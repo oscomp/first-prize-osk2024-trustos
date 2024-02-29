@@ -7,9 +7,7 @@ extern crate alloc;
 #[macro_use]
 extern crate user_lib;
 
-/// 换行
 const LF: u8 = 0x0au8;
-/// 回车
 const CR: u8 = 0x0du8;
 const DL: u8 = 0x7fu8;
 const BS: u8 = 0x08u8;
