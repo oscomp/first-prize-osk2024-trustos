@@ -129,6 +129,9 @@ impl PageTable {
         let pte = self.find_pte_create(vpn).unwrap();
         assert!(!pte.is_valid(), "vpn {:?} is mapped before mapping", vpn);
         *pte = PageTableEntry::new(ppn, flags | PTEFlags::V);
+        let va: VirtAddr = vpn.into();
+        let pa: PhysAddr = ppn.into();
+        // println!("va {:#x} map to pa{:#x}", va.0, pa.0);
     }
     #[allow(unused)]
     /// Delete a mapping form `vpn`

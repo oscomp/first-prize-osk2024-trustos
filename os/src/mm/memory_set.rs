@@ -396,24 +396,32 @@ bitflags! {
 #[allow(unused)]
 ///Check PageTable running correctly
 pub fn remap_test() {
+    println!("remap test start");
     let mut kernel_space = KERNEL_SPACE.exclusive_access();
-    let mid_text: VirtAddr = ((stext as usize + etext as usize) / 2).into();
-    let mid_rodata: VirtAddr = ((srodata as usize + erodata as usize) / 2).into();
-    let mid_data: VirtAddr = ((sdata as usize + edata as usize) / 2).into();
+    // println!("a");
+    let mid_text: VirtAddr = (stext as usize + (etext as usize - stext as usize) / 2).into();
+    // println!("b");
+    let mid_rodata: VirtAddr =
+        (srodata as usize + (erodata as usize - srodata as usize) / 2).into();
+    // println!("c");
+    let mid_data: VirtAddr = (sdata as usize + (edata as usize - sdata as usize) / 2).into();
+    // println!("assert1");
     assert!(!kernel_space
         .page_table
         .translate(mid_text.floor())
         .unwrap()
         .writable(),);
+    // println!("assert2");
     assert!(!kernel_space
         .page_table
         .translate(mid_rodata.floor())
         .unwrap()
         .writable(),);
+    // println!("assert3");
     assert!(!kernel_space
         .page_table
         .translate(mid_data.floor())
         .unwrap()
         .executable(),);
-    println!("remap_test passed!");
+    // println!("remap_test passed!");
 }

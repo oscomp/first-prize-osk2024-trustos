@@ -70,14 +70,21 @@ impl From<usize> for PhysPageNum {
         Self(v & ((1 << PPN_WIDTH_SV39) - 1))
     }
 }
+/// 拓展虚拟地址到512GB
 impl From<usize> for VirtAddr {
     fn from(v: usize) -> Self {
-        Self(v & ((1 << VA_WIDTH_SV39) - 1))
+        // Self(v & ((1 << VA_WIDTH_SV39) - 1))
+        let tmp = (v as isize >> VA_WIDTH_SV39) as isize;
+        assert!(tmp == 0 || tmp == -1, "invalid va: {:#x}", v);
+        Self(v)
     }
 }
 impl From<usize> for VirtPageNum {
     fn from(v: usize) -> Self {
-        Self(v & ((1 << VPN_WIDTH_SV39) - 1))
+        // Self(v & ((1 << VPN_WIDTH_SV39) - 1))
+        let tmp = v >> (VPN_WIDTH_SV39 - 1);
+        assert!(tmp == 0 || tmp == (1 << (52 - VPN_WIDTH_SV39 + 1)) - 1);
+        Self(v)
     }
 }
 impl From<PhysAddr> for usize {
