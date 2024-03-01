@@ -18,8 +18,7 @@
 //! We then call [`task::run_tasks()`] and for the first time go to
 //! userspace.
 
-#![deny(missing_docs)]
-#![deny(warnings)]
+// #![deny(warnings)]
 #![allow(unused_imports)]
 #![no_std]
 #![no_main]
@@ -48,7 +47,8 @@ pub mod task;
 pub mod timer;
 pub mod trap;
 
-use core::arch::global_asm;
+use config::mm::KERNEL_ADDR_OFFSET;
+use core::arch::{asm, global_asm};
 
 global_asm!(include_str!("entry.asm"));
 /// clear BSS segment
@@ -63,12 +63,25 @@ fn clear_bss() {
     }
 }
 
+/// ADD KERNEL_ADDR_OFFSET and jump to rust_main
+#[no_mangle]
+pub fn trampoline() {
+    unsafe {
+        asm!("add sp, sp, {}", in(reg) KERNEL_ADDR_OFFSET);
+        asm!("la t0, rust_main");
+        asm!("add t0, t0, {}", in(reg) KERNEL_ADDR_OFFSET);
+        // asm!("mv a0, {}", in(reg) hart_id);
+        asm!("jalr zero, 0(t0)");
+    }
+}
+
 #[no_mangle]
 /// the rust entry-point of os
 pub fn rust_main() -> ! {
     clear_bss();
     println!("[kernel] Hello, world!");
     mm::init();
+    println!("mm init successfully!");
     mm::remap_test();
     trap::init();
     trap::enable_timer_interrupt();

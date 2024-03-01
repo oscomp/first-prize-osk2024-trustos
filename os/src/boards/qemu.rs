@@ -1,5 +1,6 @@
+use crate::config::mm::KERNEL_ADDR_OFFSET;
 pub const CLOCK_FREQ: usize = 12500000;
-pub const MEMORY_END: usize = 0x8800_0000;
+pub const MEMORY_END: usize = 0x8800_0000 + KERNEL_ADDR_OFFSET;
 
 pub const MMIO: &[(usize, usize)] = &[
     (0x0010_0000, 0x00_2000), // VIRT_TEST/RTC  in virt machine
