@@ -1,6 +1,6 @@
 # Building
 TARGET := riscv64gc-unknown-none-elf
-MODE := release
+MODE := debug
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 DISASM_TMP := target/$(TARGET)/$(MODE)/asm
@@ -15,6 +15,10 @@ BOOTLOADER := ../bootloader/$(SBI)-$(BOARD).bin
 # Building mode argument
 ifeq ($(MODE), release)
 	MODE_ARG := --release
+endif
+
+ifeq ($(MODE), debug)
+	MODE_ARG := 
 endif
 
 # KERNEL ENTRY
@@ -44,14 +48,14 @@ $(KERNEL_BIN): kernel
 fs-img: $(APPS)
 	@cd ../user && make build TEST=$(TEST)
 	@rm -f $(FS_IMG)
-	@cd ../easy-fs-fuse && cargo run --release -- -s ../user/src/bin/ -t ../user/target/riscv64gc-unknown-none-elf/release/
+	@cd ../easy-fs-fuse && cargo run $(MODE_ARG) -- -s ../user/src/bin/ -t ../user/target/riscv64gc-unknown-none-elf/$(MODE)/
 
 $(APPS):
 
 kernel:
 	@echo Platform: $(BOARD)
 	@cp src/linker-$(BOARD).ld src/linker.ld
-	@cargo build --release
+	@cargo build $(MODE_ARG)
 	@rm src/linker.ld
 
 clean:
