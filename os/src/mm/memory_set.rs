@@ -1,8 +1,10 @@
 //! Implementation of [`MapArea`] and [`MemorySet`].
+use super::address::KernelAddr;
 use super::{frame_alloc, FrameTracker};
 use super::{PTEFlags, PageTable, PageTableEntry};
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use super::{StepByOne, VPNRange};
+use crate::config::mm::{KERNEL_ADDR_OFFSET, KERNEL_PGNUM_OFFSET};
 use crate::config::{
     board::{MEMORY_END, MMIO},
     mm::{PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT, USER_STACK_SIZE},
@@ -89,15 +91,19 @@ impl MemorySet {
     }
     /// Mention that trampoline is not collected by areas.
     fn map_trampoline(&mut self) {
+        // println!("before map trampoline");
         self.page_table.map(
             VirtAddr::from(TRAMPOLINE).into(),
             PhysAddr::from(strampoline as usize).into(),
             PTEFlags::R | PTEFlags::X,
         );
+        // println!("after map trampoline");
     }
     /// Without kernel stacks.
     pub fn new_kernel() -> Self {
+        // println!("call new kernel");
         let mut memory_set = Self::new_bare();
+        // println!("new bare");
         // map trampoline
         memory_set.map_trampoline();
         // map kernel sections
@@ -162,14 +168,15 @@ impl MemorySet {
         for pair in MMIO {
             memory_set.push(
                 MapArea::new(
-                    (*pair).0.into(),
-                    ((*pair).0 + (*pair).1).into(),
+                    ((*pair).0 + KERNEL_ADDR_OFFSET).into(),
+                    ((*pair).0 + (*pair).1 + KERNEL_ADDR_OFFSET).into(),
                     MapType::Identical,
                     MapPermission::R | MapPermission::W,
                 ),
                 None,
             );
         }
+        println!("create new kernel successfully!");
         memory_set
     }
     /// Include sections in elf and trampoline and TrapContext and user stack,
@@ -314,7 +321,7 @@ impl MapArea {
         let ppn: PhysPageNum;
         match self.map_type {
             MapType::Identical => {
-                ppn = PhysPageNum(vpn.0);
+                ppn = PhysPageNum(vpn.0 - KERNEL_PGNUM_OFFSET);
             }
             MapType::Framed => {
                 let frame = frame_alloc().unwrap();

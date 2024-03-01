@@ -1,8 +1,8 @@
 //! Implementation of [`FrameAllocator`] which
 //! controls all the frames in the operating system.
 use super::{PhysAddr, PhysPageNum};
-use crate::config::board::MEMORY_END;
 use crate::sync::UPSafeCell;
+use crate::{config::board::MEMORY_END, mm::address::KernelAddr};
 use alloc::vec::Vec;
 use core::fmt::{self, Debug, Formatter};
 use lazy_static::*;
@@ -53,7 +53,12 @@ impl StackFrameAllocator {
     pub fn init(&mut self, l: PhysPageNum, r: PhysPageNum) {
         self.current = l.0;
         self.end = r.0;
-        println!("last {} Physical Frames.", self.end - self.current);
+        println!(
+            "start frame={},end frame={},last {} Physical Frames.",
+            self.current,
+            self.end,
+            self.end - self.current
+        );
     }
 }
 impl FrameAllocator for StackFrameAllocator {
@@ -98,8 +103,8 @@ pub fn init_frame_allocator() {
         fn ekernel();
     }
     FRAME_ALLOCATOR.exclusive_access().init(
-        PhysAddr::from(ekernel as usize).ceil(),
-        PhysAddr::from(MEMORY_END).floor(),
+        PhysAddr::from(KernelAddr::from(ekernel as usize)).ceil(),
+        PhysAddr::from(KernelAddr::from(MEMORY_END)).floor(),
     );
 }
 /// allocate a frame

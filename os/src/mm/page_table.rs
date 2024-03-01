@@ -187,7 +187,7 @@ pub fn translated_str(token: usize, ptr: *const u8) -> String {
         let ch: u8 = *(page_table
             .translate_va(VirtAddr::from(va))
             .unwrap()
-            .get_mut());
+            .as_mut());
         if ch == 0 {
             break;
         }
@@ -204,7 +204,7 @@ pub fn translated_ref<T>(token: usize, ptr: *const T) -> &'static T {
     page_table
         .translate_va(VirtAddr::from(ptr as usize))
         .unwrap()
-        .get_ref()
+        .as_ref()
 }
 ///Translate a generic through page table and return a mutable reference
 pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
@@ -213,7 +213,7 @@ pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
     page_table
         .translate_va(VirtAddr::from(va))
         .unwrap()
-        .get_mut()
+        .as_mut()
 }
 ///Array of u8 slice that user communicate with os
 pub struct UserBuffer {

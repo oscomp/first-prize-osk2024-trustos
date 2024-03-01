@@ -1,6 +1,6 @@
 //! Implementation of physical and virtual address and page number.
 use super::PageTableEntry;
-use crate::config::mm::{PAGE_SIZE, PAGE_SIZE_BITS};
+use crate::config::mm::{KERNEL_ADDR_OFFSET, KERNEL_PGNUM_OFFSET, PAGE_SIZE, PAGE_SIZE_BITS};
 use core::fmt::{self, Debug, Formatter};
 
 const PA_WIDTH_SV39: usize = 56;
@@ -17,6 +17,11 @@ pub struct PhysAddr(pub usize);
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 ///virtual address
 pub struct VirtAddr(pub usize);
+
+/// Kernel Address
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct KernelAddr(pub usize);
 
 #[repr(C)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -99,6 +104,49 @@ impl From<VirtPageNum> for usize {
         v.0
     }
 }
+
+/// impl From for KernelAddr
+impl From<usize> for KernelAddr {
+    fn from(v: usize) -> Self {
+        Self(v)
+    }
+}
+
+impl From<PhysAddr> for KernelAddr {
+    fn from(v: PhysAddr) -> Self {
+        Self(v.0 + KERNEL_ADDR_OFFSET)
+    }
+}
+
+impl From<KernelAddr> for PhysAddr {
+    fn from(v: KernelAddr) -> Self {
+        Self(v.0 - KERNEL_ADDR_OFFSET)
+    }
+}
+
+impl From<KernelAddr> for VirtAddr {
+    fn from(v: KernelAddr) -> Self {
+        Self(v.0)
+    }
+}
+
+impl From<KernelAddr> for PhysPageNum {
+    fn from(v: KernelAddr) -> Self {
+        PhysAddr::from(v).floor()
+    }
+}
+
+/// impl KernelAddr
+impl KernelAddr {
+    pub fn as_ref<T>(&self) -> &'static T {
+        unsafe { (self.0 as *const T).as_ref().unwrap() }
+    }
+    ///Get mutable reference to `PhysAddr` value
+    pub fn as_mut<T>(&self) -> &'static mut T {
+        unsafe { (self.0 as *mut T).as_mut().unwrap() }
+    }
+}
+
 ///
 impl VirtAddr {
     ///`VirtAddr`->`VirtPageNum`
@@ -182,11 +230,11 @@ impl VirtPageNum {
 
 impl PhysAddr {
     ///Get reference to `PhysAddr` value
-    pub fn get_ref<T>(&self) -> &'static T {
+    pub fn as_ref<T>(&self) -> &'static T {
         unsafe { (self.0 as *const T).as_ref().unwrap() }
     }
     ///Get mutable reference to `PhysAddr` value
-    pub fn get_mut<T>(&self) -> &'static mut T {
+    pub fn as_mut<T>(&self) -> &'static mut T {
         unsafe { (self.0 as *mut T).as_mut().unwrap() }
     }
 }
@@ -194,17 +242,20 @@ impl PhysPageNum {
     ///Get `PageTableEntry` on `PhysPageNum`
     pub fn get_pte_array(&self) -> &'static mut [PageTableEntry] {
         let pa: PhysAddr = (*self).into();
-        unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut PageTableEntry, 512) }
+        let kernel_va = KernelAddr::from(pa).0;
+        unsafe { core::slice::from_raw_parts_mut(kernel_va as *mut PageTableEntry, 512) }
     }
     ///Get u8 array on `PhysPageNum`
     pub fn get_bytes_array(&self) -> &'static mut [u8] {
         let pa: PhysAddr = (*self).into();
-        unsafe { core::slice::from_raw_parts_mut(pa.0 as *mut u8, 4096) }
+        let kernel_va = KernelAddr::from(pa).0;
+        unsafe { core::slice::from_raw_parts_mut(kernel_va as *mut u8, 4096) }
     }
     ///Get Get mutable reference to `PhysAddr` value on `PhysPageNum`
-    pub fn get_mut<T>(&self) -> &'static mut T {
+    pub fn as_mut<T>(&self) -> &'static mut T {
         let pa: PhysAddr = (*self).into();
-        pa.get_mut()
+        let kernel_va = KernelAddr::from(pa);
+        kernel_va.as_mut()
     }
 }
 ///Add value by one
