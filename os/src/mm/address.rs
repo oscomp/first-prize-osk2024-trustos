@@ -62,12 +62,18 @@ impl Debug for PhysPageNum {
 
 impl From<usize> for PhysAddr {
     fn from(v: usize) -> Self {
-        Self(v & ((1 << PA_WIDTH_SV39) - 1))
+        // Self(v & ((1 << PA_WIDTH_SV39) - 1))
+        let tmp = (v as isize >> PA_WIDTH_SV39) as isize;
+        assert!(tmp == 0 || tmp == -1);
+        Self(v)
     }
 }
 impl From<usize> for PhysPageNum {
     fn from(v: usize) -> Self {
-        Self(v & ((1 << PPN_WIDTH_SV39) - 1))
+        // Self(v & ((1 << PPN_WIDTH_SV39) - 1))
+        let tmp = (v as isize >> PPN_WIDTH_SV39) as isize;
+        assert!(tmp == 0 || tmp == -1);
+        Self(v)
     }
 }
 /// 拓展虚拟地址到512GB

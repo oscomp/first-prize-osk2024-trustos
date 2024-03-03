@@ -89,12 +89,19 @@ impl MemorySet {
         }
         self.areas.push(map_area);
     }
+    pub fn debug_translate_va(&self, va: VirtAddr) -> Option<PhysAddr> {
+        self.page_table.translate_va(va)
+    }
     /// Mention that trampoline is not collected by areas.
     fn map_trampoline(&mut self) {
         // println!("before map trampoline");
+        println!(
+            "map trampoline to pa {:x}",
+            PhysAddr::from(KernelAddr::from(strampoline as usize)).0
+        );
         self.page_table.map(
             VirtAddr::from(TRAMPOLINE).into(),
-            PhysAddr::from(strampoline as usize).into(),
+            PhysAddr::from(KernelAddr::from(strampoline as usize)).into(),
             PTEFlags::R | PTEFlags::X,
         );
         // println!("after map trampoline");
@@ -119,7 +126,7 @@ impl MemorySet {
             MapArea::new(
                 (stext as usize).into(),
                 (etext as usize).into(),
-                MapType::Identical,
+                MapType::Direct,
                 MapPermission::R | MapPermission::X,
             ),
             None,
@@ -129,7 +136,7 @@ impl MemorySet {
             MapArea::new(
                 (srodata as usize).into(),
                 (erodata as usize).into(),
-                MapType::Identical,
+                MapType::Direct,
                 MapPermission::R,
             ),
             None,
@@ -139,7 +146,7 @@ impl MemorySet {
             MapArea::new(
                 (sdata as usize).into(),
                 (edata as usize).into(),
-                MapType::Identical,
+                MapType::Direct,
                 MapPermission::R | MapPermission::W,
             ),
             None,
@@ -149,7 +156,7 @@ impl MemorySet {
             MapArea::new(
                 (sbss_with_stack as usize).into(),
                 (ebss as usize).into(),
-                MapType::Identical,
+                MapType::Direct,
                 MapPermission::R | MapPermission::W,
             ),
             None,
@@ -159,7 +166,7 @@ impl MemorySet {
             MapArea::new(
                 (ekernel as usize).into(),
                 MEMORY_END.into(),
-                MapType::Identical,
+                MapType::Direct,
                 MapPermission::R | MapPermission::W,
             ),
             None,
@@ -170,7 +177,7 @@ impl MemorySet {
                 MapArea::new(
                     ((*pair).0 + KERNEL_ADDR_OFFSET).into(),
                     ((*pair).0 + (*pair).1 + KERNEL_ADDR_OFFSET).into(),
-                    MapType::Identical,
+                    MapType::Direct,
                     MapPermission::R | MapPermission::W,
                 ),
                 None,
@@ -270,6 +277,7 @@ impl MemorySet {
     ///Refresh TLB with `sfence.vma`
     pub fn activate(&self) {
         let satp = self.page_table.token();
+        println!("kernel satp= {:x}", satp);
         unsafe {
             satp::write(satp);
             asm!("sfence.vma");
@@ -320,7 +328,7 @@ impl MapArea {
     pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         let ppn: PhysPageNum;
         match self.map_type {
-            MapType::Identical => {
+            MapType::Direct => {
                 ppn = PhysPageNum(vpn.0 - KERNEL_PGNUM_OFFSET);
             }
             MapType::Framed => {
@@ -375,7 +383,7 @@ impl MapArea {
 #[derive(Copy, Clone, PartialEq, Debug)]
 /// map type for memory set: identical or framed
 pub enum MapType {
-    Identical,
+    Direct,
     Framed,
 }
 

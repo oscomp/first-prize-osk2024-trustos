@@ -83,20 +83,13 @@ pub fn rust_main() -> ! {
     clear_bss();
     println!("[kernel] Hello, world!");
     mm::init();
-    println!("mm init successfully!");
     mm::remap_test();
     logger::init();
-    info!("logger init successfully!");
     trap::init();
-    println!("trap init successfully!");
     trap::enable_timer_interrupt();
-    println!("timer interrupt init successfully!");
     timer::set_next_trigger();
-    println!("timer set next trigger successfully!");
     fs::list_apps();
-    println!("fs list apps successfully!");
     task::add_initproc();
-    println!("task add initproc successfully!");
     task::run_tasks();
     panic!("Unreachable in rust_main!");
 }

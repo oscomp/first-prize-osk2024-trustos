@@ -30,6 +30,7 @@ global_asm!(include_str!("trap.S"));
 /// initialize CSR `stvec` as the entry of `__alltraps`
 pub fn init() {
     set_kernel_trap_entry();
+    println!("trap init successfully!");
 }
 
 fn set_kernel_trap_entry() {
@@ -48,6 +49,7 @@ pub fn enable_timer_interrupt() {
     unsafe {
         sie::set_stimer();
     }
+    println!("timer interrupt init successfully!");
 }
 
 #[no_mangle]
@@ -116,6 +118,10 @@ pub fn trap_return() -> ! {
         fn __restore();
     }
     let restore_va = __restore as usize - __alltraps as usize + TRAMPOLINE;
+    println!(
+        "before enter __restore, restore_va={:x} ,user_satp={:x}",
+        restore_va, user_satp
+    );
     unsafe {
         asm!(
             "fence.i",

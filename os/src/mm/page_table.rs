@@ -1,4 +1,6 @@
 //! Implementation of [`PageTableEntry`] and [`PageTable`].
+use crate::mm::KernelAddr;
+
 use super::{frame_alloc, FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
 use alloc::string::String;
 use alloc::vec;
@@ -131,7 +133,7 @@ impl PageTable {
         *pte = PageTableEntry::new(ppn, flags | PTEFlags::V);
         let va: VirtAddr = vpn.into();
         let pa: PhysAddr = ppn.into();
-        // println!("va {:#x} map to pa{:#x}", va.0, pa.0);
+        println!("va {:#x} map to pa{:#x}", va.0, pa.0);
     }
     #[allow(unused)]
     /// Delete a mapping form `vpn`
@@ -146,6 +148,7 @@ impl PageTable {
     }
     /// Translate `VirtAddr` to `PhysAddr`
     pub fn translate_va(&self, va: VirtAddr) -> Option<PhysAddr> {
+        // println!("translate va {:#x}", va.0);
         self.find_pte(va.clone().floor()).map(|pte| {
             let aligned_pa: PhysAddr = pte.ppn().into();
             let offset = va.page_offset();
@@ -186,7 +189,12 @@ pub fn translated_str(token: usize, ptr: *const u8) -> String {
     let page_table = PageTable::from_token(token);
     let mut string = String::new();
     let mut va = ptr as usize;
+    let mut times: usize = 0;
     loop {
+        times += 1;
+        println!("loop time {}", times);
+        let pa: PhysAddr = page_table.translate_va(VirtAddr::from(va)).unwrap();
+        println!("translate_str va {:#x} to pa {:#x}", va, pa.0);
         let ch: u8 = *(page_table
             .translate_va(VirtAddr::from(va))
             .unwrap()

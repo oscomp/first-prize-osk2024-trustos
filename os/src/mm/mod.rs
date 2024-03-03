@@ -21,11 +21,26 @@ pub use page_table::{
     translated_byte_buffer, translated_ref, translated_refmut, translated_str, PageTable,
     PageTableEntry, UserBuffer, UserBufferIterator,
 };
+
+use crate::config::mm::TRAMPOLINE;
 /// initiate heap allocator, frame allocator and kernel space
 pub fn init() {
     heap_allocator::init_heap();
     frame_allocator::init_frame_allocator();
-    // println!("before kernel space activate");
     KERNEL_SPACE.exclusive_access().activate();
-    // println!("after kernel space activate");
+    println!("mm init successfully!");
+    // extern "C" {
+    //     fn __alltraps();
+    //     fn __restore();
+    // }
+    // let restore_va = __restore as usize - __alltraps as usize + TRAMPOLINE;
+    // println!(
+    //     "translate va {:x} to pa {:x}",
+    //     restore_va,
+    //     KERNEL_SPACE
+    //         .exclusive_access()
+    //         .debug_translate_va(VirtAddr::from(restore_va))
+    //         .unwrap()
+    //         .0
+    // );
 }
