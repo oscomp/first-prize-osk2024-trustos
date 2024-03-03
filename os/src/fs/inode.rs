@@ -13,6 +13,7 @@ use alloc::vec::Vec;
 use bitflags::*;
 use easy_fs::{EasyFileSystem, Inode};
 use lazy_static::*;
+use log::info;
 /// A wrapper around a filesystem inode
 /// to implement File trait atop
 pub struct OSInode {
@@ -54,7 +55,9 @@ impl OSInode {
 
 lazy_static! {
     pub static ref ROOT_INODE: Arc<Inode> = {
+        info!("Opening root inode");
         let efs = EasyFileSystem::open(BLOCK_DEVICE.clone());
+        info!("root inode opened");
         Arc::new(EasyFileSystem::root_inode(&efs))
     };
 }

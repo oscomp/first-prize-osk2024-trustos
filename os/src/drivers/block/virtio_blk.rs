@@ -1,4 +1,5 @@
 use super::BlockDevice;
+use crate::config::mm::KERNEL_ADDR_OFFSET;
 use crate::mm::{
     frame_alloc, frame_dealloc, kernel_token, FrameTracker, PageTable, PhysAddr, PhysPageNum,
     StepByOne, VirtAddr,
@@ -6,10 +7,11 @@ use crate::mm::{
 use crate::sync::UPSafeCell;
 use alloc::vec::Vec;
 use lazy_static::*;
+use log::info;
 use virtio_drivers::{Hal, VirtIOBlk, VirtIOHeader};
 
 #[allow(unused)]
-const VIRTIO0: usize = 0x10001000;
+const VIRTIO0: usize = 0x10001000 + KERNEL_ADDR_OFFSET;
 
 pub struct VirtIOBlock(UPSafeCell<VirtIOBlk<'static, VirtioHal>>);
 
