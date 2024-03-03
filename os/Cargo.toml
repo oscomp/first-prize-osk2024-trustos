@@ -17,5 +17,14 @@ easy-fs = { path = "../easy-fs" }
 log = "0.4"
 sbi-rt = { version = "0.0.2", features = ["legacy"] }
 
+[features]
+board_qemu = []
+default = ["info"]
+error = []
+warn = []
+info = []
+debug = []
+trace = []
+
 [profile.release]
 debug = true

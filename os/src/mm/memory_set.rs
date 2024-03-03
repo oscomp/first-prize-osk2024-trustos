@@ -396,7 +396,7 @@ bitflags! {
 #[allow(unused)]
 ///Check PageTable running correctly
 pub fn remap_test() {
-    println!("remap test start");
+    println!("remap test start!");
     let mut kernel_space = KERNEL_SPACE.exclusive_access();
     // println!("a");
     let mid_text: VirtAddr = (stext as usize + (etext as usize - stext as usize) / 2).into();
@@ -423,5 +423,5 @@ pub fn remap_test() {
         .translate(mid_data.floor())
         .unwrap()
         .executable(),);
-    // println!("remap_test passed!");
+    println!("remap_test passed!");
 }
