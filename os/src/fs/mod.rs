@@ -1,19 +1,34 @@
-//! File system in os
 mod inode;
+mod pipe;
 mod stdio;
+mod mount;
+mod stat;
+mod dirent;
+
 
 use crate::mm::UserBuffer;
-/// File trait
+use alloc::string::String;
+
 pub trait File: Send + Sync {
-    /// If readable
     fn readable(&self) -> bool;
-    /// If writable
     fn writable(&self) -> bool;
-    /// Read file to `UserBuffer`
+    /// read 指的是从文件中读取数据放到缓冲区中，最多将缓冲区填满，并返回实际读取的字节数
     fn read(&self, buf: UserBuffer) -> usize;
-    /// Write `UserBuffer` to file
+    /// 将缓冲区中的数据写入文件，最多将缓冲区中的数据全部写入，并返回直接写入的字节数
     fn write(&self, buf: UserBuffer) -> usize;
+
+    fn get_fstat(&self, kstat: &mut Kstat);
+
+    fn get_dirent(&self, dirent: &mut Dirent) -> isize;
+
+    fn get_name(&self) -> String;
+
+    fn set_offset(&self, offset: usize);
 }
 
-pub use inode::{list_apps, open_file, OSInode, OpenFlags};
+pub use dirent::Dirent;
+pub use inode::{chdir, list_apps, open, OSInode, OpenFlags};
+pub use mount::MNT_TABLE;
+pub use pipe::{make_pipe, Pipe};
+pub use stat::Kstat;
 pub use stdio::{Stdin, Stdout};
