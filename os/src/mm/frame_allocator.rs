@@ -17,7 +17,7 @@ impl FrameTracker {
     ///Create an empty `FrameTracker`
     pub fn new(ppn: PhysPageNum) -> Self {
         // page cleaning
-        let bytes_array = ppn.get_bytes_array();
+        let bytes_array = ppn.bytes_array();
         for i in bytes_array {
             *i = 0;
         }

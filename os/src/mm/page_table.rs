@@ -93,7 +93,7 @@ impl PageTable {
         let mut ppn = self.root_ppn;
         let mut result: Option<&mut PageTableEntry> = None;
         for (i, idx) in idxs.iter().enumerate() {
-            let pte = &mut ppn.get_pte_array()[*idx];
+            let pte = &mut ppn.pte_array()[*idx];
             if i == 2 {
                 result = Some(pte);
                 break;
@@ -113,7 +113,7 @@ impl PageTable {
         let mut ppn = self.root_ppn;
         let mut result: Option<&mut PageTableEntry> = None;
         for (i, idx) in idxs.iter().enumerate() {
-            let pte = &mut ppn.get_pte_array()[*idx];
+            let pte = &mut ppn.pte_array()[*idx];
             if i == 2 {
                 result = Some(pte);
                 break;
@@ -182,9 +182,9 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
         end_va = end_va.min(VirtAddr::from(end));
         // println!("a");
         if end_va.page_offset() == 0 {
-            v.push(&mut ppn.get_bytes_array()[start_va.page_offset()..]);
+            v.push(&mut ppn.bytes_array()[start_va.page_offset()..]);
         } else {
-            v.push(&mut ppn.get_bytes_array()[start_va.page_offset()..end_va.page_offset()]);
+            v.push(&mut ppn.bytes_array()[start_va.page_offset()..end_va.page_offset()]);
         }
         // println!("b");
         start = end_va.into();

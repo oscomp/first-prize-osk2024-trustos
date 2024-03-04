@@ -253,13 +253,13 @@ impl PhysAddr {
 }
 impl PhysPageNum {
     ///Get `PageTableEntry` on `PhysPageNum`
-    pub fn get_pte_array(&self) -> &'static mut [PageTableEntry] {
+    pub fn pte_array(&self) -> &'static mut [PageTableEntry] {
         let pa: PhysAddr = (*self).into();
         let kernel_va = KernelAddr::from(pa).0;
         unsafe { core::slice::from_raw_parts_mut(kernel_va as *mut PageTableEntry, 512) }
     }
     ///Get u8 array on `PhysPageNum`
-    pub fn get_bytes_array(&self) -> &'static mut [u8] {
+    pub fn bytes_array(&self) -> &'static mut [u8] {
         let pa: PhysAddr = (*self).into();
         let kernel_va = KernelAddr::from(pa).0;
         unsafe { core::slice::from_raw_parts_mut(kernel_va as *mut u8, 4096) }

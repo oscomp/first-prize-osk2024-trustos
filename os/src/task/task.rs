@@ -33,17 +33,17 @@ pub struct TaskControlBlockInner {
 }
 
 impl TaskControlBlockInner {
-    pub fn get_trap_cx(&self) -> &'static mut TrapContext {
+    pub fn trap_cx(&self) -> &'static mut TrapContext {
         self.trap_cx_ppn.as_mut()
     }
-    pub fn get_user_token(&self) -> usize {
+    pub fn user_token(&self) -> usize {
         self.memory_set.token()
     }
-    fn get_status(&self) -> TaskStatus {
+    fn status(&self) -> TaskStatus {
         self.task_status
     }
     pub fn is_zombie(&self) -> bool {
-        self.get_status() == TaskStatus::Zombie
+        self.status() == TaskStatus::Zombie
     }
     pub fn alloc_fd(&mut self) -> usize {
         if let Some(fd) = (0..self.fd_table.len()).find(|fd| self.fd_table[*fd].is_none()) {
@@ -70,7 +70,7 @@ impl TaskControlBlock {
         // alloc a pid and a kernel stack in kernel space
         let pid_handle = pid_alloc();
         let kernel_stack = KernelStack::new(&pid_handle);
-        let kernel_stack_top = kernel_stack.get_top();
+        let kernel_stack_top = kernel_stack.top();
         let task_control_block = Self {
             pid: pid_handle,
             kernel_stack,
@@ -96,7 +96,7 @@ impl TaskControlBlock {
             },
         };
         // prepare TrapContext in user space
-        let trap_cx = task_control_block.inner_exclusive_access().get_trap_cx();
+        let trap_cx = task_control_block.inner_exclusive_access().trap_cx();
         *trap_cx = TrapContext::app_init_context(
             entry_point,
             user_sp,
@@ -126,10 +126,10 @@ impl TaskControlBlock {
             entry_point,
             user_sp,
             KERNEL_SPACE.exclusive_access().token(),
-            self.kernel_stack.get_top(),
+            self.kernel_stack.top(),
             trap_handler as usize,
         );
-        *inner.get_trap_cx() = trap_cx;
+        *inner.trap_cx() = trap_cx;
         // **** release current PCB
     }
     pub fn fork(self: &Arc<TaskControlBlock>) -> Arc<TaskControlBlock> {
@@ -144,7 +144,7 @@ impl TaskControlBlock {
         // alloc a pid and a kernel stack in kernel space
         let pid_handle = pid_alloc();
         let kernel_stack = KernelStack::new(&pid_handle);
-        let kernel_stack_top = kernel_stack.get_top();
+        let kernel_stack_top = kernel_stack.top();
         // copy fd table
         let mut new_fd_table: Vec<Option<Arc<dyn File + Send + Sync>>> = Vec::new();
         for fd in parent_inner.fd_table.iter() {
@@ -175,7 +175,7 @@ impl TaskControlBlock {
         parent_inner.children.push(task_control_block.clone());
         // modify kernel_sp in trap_cx
         // **** access child PCB exclusively
-        let trap_cx = task_control_block.inner_exclusive_access().get_trap_cx();
+        let trap_cx = task_control_block.inner_exclusive_access().trap_cx();
         trap_cx.kernel_sp = kernel_stack_top;
         // return
         task_control_block
