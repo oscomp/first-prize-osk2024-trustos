@@ -45,13 +45,13 @@ $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
 
 copy_to_fs: 
-	sh ../simple-fat32/create_img.sh 
-	sudo mkdir ../simple-fat32/fs 
-	sudo mount ../simple-fat32/fat32.img ../simple-fat32/fs 
-	sudo rm ../user/target/riscv64gc-unknown-none-elf/release/*.* 
-	sudo cp ../user/target/riscv64gc-unknown-none-elf/release/* ../simple-fat32/fs/ 
-	sudo umount ../simple-fat32/fs 
-	sudo rmdir ../simple-fat32/fs
+	 cd ../simple-fat32&&sh create_img.sh 
+	# sudo mkdir ../simple-fat32/fs 
+	# sudo mount ../simple-fat32/fat32.img ../simple-fat32/fs 
+	# sudo rm ../user/target/riscv64gc-unknown-none-elf/release/*.* 
+	# sudo cp ../user/target/riscv64gc-unknown-none-elf/release/* ../simple-fat32/fs/ 
+	# sudo umount ../simple-fat32/fs 
+	# sudo rmdir ../simple-fat32/fs
 
 $(APPS):
 

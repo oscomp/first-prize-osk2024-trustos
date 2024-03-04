@@ -1,6 +1,13 @@
 # 制作一个全0的镜像文件
-dd if=/dev/zero of=fat32.img bs=3M count=16
+dd if=/dev/zero of=fat32.img bs=4M count=64
 
 # 格式化为 fat32
 sudo mkfs.vfat -F 32 fat32.img
 sudo chmod 777 fat32.img
+pwd
+sudo mkdir ../simple-fat32/fs 
+sudo mount ../simple-fat32/fat32.img ../simple-fat32/fs 
+sudo rm ../user/target/riscv64gc-unknown-none-elf/release/*.* 
+sudo cp ../user/target/riscv64gc-unknown-none-elf/release/* ../simple-fat32/fs/ 
+sudo umount ../simple-fat32/fs 
+sudo rmdir ../simple-fat32/fs
