@@ -133,7 +133,7 @@ impl PageTable {
         *pte = PageTableEntry::new(ppn, flags | PTEFlags::V);
         let va: VirtAddr = vpn.into();
         let pa: PhysAddr = ppn.into();
-        println!("va {:#x} map to pa{:#x}", va.0, pa.0);
+        // println!("va {:#x} map to pa{:#x}", va.0, pa.0);
     }
     #[allow(unused)]
     /// Delete a mapping form `vpn`
@@ -163,24 +163,33 @@ impl PageTable {
 }
 /// Translate a pointer to a mutable u8 Vec through page table
 pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]> {
+    // println!("call translated_byte_buffer");
     let page_table = PageTable::from_token(token);
     let mut start = ptr as usize;
     let end = start + len;
     let mut v = Vec::new();
+    // let mut t: usize = 0;
+    // println!("end va = {:x}", end);
     while start < end {
+        // println!("start va = {:x}", start);
+        // t += 1;
+        // println!("translated byte buffer loop time {}", t);
         let start_va = VirtAddr::from(start);
         let mut vpn = start_va.floor();
         let ppn = page_table.translate(vpn).unwrap().ppn();
         vpn.step();
         let mut end_va: VirtAddr = vpn.into();
         end_va = end_va.min(VirtAddr::from(end));
+        // println!("a");
         if end_va.page_offset() == 0 {
             v.push(&mut ppn.get_bytes_array()[start_va.page_offset()..]);
         } else {
             v.push(&mut ppn.get_bytes_array()[start_va.page_offset()..end_va.page_offset()]);
         }
+        // println!("b");
         start = end_va.into();
     }
+    // println!("c");
     v
 }
 
@@ -189,16 +198,18 @@ pub fn translated_str(token: usize, ptr: *const u8) -> String {
     let page_table = PageTable::from_token(token);
     let mut string = String::new();
     let mut va = ptr as usize;
-    let mut times: usize = 0;
+    // let mut times: usize = 0;
     loop {
-        times += 1;
-        println!("loop time {}", times);
-        let pa: PhysAddr = page_table.translate_va(VirtAddr::from(va)).unwrap();
-        println!("translate_str va {:#x} to pa {:#x}", va, pa.0);
-        let ch: u8 = *(page_table
-            .translate_va(VirtAddr::from(va))
-            .unwrap()
-            .as_mut());
+        // times += 1;
+        // println!("loop time {}", times);
+        // let pa: PhysAddr = page_table.translate_va(VirtAddr::from(va)).unwrap();
+        // println!("translate_str va {:#x} to pa {:#x}", va, pa.0);
+        // let ch: u8 = *(page_table
+        //     .translate_va(VirtAddr::from(va))
+        //     .unwrap()
+        //     .as_mut());
+        let ch: u8 =
+            *(KernelAddr::from(page_table.translate_va(VirtAddr::from(va)).unwrap()).as_mut());
         if ch == 0 {
             break;
         }
@@ -221,10 +232,11 @@ pub fn translated_ref<T>(token: usize, ptr: *const T) -> &'static T {
 pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
     let page_table = PageTable::from_token(token);
     let va = ptr as usize;
-    page_table
-        .translate_va(VirtAddr::from(va))
-        .unwrap()
-        .as_mut()
+    KernelAddr::from(page_table.translate_va(VirtAddr::from(va)).unwrap()).as_mut()
+    // page_table
+    //     .translate_va(VirtAddr::from(va))
+    //     .unwrap()
+    //     .as_mut()
 }
 ///Array of u8 slice that user communicate with os
 pub struct UserBuffer {

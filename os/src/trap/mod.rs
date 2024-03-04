@@ -118,10 +118,13 @@ pub fn trap_return() -> ! {
         fn __restore();
     }
     let restore_va = __restore as usize - __alltraps as usize + TRAMPOLINE;
-    println!(
-        "before enter __restore, restore_va={:x} ,user_satp={:x}",
-        restore_va, user_satp
-    );
+    // TODO(ZMY) 至今仍未知道为什么删除下面这个print后会卡死
+    //println!("before trap_return");
+    print!("");
+    // println!(
+    //     "before enter __restore, restore_va={:x} ,user_satp={:x}",
+    //     restore_va, user_satp
+    // );
     unsafe {
         asm!(
             "fence.i",
