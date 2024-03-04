@@ -49,7 +49,9 @@ copy_to_fs:
 	&& sh ./create_img.sh \
 	&& sudo mkdir fs \
 	&& sudo mount fat32.img fs \
-	&& sudo cp ../user/bin/* fs/ \
+	&& sudo cp ../user/target/riscv64gc-unknown-none-elf/release/initproc fs/ \
+	&& sudo cp ../user/target/riscv64gc-unknown-none-elf/release/user_shell fs/ \
+	&& sudo cp ../user/target/riscv64gc-unknown-none-elf/release/usertests fs/ \
 	&& sudo umount fs \
 	&& sudo rmdir fs
 
