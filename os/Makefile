@@ -33,7 +33,7 @@ TEST ?=
 build: env initproc $(KERNEL_BIN)
 
 initproc:
-	@cd ../user && make build
+	@cd ../user && make clean && make build
 
 env:
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
