@@ -1,10 +1,9 @@
-mod inode;
-mod pipe;
-mod stdio;
-mod mount;
-mod stat;
 mod dirent;
-
+mod inode;
+mod mount;
+mod pipe;
+mod stat;
+mod stdio;
 
 use crate::mm::UserBuffer;
 use alloc::string::String;
@@ -27,7 +26,7 @@ pub trait File: Send + Sync {
 }
 
 pub use dirent::Dirent;
-pub use inode::{chdir, list_apps, open, OSInode, OpenFlags};
+pub use inode::{chdir, list_apps, open, open_file, OSInode, OpenFlags};
 pub use mount::MNT_TABLE;
 pub use pipe::{make_pipe, Pipe};
 pub use stat::Kstat;

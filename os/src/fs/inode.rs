@@ -1,3 +1,4 @@
+///hhh
 use super::{Dirent, File, Kstat};
 use crate::{drivers::BLOCK_DEVICE, mm::UserBuffer};
 use _core::str::FromStr;
@@ -101,7 +102,9 @@ impl OpenFlags {
         }
     }
 }
-
+pub fn open_file(path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
+    open(&"/", path, flags)
+}
 pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     let cur_inode = {
         if work_path == "/" {
@@ -235,7 +238,7 @@ impl File for OSInode {
         self.name()
     }
 
-    fn set_offset(&self, offset: usize){
+    fn set_offset(&self, offset: usize) {
         let mut inner = self.inner.lock();
         inner.offset = offset;
     }

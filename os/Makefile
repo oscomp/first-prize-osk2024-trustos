@@ -1,5 +1,5 @@
 # Building
-TARGET := riscv64imac-unknown-none-elf
+TARGET := riscv64gc-unknown-none-elf
 MODE := release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
@@ -19,13 +19,10 @@ OBJCOPY := rust-objcopy --binary-architecture=riscv64
 
 build: env initproc $(KERNEL_BIN) 
 
-build_submit: env initproc_submit $(KERNEL_BIN) 
 
 initproc:
 	@cd ../user && make build
 
-initproc_submit:
-	@cd ../user && make build_initproc_submit
 
 env:
 	rustup target add $(TARGET)
@@ -41,13 +38,9 @@ kernel:
 	@cargo clean
 	@echo Platform: $(BOARD)
 	@cp src/linker-$(BOARD).ld src/linker.ld
-	@cargo build --release --offline --features "board_$(BOARD)"
+	@cargo build --release 
 	@rm src/linker.ld
 
-submit: build_submit
-	@cp $(BOOTLOADER) $(BOOTLOADER).copy
-	@dd if=$(KERNEL_BIN) of=$(BOOTLOADER).copy bs=$(K210_BOOTLOADER_SIZE) seek=1
-	@mv $(BOOTLOADER).copy ../os.bin
 
 run: run-inner
 
@@ -56,7 +49,7 @@ copy_to_fs:
 	&& sh ./create_img.sh \
 	&& sudo mkdir fs \
 	&& sudo mount fat32.img fs \
-	&& sudo cp ../user_c/bin/* fs/ \
+	&& sudo cp ../user/bin/* fs/ \
 	&& sudo umount fs \
 	&& sudo rmdir fs
 
