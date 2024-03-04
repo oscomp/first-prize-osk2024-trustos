@@ -9,12 +9,12 @@ use user_lib::{close, open, read, OpenFlags};
 
 #[no_mangle]
 pub fn main() -> i32 {
-    let fd = open("filea\0", OpenFlags::RDONLY);
+    let fd = open("filea\0", OpenFlags::O_RDONLY);
     if fd == -1 {
         panic!("Error occured when opening file");
     }
     let fd = fd as usize;
-    let mut buf = [0u8; 256];
+    let mut buf = [0u8; 100];
     loop {
         let size = read(fd, &mut buf) as usize;
         if size == 0 {

@@ -33,7 +33,7 @@ TEST ?=
 build: env initproc $(KERNEL_BIN)
 
 initproc:
-	@cd ../user && make clean && make build
+	@cd ../user && cargo clean && make build
 
 env:
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
@@ -45,13 +45,7 @@ $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
 
 copy_to_fs: 
-	 cd ../simple-fat32&&sh create_img.sh 
-	# sudo mkdir ../simple-fat32/fs 
-	# sudo mount ../simple-fat32/fat32.img ../simple-fat32/fs 
-	# sudo rm ../user/target/riscv64gc-unknown-none-elf/release/*.* 
-	# sudo cp ../user/target/riscv64gc-unknown-none-elf/release/* ../simple-fat32/fs/ 
-	# sudo umount ../simple-fat32/fs 
-	# sudo rmdir ../simple-fat32/fs
+	@cd ../simple-fat32&&sh create_img.sh 
 
 $(APPS):
 
@@ -84,11 +78,11 @@ QEMU_ARGS := -machine virt \
 run-inner: build copy_to_fs
 	@qemu-system-riscv64 $(QEMU_ARGS)
 
-debug: build
+debug: build copy_to_fs
 	@tmux new-session -d \
 		"qemu-system-riscv64 $(QEMU_ARGS) -s -S" && \
 		tmux split-window -h "riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'" && \
-		tmux -2 attach-session -d
+		tmux -2 attach-session 
 
 
 gdbserver: build
