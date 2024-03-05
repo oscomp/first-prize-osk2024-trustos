@@ -7,7 +7,7 @@ use super::{StepByOne, VPNRange};
 use crate::config::mm::{KERNEL_ADDR_OFFSET, KERNEL_PGNUM_OFFSET};
 use crate::config::{
     board::{MEMORY_END, MMIO},
-    mm::{PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT, USER_STACK_SIZE},
+    mm::{PAGE_SIZE, TRAMPOLINE, USER_SPACE_SIZE, USER_STACK_SIZE, USER_TRAP_CONTEXT},
 };
 // use crate::config::{MEMORY_END, MMIO, PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT, USER_STACK_SIZE};
 use crate::sync::UPSafeCell;
@@ -16,6 +16,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::arch::asm;
 use lazy_static::*;
+use log::debug;
 use riscv::register::satp;
 
 extern "C" {
@@ -28,7 +29,7 @@ extern "C" {
     fn sbss_with_stack();
     fn ebss();
     fn ekernel();
-    fn strampoline();
+    // fn strampoline();
 }
 
 lazy_static! {
@@ -42,7 +43,7 @@ pub fn kernel_token() -> usize {
 }
 /// memory set structure, controls virtual-memory space
 pub struct MemorySet {
-    page_table: PageTable,
+    pub page_table: PageTable,
     areas: Vec<MapArea>,
 }
 
@@ -51,6 +52,12 @@ impl MemorySet {
     pub fn new_bare() -> Self {
         Self {
             page_table: PageTable::new(),
+            areas: Vec::new(),
+        }
+    }
+    pub fn new_from_kernel() -> Self {
+        Self {
+            page_table: PageTable::new_from_kernel(),
             areas: Vec::new(),
         }
     }
@@ -93,26 +100,26 @@ impl MemorySet {
         self.page_table.translate_va(va)
     }
     /// Mention that trampoline is not collected by areas.
-    fn map_trampoline(&mut self) {
-        // println!("before map trampoline");
-        // println!(
-        //     "map trampoline to pa {:x}",
-        //     PhysAddr::from(KernelAddr::from(strampoline as usize)).0
-        // );
-        self.page_table.map(
-            VirtAddr::from(TRAMPOLINE).into(),
-            PhysAddr::from(KernelAddr::from(strampoline as usize)).into(),
-            PTEFlags::R | PTEFlags::X,
-        );
-        // println!("after map trampoline");
-    }
+    // fn map_trampoline(&mut self) {
+    // println!("before map trampoline");
+    // println!(
+    //     "map trampoline to pa {:x}",
+    //     PhysAddr::from(KernelAddr::from(strampoline as usize)).0
+    // );
+    // self.page_table.map(
+    //     VirtAddr::from(TRAMPOLINE).into(),
+    //     PhysAddr::from(KernelAddr::from(strampoline as usize)).into(),
+    //     PTEFlags::R | PTEFlags::X,
+    // );
+    // println!("after map trampoline");
+    // }
     /// Without kernel stacks.
     pub fn new_kernel() -> Self {
         // println!("call new kernel");
         let mut memory_set = Self::new_bare();
         // println!("new bare");
         // map trampoline
-        memory_set.map_trampoline();
+        // memory_set.map_trampoline();
         // map kernel sections
         println!(".text [{:#x}, {:#x})", stext as usize, etext as usize);
         println!(".rodata [{:#x}, {:#x})", srodata as usize, erodata as usize);
@@ -189,9 +196,11 @@ impl MemorySet {
     /// Include sections in elf and trampoline and TrapContext and user stack,
     /// also returns user_sp and entry point.
     pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize) {
-        let mut memory_set = Self::new_bare();
+        debug!("call from_elf");
+        // let mut memory_set = Self::new_bare();
+        let mut memory_set = Self::new_from_kernel();
         // map trampoline
-        memory_set.map_trampoline();
+        // memory_set.map_trampoline();
         // map program headers of elf, with U flag
         let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
         let elf_header = elf.header;
@@ -238,16 +247,27 @@ impl MemorySet {
             ),
             None,
         );
+        debug!("push user_stack successfully!");
         // map TrapContext
+        // memory_set.push(
+        //     MapArea::new(
+        //         TRAP_CONTEXT.into(),
+        //         TRAMPOLINE.into(),
+        //         MapType::Framed,
+        //         MapPermission::R | MapPermission::W,
+        //     ),
+        //     None,
+        // );
         memory_set.push(
             MapArea::new(
-                TRAP_CONTEXT.into(),
-                TRAMPOLINE.into(),
+                USER_TRAP_CONTEXT.into(),
+                USER_SPACE_SIZE.into(),
                 MapType::Framed,
                 MapPermission::R | MapPermission::W,
             ),
             None,
         );
+        debug!("push TrapContext successfully!");
         (
             memory_set,
             user_stack_top,
@@ -256,9 +276,10 @@ impl MemorySet {
     }
     ///Clone a same `MemorySet`
     pub fn from_existed_user(user_space: &MemorySet) -> MemorySet {
-        let mut memory_set = Self::new_bare();
+        // let mut memory_set = Self::new_bare();
+        let mut memory_set = Self::new_from_kernel();
         // map trampoline
-        memory_set.map_trampoline();
+        // memory_set.map_trampoline();
         // copy data sections/trap_context/user_stack
         for area in user_space.areas.iter() {
             let new_area = MapArea::from_another(area);
@@ -275,7 +296,7 @@ impl MemorySet {
     ///Refresh TLB with `sfence.vma`
     pub fn activate(&self) {
         let satp = self.page_table.token();
-        println!("kernel satp= {:x}", satp);
+        println!("switch satp to  {:x}", satp);
         unsafe {
             satp::write(satp);
             asm!("sfence.vma");

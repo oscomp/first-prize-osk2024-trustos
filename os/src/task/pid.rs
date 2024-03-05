@@ -4,6 +4,7 @@ use crate::mm::{MapPermission, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use alloc::vec::Vec;
 use lazy_static::*;
+use log::debug;
 ///Pid Allocator struct
 pub struct PidAllocator {
     current: usize,
@@ -71,13 +72,19 @@ pub struct KernelStack {
 impl KernelStack {
     ///Create a kernelstack from pid
     pub fn new(pid_handle: &PidHandle) -> Self {
+        debug!("new KernelStack");
         let pid = pid_handle.0;
         let (kernel_stack_bottom, kernel_stack_top) = kernel_stack_position(pid);
+        debug!(
+            "kernel stack pos [{:#x},{:#x})",
+            kernel_stack_bottom, kernel_stack_top
+        );
         KERNEL_SPACE.exclusive_access().insert_framed_area(
             kernel_stack_bottom.into(),
             kernel_stack_top.into(),
             MapPermission::R | MapPermission::W,
         );
+        debug!("crash");
         KernelStack { pid: pid_handle.0 }
     }
     #[allow(unused)]

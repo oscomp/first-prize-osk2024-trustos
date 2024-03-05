@@ -1,7 +1,11 @@
 //! Implementation of [`PageTableEntry`] and [`PageTable`].
+use crate::config::mm::{KERNEL_ADDR_OFFSET, KERNEL_PGNUM_OFFSET};
 use crate::mm::KernelAddr;
 
-use super::{frame_alloc, FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+use super::{
+    frame_alloc, FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum,
+    KERNEL_SPACE,
+};
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -80,6 +84,20 @@ impl PageTable {
             frames: vec![frame],
         }
     }
+    pub fn new_from_kernel() -> Self {
+        let frame = frame_alloc().unwrap();
+        // let kernel = KERNEL_SPACE.exclusive_access();
+        let kernel_page_table = &KERNEL_SPACE.exclusive_access().page_table;
+        let kernel_root_ppn = kernel_page_table.root_ppn;
+        // 第一级页表
+        let index = VirtPageNum::from(KERNEL_PGNUM_OFFSET).indexes()[0];
+        frame.ppn.pte_array()[index..].copy_from_slice(&kernel_root_ppn.pte_array()[index..]);
+        PageTable {
+            root_ppn: frame.ppn,
+            frames: vec![frame],
+        }
+    }
+
     /// Temporarily used to get arguments from user space.
     pub fn from_token(satp: usize) -> Self {
         Self {
@@ -129,10 +147,15 @@ impl PageTable {
     /// Create a mapping form `vpn` to `ppn`
     pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) {
         let pte = self.find_pte_create(vpn).unwrap();
-        assert!(!pte.is_valid(), "vpn {:?} is mapped before mapping", vpn);
+        assert!(
+            !pte.is_valid(),
+            "vpn {:?}, va {:x} is mapped before mapping",
+            vpn,
+            vpn.0 << 12
+        );
         *pte = PageTableEntry::new(ppn, flags | PTEFlags::V);
-        let va: VirtAddr = vpn.into();
-        let pa: PhysAddr = ppn.into();
+        // let va: VirtAddr = vpn.into();
+        // let pa: PhysAddr = ppn.into();
         // println!("va {:#x} map to pa{:#x}", va.0, pa.0);
     }
     #[allow(unused)]

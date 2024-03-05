@@ -13,5 +13,9 @@ pub const KERNEL_PGNUM_OFFSET: usize = KERNEL_ADDR_OFFSET >> PAGE_SIZE_BITS;
 
 pub const USER_SPACE_SIZE: usize = 0x30_0000_0000;
 
+// pub const USER_TRAMPOLINE: usize = USER_SPACE_SIZE - PAGE_SIZE;
+
+pub const USER_TRAP_CONTEXT: usize = USER_SPACE_SIZE - PAGE_SIZE;
+
 pub const TRAMPOLINE: usize = usize::MAX - PAGE_SIZE + 1;
-pub const TRAP_CONTEXT: usize = TRAMPOLINE - PAGE_SIZE;
+// pub const TRAP_CONTEXT: usize = TRAMPOLINE - PAGE_SIZE;

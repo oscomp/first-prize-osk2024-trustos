@@ -2,10 +2,12 @@
 use super::__switch;
 use super::{fetch_task, TaskStatus};
 use super::{TaskContext, TaskControlBlock};
+use crate::mm::KERNEL_SPACE;
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::sync::Arc;
 use lazy_static::*;
+use log::debug;
 ///Processor management structure
 pub struct Processor {
     ///The task currently executing on the current processor
@@ -51,14 +53,17 @@ pub fn run_tasks() {
             let mut task_inner = task.inner_exclusive_access();
             let next_task_cx_ptr = &task_inner.task_cx as *const TaskContext;
             task_inner.task_status = TaskStatus::Running;
+            task_inner.memory_set.activate();
             drop(task_inner);
             // release coming task TCB manually
             processor.current = Some(task);
             // release processor manually
             drop(processor);
+            debug!("jump to switch");
             unsafe {
                 __switch(idle_task_cx_ptr, next_task_cx_ptr);
             }
+            KERNEL_SPACE.exclusive_access().activate();
         }
     }
 }
@@ -85,6 +90,7 @@ pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {
     let mut processor = PROCESSOR.exclusive_access();
     let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
     drop(processor);
+    KERNEL_SPACE.exclusive_access().activate();
     unsafe {
         __switch(switched_task_cx_ptr, idle_task_cx_ptr);
     }

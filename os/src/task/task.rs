@@ -1,7 +1,7 @@
 //!Implementation of [`TaskControlBlock`]
 use super::TaskContext;
 use super::{pid_alloc, KernelStack, PidHandle};
-use crate::config::mm::TRAP_CONTEXT;
+use crate::config::mm::USER_TRAP_CONTEXT;
 use crate::fs::{File, Stdin, Stdout};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
@@ -10,7 +10,7 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefMut;
-use log::info;
+use log::{debug, info};
 
 pub struct TaskControlBlock {
     // immutable
@@ -22,6 +22,8 @@ pub struct TaskControlBlock {
 
 pub struct TaskControlBlockInner {
     pub trap_cx_ppn: PhysPageNum,
+    // TODO(ZMY):暂时不知道直接使用TrapContext如何绕过所有权检查
+    // pub trap_cx: TrapContext,
     pub base_size: usize,
     pub task_cx: TaskContext,
     pub task_status: TaskStatus,
@@ -35,7 +37,11 @@ pub struct TaskControlBlockInner {
 impl TaskControlBlockInner {
     pub fn trap_cx(&self) -> &'static mut TrapContext {
         self.trap_cx_ppn.as_mut()
+        // &mut self.trap_cx
     }
+    // pub fn trap_cx_mut(&mut self) -> &mut TrapContext {
+    //     &mut self.trap_cx
+    // }
     pub fn user_token(&self) -> usize {
         self.memory_set.token()
     }
@@ -62,15 +68,17 @@ impl TaskControlBlock {
     pub fn new(elf_data: &[u8]) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
-        info!("entry point: {:x}", entry_point);
+        debug!("entry point: {:x}", entry_point);
         let trap_cx_ppn = memory_set
-            .translate(VirtAddr::from(TRAP_CONTEXT).into())
+            .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
             .unwrap()
             .ppn();
+        // debug!("a");
         // alloc a pid and a kernel stack in kernel space
         let pid_handle = pid_alloc();
         let kernel_stack = KernelStack::new(&pid_handle);
         let kernel_stack_top = kernel_stack.top();
+        // debug!("b");
         let task_control_block = Self {
             pid: pid_handle,
             kernel_stack,
@@ -100,10 +108,17 @@ impl TaskControlBlock {
         *trap_cx = TrapContext::app_init_context(
             entry_point,
             user_sp,
-            KERNEL_SPACE.exclusive_access().token(),
             kernel_stack_top,
             trap_handler as usize,
         );
+        // *trap_cx = TrapContext::app_init_context(
+        //     entry_point,
+        //     user_sp,
+        //     KERNEL_SPACE.exclusive_access().token(),
+        //     kernel_stack_top,
+        //     trap_handler as usize,
+        // );
+        debug!("create new task successfully");
         task_control_block
     }
     pub fn exec(&self, elf_data: &[u8]) {
@@ -111,7 +126,7 @@ impl TaskControlBlock {
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
         let trap_cx_ppn = memory_set
-            .translate(VirtAddr::from(TRAP_CONTEXT).into())
+            .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
             .unwrap()
             .ppn();
 
@@ -121,11 +136,23 @@ impl TaskControlBlock {
         inner.memory_set = memory_set;
         // update trap_cx ppn
         inner.trap_cx_ppn = trap_cx_ppn;
+        // inner.trap_cx = TrapContext::app_init_context(
+        //     entry_point,
+        //     user_sp,
+        //     self.kernel_stack.top(),
+        //     trap_handler as usize,
+        // );
         // initialize trap_cx
+        // let trap_cx = TrapContext::app_init_context(
+        //     entry_point,
+        //     user_sp,
+        //     KERNEL_SPACE.exclusive_access().token(),
+        //     self.kernel_stack.top(),
+        //     trap_handler as usize,
+        // );
         let trap_cx = TrapContext::app_init_context(
             entry_point,
             user_sp,
-            KERNEL_SPACE.exclusive_access().token(),
             self.kernel_stack.top(),
             trap_handler as usize,
         );
@@ -138,7 +165,7 @@ impl TaskControlBlock {
         // copy user space(include trap context)
         let memory_set = MemorySet::from_existed_user(&parent_inner.memory_set);
         let trap_cx_ppn = memory_set
-            .translate(VirtAddr::from(TRAP_CONTEXT).into())
+            .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
             .unwrap()
             .ppn();
         // alloc a pid and a kernel stack in kernel space
