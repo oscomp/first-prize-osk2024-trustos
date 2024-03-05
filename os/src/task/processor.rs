@@ -2,7 +2,7 @@
 use super::__switch;
 use super::{fetch_task, TaskStatus};
 use super::{TaskContext, TaskControlBlock};
-use crate::mm::KERNEL_SPACE;
+use crate::mm::{VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::sync::Arc;
@@ -61,6 +61,16 @@ pub fn run_tasks() {
             drop(processor);
             debug!("jump to switch");
             unsafe {
+                // debug!(
+                //     "idle task cx ptr: ra={:#x},sp={:#x}",
+                //     (*idle_task_cx_ptr).ra,
+                //     (*idle_task_cx_ptr).sp
+                // );
+                // debug!(
+                //     "next task cx ptr: ra={:#x},sp={:#x}",
+                //     (*next_task_cx_ptr).ra,
+                //     (*next_task_cx_ptr).sp
+                // );
                 __switch(idle_task_cx_ptr, next_task_cx_ptr);
             }
             KERNEL_SPACE.exclusive_access().activate();

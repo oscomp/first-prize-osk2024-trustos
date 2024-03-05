@@ -15,9 +15,7 @@ mod context;
 
 use crate::config::mm::TRAMPOLINE;
 use crate::syscall::syscall;
-use crate::task::{
-    current_trap_cx, current_user_token, exit_current_and_run_next, suspend_current_and_run_next,
-};
+use crate::task::{current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next};
 use crate::timer::set_next_trigger;
 use core::arch::{asm, global_asm};
 use log::debug;
@@ -120,36 +118,15 @@ pub use context::TrapContext;
 /// set the reg a0 = trap_cx_ptr, reg a1 = phy addr of usr page table,
 /// finally, jump to new addr of __restore asm function
 pub fn trap_return() {
-    debug!("trap return!");
+    // debug!("trap return!");
     set_user_trap_entry();
-    // let trap_cx_ptr = TRAP_CONTEXT;
-    // let user_satp = current_user_token();
     extern "C" {
-        // fn __alltraps();
-        // fn __restore();
         fn __return_to_user(cx: *mut TrapContext);
     }
     unsafe {
-        __return_to_user(current_trap_cx());
+        let trap_cx = current_trap_cx();
+        __return_to_user(trap_cx);
     }
-    // let restore_va = __restore as usize - __alltraps as usize + TRAMPOLINE;
-    // TODO(ZMY) 至今仍未知道为什么删除下面这个print后会卡死
-    // print!("");
-    //println!("before trap_return");
-    // println!(
-    //     "before enter __restore, restore_va={:x} ,user_satp={:x}",
-    //     restore_va, user_satp
-    // );
-    // unsafe {
-    //     asm!(
-    //         "fence.i",
-    //         "jr {restore_va}",
-    //         restore_va = in(reg) restore_va,
-    //         in("a0") trap_cx_ptr,
-    //         in("a1") user_satp,
-    //         options(noreturn)
-    //     );
-    // }
 }
 
 #[no_mangle]

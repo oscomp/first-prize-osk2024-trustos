@@ -191,12 +191,7 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
     let mut start = ptr as usize;
     let end = start + len;
     let mut v = Vec::new();
-    // let mut t: usize = 0;
-    // println!("end va = {:x}", end);
     while start < end {
-        // println!("start va = {:x}", start);
-        // t += 1;
-        // println!("translated byte buffer loop time {}", t);
         let start_va = VirtAddr::from(start);
         let mut vpn = start_va.floor();
         let ppn = page_table.translate(vpn).unwrap().ppn();
@@ -209,10 +204,8 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
         } else {
             v.push(&mut ppn.bytes_array()[start_va.page_offset()..end_va.page_offset()]);
         }
-        // println!("b");
         start = end_va.into();
     }
-    // println!("c");
     v
 }
 
@@ -221,16 +214,7 @@ pub fn translated_str(token: usize, ptr: *const u8) -> String {
     let page_table = PageTable::from_token(token);
     let mut string = String::new();
     let mut va = ptr as usize;
-    // let mut times: usize = 0;
     loop {
-        // times += 1;
-        // println!("loop time {}", times);
-        // let pa: PhysAddr = page_table.translate_va(VirtAddr::from(va)).unwrap();
-        // println!("translate_str va {:#x} to pa {:#x}", va, pa.0);
-        // let ch: u8 = *(page_table
-        //     .translate_va(VirtAddr::from(va))
-        //     .unwrap()
-        //     .as_mut());
         let ch: u8 =
             *(KernelAddr::from(page_table.translate_va(VirtAddr::from(va)).unwrap()).as_mut());
         if ch == 0 {
@@ -256,10 +240,6 @@ pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
     let page_table = PageTable::from_token(token);
     let va = ptr as usize;
     KernelAddr::from(page_table.translate_va(VirtAddr::from(va)).unwrap()).as_mut()
-    // page_table
-    //     .translate_va(VirtAddr::from(va))
-    //     .unwrap()
-    //     .as_mut()
 }
 ///Array of u8 slice that user communicate with os
 pub struct UserBuffer {

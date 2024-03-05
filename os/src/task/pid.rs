@@ -72,19 +72,13 @@ pub struct KernelStack {
 impl KernelStack {
     ///Create a kernelstack from pid
     pub fn new(pid_handle: &PidHandle) -> Self {
-        debug!("new KernelStack");
+        // debug!("new KernelStack");
         let pid = pid_handle.0;
         let (kernel_stack_bottom, kernel_stack_top) = kernel_stack_position(pid);
         debug!(
             "kernel stack pos [{:#x},{:#x})",
             kernel_stack_bottom, kernel_stack_top
         );
-        KERNEL_SPACE.exclusive_access().insert_framed_area(
-            kernel_stack_bottom.into(),
-            kernel_stack_top.into(),
-            MapPermission::R | MapPermission::W,
-        );
-        debug!("crash");
         KernelStack { pid: pid_handle.0 }
     }
     #[allow(unused)]
@@ -104,6 +98,10 @@ impl KernelStack {
     pub fn top(&self) -> usize {
         let (_, kernel_stack_top) = kernel_stack_position(self.pid);
         kernel_stack_top
+    }
+    /// Return (bottom, top) of a kernel stack in kernel space.)
+    pub fn pos(&self) -> (usize, usize) {
+        kernel_stack_position(self.pid)
     }
 }
 
