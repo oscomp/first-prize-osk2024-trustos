@@ -211,15 +211,17 @@ impl MemorySet {
         // guard page
         user_stack_bottom += PAGE_SIZE;
         let user_stack_top = user_stack_bottom + USER_STACK_SIZE;
+        println!("top:{:X} buttom:{:X}", user_stack_top, user_stack_bottom);
         memory_set.push(
             MapArea::new(
                 user_stack_bottom.into(),
-                user_stack_top.into(),
+                (user_stack_top + 10).into(),
                 MapType::Framed,
                 MapPermission::R | MapPermission::W | MapPermission::U,
             ),
             None,
         );
+
         // map TrapContext
         memory_set.push(
             MapArea::new(
@@ -320,6 +322,9 @@ impl MapArea {
         }
         let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
         page_table.map(vpn, ppn, pte_flags);
+        if (vpn.0 != ppn.0) {
+            println!("mapped vpn {:X} to ppn {:X}", vpn.0 << 12, ppn.0 << 12);
+        }
     }
     pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         if self.map_type == MapType::Framed {

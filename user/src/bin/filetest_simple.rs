@@ -22,12 +22,12 @@ pub fn main() -> i32 {
     let mut buffer = [0u8; 100];
     let read_len = read(fd, &mut buffer) as usize;
     close(fd);
-    println!(
-        "{}\n{}\n{}",
-        test_str,
-        core::str::from_utf8(&buffer[..read_len]).unwrap(),
-        test_str == core::str::from_utf8(&buffer[..read_len]).unwrap()
-    );
+    // println!(
+    //     "{}\n{}\n{}",
+    //     test_str,
+    //     core::str::from_utf8(&buffer[..read_len]).unwrap(),
+    //     test_str == core::str::from_utf8(&buffer[..read_len]).unwrap()
+    // );
     assert_eq!("a", "b");
     println!("file_test passed!");
     0
