@@ -61,6 +61,7 @@ pub fn enable_timer_interrupt() {
 #[no_mangle]
 /// handle an interrupt, exception, or system call from user space
 pub fn trap_handler() {
+    debug!("trap handler");
     set_kernel_trap_entry();
     let scause = scause::read();
     let stval = stval::read();
@@ -69,6 +70,7 @@ pub fn trap_handler() {
             // jump to next instruction anyway
             let mut cx = current_trap_cx();
             cx.sepc += 4;
+            debug!("syscall {}", cx.x[17]);
             // get system call return value
             let result = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]);
             // cx is changed during sys_exec, so we have to call it again
@@ -96,6 +98,7 @@ pub fn trap_handler() {
             exit_current_and_run_next(-3);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
+            debug!("Timer Interupt!");
             set_next_trigger();
             suspend_current_and_run_next();
         }
@@ -107,7 +110,6 @@ pub fn trap_handler() {
             );
         }
     }
-    //println!("before trap_return");
     trap_return();
 }
 
@@ -118,7 +120,7 @@ pub use context::TrapContext;
 /// set the reg a0 = trap_cx_ptr, reg a1 = phy addr of usr page table,
 /// finally, jump to new addr of __restore asm function
 pub fn trap_return() {
-    // debug!("trap return!");
+    debug!("trap return!");
     set_user_trap_entry();
     extern "C" {
         fn __return_to_user(cx: *mut TrapContext);

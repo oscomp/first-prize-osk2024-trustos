@@ -105,6 +105,7 @@ impl KernelStack {
     }
 }
 
+// TODO(ZMY):删除了应该也没有影响
 impl Drop for KernelStack {
     fn drop(&mut self) {
         let (kernel_stack_bottom, _) = kernel_stack_position(self.pid);

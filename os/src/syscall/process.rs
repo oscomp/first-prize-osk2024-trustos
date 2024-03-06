@@ -6,7 +6,7 @@ use crate::task::{
 };
 use crate::timer::get_time_ms;
 use alloc::sync::Arc;
-use log::info;
+use log::{debug, info};
 
 pub fn sys_exit(exit_code: i32) -> ! {
     exit_current_and_run_next(exit_code);
@@ -59,6 +59,7 @@ pub fn sys_exec(path: *const u8) -> isize {
 /// If there is not a child process whose pid is same as given, return -1.
 /// Else if there is a child process but it is still running, return -2.
 pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
+    debug!("sys_waitpid: {}", pid);
     let task = current_task().unwrap();
     // find a child process
 

@@ -51,8 +51,9 @@ __trap_from_user:
     ld s10, 46*8(sp)
     ld s11, 47*8(sp)
     # load kernel fp
-    ld fp, 48*8(sp)
-    ld tp, 49*8(sp)
+    # TODO(暂时没用到fp tp)
+    # ld fp, 48*8(sp)
+    # ld tp, 49*8(sp)
     ld sp, 34*8(sp)
     # return to kernel ra
     ret  
@@ -66,7 +67,7 @@ __return_to_user:
     csrw sscratch, a0
     # save kernel callee-saved regs
     sd sp, 34*8(a0)
-    sd ra, 35*8(a0)
+    # sd ra, 35*8(a0)
     sd s0, 36*8(a0)
     sd s1, 37*8(a0)
     sd s2, 38*8(a0)
@@ -79,8 +80,8 @@ __return_to_user:
     sd s9, 45*8(a0)
     sd s10, 46*8(a0)
     sd s11, 47*8(a0)
-    sd fp, 48*8(a0)
-    sd tp, 49*8(a0)
+    # sd fp, 48*8(a0)
+    # sd tp, 49*8(a0)
 
     mv sp, a0
     # now sp points to TrapContext in kernel space, start restoring based on it

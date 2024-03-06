@@ -110,7 +110,7 @@ impl TaskControlBlock {
             kernel_stack_top,
             trap_handler as usize,
         );
-        debug!("create new task successfully");
+        debug!("create task {}", task_control_block.pid.0);
         task_control_block
     }
     pub fn exec(&self, elf_data: &[u8]) {
@@ -135,6 +135,7 @@ impl TaskControlBlock {
             trap_handler as usize,
         );
         *inner.trap_cx() = trap_cx;
+        info!("task.exec.pid={}", self.pid.0);
         // **** release current PCB
     }
     pub fn fork(self: &Arc<TaskControlBlock>) -> Arc<TaskControlBlock> {

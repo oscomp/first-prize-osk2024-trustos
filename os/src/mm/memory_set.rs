@@ -16,7 +16,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::arch::asm;
 use lazy_static::*;
-use log::debug;
+use log::{debug, info};
 use riscv::register::satp;
 
 extern "C" {
@@ -42,6 +42,7 @@ pub fn kernel_token() -> usize {
     KERNEL_SPACE.exclusive_access().token()
 }
 /// memory set structure, controls virtual-memory space
+/// 地址空间
 pub struct MemorySet {
     pub page_table: PageTable,
     areas: Vec<MapArea>,
@@ -99,27 +100,10 @@ impl MemorySet {
     pub fn debug_translate_va(&self, va: VirtAddr) -> Option<PhysAddr> {
         self.page_table.translate_va(va)
     }
-    /// Mention that trampoline is not collected by areas.
-    // fn map_trampoline(&mut self) {
-    // println!("before map trampoline");
-    // println!(
-    //     "map trampoline to pa {:x}",
-    //     PhysAddr::from(KernelAddr::from(strampoline as usize)).0
-    // );
-    // self.page_table.map(
-    //     VirtAddr::from(TRAMPOLINE).into(),
-    //     PhysAddr::from(KernelAddr::from(strampoline as usize)).into(),
-    //     PTEFlags::R | PTEFlags::X,
-    // );
-    // println!("after map trampoline");
-    // }
     /// Without kernel stacks.
     pub fn new_kernel() -> Self {
-        // println!("call new kernel");
         let mut memory_set = Self::new_bare();
-        // println!("new bare");
-        // map trampoline
-        // memory_set.map_trampoline();
+        println!("kernel satp: {:#x}", memory_set.page_table.token());
         // map kernel sections
         println!(".text [{:#x}, {:#x})", stext as usize, etext as usize);
         println!(".rodata [{:#x}, {:#x})", srodata as usize, erodata as usize);
@@ -196,11 +180,8 @@ impl MemorySet {
     /// Include sections in elf and trampoline and TrapContext and user stack,
     /// also returns user_sp and entry point.
     pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize) {
-        debug!("call from_elf");
-        // let mut memory_set = Self::new_bare();
         let mut memory_set = Self::new_from_kernel();
-        // map trampoline
-        // memory_set.map_trampoline();
+        info!("from_elf new stap={:#x}", memory_set.page_table.token());
         // map program headers of elf, with U flag
         let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
         let elf_header = elf.header;
@@ -247,17 +228,6 @@ impl MemorySet {
             ),
             None,
         );
-        debug!("push user_stack successfully!");
-        // map TrapContext
-        // memory_set.push(
-        //     MapArea::new(
-        //         TRAP_CONTEXT.into(),
-        //         TRAMPOLINE.into(),
-        //         MapType::Framed,
-        //         MapPermission::R | MapPermission::W,
-        //     ),
-        //     None,
-        // );
         memory_set.push(
             MapArea::new(
                 USER_TRAP_CONTEXT.into(),
@@ -267,7 +237,6 @@ impl MemorySet {
             ),
             None,
         );
-        debug!("push TrapContext successfully!");
         (
             memory_set,
             user_stack_top,
@@ -276,10 +245,11 @@ impl MemorySet {
     }
     ///Clone a same `MemorySet`
     pub fn from_existed_user(user_space: &MemorySet) -> MemorySet {
-        // let mut memory_set = Self::new_bare();
         let mut memory_set = Self::new_from_kernel();
-        // map trampoline
-        // memory_set.map_trampoline();
+        info!(
+            "from_existed_user new stap={:#x}",
+            memory_set.page_table.token()
+        );
         // copy data sections/trap_context/user_stack
         for area in user_space.areas.iter() {
             let new_area = MapArea::from_another(area);
@@ -313,6 +283,7 @@ impl MemorySet {
     }
 }
 /// map area structure, controls a contiguous piece of virtual memory
+/// 逻辑段
 pub struct MapArea {
     vpn_range: VPNRange,
     data_frames: BTreeMap<VirtPageNum, FrameTracker>,

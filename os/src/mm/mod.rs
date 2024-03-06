@@ -29,18 +29,4 @@ pub fn init() {
     frame_allocator::init_frame_allocator();
     KERNEL_SPACE.exclusive_access().activate();
     println!("mm init successfully!");
-    // extern "C" {
-    //     fn __alltraps();
-    //     fn __restore();
-    // }
-    // let restore_va = __restore as usize - __alltraps as usize + TRAMPOLINE;
-    // println!(
-    //     "translate va {:x} to pa {:x}",
-    //     restore_va,
-    //     KERNEL_SPACE
-    //         .exclusive_access()
-    //         .debug_translate_va(VirtAddr::from(restore_va))
-    //         .unwrap()
-    //         .0
-    // );
 }

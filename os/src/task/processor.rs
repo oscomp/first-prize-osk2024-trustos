@@ -44,6 +44,7 @@ lazy_static! {
 ///The main part of process execution and scheduling
 ///Loop `fetch_task` to get the process that needs to run, and switch the process through `__switch`
 pub fn run_tasks() {
+    let mut t: usize = 0;
     loop {
         let mut processor = PROCESSOR.exclusive_access();
         if let Some(task) = fetch_task() {
@@ -54,12 +55,14 @@ pub fn run_tasks() {
             let next_task_cx_ptr = &task_inner.task_cx as *const TaskContext;
             task_inner.task_status = TaskStatus::Running;
             task_inner.memory_set.activate();
+            let pid = task.pid.0;
             drop(task_inner);
             // release coming task TCB manually
             processor.current = Some(task);
             // release processor manually
             drop(processor);
-            debug!("jump to switch");
+            t += 1;
+            debug!("{} time switch,switch to task {}", t, pid);
             unsafe {
                 // debug!(
                 //     "idle task cx ptr: ra={:#x},sp={:#x}",
@@ -73,6 +76,7 @@ pub fn run_tasks() {
                 // );
                 __switch(idle_task_cx_ptr, next_task_cx_ptr);
             }
+            debug!("run tasks loop again and use kernel satp");
             KERNEL_SPACE.exclusive_access().activate();
         }
     }
@@ -100,7 +104,7 @@ pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {
     let mut processor = PROCESSOR.exclusive_access();
     let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
     drop(processor);
-    KERNEL_SPACE.exclusive_access().activate();
+    // KERNEL_SPACE.exclusive_access().activate();
     unsafe {
         __switch(switched_task_cx_ptr, idle_task_cx_ptr);
     }

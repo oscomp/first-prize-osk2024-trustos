@@ -5,9 +5,10 @@ use crate::mm::{
     PhysPageNum, StepByOne, VirtAddr,
 };
 use crate::sync::UPSafeCell;
+use crate::task::{current_task, current_user_token};
 use alloc::vec::Vec;
 use lazy_static::*;
-use log::info;
+use log::{debug, info};
 use virtio_drivers::{Hal, VirtIOBlk, VirtIOHeader};
 
 #[allow(unused)]
@@ -78,7 +79,7 @@ impl Hal for VirtioHal {
     }
 
     fn virt_to_phys(vaddr: usize) -> usize {
-        PageTable::from_token(kernel_token())
+        PageTable::from_token(current_task().map_or(kernel_token(), |_| current_user_token()))
             .translate_va(VirtAddr::from(vaddr))
             .unwrap()
             .0
