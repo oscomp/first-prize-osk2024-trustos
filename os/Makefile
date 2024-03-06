@@ -30,10 +30,11 @@ DISASM ?= -x
 # Run usertests or usershell
 TEST ?=
 
-build: env initproc $(KERNEL_BIN)
+build: env $(KERNEL_BIN)
 
 initproc:
 	@cd ../user && cargo clean && make build
+	@cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean && make all
 
 env:
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
@@ -66,7 +67,9 @@ disasm-vim: kernel
 	@vim $(DISASM_TMP)
 	@rm $(DISASM_TMP)
 
-run: run-inner
+run: initproc run-inner
+
+srun: run-inner
 
 QEMU_ARGS := -machine virt \
 			 -nographic \
@@ -91,4 +94,4 @@ gdbserver: build
 gdbclient:
 	@riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'
 
-.PHONY: build env kernel clean disasm disasm-vim run-inner copy-to-fs procinit gdbserver gdbclient
+.PHONY: build env kernel clean disasm disasm-vim run-inner copy-to-fs procinit gdbserver gdbclient srun
