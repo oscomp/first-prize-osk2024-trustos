@@ -246,10 +246,10 @@ impl MemorySet {
     ///Clone a same `MemorySet`
     pub fn from_existed_user(user_space: &MemorySet) -> MemorySet {
         let mut memory_set = Self::new_from_kernel();
-        info!(
-            "from_existed_user new stap={:#x}",
-            memory_set.page_table.token()
-        );
+        // info!(
+        //     "from_existed_user new stap={:#x}",
+        //     memory_set.page_table.token()
+        // );
         // copy data sections/trap_context/user_stack
         for area in user_space.areas.iter() {
             let new_area = MapArea::from_another(area);
@@ -266,7 +266,7 @@ impl MemorySet {
     ///Refresh TLB with `sfence.vma`
     pub fn activate(&self) {
         let satp = self.page_table.token();
-        println!("switch satp to  {:x}", satp);
+        // println!("switch satp to  {:x}", satp);
         unsafe {
             satp::write(satp);
             asm!("sfence.vma");

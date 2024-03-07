@@ -264,6 +264,12 @@ impl PhysPageNum {
         let kernel_va = KernelAddr::from(pa).0;
         unsafe { core::slice::from_raw_parts_mut(kernel_va as *mut u8, 4096) }
     }
+    ///Get u8 array on `PhysPageNum` with given length
+    pub fn bytes_array_from_offset(&self, offset: usize, len: usize) -> &'static mut [u8] {
+        let pa: PhysAddr = (*self).into();
+        let kernel_va = KernelAddr::from(pa).0 + offset;
+        unsafe { core::slice::from_raw_parts_mut(kernel_va as *mut u8, len) }
+    }
     ///Get Get mutable reference to `PhysAddr` value on `PhysPageNum`
     pub fn as_mut<T>(&self) -> &'static mut T {
         let pa: PhysAddr = (*self).into();

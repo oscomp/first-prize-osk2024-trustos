@@ -19,7 +19,7 @@ sbi-rt = { version = "0.0.2", features = ["legacy"] }
 
 [features]
 board_qemu = []
-default = ["debug"]
+default = ["info"]
 error = []
 warn = []
 info = []

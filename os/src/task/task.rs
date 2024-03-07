@@ -116,11 +116,18 @@ impl TaskControlBlock {
     pub fn exec(&self, elf_data: &[u8]) {
         info!("call task.exec");
         // memory_set with elf program headers/trampoline/trap context/user stack
-        let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+        let (mut memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
             .unwrap()
             .ppn();
+        // map kernel stack
+        let (kernel_stack_bottom, kernel_stack_top) = self.kernel_stack.pos();
+        memory_set.insert_framed_area(
+            kernel_stack_bottom.into(),
+            kernel_stack_top.into(),
+            MapPermission::R | MapPermission::W,
+        );
 
         // **** access current TCB exclusively
         let mut inner = self.inner_exclusive_access();
