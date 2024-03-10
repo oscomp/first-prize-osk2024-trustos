@@ -5,18 +5,18 @@
 extern crate user_lib;
 extern crate alloc;
 
-use user_lib::{close, open, read, OpenFlags};
+use user_lib::{close, openat, read, OpenFlags};
 
 #[no_mangle]
 pub fn main() -> i32 {
-    let fd = open("text.txt\0", OpenFlags::O_RDONLY);
+    let fd = openat(-100,"text.txt\0", OpenFlags::O_RDONLY,0);
     if fd == -1 {
         panic!("Error occured when opening file");
     }
     let fd = fd as usize;
     let mut buf = [0u8; 100];
     loop {
-        let size = read(fd, &mut buf) as usize;
+        let size = read(fd, &mut buf,100) as usize;
         if size == 0 {
             break;
         }

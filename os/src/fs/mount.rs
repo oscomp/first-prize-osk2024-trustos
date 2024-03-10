@@ -9,7 +9,7 @@ pub struct MountTable {
 }
 
 impl MountTable {
-    pub fn mount(&mut self, special: String, dir: String, fstype: String, flags: u32) -> isize {
+    pub fn mount(&mut self, special: String, dir: String, fstype: String, flags: u32,data:String) -> isize {
         if self.mnt_list.len() == MNT_MAXLEN {
             return -1;
         }
@@ -20,6 +20,7 @@ impl MountTable {
 
         // todo
         _ = flags;
+        _ = data;
 
         self.mnt_list.push((special, dir, fstype));
         0

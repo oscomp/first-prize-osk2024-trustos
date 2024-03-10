@@ -29,6 +29,7 @@ pub struct TaskControlBlockInner {
     pub children: Vec<Arc<TaskControlBlock>>,
     pub exit_code: i32,
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
+    pub current_path: alloc::string::String,
 }
 
 impl TaskControlBlockInner {
@@ -90,6 +91,7 @@ impl TaskControlBlock {
                         // 2 -> stderr
                         Some(Arc::new(Stdout)),
                     ],
+                    current_path:alloc::string::String::from("/"),
                 })
             },
         };
@@ -166,6 +168,7 @@ impl TaskControlBlock {
                     children: Vec::new(),
                     exit_code: 0,
                     fd_table: new_fd_table,
+                    current_path:parent_inner.current_path.clone(),
                 })
             },
         });
