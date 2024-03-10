@@ -59,7 +59,7 @@ __trap_from_user:
     ret  
 
 # kernel -> user
-__return_to_user:
+__return_to_user_for_new_task_once:
     # a0: *TrapContext in user space(Constant); a1: user space token
     # switch to user space
 
@@ -101,7 +101,7 @@ __return_to_user:
     ld sp, 2*8(sp)
     sret
     
-__return_to_user2:
+__return_to_user:
     # a0: *TrapContext in user space(Constant); a1: user space token
     # switch to user space
 

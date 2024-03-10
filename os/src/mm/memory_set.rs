@@ -181,7 +181,7 @@ impl MemorySet {
     /// also returns user_sp and entry point.
     pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize) {
         let mut memory_set = Self::new_from_kernel();
-        info!("from_elf new stap={:#x}", memory_set.page_table.token());
+        debug!("from_elf new stap={:#x}", memory_set.page_table.token());
         // map program headers of elf, with U flag
         let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
         let elf_header = elf.header;
@@ -246,10 +246,6 @@ impl MemorySet {
     ///Clone a same `MemorySet`
     pub fn from_existed_user(user_space: &MemorySet) -> MemorySet {
         let mut memory_set = Self::new_from_kernel();
-        // info!(
-        //     "from_existed_user new stap={:#x}",
-        //     memory_set.page_table.token()
-        // );
         // copy data sections/trap_context/user_stack
         for area in user_space.areas.iter() {
             let new_area = MapArea::from_another(area);

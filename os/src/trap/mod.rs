@@ -43,9 +43,6 @@ fn set_kernel_trap_entry() {
 }
 
 fn set_user_trap_entry() {
-    // unsafe {
-    //     stvec::write(TRAMPOLINE as usize, TrapMode::Direct);
-    // }
     unsafe {
         stvec::write(__trap_from_user as usize, TrapMode::Direct);
     }
@@ -61,11 +58,6 @@ pub fn enable_timer_interrupt() {
 #[no_mangle]
 /// handle an interrupt, exception, or system call from user space
 pub fn trap_handler() {
-    // let mut sp=0i32;
-    // unsafe{
-    //     asm!("mv {},sp",out(reg) sp);
-    //     println!("sp:{}",sp);
-    // }
     debug!("trap handler");
     set_kernel_trap_entry();
     let scause = scause::read();
@@ -115,19 +107,14 @@ pub fn trap_handler() {
             );
         }
     }
-    // trap_return() 手动内联
-    debug!("trap return!");
+    // 手动内联trap_return
     set_user_trap_entry();
     extern "C" {
-        fn __return_to_user2(cx: *mut TrapContext);
+        #[allow(improper_ctypes)]
+        fn __return_to_user(cx: *mut TrapContext);
     }
     unsafe {
-        let trap_cx = current_trap_cx();
-    // unsafe{
-    //     asm!("mv {},sp",out(reg) sp);
-    //     println!("sp is {} trap_return",sp);
-    // }
-        __return_to_user2(trap_cx);
+        __return_to_user(current_trap_cx());
     }
 }
 
@@ -138,43 +125,27 @@ pub use context::TrapContext;
 /// set the reg a0 = trap_cx_ptr, reg a1 = phy addr of usr page table,
 /// finally, jump to new addr of __restore asm function
 pub fn trap_return_for_new_task_once() {
-    
-    let mut sp=0i32;
-    debug!("trap return!");
     set_user_trap_entry();
     extern "C" {
-        fn __return_to_user(cx: *mut TrapContext);
+        #[allow(improper_ctypes)]
+        fn __return_to_user_for_new_task_once(cx: *mut TrapContext);
     }
     unsafe {
-        let trap_cx = current_trap_cx();
-    // unsafe{
-    //     asm!("mv {},sp",out(reg) sp);
-    //     println!("sp is {} trap_return",sp);
-    // }
-        __return_to_user(trap_cx);
+        __return_to_user_for_new_task_once(current_trap_cx());
     }
 }
-#[no_mangle]
-#[inline(never)]
-/// set the new addr of __restore asm function in TRAMPOLINE page,
-/// set the reg a0 = trap_cx_ptr, reg a1 = phy addr of usr page table,
-/// finally, jump to new addr of __restore asm function
-pub fn trap_return() {
-    
-    debug!("trap return!");
-    set_user_trap_entry();
-    extern "C" {
-        fn __return_to_user2(cx: *mut TrapContext);
-    }
-    unsafe {
-        let trap_cx = current_trap_cx();
-    // unsafe{
-    //     asm!("mv {},sp",out(reg) sp);
-    //     println!("sp is {} trap_return",sp);
-    // }
-        __return_to_user2(trap_cx);
-    }
-}
+// #[no_mangle]
+// #[inline(never)]
+// pub fn trap_return() {
+//     set_user_trap_entry();
+//     extern "C" {
+//         #[allow(improper_ctypes)]
+//         fn __return_to_user(cx: *mut TrapContext);
+//     }
+//     unsafe {
+//         __return_to_user(current_trap_cx());
+//     }
+// }
 
 #[no_mangle]
 /// Unimplement: traps/interrupts/exceptions from kernel mode

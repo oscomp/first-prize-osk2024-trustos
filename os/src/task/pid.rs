@@ -106,12 +106,12 @@ impl KernelStack {
 }
 
 // TODO(ZMY):删除了应该也没有影响
-impl Drop for KernelStack {
-    fn drop(&mut self) {
-        let (kernel_stack_bottom, _) = kernel_stack_position(self.pid);
-        let kernel_stack_bottom_va: VirtAddr = kernel_stack_bottom.into();
-        KERNEL_SPACE
-            .exclusive_access()
-            .remove_area_with_start_vpn(kernel_stack_bottom_va.into());
-    }
-}
+// impl Drop for KernelStack {
+//     fn drop(&mut self) {
+//         let (kernel_stack_bottom, _) = kernel_stack_position(self.pid);
+//         let kernel_stack_bottom_va: VirtAddr = kernel_stack_bottom.into();
+//         KERNEL_SPACE
+//             .exclusive_access()
+//             .remove_area_with_start_vpn(kernel_stack_bottom_va.into());
+//     }
+// }

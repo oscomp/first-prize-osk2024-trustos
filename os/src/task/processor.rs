@@ -44,36 +44,21 @@ lazy_static! {
 ///The main part of process execution and scheduling
 ///Loop `fetch_task` to get the process that needs to run, and switch the process through `__switch`
 pub fn run_tasks() {
-    let mut t: usize = 0;
     loop {
         let mut processor = PROCESSOR.exclusive_access();
         if let Some(task) = fetch_task() {
-            // println!("fetch task and switch");
             let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
             // access coming task TCB exclusively
             let mut task_inner = task.inner_exclusive_access();
             let next_task_cx_ptr = &task_inner.task_cx as *const TaskContext;
             task_inner.task_status = TaskStatus::Running;
             task_inner.memory_set.activate();
-            let pid = task.pid.0;
             drop(task_inner);
             // release coming task TCB manually
             processor.current = Some(task);
             // release processor manually
             drop(processor);
-            t += 1;
-            debug!("{} time switch,switch to task {}", t, pid);
             unsafe {
-                // debug!(
-                //     "idle task cx ptr: ra={:#x},sp={:#x}",
-                //     (*idle_task_cx_ptr).ra,
-                //     (*idle_task_cx_ptr).sp
-                // );
-                // debug!(
-                //     "next task cx ptr: ra={:#x},sp={:#x}",
-                //     (*next_task_cx_ptr).ra,
-                //     (*next_task_cx_ptr).sp
-                // );
                 __switch(idle_task_cx_ptr, next_task_cx_ptr);
             }
             debug!("run tasks loop again and use kernel satp");

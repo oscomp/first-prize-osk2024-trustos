@@ -86,7 +86,6 @@ impl PageTable {
     }
     pub fn new_from_kernel() -> Self {
         let frame = frame_alloc().unwrap();
-        // let kernel = KERNEL_SPACE.exclusive_access();
         let kernel_page_table = &KERNEL_SPACE.exclusive_access().page_table;
         let kernel_root_ppn = kernel_page_table.root_ppn;
         // 第一级页表
@@ -154,9 +153,6 @@ impl PageTable {
             vpn.0 << 12
         );
         *pte = PageTableEntry::new(ppn, flags | PTEFlags::V);
-        // let va: VirtAddr = vpn.into();
-        // let pa: PhysAddr = ppn.into();
-        // println!("va {:#x} map to pa{:#x}", va.0, pa.0);
     }
     #[allow(unused)]
     /// Delete a mapping form `vpn`
@@ -186,7 +182,6 @@ impl PageTable {
 }
 /// Translate a pointer to a mutable u8 Vec through page table
 pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]> {
-    // println!("call translated_byte_buffer");
     let page_table = PageTable::from_token(token);
     let va = VirtAddr::from(ptr as usize);
     let ppn = page_table.translate(va.floor()).unwrap().ppn();
