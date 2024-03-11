@@ -9,10 +9,22 @@
 //! For clarity, each single syscall is implemented as its own function, named
 //! `sys_` then the name of the syscall. You can find functions like this in
 //! submodules, and you should also implement syscalls this way.
-const SYSCALL_OPEN: usize = 56;
+const SYSCALL_GETCWD: usize = 17;
+const SYSCALL_DUP: usize = 23;
+const SYSCALL_DUP3: usize = 24;
+const SYSCALL_MKDIRAT: usize = 34;
+const SYSCALL_UNLINKAT: usize = 35;
+const SYSCALL_LINKAT: usize = 37;
+const SYSCALL_UMOUNT2: usize = 39;
+const SYSCALL_MOUNT: usize = 40;
+const SYSCALL_CHDIR: usize = 49;
+const SYSCALL_OPENAT: usize = 56;
 const SYSCALL_CLOSE: usize = 57;
+const SYSCALL_PIPE2: usize = 59;
+const SYSCALL_GETDENTS64: usize = 61;
 const SYSCALL_READ: usize = 63;
 const SYSCALL_WRITE: usize = 64;
+const SYSCALL_FSTAT: usize = 80;
 const SYSCALL_EXIT: usize = 93;
 const SYSCALL_YIELD: usize = 124;
 const SYSCALL_GET_TIME: usize = 169;
@@ -26,13 +38,28 @@ mod process;
 
 use fs::*;
 use process::*;
+
+use crate::console::print;
 /// handle syscall exception with `syscall_id` and other arguments
-pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
+pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
+    //println!("hello!");
     match syscall_id {
-        SYSCALL_OPEN => sys_open(args[0] as *const u8, args[1] as u32),
-        SYSCALL_CLOSE => sys_close(args[0]),
-        SYSCALL_READ => sys_read(args[0], args[1] as *const u8, args[2]),
-        SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
+        SYSCALL_GETCWD => sys_getcwd(args[0] as *const u8,args[1] as usize),
+        SYSCALL_DUP => sys_dup(args[0] as usize),
+        SYSCALL_DUP3 => sys_dup3(args[0] as usize,args[1] as usize),
+        SYSCALL_MKDIRAT => sys_mkdirat(args[0],args[1] as *const u8, args[2] as usize),
+        SYSCALL_UNLINKAT => sys_unlinkat(args[0],args[1] as *const u8, args[2] as u32),
+        SYSCALL_LINKAT => sys_linkat(args[0],args[1] as *const u8, args[2],args[3] as *const u8, args[4] as u32),
+        SYSCALL_UMOUNT2 => sys_umount2(args[0] as *const u8, args[1] as u32),
+        SYSCALL_MOUNT => sys_mount(args[0] as *const u8, args[1] as *const u8, args[2] as *const u8 ,args[3] as u32, args[4] as *const u8),
+        SYSCALL_CHDIR => sys_chdir(args[0] as *const u8),
+        SYSCALL_OPENAT => sys_openat(args[0],args[1] as *const u8, args[2] as u32,args[3] as usize),
+        SYSCALL_CLOSE => sys_close(args[0] as usize),
+        SYSCALL_PIPE2 => sys_pipe2(args[0] as *mut u32),
+        SYSCALL_GETDENTS64 => sys_getdents64(args[0] as usize,args[1] as *const u8,args[2] as usize),
+        SYSCALL_READ => sys_read(args[0] as usize, args[1] as *const u8, args[2] as usize),
+        SYSCALL_WRITE => sys_write(args[0] as usize, args[1] as *const u8, args[2] as usize),
+        SYSCALL_FSTAT => sys_fstat(args[0] as usize, args[1] as *const u8),
         SYSCALL_EXIT => sys_exit(args[0] as i32),
         SYSCALL_YIELD => sys_yield(),
         SYSCALL_GET_TIME => sys_get_time(),

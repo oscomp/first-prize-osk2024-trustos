@@ -4,7 +4,7 @@
 #[macro_use]
 extern crate user_lib;
 
-use user_lib::{close, get_time, open, write, OpenFlags};
+use user_lib::{close, get_time, openat, write, OpenFlags};
 
 #[no_mangle]
 pub fn main() -> i32 {
@@ -12,7 +12,7 @@ pub fn main() -> i32 {
     for (i, ch) in buffer.iter_mut().enumerate() {
         *ch = i as u8;
     }
-    let f = open("testf\0", OpenFlags::CREATE | OpenFlags::WRONLY);
+    let f = openat(-100,"testf\0", OpenFlags::O_CREATE | OpenFlags::O_WRONLY,0);
     if f < 0 {
         panic!("Open test file failed!");
     }
@@ -20,7 +20,7 @@ pub fn main() -> i32 {
     let start = get_time();
     let size_mb = 1usize;
     for _ in 0..1024 * size_mb {
-        write(f, &buffer);
+        write(f, &buffer,buffer.len());
     }
     close(f);
     let time_ms = (get_time() - start) as usize;

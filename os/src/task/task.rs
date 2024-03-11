@@ -3,7 +3,7 @@ use super::TaskContext;
 use super::{pid_alloc, KernelStack, PidHandle};
 use crate::config::mm::USER_TRAP_CONTEXT;
 use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
+use crate::mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, VirtPageNum, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
@@ -30,6 +30,7 @@ pub struct TaskControlBlockInner {
     pub children: Vec<Arc<TaskControlBlock>>,
     pub exit_code: i32,
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
+    pub current_path: alloc::string::String,
 }
 
 impl TaskControlBlockInner {
@@ -97,6 +98,7 @@ impl TaskControlBlock {
                         // 2 -> stderr
                         Some(Arc::new(Stdout)),
                     ],
+                    current_path:alloc::string::String::from("/"),
                 })
             },
         };
@@ -113,7 +115,12 @@ impl TaskControlBlock {
     }
     pub fn exec(&self, elf_data: &[u8]) {
         // memory_set with elf program headers/trampoline/trap context/user stack
+<<<<<<< HEAD
         let (mut memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+=======
+        let (memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+
+>>>>>>> zch_fs
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
             .unwrap()
@@ -184,6 +191,7 @@ impl TaskControlBlock {
                     children: Vec::new(),
                     exit_code: 0,
                     fd_table: new_fd_table,
+                    current_path:parent_inner.current_path.clone(),
                 })
             },
         });
