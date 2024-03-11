@@ -18,13 +18,10 @@
 //! We then call [`task::run_tasks()`] and for the first time go to
 //! userspace.
 
-<<<<<<< HEAD
 // #![deny(warnings)]
-=======
 //#![deny(missing_docs)]
 #![allow(unused)]
 #![deny(warnings)]
->>>>>>> zch_fs
 #![allow(unused_imports)]
 #![no_std]
 #![no_main]

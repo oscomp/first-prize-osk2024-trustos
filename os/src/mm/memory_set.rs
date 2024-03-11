@@ -228,11 +228,8 @@ impl MemorySet {
             ),
             None,
         );
-<<<<<<< HEAD
-=======
 
         // map TrapContext
->>>>>>> zch_fs
         memory_set.push(
             MapArea::new(
                 USER_TRAP_CONTEXT.into(),
