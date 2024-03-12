@@ -28,17 +28,8 @@ impl Processor {
             hartid: 0,
         }
     }
-    ///Create an empty const Processor
-    // pub const fn new_const() -> Self {
-    //     Self {
-    //         current: None,
-    //         idle_task_cx: None,
-    //         hartid: 0,
-    //     }
-    // }
     ///Get mutable reference to `idle_task_cx`
     fn get_idle_task_cx_ptr(&mut self) -> *mut TaskContext {
-        // &mut self.idle_task_cx as *mut _
         self.idle_task_cx.as_mut().unwrap().as_mut() as *mut _
     }
     pub fn set_hartid(&mut self, hartid: usize) {
@@ -74,7 +65,6 @@ pub fn run_tasks() {
             debug!("fetch task {}", task.pid.0);
             let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
             // access coming task TCB exclusively
-            // let mut task_inner = task.inner_exclusive_access();
             let mut task_inner = task.lock_inner();
             let next_task_cx_ptr = &task_inner.task_cx as *const TaskContext;
             task_inner.task_status = TaskStatus::Running;
@@ -83,7 +73,6 @@ pub fn run_tasks() {
             // release coming task TCB manually
             processor.current = Some(task);
             // release processor manually
-            // drop(processor);
             unsafe {
                 __switch(idle_task_cx_ptr, next_task_cx_ptr);
             }
@@ -95,33 +84,26 @@ pub fn run_tasks() {
 }
 ///Take the current task,leaving a None in its place
 pub fn take_current_task() -> Option<Arc<TaskControlBlock>> {
-    // PROCESSOR.exclusive_access().take_current()
     get_proc_by_hartid(hart_id()).take_current()
 }
 ///Get running task
 pub fn current_task() -> Option<Arc<TaskControlBlock>> {
-    // PROCESSOR.exclusive_access().current()
     get_proc_by_hartid(hart_id()).current()
 }
 ///Get token of the address space of current task
 pub fn current_user_token() -> usize {
     let task = current_task().unwrap();
-    // let token = task.inner_exclusive_access().user_token();
     let token = task.lock_inner().user_token();
     token
 }
 ///Get the mutable reference to trap context of current task
 pub fn current_trap_cx() -> &'static mut TrapContext {
-    // current_task().unwrap().inner_exclusive_access().trap_cx()
     current_task().unwrap().lock_inner().trap_cx()
 }
 ///Return to idle control flow for new scheduling
 pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {
-    // let mut processor = PROCESSOR.exclusive_access();
     let processor = get_proc_by_hartid(hart_id());
     let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
-    // drop(processor);
-    // KERNEL_SPACE.exclusive_access().activate();
     unsafe {
         __switch(switched_task_cx_ptr, idle_task_cx_ptr);
     }

@@ -38,7 +38,6 @@ lazy_static! {
 }
 ///Get kernelspace root ppn
 pub fn kernel_token() -> usize {
-    // KERNEL_SPACE.exclusive_access().token()
     KERNEL_SPACE.lock().token()
 }
 /// memory set structure, controls virtual-memory space

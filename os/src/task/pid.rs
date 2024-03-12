@@ -48,14 +48,11 @@ pub struct PidHandle(pub usize);
 
 impl Drop for PidHandle {
     fn drop(&mut self) {
-        //println!("drop pid {}", self.0);
-        // PID_ALLOCATOR.exclusive_access().dealloc(self.0);
         PID_ALLOCATOR.lock().dealloc(self.0);
     }
 }
 ///Allocate a pid from PID_ALLOCATOR
 pub fn pid_alloc() -> PidHandle {
-    // PID_ALLOCATOR.exclusive_access().alloc()
     PID_ALLOCATOR.lock().alloc()
 }
 
@@ -73,7 +70,6 @@ pub struct KernelStack {
 impl KernelStack {
     ///Create a kernelstack from pid
     pub fn new(pid_handle: &PidHandle) -> Self {
-        // debug!("new KernelStack");
         let pid = pid_handle.0;
         let (kernel_stack_bottom, kernel_stack_top) = kernel_stack_position(pid);
         debug!(

@@ -22,20 +22,12 @@ lazy_static! {
 
 impl BlockDevice for VirtIOBlock {
     fn read_block(&self, block_id: usize, buf: &mut [u8]) {
-        // self.0
-        //     .exclusive_access()
-        //     .read_block(block_id, buf)
-        //     .expect("Error when reading VirtIOBlk");
         self.0
             .lock()
             .read_block(block_id, buf)
             .expect("Error when reading VirtIOBlk");
     }
     fn write_block(&self, block_id: usize, buf: &[u8]) {
-        // self.0
-        //     .exclusive_access()
-        //     .write_block(block_id, buf)
-        //     .expect("Error when writing VirtIOBlk");
         self.0
             .lock()
             .write_block(block_id, buf)
@@ -66,7 +58,6 @@ impl Hal for VirtioHal {
                 ppn_base = frame.ppn;
             }
             assert_eq!(frame.ppn.0, ppn_base.0 + i);
-            // QUEUE_FRAMES.exclusive_access().push(frame);
             QUEUE_FRAMES.lock().push(frame);
         }
         let pa: PhysAddr = ppn_base.into();

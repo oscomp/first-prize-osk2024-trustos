@@ -6,7 +6,6 @@ use crate::task::{current_task, current_user_token};
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
-    // let inner = task.inner_exclusive_access();
     let inner = task.lock_inner();
     if fd >= inner.fd_table.len() {
         return -1;
@@ -27,7 +26,6 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
 pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
-    // let inner = task.inner_exclusive_access();
     let inner = task.lock_inner();
     if fd >= inner.fd_table.len() {
         return -1;
@@ -50,7 +48,6 @@ pub fn sys_open(path: *const u8, flags: u32) -> isize {
     let token = current_user_token();
     let path = translated_str(token, path);
     if let Some(inode) = open_file(path.as_str(), OpenFlags::from_bits(flags).unwrap()) {
-        // let mut inner = task.inner_exclusive_access();
         let mut inner = task.lock_inner();
         let fd = inner.alloc_fd();
         inner.fd_table[fd] = Some(inode);
@@ -62,7 +59,6 @@ pub fn sys_open(path: *const u8, flags: u32) -> isize {
 
 pub fn sys_close(fd: usize) -> isize {
     let task = current_task().unwrap();
-    // let mut inner = task.inner_exclusive_access();
     let mut inner = task.lock_inner();
     if fd >= inner.fd_table.len() {
         return -1;

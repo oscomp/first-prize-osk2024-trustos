@@ -45,7 +45,6 @@ use self::processor::get_proc_by_hartid;
 pub fn suspend_current_and_run_next() {
     // 该线程上可能没有任务正在运行
     if let Some(task) = take_current_task() {
-        // let mut task_inner = task.inner_exclusive_access();
         let mut task_inner = task.lock_inner();
         let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
         // Change status to Ready
@@ -58,7 +57,6 @@ pub fn suspend_current_and_run_next() {
         // jump to scheduling cycle
         schedule(task_cx_ptr);
     }
-    // let task = take_current_task().unwrap();
 
     // ---- access current TCB exclusively
 }
@@ -132,9 +130,6 @@ pub fn add_initproc() {
 ///Init PROCESSORS
 pub fn init() {
     unsafe {
-        // for p in PROCESSORS.iter_mut() {
-        //     p.idle_task_cx = Some(Box::new(TaskContext::zero_init()));
-        // }
         for (id, p) in PROCESSORS.iter_mut().enumerate() {
             p.idle_task_cx = Some(Box::new(TaskContext::zero_init()));
             p.hartid = id;

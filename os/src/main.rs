@@ -93,30 +93,14 @@ static INIT_FINISHED: AtomicBool = AtomicBool::new(false);
 static START_HART_ID: AtomicUsize = AtomicUsize::new(0);
 /// boot start_hart之外的所有 hart
 pub fn boot_all_harts(hartid: usize) {
-    // let mut finished = false;
-    // let hart_num = HART_NUM;
     for i in (0..HART_NUM).filter(|id| *id != hartid) {
         sbi::hart_start(i, HART_START_ADDR).unwrap();
     }
-    // for i in 0..hart_num {
-    //     if finished {
-    //         break;
-    //     }
-    //     if i == hartid {
-    //         continue;
-    //     }
-    //     let ok = sbi::hart_start(i, HART_START_ADDR);
-    //     println!("[kernel] start to wake up hart {}... status {}", i, ok);
-    //     if !ok {
-    //         finished = true;
-    //     }
-    // }
 }
 
 #[no_mangle]
 /// the rust entry-point of os
 pub fn rust_main(hartid: usize) -> ! {
-    // println!("Rust OS starts,hart={}", hartid);
     if FIRST_HART.load(Ordering::SeqCst) == true {
         FIRST_HART.store(false, Ordering::SeqCst);
         clear_bss();
@@ -155,24 +139,10 @@ pub fn rust_main(hartid: usize) -> ! {
         activate_kernel_space();
         trap::enable_timer_interrupt();
         timer::set_next_trigger();
-
-        // loop {}
     }
     if hart_id() == START_HART_ID.load(Ordering::SeqCst) {
         fs::list_apps();
     }
     task::run_tasks();
     panic!("Unreachable in rust_main!");
-    // clear_bss();
-    // println!("[kernel] Hello, world!");
-    // mm::init();
-    // mm::remap_test();
-    // logger::init();
-    // trap::init();
-    // trap::enable_timer_interrupt();
-    // timer::set_next_trigger();
-    // fs::list_apps();
-    // task::add_initproc();
-    // task::run_tasks();
-    // panic!("Unreachable in rust_main!");
 }

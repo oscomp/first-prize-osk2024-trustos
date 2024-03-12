@@ -62,7 +62,6 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
     // find a child process
 
     // ---- access current PCB exclusively
-    // let mut inner = task.inner_exclusive_access();
     let mut inner = task.lock_inner();
     if !inner
         .children

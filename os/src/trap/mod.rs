@@ -35,7 +35,6 @@ extern "C" {
 /// initialize CSR `stvec` as the entry of `__alltraps`
 pub fn init() {
     set_kernel_trap_entry();
-    // interrupt_on();
     println!("trap init successfully!");
 }
 

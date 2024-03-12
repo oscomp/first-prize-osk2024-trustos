@@ -48,25 +48,4 @@ impl TrapContext {
         cx.set_sp(sp);
         cx
     }
-    // pub fn app_init_context(
-    //     entry: usize,
-    //     sp: usize,
-    //     kernel_satp: usize,
-    //     kernel_sp: usize,
-    //     trap_handler: usize,
-    // ) -> Self {
-    //     let mut sstatus = sstatus::read();
-    //     // set CPU privilege to User after trapping back
-    //     sstatus.set_spp(SPP::User);
-    //     let mut cx = Self {
-    //         x: [0; 32],
-    //         sstatus,
-    //         sepc: entry,
-    //         kernel_satp,
-    //         kernel_sp,
-    //         trap_handler,
-    //     };
-    //     cx.set_sp(sp);
-    //     cx
-    // }
 }
