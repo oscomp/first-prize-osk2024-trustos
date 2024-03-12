@@ -1,7 +1,7 @@
 //! SBI console driver, for text output
 use crate::sbi::console_putchar;
 use core::fmt::{self, Write};
-
+use spin::Mutex;
 struct Stdout;
 
 impl Write for Stdout {
@@ -12,9 +12,12 @@ impl Write for Stdout {
         Ok(())
     }
 }
-
+static mut STDOUT: Mutex<Stdout> = Mutex::new(Stdout {});
 pub fn print(args: fmt::Arguments) {
-    Stdout.write_fmt(args).unwrap();
+    // Stdout.write_fmt(args).unwrap();
+    unsafe {
+        STDOUT.lock().write_fmt(args).unwrap();
+    }
 }
 
 #[macro_export]

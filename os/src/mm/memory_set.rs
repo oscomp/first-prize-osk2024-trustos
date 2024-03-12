@@ -18,6 +18,7 @@ use core::arch::asm;
 use lazy_static::*;
 use log::{debug, info};
 use riscv::register::satp;
+use spin::Mutex;
 
 extern "C" {
     fn stext();
@@ -34,12 +35,13 @@ extern "C" {
 
 lazy_static! {
     /// a memory set instance through lazy_static! managing kernel space
-    pub static ref KERNEL_SPACE: Arc<UPSafeCell<MemorySet>> =
-        Arc::new(unsafe { UPSafeCell::new(MemorySet::new_kernel()) });
+    pub static ref KERNEL_SPACE: Arc<Mutex<MemorySet>> =
+        Arc::new( Mutex::new(MemorySet::new_kernel()) );
 }
 ///Get kernelspace root ppn
 pub fn kernel_token() -> usize {
-    KERNEL_SPACE.exclusive_access().token()
+    // KERNEL_SPACE.exclusive_access().token()
+    KERNEL_SPACE.lock().token()
 }
 /// memory set structure, controls virtual-memory space
 /// 地址空间
@@ -391,7 +393,8 @@ bitflags! {
 ///Check PageTable running correctly
 pub fn remap_test() {
     println!("remap test start!");
-    let mut kernel_space = KERNEL_SPACE.exclusive_access();
+    // let mut kernel_space = KERNEL_SPACE.exclusive_access();
+    let mut kernel_space = KERNEL_SPACE.lock();
     // println!("a");
     let mid_text: VirtAddr = (stext as usize + (etext as usize - stext as usize) / 2).into();
     // println!("b");

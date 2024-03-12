@@ -2,31 +2,47 @@
 use super::__switch;
 use super::{fetch_task, TaskStatus};
 use super::{TaskContext, TaskControlBlock};
-use crate::mm::{VirtAddr, KERNEL_SPACE};
-use crate::sync::UPSafeCell;
+use crate::config::processor::HART_NUM;
+use crate::mm::{activate_kernel_space, VirtAddr};
 use crate::trap::TrapContext;
+use crate::utils::hart_id;
+use alloc::boxed::Box;
 use alloc::sync::Arc;
 use lazy_static::*;
 use log::debug;
 ///Processor management structure
 pub struct Processor {
     ///The task currently executing on the current processor
-    current: Option<Arc<TaskControlBlock>>,
+    pub current: Option<Arc<TaskControlBlock>>,
     ///The basic control flow of each core, helping to select and switch process
-    idle_task_cx: TaskContext,
+    pub idle_task_cx: Option<Box<TaskContext>>,
+    pub hartid: usize,
 }
 
 impl Processor {
     ///Create an empty Processor
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             current: None,
-            idle_task_cx: TaskContext::zero_init(),
+            idle_task_cx: None,
+            hartid: 0,
         }
     }
+    ///Create an empty const Processor
+    // pub const fn new_const() -> Self {
+    //     Self {
+    //         current: None,
+    //         idle_task_cx: None,
+    //         hartid: 0,
+    //     }
+    // }
     ///Get mutable reference to `idle_task_cx`
     fn get_idle_task_cx_ptr(&mut self) -> *mut TaskContext {
-        &mut self.idle_task_cx as *mut _
+        // &mut self.idle_task_cx as *mut _
+        self.idle_task_cx.as_mut().unwrap().as_mut() as *mut _
+    }
+    pub fn set_hartid(&mut self, hartid: usize) {
+        self.hartid = hartid;
     }
     ///Get current task in moving semanteme
     pub fn take_current(&mut self) -> Option<Arc<TaskControlBlock>> {
@@ -38,15 +54,27 @@ impl Processor {
     }
 }
 
-lazy_static! {
-    pub static ref PROCESSOR: UPSafeCell<Processor> = unsafe { UPSafeCell::new(Processor::new()) };
+// lazy_static! {
+//     pub static ref PROCESSOR: UPSafeCell<Processor> = unsafe { UPSafeCell::new(Processor::new()) };
+// }
+const EMPTY_PROCESSOR: Processor = Processor::new();
+/// 不需要加锁,每个核只会访问固定的Processor
+pub static mut PROCESSORS: [Processor; HART_NUM] = [EMPTY_PROCESSOR; HART_NUM];
+
+///attach to processors
+pub fn get_proc_by_hartid(hartid: usize) -> &'static mut Processor {
+    unsafe { &mut PROCESSORS[hartid] }
 }
+
 ///The main part of process execution and scheduling
 ///Loop `fetch_task` to get the process that needs to run, and switch the process through `__switch`
 pub fn run_tasks() {
     loop {
-        let mut processor = PROCESSOR.exclusive_access();
+        // let mut processor = PROCESSOR.exclusive_access();
+        let hartid = hart_id();
+        let processor = get_proc_by_hartid(hartid);
         if let Some(task) = fetch_task() {
+            debug!("fetch task {}", task.pid.0);
             let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
             // access coming task TCB exclusively
             let mut task_inner = task.inner_exclusive_access();
@@ -57,22 +85,25 @@ pub fn run_tasks() {
             // release coming task TCB manually
             processor.current = Some(task);
             // release processor manually
-            drop(processor);
+            // drop(processor);
             unsafe {
                 __switch(idle_task_cx_ptr, next_task_cx_ptr);
             }
             debug!("run tasks loop again and use kernel satp");
-            KERNEL_SPACE.exclusive_access().activate();
+            // KERNEL_SPACE.exclusive_access().activate();
+            activate_kernel_space();
         }
     }
 }
 ///Take the current task,leaving a None in its place
 pub fn take_current_task() -> Option<Arc<TaskControlBlock>> {
-    PROCESSOR.exclusive_access().take_current()
+    // PROCESSOR.exclusive_access().take_current()
+    get_proc_by_hartid(hart_id()).take_current()
 }
 ///Get running task
 pub fn current_task() -> Option<Arc<TaskControlBlock>> {
-    PROCESSOR.exclusive_access().current()
+    // PROCESSOR.exclusive_access().current()
+    get_proc_by_hartid(hart_id()).current()
 }
 ///Get token of the address space of current task
 pub fn current_user_token() -> usize {
@@ -86,9 +117,10 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 }
 ///Return to idle control flow for new scheduling
 pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {
-    let mut processor = PROCESSOR.exclusive_access();
+    // let mut processor = PROCESSOR.exclusive_access();
+    let processor = get_proc_by_hartid(hart_id());
     let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
-    drop(processor);
+    // drop(processor);
     // KERNEL_SPACE.exclusive_access().activate();
     unsafe {
         __switch(switched_task_cx_ptr, idle_task_cx_ptr);

@@ -14,9 +14,11 @@
 mod context;
 
 use crate::config::mm::TRAMPOLINE;
+use crate::sync::interrupt_on;
 use crate::syscall::syscall;
 use crate::task::{current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next};
 use crate::timer::set_next_trigger;
+use crate::utils::hart_id;
 use core::arch::{asm, global_asm};
 use log::debug;
 use riscv::register::{
@@ -33,6 +35,7 @@ extern "C" {
 /// initialize CSR `stvec` as the entry of `__alltraps`
 pub fn init() {
     set_kernel_trap_entry();
+    // interrupt_on();
     println!("trap init successfully!");
 }
 
@@ -58,6 +61,7 @@ pub fn enable_timer_interrupt() {
 #[no_mangle]
 /// handle an interrupt, exception, or system call from user space
 pub fn trap_handler() {
+    let hartid = hart_id();
     debug!("trap handler");
     set_kernel_trap_entry();
     let scause = scause::read();
@@ -65,9 +69,10 @@ pub fn trap_handler() {
     match scause.cause() {
         Trap::Exception(Exception::UserEnvCall) => {
             // jump to next instruction anyway
+            debug!("syscall");
             let mut cx = current_trap_cx();
             cx.sepc += 4;
-            debug!("syscall {}", cx.x[17]);
+            debug!("run syscall {}", cx.x[17]);
             // get system call return value
             let result = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]);
             // cx is changed during sys_exec, so we have to call it again
@@ -81,7 +86,8 @@ pub fn trap_handler() {
         | Trap::Exception(Exception::LoadFault)
         | Trap::Exception(Exception::LoadPageFault) => {
             println!(
-                "[kernel] {:?} in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.",
+                "[kernel] hart {} {:?} in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.",
+                hartid,
                 scause.cause(),
                 stval,
                 current_trap_cx().sepc,
@@ -90,12 +96,15 @@ pub fn trap_handler() {
             exit_current_and_run_next(-2);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
-            println!("[kernel] IllegalInstruction in application, kernel killed it.");
+            println!(
+                "[kernel] [hart {}] IllegalInstruction in application, kernel killed it.",
+                hartid
+            );
             // illegal instruction exit code
             exit_current_and_run_next(-3);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
-            // println!("Timer Interupt!");
+            debug!("Timer Interupt!");
             set_next_trigger();
             suspend_current_and_run_next();
         }
@@ -107,6 +116,7 @@ pub fn trap_handler() {
             );
         }
     }
+    debug!("in trap handler,return to user space");
     // 手动内联trap_return
     set_user_trap_entry();
     extern "C" {

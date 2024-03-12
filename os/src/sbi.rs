@@ -1,6 +1,8 @@
 //! SBI call wrappers
 #![allow(unused)]
 
+use sbi_rt::SbiRet;
+
 /// use sbi call to putchar in console (qemu uart handler)
 pub fn console_putchar(c: usize) {
     #[allow(deprecated)]
@@ -27,4 +29,9 @@ pub fn shutdown(failure: bool) -> ! {
         system_reset(Shutdown, SystemFailure);
     }
     unreachable!()
+}
+
+/// use sbi call to start the specific core
+pub fn hart_start(hartid: usize, start_addr: usize) -> SbiRet {
+    sbi_rt::hart_start(hartid, start_addr, 0)
 }

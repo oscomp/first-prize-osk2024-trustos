@@ -47,10 +47,21 @@ pub mod syscall;
 pub mod task;
 pub mod timer;
 pub mod trap;
+pub mod utils;
 
-use config::mm::KERNEL_ADDR_OFFSET;
-use core::arch::{asm, global_asm};
+use config::{
+    mm::{HART_START_ADDR, KERNEL_ADDR_OFFSET},
+    processor::HART_NUM,
+};
+use core::{
+    arch::{asm, global_asm},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    usize,
+};
 use log::info;
+use task::PROCESSORS;
+
+use crate::{mm::activate_kernel_space, utils::hart_id};
 
 global_asm!(include_str!("entry.asm"));
 /// clear BSS segment
@@ -67,29 +78,101 @@ fn clear_bss() {
 
 /// ADD KERNEL_ADDR_OFFSET and jump to rust_main
 #[no_mangle]
-pub fn trampoline() {
+pub fn trampoline(hartid: usize) {
     unsafe {
         asm!("add sp, sp, {}", in(reg) KERNEL_ADDR_OFFSET);
         asm!("la t0, rust_main");
         asm!("add t0, t0, {}", in(reg) KERNEL_ADDR_OFFSET);
-        // asm!("mv a0, {}", in(reg) hart_id);
+        asm!("mv a0, {}", in(reg) hartid);
         asm!("jalr zero, 0(t0)");
     }
 }
 
+static FIRST_HART: AtomicBool = AtomicBool::new(true);
+static INIT_FINISHED: AtomicBool = AtomicBool::new(false);
+static START_HART_ID: AtomicUsize = AtomicUsize::new(0);
+/// boot start_hart之外的所有 hart
+pub fn boot_all_harts(hartid: usize) {
+    // let mut finished = false;
+    // let hart_num = HART_NUM;
+    for i in (0..HART_NUM).filter(|id| *id != hartid) {
+        sbi::hart_start(i, HART_START_ADDR).unwrap();
+    }
+    // for i in 0..hart_num {
+    //     if finished {
+    //         break;
+    //     }
+    //     if i == hartid {
+    //         continue;
+    //     }
+    //     let ok = sbi::hart_start(i, HART_START_ADDR);
+    //     println!("[kernel] start to wake up hart {}... status {}", i, ok);
+    //     if !ok {
+    //         finished = true;
+    //     }
+    // }
+}
+
 #[no_mangle]
 /// the rust entry-point of os
-pub fn rust_main() -> ! {
-    clear_bss();
-    println!("[kernel] Hello, world!");
-    mm::init();
-    mm::remap_test();
-    logger::init();
-    trap::init();
-    trap::enable_timer_interrupt();
-    timer::set_next_trigger();
-    fs::list_apps();
-    task::add_initproc();
+pub fn rust_main(hartid: usize) -> ! {
+    // println!("Rust OS starts,hart={}", hartid);
+    if FIRST_HART.load(Ordering::SeqCst) == true {
+        FIRST_HART.store(false, Ordering::SeqCst);
+        clear_bss();
+        println!("[kernel] Hello, world!");
+        println!(
+            r#" ,--.--------.                                 ,-,--.   ,--.--------.  
+        /==/,  -   , -\   .-.,.---.    .--.-. .-.-.  ,-.'-  _\ /==/,  -   , -\ 
+        \==\.-.  - ,-./  /==/  `   \  /==/ -|/=/  | /==/_ ,_.' \==\.-.  - ,-./ 
+         `--`\==\- \    |==|-, .=., | |==| ,||=| -| \==\  \     `--`\==\- \    
+              \==\_ \   |==|   '='  / |==|- | =/  |  \==\ -\         \==\_ \   
+              |==|- |   |==|- ,   .'  |==|,  \/ - |  _\==\ ,\        |==|- |   
+              |==|, |   |==|_  . ,'.  |==|-   ,   / /==/\/ _ |       |==|, |   
+              /==/ -/   /==/  /\ ,  ) /==/ , _  .'  \==\ - , /       /==/ -/   
+              `--`--`   `--`-`--`--'  `--`..---'     `--`---'        `--`--`   "#
+        );
+        mm::init();
+        mm::remap_test();
+        logger::init();
+        trap::init();
+        task::init();
+        task::add_initproc();
+        INIT_FINISHED.store(true, Ordering::SeqCst);
+        START_HART_ID.store(hartid, Ordering::SeqCst);
+        boot_all_harts(hartid);
+        trap::enable_timer_interrupt();
+        timer::set_next_trigger();
+    } else {
+        // barrier
+        while !INIT_FINISHED.load(Ordering::SeqCst) {}
+
+        println!(
+            "[kernel] ---------- hart {} is starting... ----------",
+            hartid
+        );
+        trap::init();
+        activate_kernel_space();
+        trap::enable_timer_interrupt();
+        timer::set_next_trigger();
+
+        // loop {}
+    }
+    if hart_id() == START_HART_ID.load(Ordering::SeqCst) {
+        fs::list_apps();
+    }
     task::run_tasks();
     panic!("Unreachable in rust_main!");
+    // clear_bss();
+    // println!("[kernel] Hello, world!");
+    // mm::init();
+    // mm::remap_test();
+    // logger::init();
+    // trap::init();
+    // trap::enable_timer_interrupt();
+    // timer::set_next_trigger();
+    // fs::list_apps();
+    // task::add_initproc();
+    // task::run_tasks();
+    // panic!("Unreachable in rust_main!");
 }

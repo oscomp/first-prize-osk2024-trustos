@@ -25,6 +25,7 @@ mod task;
 
 use crate::fs::{open_file, OpenFlags};
 use crate::sbi::shutdown;
+use alloc::boxed::Box;
 use alloc::sync::Arc;
 pub use context::TaskContext;
 use lazy_static::*;
@@ -36,25 +37,29 @@ pub use manager::add_task;
 pub use pid::{pid_alloc, KernelStack, PidAllocator, PidHandle};
 pub use processor::{
     current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
-    Processor,
+    Processor, PROCESSORS,
 };
+
+use self::processor::get_proc_by_hartid;
 /// Suspend the current 'Running' task and run the next task in task list.
 pub fn suspend_current_and_run_next() {
-    // There must be an application running.
-    let task = take_current_task().unwrap();
+    // 该线程上可能没有任务正在运行
+    if let Some(task) = take_current_task() {
+        let mut task_inner = task.inner_exclusive_access();
+        let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
+        // Change status to Ready
+        task_inner.task_status = TaskStatus::Ready;
+        drop(task_inner);
+        // ---- release current PCB
+
+        // push back to ready queue.
+        add_task(task);
+        // jump to scheduling cycle
+        schedule(task_cx_ptr);
+    }
+    // let task = take_current_task().unwrap();
 
     // ---- access current TCB exclusively
-    let mut task_inner = task.inner_exclusive_access();
-    let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
-    // Change status to Ready
-    task_inner.task_status = TaskStatus::Ready;
-    drop(task_inner);
-    // ---- release current PCB
-
-    // push back to ready queue.
-    add_task(task);
-    // jump to scheduling cycle
-    schedule(task_cx_ptr);
 }
 
 /// pid of usertests app in make run TEST=1
@@ -121,4 +126,17 @@ lazy_static! {
 ///Add init process to the manager
 pub fn add_initproc() {
     add_task(INITPROC.clone());
+}
+///Init PROCESSORS
+pub fn init() {
+    unsafe {
+        // for p in PROCESSORS.iter_mut() {
+        //     p.idle_task_cx = Some(Box::new(TaskContext::zero_init()));
+        // }
+        for (id, p) in PROCESSORS.iter_mut().enumerate() {
+            p.idle_task_cx = Some(Box::new(TaskContext::zero_init()));
+            p.hartid = id;
+        }
+    }
+    println!("procs init successfully!");
 }
