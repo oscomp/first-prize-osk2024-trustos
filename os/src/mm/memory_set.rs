@@ -9,8 +9,6 @@ use crate::config::{
     board::{MEMORY_END, MMIO},
     mm::{PAGE_SIZE, TRAMPOLINE, USER_SPACE_SIZE, USER_STACK_SIZE, USER_TRAP_CONTEXT},
 };
-// use crate::config::{MEMORY_END, MMIO, PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT, USER_STACK_SIZE};
-use crate::sync::UPSafeCell;
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use alloc::vec::Vec;

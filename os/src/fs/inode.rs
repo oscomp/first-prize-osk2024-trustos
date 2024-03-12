@@ -2,26 +2,26 @@
 //! we need to wrap `Inode` into `Arc`,but `Mutex` in `Inode` prevents
 //! file systems from being accessed simultaneously
 //!
-//! `UPSafeCell<OSInodeInner>` -> `OSInode`: for static `ROOT_INODE`,we
-//! need to wrap `OSInodeInner` into `UPSafeCell`
+//! `Mutex<OSInodeInner>` -> `OSInode`: for static `ROOT_INODE`,we
+//! need to wrap `OSInodeInner` into `Mutex`
 use super::File;
 use crate::drivers::BLOCK_DEVICE;
 use crate::mm::UserBuffer;
-use crate::sync::UPSafeCell;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use bitflags::*;
 use easy_fs::{EasyFileSystem, Inode};
 use lazy_static::*;
 use log::info;
+use spin::Mutex;
 /// A wrapper around a filesystem inode
 /// to implement File trait atop
 pub struct OSInode {
     readable: bool,
     writable: bool,
-    inner: UPSafeCell<OSInodeInner>,
+    inner: Mutex<OSInodeInner>,
 }
-/// The OS inode inner in 'UPSafeCell'
+/// The OS inode inner in 'Mutex'
 pub struct OSInodeInner {
     offset: usize,
     inode: Arc<Inode>,
@@ -33,12 +33,12 @@ impl OSInode {
         Self {
             readable,
             writable,
-            inner: unsafe { UPSafeCell::new(OSInodeInner { offset: 0, inode }) },
+            inner: Mutex::new(OSInodeInner { offset: 0, inode }),
         }
     }
     /// Read all data inside a inode into vector
     pub fn read_all(&self) -> Vec<u8> {
-        let mut inner = self.inner.exclusive_access();
+        let mut inner = self.inner.lock();
         let mut buffer = [0u8; 512];
         let mut v: Vec<u8> = Vec::new();
         loop {
@@ -129,7 +129,8 @@ impl File for OSInode {
         self.writable
     }
     fn read(&self, mut buf: UserBuffer) -> usize {
-        let mut inner = self.inner.exclusive_access();
+        // let mut inner = self.inner.exclusive_access();
+        let mut inner = self.inner.lock();
         let mut total_read_size = 0usize;
         for slice in buf.buffers.iter_mut() {
             let read_size = inner.inode.read_at(inner.offset, *slice);
@@ -142,7 +143,8 @@ impl File for OSInode {
         total_read_size
     }
     fn write(&self, buf: UserBuffer) -> usize {
-        let mut inner = self.inner.exclusive_access();
+        // let mut inner = self.inner.exclusive_access();
+        let mut inner = self.inner.lock();
         let mut total_write_size = 0usize;
         for slice in buf.buffers.iter() {
             let write_size = inner.inode.write_at(inner.offset, *slice);

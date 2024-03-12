@@ -31,7 +31,8 @@ pub fn sys_fork() -> isize {
     let new_task = current_task.fork();
     let new_pid = new_task.pid.0;
     // modify trap context of new_task, because it returns immediately after switching
-    let trap_cx = new_task.inner_exclusive_access().trap_cx();
+    // let trap_cx = new_task.inner_exclusive_access().trap_cx();
+    let trap_cx = new_task.lock_inner().trap_cx();
     // we do not have to move to next instruction since we have done it before
     // for child process, fork returns 0
     trap_cx.x[10] = 0;
@@ -61,7 +62,8 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
     // find a child process
 
     // ---- access current PCB exclusively
-    let mut inner = task.inner_exclusive_access();
+    // let mut inner = task.inner_exclusive_access();
+    let mut inner = task.lock_inner();
     if !inner
         .children
         .iter()
@@ -72,7 +74,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
     }
     let pair = inner.children.iter().enumerate().find(|(_, p)| {
         // ++++ temporarily access child PCB exclusively
-        p.inner_exclusive_access().is_zombie() && (pid == -1 || pid as usize == p.getpid())
+        p.lock_inner().is_zombie() && (pid == -1 || pid as usize == p.getpid())
         // ++++ release child PCB
     });
     if let Some((idx, _)) = pair {
@@ -81,7 +83,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         assert_eq!(Arc::strong_count(&child), 1);
         let found_pid = child.getpid();
         // ++++ temporarily access child PCB exclusively
-        let exit_code = child.inner_exclusive_access().exit_code;
+        let exit_code = child.lock_inner().exit_code;
         // ++++ release child PCB
         *translated_refmut(inner.memory_set.token(), exit_code_ptr) = exit_code;
         found_pid as isize

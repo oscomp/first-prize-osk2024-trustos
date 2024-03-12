@@ -4,20 +4,20 @@ use super::{pid_alloc, KernelStack, PidHandle};
 use crate::config::mm::USER_TRAP_CONTEXT;
 use crate::fs::{File, Stdin, Stdout};
 use crate::mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
-use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefMut;
 use log::{debug, info};
+use spin::{Mutex, MutexGuard};
 
 pub struct TaskControlBlock {
     // immutable
     pub pid: PidHandle,
     pub kernel_stack: KernelStack,
     // mutable
-    inner: UPSafeCell<TaskControlBlockInner>,
+    inner: Mutex<TaskControlBlockInner>,
 }
 
 pub struct TaskControlBlockInner {
@@ -56,8 +56,11 @@ impl TaskControlBlockInner {
 }
 
 impl TaskControlBlock {
-    pub fn inner_exclusive_access(&self) -> RefMut<'_, TaskControlBlockInner> {
-        self.inner.exclusive_access()
+    // pub fn inner_exclusive_access(&self) -> RefMut<'_, TaskControlBlockInner> {
+    //     self.inner.exclusive_access()
+    // }
+    pub fn lock_inner(&self) -> MutexGuard<TaskControlBlockInner> {
+        self.inner.lock()
     }
     pub fn new(elf_data: &[u8]) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack
@@ -79,29 +82,28 @@ impl TaskControlBlock {
         let task_control_block = Self {
             pid: pid_handle,
             kernel_stack,
-            inner: unsafe {
-                UPSafeCell::new(TaskControlBlockInner {
-                    trap_cx_ppn,
-                    base_size: user_sp,
-                    task_cx: TaskContext::goto_trap_return(kernel_stack_top),
-                    task_status: TaskStatus::Ready,
-                    memory_set,
-                    parent: None,
-                    children: Vec::new(),
-                    exit_code: 0,
-                    fd_table: vec![
-                        // 0 -> stdin
-                        Some(Arc::new(Stdin)),
-                        // 1 -> stdout
-                        Some(Arc::new(Stdout)),
-                        // 2 -> stderr
-                        Some(Arc::new(Stdout)),
-                    ],
-                })
-            },
+            inner: Mutex::new(TaskControlBlockInner {
+                trap_cx_ppn,
+                base_size: user_sp,
+                task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+                task_status: TaskStatus::Ready,
+                memory_set,
+                parent: None,
+                children: Vec::new(),
+                exit_code: 0,
+                fd_table: vec![
+                    // 0 -> stdin
+                    Some(Arc::new(Stdin)),
+                    // 1 -> stdout
+                    Some(Arc::new(Stdout)),
+                    // 2 -> stderr
+                    Some(Arc::new(Stdout)),
+                ],
+            }),
         };
         // prepare TrapContext in user space
-        let trap_cx = task_control_block.inner_exclusive_access().trap_cx();
+        // let trap_cx = task_control_block.inner_exclusive_access().trap_cx();
+        let trap_cx = task_control_block.lock_inner().trap_cx();
         *trap_cx = TrapContext::app_init_context(
             entry_point,
             user_sp,
@@ -127,7 +129,8 @@ impl TaskControlBlock {
         );
 
         // **** access current TCB exclusively
-        let mut inner = self.inner_exclusive_access();
+        // let mut inner = self.inner_exclusive_access();
+        let mut inner = self.lock_inner();
         // substitute memory_set
         inner.memory_set = memory_set;
         // update trap_cx ppn
@@ -144,7 +147,8 @@ impl TaskControlBlock {
     }
     pub fn fork(self: &Arc<TaskControlBlock>) -> Arc<TaskControlBlock> {
         // ---- hold parent PCB lock
-        let mut parent_inner = self.inner_exclusive_access();
+        // let mut parent_inner = self.inner_exclusive_access();
+        let mut parent_inner = self.lock_inner();
         // copy user space(include trap context)
         let mut memory_set = MemorySet::from_existed_user(&parent_inner.memory_set);
         let trap_cx_ppn = memory_set
@@ -173,25 +177,24 @@ impl TaskControlBlock {
         let task_control_block = Arc::new(TaskControlBlock {
             pid: pid_handle,
             kernel_stack,
-            inner: unsafe {
-                UPSafeCell::new(TaskControlBlockInner {
-                    trap_cx_ppn,
-                    base_size: parent_inner.base_size,
-                    task_cx: TaskContext::goto_trap_return(kernel_stack_top),
-                    task_status: TaskStatus::Ready,
-                    memory_set,
-                    parent: Some(Arc::downgrade(self)),
-                    children: Vec::new(),
-                    exit_code: 0,
-                    fd_table: new_fd_table,
-                })
-            },
+            inner: Mutex::new(TaskControlBlockInner {
+                trap_cx_ppn,
+                base_size: parent_inner.base_size,
+                task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+                task_status: TaskStatus::Ready,
+                memory_set,
+                parent: Some(Arc::downgrade(self)),
+                children: Vec::new(),
+                exit_code: 0,
+                fd_table: new_fd_table,
+            }),
         });
         // add child
         parent_inner.children.push(task_control_block.clone());
         // modify kernel_sp in trap_cx
         // **** access child PCB exclusively
-        let trap_cx = task_control_block.inner_exclusive_access().trap_cx();
+        // let trap_cx = task_control_block.inner_exclusive_access().trap_cx();
+        let trap_cx = task_control_block.lock_inner().trap_cx();
         trap_cx.kernel_sp = kernel_stack_top;
         // return
         task_control_block

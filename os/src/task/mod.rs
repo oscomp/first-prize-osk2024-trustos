@@ -45,7 +45,8 @@ use self::processor::get_proc_by_hartid;
 pub fn suspend_current_and_run_next() {
     // 该线程上可能没有任务正在运行
     if let Some(task) = take_current_task() {
-        let mut task_inner = task.inner_exclusive_access();
+        // let mut task_inner = task.inner_exclusive_access();
+        let mut task_inner = task.lock_inner();
         let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
         // Change status to Ready
         task_inner.task_status = TaskStatus::Ready;
@@ -86,7 +87,8 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     }
 
     // **** access current TCB exclusively
-    let mut inner = task.inner_exclusive_access();
+    // let mut inner = task.inner_exclusive_access();
+    let mut inner = task.lock_inner();
     // Change status to Zombie
     inner.task_status = TaskStatus::Zombie;
     // Record exit code
@@ -95,9 +97,9 @@ pub fn exit_current_and_run_next(exit_code: i32) {
 
     // ++++++ access initproc TCB exclusively
     {
-        let mut initproc_inner = INITPROC.inner_exclusive_access();
+        let mut initproc_inner = INITPROC.lock_inner();
         for child in inner.children.iter() {
-            child.inner_exclusive_access().parent = Some(Arc::downgrade(&INITPROC));
+            child.lock_inner().parent = Some(Arc::downgrade(&INITPROC));
             initproc_inner.children.push(child.clone());
         }
     }
