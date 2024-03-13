@@ -22,12 +22,14 @@ lazy_static! {
 
 impl BlockDevice for VirtIOBlock {
     fn read_block(&self, block_id: usize, buf: &mut [u8]) {
+        //println!("I take it in read_block!");
         self.0
             .exclusive_access()
             .read_block(block_id, buf)
             .expect("Error when reading VirtIOBlk");
     }
     fn write_block(&self, block_id: usize, buf: &[u8]) {
+        //println!("I take it in write_block!");
         self.0
             .exclusive_access()
             .write_block(block_id, buf)

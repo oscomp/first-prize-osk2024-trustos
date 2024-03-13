@@ -182,11 +182,36 @@ impl PageTable {
 }
 /// Translate a pointer to a mutable u8 Vec through page table
 pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]> {
-    let page_table = PageTable::from_token(token);
+    /*let page_table = PageTable::from_token(token);
     let va = VirtAddr::from(ptr as usize);
     let ppn = page_table.translate(va.floor()).unwrap().ppn();
     let mut v = Vec::new();
     v.push(ppn.bytes_array_from_offset(va.page_offset(), len));
+    v*/
+    let page_table = PageTable::from_token(token);
+    let mut start = ptr as usize;
+    let end = start + len;
+    let mut v = Vec::new();
+    while start < end {
+        let start_va = VirtAddr::from(start);
+        let mut vpn = start_va.floor();
+        match page_table.translate(vpn) {
+            None => {
+                println!("[kernel] mm: 0x{:x} not mapped", start);
+            }
+            _ => { }
+        }
+        let ppn = page_table.translate(vpn).unwrap().ppn();
+        vpn.step();
+        let mut end_va: VirtAddr = vpn.into();
+        end_va = end_va.min(VirtAddr::from(end));
+        if end_va.page_offset() == 0 {
+            v.push(&mut ppn.bytes_array()[start_va.page_offset()..]);
+        } else {
+            v.push(&mut ppn.bytes_array()[start_va.page_offset()..end_va.page_offset()]);
+        }
+        start = end_va.into();
+    }
     v
 }
 
@@ -241,6 +266,56 @@ impl UserBuffer {
             total += b.len();
         }
         total
+    }
+    // 将一个Buffer的数据写入UserBuffer，返回写入长度
+    pub fn write(&mut self, buff: &[u8]) -> usize {
+        let len = self.len().min(buff.len());
+        let mut current = 0;
+        for sub_buff in self.buffers.iter_mut() {
+            let sblen = (*sub_buff).len();
+            for j in 0..sblen {
+                (*sub_buff)[j] = buff[current];
+                current += 1;
+                if current == len {
+                    return len;
+                }
+            }
+        }
+        return len;
+    }
+    //在指定位置写入数据
+    pub fn write_at(&mut self, offset:usize, buff: &[u8])->isize{
+        let len = buff.len();
+        if offset + len > self.len() {
+            return -1
+        }
+        let mut head = 0; // offset of slice in UBuffer
+        let mut current = 0; // current offset of buff
+    
+        for sub_buff in self.buffers.iter_mut() {
+            let sblen = (*sub_buff).len();
+            if head + sblen < offset {
+                continue;
+            } else if head < offset {
+                for j in (offset - head)..sblen {
+                    (*sub_buff)[j] = buff[current];
+                    current += 1;
+                    if current == len {
+                        return len as isize;
+                    }
+                }
+            } else {  //head + sblen > offset and head > offset
+                for j in 0..sblen {
+                    (*sub_buff)[j] = buff[current];
+                    current += 1;
+                    if current == len {
+                        return len as isize;
+                    }
+                }
+            }
+            head += sblen;
+        }
+        0
     }
 }
 

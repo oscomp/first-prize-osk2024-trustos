@@ -19,6 +19,7 @@ use user_lib::{exec, fork, waitpid};
 #[no_mangle]
 pub fn main() -> i32 {
     println!("Rust user shell");
+    //openat(-100, "./text.txt", OpenFlags::O_WRONLY, 0);
     let mut line: String = String::new();
     print!(">> ");
     loop {

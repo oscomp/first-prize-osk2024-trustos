@@ -320,7 +320,6 @@ impl ShortDirEntry {
         let fat_reader = fat.read();
         let bytes_per_sector = manager_reader.bytes_per_sector() as usize;
         let bytes_per_cluster = manager_reader.bytes_per_cluster() as usize;
-
         // 1、检查边界条件
         // 计算上界
         let end: usize;
@@ -339,7 +338,7 @@ impl ShortDirEntry {
 
         // 2、计算开始读取的位置
         let (mut current_cluster, mut current_sector, _) = self.get_pos(offset, manager, &manager_reader.get_fat(), block_device);
-
+        
         // 3、开始读取内容
         let mut read_size = 0usize;
         let mut current_off = offset;

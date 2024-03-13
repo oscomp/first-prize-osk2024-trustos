@@ -155,6 +155,7 @@ pub fn get_block_cache(
     block_device: Arc<dyn BlockDevice>,
 ) -> Arc<RwLock<BlockCache>> {
     // 这里的read是RWLock读写锁
+    //println!("{}",block_id);
     let phy_blk_id = BLOCK_CACHE_MANAGER.read().start_sec() + block_id;
     BLOCK_CACHE_MANAGER
         .write()

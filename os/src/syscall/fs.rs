@@ -1,4 +1,5 @@
 //! File and filesystem-related syscalls
+use crate::console::print;
 use crate::fs::{make_pipe, open, open_file, Dirent, Kstat, OpenFlags, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_str, UserBuffer,translated_refmut};
 use crate::task::{current_task, current_user_token};
@@ -52,14 +53,17 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
 
 pub fn sys_openat(fd:isize,path: *const u8, flags: u32,_mode:usize) -> isize {
     println!("start sys_openat!");
-    let task = current_task().unwrap();
     let token = current_user_token();
+    let task = current_task().unwrap();
     let path = translated_str(token, path);
     let mut inner = task.inner_exclusive_access();
     let flags=OpenFlags::from_bits(flags).unwrap();
+    println!("{},{}\n",fd,path);
     //若为绝对路径
     if path.starts_with('/'){
+        drop(inner);
         if let Some(inode) = open_file(path.as_str(), flags) {
+            let mut inner = task.inner_exclusive_access();
             let fd_new = inner.alloc_fd();
             inner.fd_table[fd_new] = Some(inode);
             fd_new as isize
@@ -69,7 +73,10 @@ pub fn sys_openat(fd:isize,path: *const u8, flags: u32,_mode:usize) -> isize {
     } else{
         //若fd为当前目录
         if fd == AT_FDCWD {
-            if let Some(inode) = open(inner.current_path.as_str(),path.as_str(),flags){
+            let now_path:String=inner.current_path.clone();
+            drop(inner);
+            if let Some(inode) = open(now_path.as_str(),path.as_str(),flags){
+                let mut inner = task.inner_exclusive_access();
                 let fd_new = inner.alloc_fd();
                 inner.fd_table[fd_new] = Some(inode);
                 fd_new as isize
@@ -83,7 +90,10 @@ pub fn sys_openat(fd:isize,path: *const u8, flags: u32,_mode:usize) -> isize {
                 return -1;
             }
             if let Some(file) = &inner.fd_table[fd] {
-                if let Some(inode) = open(file.get_name().as_str(), path.as_str(), flags) {
+                let filename:String = file.get_name().clone();
+                drop(inner);
+                if let Some(inode) = open(filename.as_str(), path.as_str(), flags) {
+                    let mut inner = task.inner_exclusive_access();
                     let fd = inner.alloc_fd();
                     inner.fd_table[fd] = Some(inode);
                     fd as isize
@@ -118,9 +128,9 @@ pub fn sys_getcwd(buf: *const u8,size: usize) ->isize {
     let task = current_task().unwrap();
     let mut inner = task.inner_exclusive_access();
 
-    let buffer = UserBuffer::new(translated_byte_buffer(token, buf, size));
-    //buffer.write();
-    0
+    let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, size));
+    buffer.write(inner.current_path.as_bytes());
+    buf as isize
 }
 
 pub fn sys_dup(fd: usize) -> isize {
@@ -176,16 +186,23 @@ pub fn sys_chdir(path: *const u8) -> isize {
     let mut inner = task.inner_exclusive_access();
 
     let path = translated_str(token, path);
+    //println!("{}",path);
     if path.starts_with('/'){
+        drop(inner);
         if let Some(inode) = open_file(path.as_str(), OpenFlags::O_RDONLY) {
+            let mut inner = task.inner_exclusive_access();
             inner.current_path=path.clone();
             return 0;
         } else {
             -1
         }
     } else {
-        if let Some(inode) = open(inner.current_path.as_str(),path.as_str(),OpenFlags::O_RDONLY){
-            if inode.name() == "/"{
+        let now_path:String = inner.current_path.clone();
+        //println!("nowpath:{}",now_path);
+        drop(inner);
+        if let Some(inode) = open(now_path.as_str(),path.as_str(),OpenFlags::O_RDONLY){
+            let mut inner = task.inner_exclusive_access();
+            if now_path == "/"{
                 inner.current_path=alloc::format!{"/{}",&path[..]};
             } else {
                 inner.current_path=alloc::format!{"{}/{}",&inner.current_path[..],&path[..]};
@@ -195,17 +212,6 @@ pub fn sys_chdir(path: *const u8) -> isize {
             -1
         }
     }
-    // let token = current_user_token();
-    // let task = current_task().unwrap();
-    // let mut inner = task.inner_exclusive_access();
-
-    // let path = translated_str(token, path);
-    // if let Some(new_cwd) = chdir(inner.current_path.as_str(),&path){
-    //     inner.current_path = new_cwd;
-    //     0
-    // } else {
-    //     -1
-    // }
 }
 
 pub fn sys_mkdirat(dirfd:isize,path: *const u8,_mode:usize) -> isize {
@@ -216,6 +222,7 @@ pub fn sys_mkdirat(dirfd:isize,path: *const u8,_mode:usize) -> isize {
     let path = translated_str(token, path);
     //若为绝对路径
     if path.starts_with('/'){
+        drop(inner);
         if let Some(_) = open_file(path.as_str(), OpenFlags::O_DIRECTROY) {
             0
         } else {
@@ -224,7 +231,9 @@ pub fn sys_mkdirat(dirfd:isize,path: *const u8,_mode:usize) -> isize {
     } else{
         //若fd为当前目录
         if dirfd == AT_FDCWD {
-            if let Some(_) = open(inner.current_path.as_str(),path.as_str(),OpenFlags::O_DIRECTROY){
+            let now_path:String = inner.current_path.clone();
+            drop(inner);
+            if let Some(_) = open(now_path.as_str(),path.as_str(),OpenFlags::O_DIRECTROY){
                 0
             } else {
                 -1
@@ -241,7 +250,9 @@ pub fn sys_mkdirat(dirfd:isize,path: *const u8,_mode:usize) -> isize {
             }
 
             if let Some(file) = &inner.fd_table[dirfd] {
-                if let Some(_) = open(file.get_name().as_str(), path.as_str(), OpenFlags::O_DIRECTROY) {
+                let filename:String = file.get_name().clone();
+                drop(inner);
+                if let Some(_) = open(filename.as_str(), path.as_str(), OpenFlags::O_DIRECTROY) {
                     0
                 } else {
                     -1
@@ -260,7 +271,7 @@ pub fn sys_getdents64(fd:usize,buf: *const u8,len:usize) -> isize {
     let task = current_task().unwrap();
     let mut inner = task.inner_exclusive_access();
     
-    let buffer = UserBuffer::new(translated_byte_buffer(token, buf,len));
+    let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf,len));
 
     if fd >= inner.fd_table.len(){
         return -1;
@@ -277,19 +288,22 @@ pub fn sys_getdents64(fd:usize,buf: *const u8,len:usize) -> isize {
         // release current task TCB manually to avoid multi-borrow
         drop(inner);
 
+        let mut all_len:usize= 0;
         let mut dirent = Dirent::new();
         let dirent_size = core::mem::size_of::<Dirent>();
-        let mut all_len:isize= 0;
+        //println!("dirent_size:{},len:{}",dirent_size,len);
         loop{
+            //println!("alllen:{}",all_len);
+            if len < dirent_size+all_len {
+                return all_len as isize;
+            }
             let readsize:isize=file.get_dirent(&mut dirent);
             if readsize < 0 {
-                return all_len;
+                return all_len as isize;
             }
-            all_len += readsize;
-            //buffer.write();
-            if len < dirent_size+(all_len as usize) {
-                return all_len;
-            }
+            //println!("readsize:{},all_len:{}",readsize,all_len);
+            buffer.write_at(all_len,dirent.as_bytes());
+            all_len += dirent_size;
         }
     } else{
         -1
@@ -297,6 +311,8 @@ pub fn sys_getdents64(fd:usize,buf: *const u8,len:usize) -> isize {
 }
 
 pub fn sys_linkat(oldfd:isize,oldpath: *const u8,newfd:isize,newpath: *const u8,_flags:u32) -> isize {
+    0
+/*
     println!("start sys_linkat!");
     let token = current_user_token();
     let task = current_task().unwrap();
@@ -445,7 +461,7 @@ pub fn sys_linkat(oldfd:isize,oldpath: *const u8,newfd:isize,newpath: *const u8,
                 -1
             }
         }
-    }
+    }*/
 }
 
 pub fn sys_unlinkat(dirfd:isize,path: *const u8,flags:u32) -> isize {
@@ -456,6 +472,7 @@ pub fn sys_unlinkat(dirfd:isize,path: *const u8,flags:u32) -> isize {
     let path = translated_str(token, path);
     
     if path.starts_with('/'){
+        drop(inner);
         if let Some(inode) = open_file(path.as_str(), OpenFlags::O_RDONLY) {
             //断开链接(讨论flags)
             if flags == AT_REMOVEDIR {
@@ -474,7 +491,9 @@ pub fn sys_unlinkat(dirfd:isize,path: *const u8,flags:u32) -> isize {
         }
     } else {
         if dirfd == AT_FDCWD {
-            if let Some(inode) = open(inner.current_path.as_str(),path.as_str(),OpenFlags::O_RDONLY) {
+            let now_path:String = inner.current_path.clone();
+            drop(inner);
+            if let Some(inode) = open(now_path.as_str(),path.as_str(),OpenFlags::O_RDONLY) {
                 //断开链接(讨论flags)
                 if flags == AT_REMOVEDIR {
                     inode.delete();
@@ -501,7 +520,9 @@ pub fn sys_unlinkat(dirfd:isize,path: *const u8,flags:u32) -> isize {
             }
         
             if let Some(file) = &inner.fd_table[dirfd] {
-                if let Some(inode) = open(file.get_name().as_str(), path.as_str(), OpenFlags::O_RDONLY) {
+                let filename:String = file.get_name().clone();
+                drop(inner);
+                if let Some(inode) = open(filename.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
                     //断开链接(讨论flags)
                     if flags == AT_REMOVEDIR {
                         inode.delete();
@@ -554,7 +575,7 @@ pub fn sys_fstat(fd:usize, kst:*const u8) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
     let mut inner = task.inner_exclusive_access();
-    let kst = UserBuffer::new(translated_byte_buffer(token, kst,core::mem::size_of::<Kstat>()));
+    let mut kst = UserBuffer::new(translated_byte_buffer(token, kst,core::mem::size_of::<Kstat>()));
 
     if fd >= inner.fd_table.len() {
         return -1;
@@ -565,8 +586,11 @@ pub fn sys_fstat(fd:usize, kst:*const u8) -> isize {
 
     if let Some(file) = &inner.fd_table[fd] {
         let mut kstat = Kstat::new();
+        //println!("work here");
+        let file=file.clone();
+        drop(inner);
         file.get_fstat(&mut kstat);
-        //kst.write();
+        kst.write(kstat.as_bytes());
         0
     } else {
         -1
