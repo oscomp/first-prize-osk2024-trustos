@@ -29,11 +29,10 @@ use alloc::boxed::Box;
 use alloc::sync::Arc;
 pub use context::TaskContext;
 use lazy_static::*;
-pub use manager::{fetch_task, TaskManager};
+pub use manager::{add_task, fetch_task, lock_task_manager, TaskManager};
 use switch::__switch;
 use task::{TaskControlBlock, TaskStatus};
 
-pub use manager::add_task;
 pub use pid::{pid_alloc, KernelStack, PidAllocator, PidHandle};
 pub use processor::{
     current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
@@ -43,22 +42,19 @@ pub use processor::{
 use self::processor::get_proc_by_hartid;
 /// Suspend the current 'Running' task and run the next task in task list.
 pub fn suspend_current_and_run_next() {
-    // 该线程上可能没有任务正在运行
-    if let Some(task) = take_current_task() {
-        let mut task_inner = task.lock_inner();
-        let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
-        // Change status to Ready
-        task_inner.task_status = TaskStatus::Ready;
-        drop(task_inner);
-        // ---- release current PCB
-
-        // push back to ready queue.
-        add_task(task);
-        // jump to scheduling cycle
-        schedule(task_cx_ptr);
-    }
-
-    // ---- access current TCB exclusively
+    // There must be
+    let task = current_task().unwrap();
+    let mut task_inner = task.lock_inner();
+    let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
+    // Change status to Ready
+    task_inner.task_status = TaskStatus::Ready;
+    // ---- release current PCB
+    drop(task_inner);
+    drop(task);
+    // push back to ready queue.
+    // add_task(task);
+    // jump to scheduling cycle
+    schedule(task_cx_ptr);
 }
 
 /// pid of usertests app in make run TEST=1

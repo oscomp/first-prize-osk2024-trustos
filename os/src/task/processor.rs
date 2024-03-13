@@ -1,5 +1,5 @@
 //!Implementation of [`Processor`] and Intersection of control flow
-use super::__switch;
+use super::{__switch, add_task};
 use super::{fetch_task, TaskStatus};
 use super::{TaskContext, TaskControlBlock};
 use crate::config::processor::HART_NUM;
@@ -9,7 +9,7 @@ use crate::utils::hart_id;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use lazy_static::*;
-use log::debug;
+use log::{debug, info};
 ///Processor management structure
 pub struct Processor {
     ///The task currently executing on the current processor
@@ -58,29 +58,78 @@ pub fn get_proc_by_hartid(hartid: usize) -> &'static mut Processor {
 ///Loop `fetch_task` to get the process that needs to run, and switch the process through `__switch`
 pub fn run_tasks() {
     loop {
-        // let mut processor = PROCESSOR.exclusive_access();
-        let hartid = hart_id();
-        let processor = get_proc_by_hartid(hartid);
-        if let Some(task) = fetch_task() {
-            debug!("fetch task {}", task.pid.0);
-            let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
-            // access coming task TCB exclusively
-            let mut task_inner = task.lock_inner();
-            let next_task_cx_ptr = &task_inner.task_cx as *const TaskContext;
-            task_inner.task_status = TaskStatus::Running;
-            task_inner.memory_set.activate();
-            drop(task_inner);
-            // release coming task TCB manually
-            processor.current = Some(task);
-            // release processor manually
-            unsafe {
-                __switch(idle_task_cx_ptr, next_task_cx_ptr);
+        let processor = get_proc_by_hartid(hart_id());
+        let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
+        if let Some(cur_task) = take_current_task() {
+            let mut cur_task_inner = cur_task.lock_inner();
+            if let Some(next_task) = fetch_task() {
+                info!(
+                    "drop task {},fetch task {}",
+                    cur_task.pid.0, next_task.pid.0
+                );
+                let mut next_task_inner = next_task.lock_inner();
+                let next_task_cx_ptr = &next_task_inner.task_cx as *const TaskContext;
+                next_task_inner.task_status = TaskStatus::Running;
+                next_task_inner.memory_set.activate();
+                drop(next_task_inner);
+                drop(cur_task_inner);
+                processor.current = Some(next_task);
+                add_task(cur_task);
+                unsafe {
+                    __switch(idle_task_cx_ptr, next_task_cx_ptr);
+                }
+            } else {
+                cur_task_inner.task_status = TaskStatus::Running;
+                let cur_task_cx_ptr = &cur_task_inner.task_cx as *const TaskContext;
+                drop(cur_task_inner);
+                processor.current = Some(cur_task);
+                unsafe {
+                    __switch(idle_task_cx_ptr, cur_task_cx_ptr);
+                }
             }
-            debug!("run tasks loop again and use kernel satp");
-            // KERNEL_SPACE.exclusive_access().activate();
-            activate_kernel_space();
+        } else {
+            // 第一次调度，抢占
+            if let Some(task) = fetch_task() {
+                info!("first fetch task {}", task.pid.0);
+                let mut task_inner = task.lock_inner();
+                let next_task_cx_ptr = &task_inner.task_cx as *const TaskContext;
+                task_inner.task_status = TaskStatus::Running;
+                task_inner.memory_set.activate();
+                drop(task_inner);
+                processor.current = Some(task);
+                unsafe {
+                    __switch(idle_task_cx_ptr, next_task_cx_ptr);
+                }
+            }
+            //不切换到内核的地址空间，可能继续运行或转到别的任务
         }
     }
+    // if let Some(task) = fetch_task() {
+    //     debug!("fetch task {}", task.pid.0);
+    //     // access coming task TCB exclusively
+    //     let mut task_inner = task.lock_inner();
+    //     let next_task_cx_ptr = &task_inner.task_cx as *const TaskContext;
+    //     task_inner.task_status = TaskStatus::Running;
+    //     task_inner.memory_set.activate();
+    //     drop(task_inner);
+    //     processor.current = Some(task);
+    //     unsafe {
+    //         __switch(idle_task_cx_ptr, next_task_cx_ptr);
+    //     }
+    //     debug!("run tasks loop again and use kernel satp");
+    //     activate_kernel_space();
+    // } else {
+    //     if let Some(task) = current_task() {
+    //         let mut task_inner = task.lock_inner();
+    //         let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
+    //         task_inner.task_status = TaskStatus::Running;
+    //         debug!("run task {} continue", task.pid.0);
+    //         drop(task_inner);
+    //         unsafe {
+    //             __switch(idle_task_cx_ptr, task_cx_ptr);
+    //         }
+    //     }
+    // }
 }
 ///Take the current task,leaving a None in its place
 pub fn take_current_task() -> Option<Arc<TaskControlBlock>> {

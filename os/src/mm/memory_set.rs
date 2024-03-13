@@ -33,8 +33,8 @@ extern "C" {
 
 lazy_static! {
     /// a memory set instance through lazy_static! managing kernel space
-    pub static ref KERNEL_SPACE: Arc<Mutex<MemorySet>> =
-        Arc::new( Mutex::new(MemorySet::new_kernel()) );
+    pub static ref KERNEL_SPACE: Mutex<MemorySet> =
+         Mutex::new(MemorySet::new_kernel()) ;
 }
 ///Get kernelspace root ppn
 pub fn kernel_token() -> usize {
@@ -390,28 +390,21 @@ bitflags! {
 ///Check PageTable running correctly
 pub fn remap_test() {
     println!("remap test start!");
-    // let mut kernel_space = KERNEL_SPACE.exclusive_access();
     let mut kernel_space = KERNEL_SPACE.lock();
-    // println!("a");
     let mid_text: VirtAddr = (stext as usize + (etext as usize - stext as usize) / 2).into();
-    // println!("b");
     let mid_rodata: VirtAddr =
         (srodata as usize + (erodata as usize - srodata as usize) / 2).into();
-    // println!("c");
     let mid_data: VirtAddr = (sdata as usize + (edata as usize - sdata as usize) / 2).into();
-    // println!("assert1");
     assert!(!kernel_space
         .page_table
         .translate(mid_text.floor())
         .unwrap()
         .writable(),);
-    // println!("assert2");
     assert!(!kernel_space
         .page_table
         .translate(mid_rodata.floor())
         .unwrap()
         .writable(),);
-    // println!("assert3");
     assert!(!kernel_space
         .page_table
         .translate(mid_data.floor())

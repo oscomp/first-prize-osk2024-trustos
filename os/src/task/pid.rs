@@ -1,6 +1,6 @@
 //!Implementation of [`PidAllocator`]
 use crate::config::mm::{KERNEL_STACK_SIZE, PAGE_SIZE, TRAMPOLINE};
-use crate::mm::{MapPermission, VirtAddr, KERNEL_SPACE};
+use crate::mm::{MapPermission, VirtAddr};
 use alloc::vec::Vec;
 use lazy_static::*;
 use log::debug;
@@ -101,14 +101,3 @@ impl KernelStack {
         kernel_stack_position(self.pid)
     }
 }
-
-// TODO(ZMY):删除了应该也没有影响
-// impl Drop for KernelStack {
-//     fn drop(&mut self) {
-//         let (kernel_stack_bottom, _) = kernel_stack_position(self.pid);
-//         let kernel_stack_bottom_va: VirtAddr = kernel_stack_bottom.into();
-//         KERNEL_SPACE
-//             .exclusive_access()
-//             .remove_area_with_start_vpn(kernel_stack_bottom_va.into());
-//     }
-// }

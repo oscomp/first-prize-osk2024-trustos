@@ -20,7 +20,7 @@ use crate::task::{current_trap_cx, exit_current_and_run_next, suspend_current_an
 use crate::timer::set_next_trigger;
 use crate::utils::hart_id;
 use core::arch::{asm, global_asm};
-use log::debug;
+use log::{debug, info};
 use riscv::register::{
     mtvec::TrapMode,
     scause::{self, Exception, Interrupt, Trap},
@@ -68,7 +68,6 @@ pub fn trap_handler() {
     match scause.cause() {
         Trap::Exception(Exception::UserEnvCall) => {
             // jump to next instruction anyway
-            debug!("syscall");
             let mut cx = current_trap_cx();
             cx.sepc += 4;
             debug!("run syscall {}", cx.x[17]);
@@ -123,7 +122,9 @@ pub fn trap_handler() {
         fn __return_to_user(cx: *mut TrapContext);
     }
     unsafe {
-        __return_to_user(current_trap_cx());
+        // 方便调试进入__return_to_user
+        let trap_cx = current_trap_cx();
+        __return_to_user(trap_cx);
     }
 }
 
@@ -143,18 +144,6 @@ pub fn trap_return_for_new_task_once() {
         __return_to_user_for_new_task_once(current_trap_cx());
     }
 }
-// #[no_mangle]
-// #[inline(never)]
-// pub fn trap_return() {
-//     set_user_trap_entry();
-//     extern "C" {
-//         #[allow(improper_ctypes)]
-//         fn __return_to_user(cx: *mut TrapContext);
-//     }
-//     unsafe {
-//         __return_to_user(current_trap_cx());
-//     }
-// }
 
 #[no_mangle]
 /// Unimplement: traps/interrupts/exceptions from kernel mode

@@ -11,7 +11,7 @@ APPS := ../user/src/bin/*
 BOARD := qemu
 SBI ?= rustsbi
 BOOTLOADER := ../bootloader/$(SBI)-$(BOARD).bin
-CPUS ?= 2 # default 2 cores for qemu
+CPUS ?= 1 # default 2 cores for qemu
 
 # Building mode argument
 ifeq ($(MODE), release)

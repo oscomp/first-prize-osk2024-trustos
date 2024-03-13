@@ -86,8 +86,8 @@ impl PageTable {
     }
     pub fn new_from_kernel() -> Self {
         let frame = frame_alloc().unwrap();
-        let kernel_page_table = &KERNEL_SPACE.lock().page_table;
-        let kernel_root_ppn = kernel_page_table.root_ppn;
+        let locked_kernel = KERNEL_SPACE.lock();
+        let kernel_root_ppn = locked_kernel.page_table.root_ppn;
         // 第一级页表
         let index = VirtPageNum::from(KERNEL_PGNUM_OFFSET).indexes()[0];
         frame.ppn.pte_array()[index..].copy_from_slice(&kernel_root_ppn.pte_array()[index..]);
@@ -182,30 +182,48 @@ impl PageTable {
 }
 /// Translate a pointer to a mutable u8 Vec through page table
 pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]> {
+    // let page_table = PageTable::from_token(token);
+    // let va = VirtAddr::from(ptr as usize);
+    // let ppn = page_table.translate(va.floor()).unwrap().ppn();
+    // let mut v = Vec::new();
+    // v.push(ppn.bytes_array_from_offset(va.page_offset(), len));
+    // v
     let page_table = PageTable::from_token(token);
-    let va = VirtAddr::from(ptr as usize);
-    let ppn = page_table.translate(va.floor()).unwrap().ppn();
+    let mut start = ptr as usize;
+    let end = start + len;
     let mut v = Vec::new();
-    v.push(ppn.bytes_array_from_offset(va.page_offset(), len));
+    while start < end {
+        let start_va = VirtAddr::from(start);
+        let mut vpn = start_va.floor();
+        let ppn = page_table.translate(vpn).unwrap().ppn();
+        vpn.step();
+        let mut end_va: VirtAddr = vpn.into();
+        end_va = end_va.min(VirtAddr::from(end));
+        if end_va.page_offset() == 0 {
+            v.push(&mut ppn.bytes_array()[start_va.page_offset()..]);
+        } else {
+            v.push(&mut ppn.bytes_array()[start_va.page_offset()..end_va.page_offset()]);
+        }
+        start = end_va.into();
+    }
     v
 }
 
 /// Translate a pointer to a mutable u8 Vec end with `\0` through page table to a `String`
 pub fn translated_str(token: usize, ptr: *const u8) -> String {
     let page_table = PageTable::from_token(token);
-    let ptr: *mut u8 = KernelAddr::from(
-        page_table
-            .translate_va(VirtAddr::from(ptr as usize))
-            .unwrap(),
-    )
-    .0 as _;
-    let mut len: isize = 0;
-    unsafe {
-        while *ptr.offset(len) != 0 {
-            len += 1;
+    let mut string = String::new();
+    let mut va = ptr as usize;
+    loop {
+        let ch: u8 =
+            *(KernelAddr::from(page_table.translate_va(VirtAddr::from(va)).unwrap()).as_mut());
+        if ch == 0 {
+            break;
         }
-        String::from_utf8(core::slice::from_raw_parts_mut(ptr, len as usize).to_vec()).unwrap()
+        string.push(ch as char);
+        va += 1;
     }
+    string
 }
 
 #[allow(unused)]

@@ -3,6 +3,8 @@ use core::fmt::{self, Write};
 const STDIN: usize = 0;
 const STDOUT: usize = 1;
 
+use spin::Mutex;
+
 use super::{read, write};
 
 struct Stdout;
@@ -13,9 +15,10 @@ impl Write for Stdout {
         Ok(())
     }
 }
-
+static LOCKED_STDOUT: Mutex<Stdout> = Mutex::new(Stdout {});
 pub fn print(args: fmt::Arguments) {
-    Stdout.write_fmt(args).unwrap();
+    // Stdout.write_fmt(args).unwrap();
+    LOCKED_STDOUT.lock().write_fmt(args).unwrap();
 }
 
 #[macro_export]

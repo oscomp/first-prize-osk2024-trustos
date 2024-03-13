@@ -3,7 +3,7 @@ use super::TaskControlBlock;
 use alloc::collections::VecDeque;
 use alloc::sync::Arc;
 use lazy_static::*;
-use spin::Mutex;
+use spin::{Mutex, MutexGuard};
 ///A array of `TaskControlBlock` that is thread-safe
 pub struct TaskManager {
     ready_queue: VecDeque<Arc<TaskControlBlock>>,
@@ -25,6 +25,9 @@ impl TaskManager {
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
         self.ready_queue.pop_front()
     }
+    pub fn is_empty(&self) -> bool {
+        self.ready_queue.is_empty()
+    }
 }
 
 lazy_static! {
@@ -37,4 +40,8 @@ pub fn add_task(task: Arc<TaskControlBlock>) {
 ///Interface offered to pop the first task
 pub fn fetch_task() -> Option<Arc<TaskControlBlock>> {
     TASK_MANAGER.lock().fetch()
+}
+///Lock TaskManager
+pub fn lock_task_manager() -> MutexGuard<'static, TaskManager> {
+    TASK_MANAGER.lock()
 }
