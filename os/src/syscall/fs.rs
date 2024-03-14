@@ -112,6 +112,7 @@ pub fn sys_openat(fd:isize,path: *const u8, flags: u32,_mode:usize) -> isize {
 
 pub fn sys_close(fd: usize) -> isize {
     println!("start sys_close!");
+    println!("close fd : {}",fd);
     let task = current_task().unwrap();
     let mut inner = task.inner_exclusive_access();
     if fd >= inner.fd_table.len() {
@@ -457,10 +458,11 @@ pub fn sys_pipe2(fd:*mut u32) -> isize {
     let mut inner = task.inner_exclusive_access();
 
     let read_fd = inner.alloc_fd();
-    let write_fd = inner.alloc_fd();
     let (read_pipe,write_pipe) = make_pipe();
     inner.fd_table[read_fd] = Some(read_pipe);
+    let write_fd = inner.alloc_fd();
     inner.fd_table[write_fd] = Some(write_pipe);
+    println!("{} and {}",read_fd,write_fd);
     *translated_refmut(token, fd) = read_fd as u32;
     *translated_refmut(token, unsafe { fd.add(1) }) = write_fd as u32;
     0

@@ -158,6 +158,7 @@ impl File for Pipe {
         self.writable
     }
     fn read(&self, buf: UserBuffer) -> usize {
+        //println!("work in read");
         assert!(self.readable());
         let mut buf_iter = buf.into_iter();
         let mut read_size = 0usize;
@@ -186,6 +187,7 @@ impl File for Pipe {
         }
     }
     fn write(&self, buf: UserBuffer) -> usize {
+        //println!("work in write");
         assert!(self.writable());
         let mut buf_iter = buf.into_iter();
         let mut write_size = 0usize;
