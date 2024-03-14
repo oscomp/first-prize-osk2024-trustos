@@ -109,10 +109,13 @@ impl VFile {
         let long_ent_num = name_vec.len();
         let mut offset: usize = 0;
         let mut long_entry = LongDirEntry::new();
-
+        //println!("name is {}",name);
+        /*for i in name_vec.iter() {
+            println!("namepart is {}",i);
+        }*/
         let mut long_pos_vec: Vec<(usize, usize)> = Vec::new();
         let name_last = name_vec.pop().unwrap();
-
+        //println!("name_last:{}",name_last);
         loop {
             long_pos_vec.clear();
             // 读取offset处的目录项
@@ -337,9 +340,11 @@ impl VFile {
         }
         // 定义一个空的短文件名目录项用于写入
         let mut tmp_short_ent = ShortDirEntry::new();
+        //println!("{} with {}space",name_.len(),ext_);
         if name_.len() > 8 || ext_.len() > 3 {
             // 长文件名
             // 生成短文件名及对应目录项
+            //println!("work here !");
             let short_name = generate_short_name(name);
             let (_name, _ext) = short_name_format(short_name.as_str());
             tmp_short_ent.initialize(&_name, &_ext, attribute);

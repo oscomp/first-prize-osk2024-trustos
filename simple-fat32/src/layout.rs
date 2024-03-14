@@ -326,7 +326,8 @@ impl ShortDirEntry {
         if self.is_dir() {
             let dir_file_size =
                 bytes_per_cluster * fat_reader.count_claster_num(self.first_cluster() as u32, block_device.clone()) as usize;
-            end = offset + buf.len().min(dir_file_size);
+            end = (offset + buf.len()).min(dir_file_size);
+            //println!("{}",end);
         } else {
             // 此次文件读取的最大范围，偏移量位置加上缓冲区大小 和 文件总大小 取较小者
             end = (offset + buf.len()).min(self.dir_file_size as usize);

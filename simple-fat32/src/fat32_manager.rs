@@ -245,6 +245,7 @@ pub fn long_name_split(name: &str) -> Vec<String> {
             }
         }
         name_vec.push(temp_buffer.clone());
+        //println!("tempbuffer: {}",temp_buffer);
     }
     name_vec
 }
@@ -260,6 +261,7 @@ pub fn split_name_ext(name: &str) -> (&str, &str) {
                 // 如果没有后缀名则推入一个空值
                 name_and_ext.push("");
             }
+            //println!("{} and {}spacehere",name_and_ext[0].len(),name_and_ext[1]);
             (name_and_ext[0], name_and_ext[1])
         }
     }

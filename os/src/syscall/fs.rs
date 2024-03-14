@@ -56,9 +56,11 @@ pub fn sys_openat(fd:isize,path: *const u8, flags: u32,_mode:usize) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
     let path = translated_str(token, path);
+    let path = String::from(path.trim_end_matches('\n'));
+    //println!("{}space",path);
     let mut inner = task.inner_exclusive_access();
     let flags=OpenFlags::from_bits(flags).unwrap();
-    println!("{},{}\n",fd,path);
+    //println!("ready to open:{},{}",fd,path);
     //若为绝对路径
     if path.starts_with('/'){
         drop(inner);
@@ -311,157 +313,7 @@ pub fn sys_getdents64(fd:usize,buf: *const u8,len:usize) -> isize {
 }
 
 pub fn sys_linkat(oldfd:isize,oldpath: *const u8,newfd:isize,newpath: *const u8,_flags:u32) -> isize {
-    0
-/*
-    println!("start sys_linkat!");
-    let token = current_user_token();
-    let task = current_task().unwrap();
-    let mut inner = task.inner_exclusive_access();
-    let oldpath = translated_str(token, oldpath);
-    let newpath = translated_str(token, newpath);
-    
-    if oldpath.starts_with('/'){
-        if let Some(oldinode) = open_file(oldpath.as_str(), OpenFlags::O_RDONLY){
-            if newpath.starts_with('/'){
-                if let Some(newinode) = open_file(newpath.as_str(), OpenFlags::O_RDONLY) {
-                    //进行链接
-                    0
-                } else {
-                    -1
-                }
-            } else {
-                if newfd == AT_FDCWD {
-                    if let Some(newinode) = open(inner.current_path.as_str(),newpath.as_str(),OpenFlags::O_RDONLY) {
-                        //进行链接
-                        0
-                    } else {
-                        -1
-                    }
-                } else {
-                    let newfd = newfd as usize;
-                
-                    if newfd >= inner.fd_table.len() {
-                        return -1;
-                    }
-                    if inner.fd_table[newfd].is_none() {
-                        return -1;
-                    }
-                
-                    if let Some(newfile) = &inner.fd_table[newfd] {
-                        if let Some(newinode) = open(newfile.get_name().as_str(), newpath.as_str(), OpenFlags::O_RDONLY) {
-                            //进行链接
-                            0
-                        } else {
-                            -1
-                        }
-                    } else {
-                        -1
-                    }
-                }
-            }
-        } else {
-            -1
-        }
-    } else {
-        if oldfd == AT_FDCWD {
-            if let Some(oldinode) = open(inner.current_path.as_str(),oldpath.as_str(),OpenFlags::O_RDONLY) {
-                if newpath.starts_with('/'){
-                    if let Some(newinode) = open_file(newpath.as_str(), OpenFlags::O_RDONLY) {
-                        //进行链接
-                        0
-                    } else {
-                        -1
-                    }
-                } else {
-                    if newfd == AT_FDCWD {
-                        if let Some(newinode) = open(inner.current_path.as_str(),newpath.as_str(),OpenFlags::O_RDONLY) {
-                            //进行链接
-                            0
-                        } else {
-                            -1
-                        }
-                    } else {
-                        let newfd = newfd as usize;
-                    
-                        if newfd >= inner.fd_table.len() {
-                            return -1;
-                        }
-                        if inner.fd_table[newfd].is_none() {
-                            return -1;
-                        }
-                    
-                        if let Some(newfile) = &inner.fd_table[newfd] {
-                            if let Some(newinode) = open(newfile.get_name().as_str(), newpath.as_str(), OpenFlags::O_RDONLY) {
-                                //进行链接
-                                0
-                            } else {
-                                -1
-                            }
-                        } else {
-                            -1
-                        }
-                    }
-                }
-            } else {
-                -1
-            }
-        } else {
-            let oldfd=oldfd as usize;
-
-            if oldfd >= inner.fd_table.len() {
-                return -1;
-            }
-            if inner.fd_table[oldfd].is_none() {
-                return -1;
-            }
-            
-            if let Some(oldfile) = &inner.fd_table[oldfd] {
-                if let Some(oldinode) = open(oldfile.get_name().as_str(), oldpath.as_str(), OpenFlags::O_RDONLY) {
-                    if newpath.starts_with('/'){
-                        if let Some(newinode) = open_file(newpath.as_str(), OpenFlags::O_RDONLY) {
-                            //进行链接
-                            0
-                        } else {
-                            -1
-                        }
-                    } else {
-                        if newfd == AT_FDCWD {
-                            if let Some(newinode) = open(inner.current_path.as_str(),newpath.as_str(),OpenFlags::O_RDONLY) {
-                                //进行链接
-                                0
-                            } else {
-                                -1
-                            }
-                        } else {
-                            let newfd = newfd as usize;
-                        
-                            if newfd >= inner.fd_table.len() {
-                                return -1;
-                            }
-                            if inner.fd_table[newfd].is_none() {
-                                return -1;
-                            }
-                        
-                            if let Some(newfile) = &inner.fd_table[newfd] {
-                                if let Some(newinode) = open(newfile.get_name().as_str(), newpath.as_str(), OpenFlags::O_RDONLY) {
-                                    //进行链接
-                                    0
-                                } else {
-                                    -1
-                                }
-                            } else {
-                                -1
-                            }
-                        }
-                    }
-                } else {
-                    -1
-                }
-            } else {
-                -1
-            }
-        }
-    }*/
+    todo!();
 }
 
 pub fn sys_unlinkat(dirfd:isize,path: *const u8,flags:u32) -> isize {
@@ -470,6 +322,7 @@ pub fn sys_unlinkat(dirfd:isize,path: *const u8,flags:u32) -> isize {
     let task = current_task().unwrap();
     let mut inner = task.inner_exclusive_access();
     let path = translated_str(token, path);
+    let path = String::from(path.trim_end_matches('\n'));
     
     if path.starts_with('/'){
         drop(inner);
@@ -495,6 +348,7 @@ pub fn sys_unlinkat(dirfd:isize,path: *const u8,flags:u32) -> isize {
             drop(inner);
             if let Some(inode) = open(now_path.as_str(),path.as_str(),OpenFlags::O_RDONLY) {
                 //断开链接(讨论flags)
+                //println!("{}",inode.is_dir());
                 if flags == AT_REMOVEDIR {
                     inode.delete();
                     return 0;
@@ -502,11 +356,11 @@ pub fn sys_unlinkat(dirfd:isize,path: *const u8,flags:u32) -> isize {
                     if inode.is_dir() {
                         return -1;
                     } else {
+                        //println!("work here");
                         inode.delete();
                         return 0;
                     }
                 }
-                0
             } else {
                 -1
             }
@@ -535,7 +389,6 @@ pub fn sys_unlinkat(dirfd:isize,path: *const u8,flags:u32) -> isize {
                             return 0;
                         }
                     }
-                    0
                 } else {
                     -1
                 }

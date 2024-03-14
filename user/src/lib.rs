@@ -142,8 +142,8 @@ pub fn link(oldfd:isize,oldpath:&str,newfd:isize,newpath:&str,flags:u32)->isize 
     sys_linkat(oldfd, oldpath, newfd, newpath, flags)
 }
 
-pub fn unlink(dirfd:isize,path:&str,flags:u32)->isize {
-    sys_unlinkat(dirfd, path, flags)
+pub fn unlink(dirfd:isize,path:&str,flags:OpenFlags)->isize {
+    sys_unlinkat(dirfd, path, flags.bits)
 }
 
 pub fn umount(special: &str,flags:u32) -> isize {
