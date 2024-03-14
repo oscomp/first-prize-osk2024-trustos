@@ -1,13 +1,16 @@
 //!Implementation of [`TaskControlBlock`]
-use super::TaskContext;
-use super::{pid_alloc, KernelStack, PidHandle};
-use crate::config::mm::USER_TRAP_CONTEXT;
-use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr};
-use crate::trap::{trap_handler, TrapContext};
-use alloc::sync::{Arc, Weak};
-use alloc::vec;
-use alloc::vec::Vec;
+use super::{pid_alloc, KernelStack, PidHandle, TaskContext};
+use crate::{
+    config::mm::USER_TRAP_CONTEXT,
+    fs::{File, Stdin, Stdout},
+    mm::{MapAreaType, MapPermission, MemorySet, PhysPageNum, VirtAddr},
+    trap::{trap_handler, TrapContext},
+};
+use alloc::{
+    sync::{Arc, Weak},
+    vec,
+    vec::Vec,
+};
 use core::cell::RefMut;
 use log::{debug, info};
 use spin::{Mutex, MutexGuard};
@@ -78,6 +81,7 @@ impl TaskControlBlock {
             kernel_stack_bottom.into(),
             kernel_stack_top.into(),
             MapPermission::R | MapPermission::W,
+            MapAreaType::Stack,
         );
         let task_control_block = Self {
             pid: pid_handle,
@@ -126,11 +130,19 @@ impl TaskControlBlock {
             kernel_stack_bottom.into(),
             kernel_stack_top.into(),
             MapPermission::R | MapPermission::W,
+            MapAreaType::Stack,
         );
 
         // **** access current TCB exclusively
-        // let mut inner = self.inner_exclusive_access();
         let mut inner = self.lock_inner();
+        // copy kernel stack
+        for (dst, src) in memory_set
+            .kernel_stack_ppn()
+            .iter()
+            .zip(inner.memory_set.kernel_stack_ppn().iter())
+        {
+            dst.bytes_array_mut().copy_from_slice(src.bytes_array_mut())
+        }
         // substitute memory_set
         inner.memory_set = memory_set;
         // update trap_cx ppn
@@ -142,7 +154,7 @@ impl TaskControlBlock {
             trap_handler as usize,
         );
         *inner.trap_cx() = trap_cx;
-        // debug!("task.exec.pid={}", self.pid.0);
+        debug!("task.exec.pid={}", self.pid.0);
         // **** release current PCB
     }
     pub fn fork(self: &Arc<TaskControlBlock>) -> Arc<TaskControlBlock> {
@@ -164,6 +176,7 @@ impl TaskControlBlock {
             kernel_stack_bottom.into(),
             kernel_stack_top.into(),
             MapPermission::R | MapPermission::W,
+            MapAreaType::Stack,
         );
         // copy fd table
         let mut new_fd_table: Vec<Option<Arc<dyn File + Send + Sync>>> = Vec::new();

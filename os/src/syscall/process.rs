@@ -48,6 +48,7 @@ pub fn sys_exec(path: *const u8) -> isize {
         let all_data = app_inode.read_all();
         let task = current_task().unwrap();
         task.exec(all_data.as_slice());
+        task.lock_inner().memory_set.activate();
         0
     } else {
         -1

@@ -8,17 +8,15 @@
 mod address;
 mod frame_allocator;
 mod heap_allocator;
+mod map_area;
 mod memory_set;
 mod page_table;
-
-use address::VPNRange;
-pub use address::{KernelAddr, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+pub use address::{KernelAddr, PhysAddr, PhysPageNum, StepByOne, VPNRange, VirtAddr, VirtPageNum};
 pub use frame_allocator::{frame_alloc, frame_dealloc, FrameTracker};
-pub use memory_set::remap_test;
-pub use memory_set::{kernel_token, MapPermission, MemorySet, KERNEL_SPACE};
-use page_table::PTEFlags;
+pub use map_area::{MapArea, MapAreaType, MapPermission, MapType};
+pub use memory_set::{kernel_token, remap_test, MemorySet, KERNEL_SPACE};
 pub use page_table::{
-    translated_byte_buffer, translated_ref, translated_refmut, translated_str, PageTable,
+    translated_byte_buffer, translated_ref, translated_refmut, translated_str, PTEFlags, PageTable,
     PageTableEntry, UserBuffer, UserBufferIterator,
 };
 
