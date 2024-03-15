@@ -77,13 +77,40 @@ impl MemorySet {
             None,
         );
     }
-    pub fn kernel_stack_ppn(&self) -> Vec<PhysPageNum> {
+    pub fn insert_given_framed_area(
+        &mut self,
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+        permission: MapPermission,
+        area_type: MapAreaType,
+        frames: Vec<Arc<FrameTracker>>,
+    ) {
+        self.push_with_given_frames(
+            MapArea::new(start_va, end_va, MapType::Framed, permission, area_type),
+            frames,
+        );
+    }
+    // pub fn kernel_stack_ppn(&self) -> Vec<PhysPageNum> {
+    //     self.areas
+    //         .iter()
+    //         .find_map(|area| {
+    //             if area.area_type == MapAreaType::Stack && !area.map_perm.contains(MapPermission::U)
+    //             {
+    //                 Some(area.kernel_stack_ppn(&self.page_table))
+    //             } else {
+    //                 None
+    //             }
+    //         })
+    //         .unwrap()
+    // }
+    /// return frames of kernel stack
+    pub fn kernel_stack_frame(&self) -> Vec<Arc<FrameTracker>> {
         self.areas
             .iter()
             .find_map(|area| {
                 if area.area_type == MapAreaType::Stack && !area.map_perm.contains(MapPermission::U)
                 {
-                    Some(area.kernel_stack_ppn(&self.page_table))
+                    Some(area.kernel_stack_frame())
                 } else {
                     None
                 }
@@ -107,6 +134,10 @@ impl MemorySet {
         if let Some(data) = data {
             map_area.copy_data(&mut self.page_table, data);
         }
+        self.areas.push(map_area);
+    }
+    fn push_with_given_frames(&mut self, mut map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
+        map_area.map_given_frames(&mut self.page_table, frames);
         self.areas.push(map_area);
     }
     pub fn debug_translate_va(&self, va: VirtAddr) -> Option<PhysAddr> {

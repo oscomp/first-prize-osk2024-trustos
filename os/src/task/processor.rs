@@ -78,25 +78,26 @@ pub fn run_tasks() {
                 processor.current = Some(next_task);
                 add_task(cur_task);
                 unsafe {
-                    // info!(
-                    //     "idle_task_cx_ptr.sp={:#x},next_task_cx_ptr.sp={:#x}",
-                    //     (*idle_task_cx_ptr).sp,
-                    //     (*next_task_cx_ptr).sp
-                    // );
+                    info!(
+                        "idle_task_cx_ptr.sp={:#x},next_task_cx_ptr.sp={:#x}",
+                        (*idle_task_cx_ptr).sp,
+                        (*next_task_cx_ptr).sp
+                    );
                     __switch(idle_task_cx_ptr, next_task_cx_ptr);
                 }
             } else {
+                info!("run self {}", cur_task.pid.0);
                 cur_task_inner.task_status = TaskStatus::Running;
                 let cur_task_cx_ptr = &cur_task_inner.task_cx as *const TaskContext;
                 // cur_task_inner.memory_set.activate();
                 drop(cur_task_inner);
                 processor.current = Some(cur_task);
                 unsafe {
-                    // info!(
-                    //     "idle_task_cx_ptr.sp={:#x},cur_task_cx_ptr.sp={:#x}",
-                    //     (*idle_task_cx_ptr).sp,
-                    //     (*cur_task_cx_ptr).sp
-                    // );
+                    info!(
+                        "idle_task_cx_ptr.sp={:#x},cur_task_cx_ptr.sp={:#x}",
+                        (*idle_task_cx_ptr).sp,
+                        (*cur_task_cx_ptr).sp
+                    );
                     __switch(idle_task_cx_ptr, cur_task_cx_ptr);
                 }
             }

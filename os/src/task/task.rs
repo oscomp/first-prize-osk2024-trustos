@@ -59,9 +59,6 @@ impl TaskControlBlockInner {
 }
 
 impl TaskControlBlock {
-    // pub fn inner_exclusive_access(&self) -> RefMut<'_, TaskControlBlockInner> {
-    //     self.inner.exclusive_access()
-    // }
     pub fn lock_inner(&self) -> MutexGuard<TaskControlBlockInner> {
         self.inner.lock()
     }
@@ -106,7 +103,6 @@ impl TaskControlBlock {
             }),
         };
         // prepare TrapContext in user space
-        // let trap_cx = task_control_block.inner_exclusive_access().trap_cx();
         let trap_cx = task_control_block.lock_inner().trap_cx();
         *trap_cx = TrapContext::app_init_context(
             entry_point,
@@ -124,25 +120,17 @@ impl TaskControlBlock {
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
             .unwrap()
             .ppn();
+        // **** access current TCB exclusively
+        let mut inner = self.lock_inner();
         // map kernel stack
         let (kernel_stack_bottom, kernel_stack_top) = self.kernel_stack.pos();
-        memory_set.insert_framed_area(
+        memory_set.insert_given_framed_area(
             kernel_stack_bottom.into(),
             kernel_stack_top.into(),
             MapPermission::R | MapPermission::W,
             MapAreaType::Stack,
+            inner.memory_set.kernel_stack_frame(),
         );
-
-        // **** access current TCB exclusively
-        let mut inner = self.lock_inner();
-        // copy kernel stack
-        for (dst, src) in memory_set
-            .kernel_stack_ppn()
-            .iter()
-            .zip(inner.memory_set.kernel_stack_ppn().iter())
-        {
-            dst.bytes_array_mut().copy_from_slice(src.bytes_array_mut())
-        }
         // substitute memory_set
         inner.memory_set = memory_set;
         // update trap_cx ppn
@@ -159,7 +147,6 @@ impl TaskControlBlock {
     }
     pub fn fork(self: &Arc<TaskControlBlock>) -> Arc<TaskControlBlock> {
         // ---- hold parent PCB lock
-        // let mut parent_inner = self.inner_exclusive_access();
         let mut parent_inner = self.lock_inner();
         // copy user space(include trap context)
         let mut memory_set = MemorySet::from_existed_user(&parent_inner.memory_set);

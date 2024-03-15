@@ -2,7 +2,7 @@
 //! controls all the frames in the operating system.
 use super::{PhysAddr, PhysPageNum};
 use crate::{config::board::MEMORY_END, mm::address::KernelAddr};
-use alloc::vec::Vec;
+use alloc::{sync::Arc, vec::Vec};
 use core::fmt::{self, Debug, Formatter};
 use lazy_static::*;
 use spin::Mutex;
@@ -108,8 +108,12 @@ pub fn init_frame_allocator() {
     );
 }
 /// allocate a frame
-pub fn frame_alloc() -> Option<FrameTracker> {
-    FRAME_ALLOCATOR.lock().alloc().map(FrameTracker::new)
+pub fn frame_alloc() -> Option<Arc<FrameTracker>> {
+    FRAME_ALLOCATOR
+        .lock()
+        .alloc()
+        .map(FrameTracker::new)
+        .map(Arc::new)
 }
 /// deallocate a frame
 pub fn frame_dealloc(ppn: PhysPageNum) {
@@ -119,7 +123,7 @@ pub fn frame_dealloc(ppn: PhysPageNum) {
 #[allow(unused)]
 /// a simple test for frame allocator
 pub fn frame_allocator_test() {
-    let mut v: Vec<FrameTracker> = Vec::new();
+    let mut v: Vec<Arc<FrameTracker>> = Vec::new();
     for i in 0..5 {
         let frame = frame_alloc().unwrap();
         println!("{:?}", frame);

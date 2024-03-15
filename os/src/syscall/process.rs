@@ -1,5 +1,5 @@
 use crate::fs::{open_file, OpenFlags};
-use crate::mm::{translated_refmut, translated_str};
+use crate::mm::{translated_refmut, translated_str, VirtAddr};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next,
     suspend_current_and_run_next,
@@ -31,7 +31,6 @@ pub fn sys_fork() -> isize {
     let new_task = current_task.fork();
     let new_pid = new_task.pid.0;
     // modify trap context of new_task, because it returns immediately after switching
-    // let trap_cx = new_task.inner_exclusive_access().trap_cx();
     let trap_cx = new_task.lock_inner().trap_cx();
     // we do not have to move to next instruction since we have done it before
     // for child process, fork returns 0
@@ -48,7 +47,8 @@ pub fn sys_exec(path: *const u8) -> isize {
         let all_data = app_inode.read_all();
         let task = current_task().unwrap();
         task.exec(all_data.as_slice());
-        task.lock_inner().memory_set.activate();
+        // task.lock_inner().memory_set.activate();
+        debug!("exec out");
         0
     } else {
         -1

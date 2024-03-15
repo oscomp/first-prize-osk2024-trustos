@@ -6,9 +6,7 @@ use super::{
     frame_alloc, FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum,
     KERNEL_SPACE,
 };
-use alloc::string::String;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use bitflags::*;
 
 bitflags! {
@@ -71,7 +69,7 @@ impl PageTableEntry {
 ///Record root ppn and has the same lifetime as 1 and 2 level `PageTableEntry`
 pub struct PageTable {
     root_ppn: PhysPageNum,
-    frames: Vec<FrameTracker>,
+    frames: Vec<Arc<FrameTracker>>,
 }
 
 /// Assume that it won't oom when creating/mapping.
@@ -182,18 +180,6 @@ impl PageTable {
 }
 /// Translate a pointer to a mutable u8 Vec through page table
 pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]> {
-    // let mut v = Vec::new();
-    // unsafe {
-    //     v.push(core::slice::from_raw_parts_mut(ptr as *mut u8, len));
-    // }
-    // v
-    // let page_table = PageTable::from_token(token);
-    // let va = VirtAddr::from(ptr as usize);
-    // let ppn = page_table.translate(va.floor()).unwrap().ppn();
-    // let mut v = Vec::new();
-    // v.push(ppn.bytes_array_from_offset(va.page_offset(), len));
-    // v
-
     let page_table = PageTable::from_token(token);
     let mut start = ptr as usize;
     let end = start + len;
