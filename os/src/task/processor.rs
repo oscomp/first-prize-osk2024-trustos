@@ -63,13 +63,13 @@ pub fn run_tasks() {
         let processor = get_proc_by_hartid(hart_id());
         let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
         if let Some(cur_task) = take_current_task() {
-            let mut cur_task_inner = cur_task.lock_inner();
+            let mut cur_task_inner = cur_task.inner_lock();
             if let Some(next_task) = fetch_task() {
-                info!(
-                    "drop task {},fetch task {}",
-                    cur_task.pid.0, next_task.pid.0
-                );
-                let mut next_task_inner = next_task.lock_inner();
+                // info!(
+                //     "drop task {},fetch task {}",
+                //     cur_task.pid.0, next_task.pid.0
+                // );
+                let mut next_task_inner = next_task.inner_lock();
                 let next_task_cx_ptr = &next_task_inner.task_cx as *const TaskContext;
                 next_task_inner.task_status = TaskStatus::Running;
                 next_task_inner.memory_set.activate();
@@ -78,45 +78,28 @@ pub fn run_tasks() {
                 processor.current = Some(next_task);
                 add_task(cur_task);
                 unsafe {
-                    info!(
-                        "idle_task_cx_ptr.sp={:#x},next_task_cx_ptr.sp={:#x}",
-                        (*idle_task_cx_ptr).sp,
-                        (*next_task_cx_ptr).sp
-                    );
                     __switch(idle_task_cx_ptr, next_task_cx_ptr);
                 }
             } else {
-                info!("run self {}", cur_task.pid.0);
                 cur_task_inner.task_status = TaskStatus::Running;
                 let cur_task_cx_ptr = &cur_task_inner.task_cx as *const TaskContext;
-                // cur_task_inner.memory_set.activate();
                 drop(cur_task_inner);
                 processor.current = Some(cur_task);
                 unsafe {
-                    info!(
-                        "idle_task_cx_ptr.sp={:#x},cur_task_cx_ptr.sp={:#x}",
-                        (*idle_task_cx_ptr).sp,
-                        (*cur_task_cx_ptr).sp
-                    );
                     __switch(idle_task_cx_ptr, cur_task_cx_ptr);
                 }
             }
         } else {
             // 第一次调度，抢占
             if let Some(task) = fetch_task() {
-                info!("first fetch task {}", task.pid.0);
-                let mut task_inner = task.lock_inner();
+                // info!("first fetch task {}", task.pid.0);
+                let mut task_inner = task.inner_lock();
                 let next_task_cx_ptr = &task_inner.task_cx as *const TaskContext;
                 task_inner.task_status = TaskStatus::Running;
                 task_inner.memory_set.activate();
                 drop(task_inner);
                 processor.current = Some(task);
                 unsafe {
-                    info!(
-                        "idle.sp={:#x},next.sp={:#x}",
-                        (*idle_task_cx_ptr).sp,
-                        (*next_task_cx_ptr).sp
-                    );
                     __switch(idle_task_cx_ptr, next_task_cx_ptr);
                 }
             }
@@ -135,30 +118,18 @@ pub fn current_task() -> Option<Arc<TaskControlBlock>> {
 ///Get token of the address space of current task
 pub fn current_user_token() -> usize {
     let task = current_task().unwrap();
-    let token = task.lock_inner().user_token();
+    let token = task.inner_lock().user_token();
     token
 }
 ///Get the mutable reference to trap context of current task
 pub fn current_trap_cx() -> &'static mut TrapContext {
-    current_task().unwrap().lock_inner().trap_cx()
+    current_task().unwrap().inner_lock().trap_cx()
 }
 ///Return to idle control flow for new scheduling
 pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {
     let processor = get_proc_by_hartid(hart_id());
     let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
-    // let mut sp: usize;
     unsafe {
-        // info!(
-        //     "switched_task_cx_ptr.sp={:#x},idle_task_cx_ptr.sp={:#x}",
-        //     (*switched_task_cx_ptr).sp,
-        //     (*idle_task_cx_ptr).sp
-        // );
-        // asm!("mv {},sp", out(reg) sp);
-        // info!("before schedule switch,save sp={:#x}", sp);
         __switch(switched_task_cx_ptr, idle_task_cx_ptr);
-        // asm!("mv {},sp", out(reg) sp);
-        // info!("after schedule switch,save sp={:#x}", sp);
     }
-    // asm!("mv {},sp", out(reg) sp);
-    // info!("after schedule switch,save sp={:#x}", sp);
 }

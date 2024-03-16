@@ -90,19 +90,6 @@ impl MemorySet {
             frames,
         );
     }
-    // pub fn kernel_stack_ppn(&self) -> Vec<PhysPageNum> {
-    //     self.areas
-    //         .iter()
-    //         .find_map(|area| {
-    //             if area.area_type == MapAreaType::Stack && !area.map_perm.contains(MapPermission::U)
-    //             {
-    //                 Some(area.kernel_stack_ppn(&self.page_table))
-    //             } else {
-    //                 None
-    //             }
-    //         })
-    //         .unwrap()
-    // }
     /// return frames of kernel stack
     pub fn kernel_stack_frame(&self) -> Vec<Arc<FrameTracker>> {
         self.areas
@@ -230,7 +217,7 @@ impl MemorySet {
     /// also returns user_sp and entry point.
     pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize) {
         let mut memory_set = Self::new_from_kernel();
-        debug!("from_elf new stap={:#x}", memory_set.page_table.token());
+        // debug!("from_elf new stap={:#x}", memory_set.page_table.token());
         // map program headers of elf, with U flag
         let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
         let elf_header = elf.header;
@@ -305,6 +292,10 @@ impl MemorySet {
         let mut memory_set = Self::new_from_kernel();
         // copy data sections/trap_context/user_stack
         for area in user_space.areas.iter() {
+            // don't copy kernel stack
+            if area.area_type == MapAreaType::Stack && !area.map_perm.contains(MapPermission::U) {
+                continue;
+            }
             let new_area = MapArea::from_another(area);
             memory_set.push(new_area, None);
             // copy data from another space

@@ -59,7 +59,7 @@ impl TaskControlBlockInner {
 }
 
 impl TaskControlBlock {
-    pub fn lock_inner(&self) -> MutexGuard<TaskControlBlockInner> {
+    pub fn inner_lock(&self) -> MutexGuard<TaskControlBlockInner> {
         self.inner.lock()
     }
     pub fn new(elf_data: &[u8]) -> Self {
@@ -103,7 +103,7 @@ impl TaskControlBlock {
             }),
         };
         // prepare TrapContext in user space
-        let trap_cx = task_control_block.lock_inner().trap_cx();
+        let trap_cx = task_control_block.inner_lock().trap_cx();
         *trap_cx = TrapContext::app_init_context(
             entry_point,
             user_sp,
@@ -121,7 +121,7 @@ impl TaskControlBlock {
             .unwrap()
             .ppn();
         // **** access current TCB exclusively
-        let mut inner = self.lock_inner();
+        let mut inner = self.inner_lock();
         // map kernel stack
         let (kernel_stack_bottom, kernel_stack_top) = self.kernel_stack.pos();
         memory_set.insert_given_framed_area(
@@ -147,7 +147,7 @@ impl TaskControlBlock {
     }
     pub fn fork(self: &Arc<TaskControlBlock>) -> Arc<TaskControlBlock> {
         // ---- hold parent PCB lock
-        let mut parent_inner = self.lock_inner();
+        let mut parent_inner = self.inner_lock();
         // copy user space(include trap context)
         let mut memory_set = MemorySet::from_existed_user(&parent_inner.memory_set);
         let trap_cx_ppn = memory_set
@@ -157,7 +157,6 @@ impl TaskControlBlock {
         // alloc a pid and a kernel stack in kernel space
         let pid_handle = pid_alloc();
         let kernel_stack = KernelStack::new(&pid_handle);
-        // let kernel_stack_top = kernel_stack.top();
         let (kernel_stack_bottom, kernel_stack_top) = kernel_stack.pos();
         memory_set.insert_framed_area(
             kernel_stack_bottom.into(),
@@ -194,7 +193,7 @@ impl TaskControlBlock {
         // modify kernel_sp in trap_cx
         // **** access child PCB exclusively
         // let trap_cx = task_control_block.inner_exclusive_access().trap_cx();
-        let trap_cx = task_control_block.lock_inner().trap_cx();
+        let trap_cx = task_control_block.inner_lock().trap_cx();
         trap_cx.kernel_sp = kernel_stack_top;
         // return
         task_control_block

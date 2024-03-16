@@ -61,7 +61,7 @@ pub fn enable_timer_interrupt() {
 /// handle an interrupt, exception, or system call from user space
 pub fn trap_handler() {
     let hartid = hart_id();
-    debug!("trap handler");
+    // debug!("trap handler");
     set_kernel_trap_entry();
     let scause = scause::read();
     let stval = stval::read();
@@ -70,7 +70,7 @@ pub fn trap_handler() {
             // jump to next instruction anyway
             let mut cx = current_trap_cx();
             cx.sepc += 4;
-            debug!("run syscall {}", cx.x[17]);
+            // debug!("run syscall {}", cx.x[17]);
             // get system call return value
             let result = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]);
             // cx is changed during sys_exec, so we have to call it again
@@ -102,7 +102,7 @@ pub fn trap_handler() {
             exit_current_and_run_next(-3);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
-            info!("Timer Interupt!");
+            // println!("Timer Interupt!");
             set_next_trigger();
             suspend_current_and_run_next();
         }
@@ -114,7 +114,7 @@ pub fn trap_handler() {
             );
         }
     }
-    debug!("in trap handler,return to user space");
+    // debug!("in trap handler,return to user space");
     // 手动内联trap_return
     set_user_trap_entry();
     extern "C" {
@@ -151,6 +151,11 @@ pub fn trap_return_for_new_task_once() {
 pub fn trap_from_kernel() -> ! {
     debug!("trap from kernel!");
     use riscv::register::sepc;
-    println!("stval = {:#x}, sepc = {:#x}", stval::read(), sepc::read());
-    panic!("a trap {:?} from kernel!", scause::read().cause());
+    panic!(
+        "stval = {:#x}, sepc = {:#x}\n
+        a trap {:?} from kernel!",
+        stval::read(),
+        sepc::read(),
+        scause::read().cause()
+    );
 }

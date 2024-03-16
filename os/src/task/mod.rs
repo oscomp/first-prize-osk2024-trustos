@@ -44,15 +44,13 @@ use self::processor::get_proc_by_hartid;
 pub fn suspend_current_and_run_next() {
     // There must be
     let task = current_task().unwrap();
-    let mut task_inner = task.lock_inner();
+    let mut task_inner = task.inner_lock();
     let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
     // Change status to Ready
     task_inner.task_status = TaskStatus::Ready;
     // ---- release current PCB
     drop(task_inner);
     drop(task);
-    // push back to ready queue.
-    // add_task(task);
     // jump to scheduling cycle
     schedule(task_cx_ptr);
 }
@@ -62,6 +60,7 @@ pub const IDLE_PID: usize = 0;
 
 /// Exit the current 'Running' task and run the next task in task list.
 pub fn exit_current_and_run_next(exit_code: i32) {
+    let mut initproc_inner = INITPROC.inner_lock();
     // take from Processor
     let task = take_current_task().unwrap();
 
@@ -82,7 +81,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
 
     // **** access current TCB exclusively
     // let mut inner = task.inner_exclusive_access();
-    let mut inner = task.lock_inner();
+    let mut inner = task.inner_lock();
     // Change status to Zombie
     inner.task_status = TaskStatus::Zombie;
     // Record exit code
@@ -91,11 +90,11 @@ pub fn exit_current_and_run_next(exit_code: i32) {
 
     // ++++++ access initproc TCB exclusively
     {
-        let mut initproc_inner = INITPROC.lock_inner();
         for child in inner.children.iter() {
-            child.lock_inner().parent = Some(Arc::downgrade(&INITPROC));
+            child.inner_lock().parent = Some(Arc::downgrade(&INITPROC));
             initproc_inner.children.push(child.clone());
         }
+        drop(initproc_inner);
     }
     // ++++++ release parent PCB
 
