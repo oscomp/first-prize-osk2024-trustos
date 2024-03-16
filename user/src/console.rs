@@ -11,7 +11,7 @@ struct Stdout;
 
 impl Write for Stdout {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        write(STDOUT, s.as_bytes());
+        write(STDOUT, s.as_bytes(),s.as_bytes().len());
         Ok(())
     }
 }
@@ -37,6 +37,6 @@ macro_rules! println {
 
 pub fn getchar() -> u8 {
     let mut c = [0u8; 1];
-    read(STDIN, &mut c);
+    read(STDIN, &mut c,1);
     c[0]
 }

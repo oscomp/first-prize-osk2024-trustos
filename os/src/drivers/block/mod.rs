@@ -4,8 +4,9 @@ pub use virtio_blk::VirtIOBlock;
 
 use crate::board::BlockDeviceImpl;
 use alloc::sync::Arc;
-use easy_fs::BlockDevice;
 use lazy_static::*;
+use simple_fat32::BlockDevice;
+
 lazy_static! {
     /// 实现 Trait BlockDevice时对内部操作加锁
     pub static ref BLOCK_DEVICE: Arc<dyn BlockDevice> = Arc::new(BlockDeviceImpl::new());

@@ -14,11 +14,16 @@ const BS: u8 = 0x08u8;
 
 use alloc::string::String;
 use user_lib::console::getchar;
-use user_lib::{exec, fork, waitpid};
+use user_lib::{exec, fork, openat, unlink, waitpid, OpenFlags};
 
 #[no_mangle]
 pub fn main() -> i32 {
     println!("Rust user shell");
+    //let red=openat(-100, "./test_unlink", OpenFlags::O_WRONLY | OpenFlags::O_CREATE, 0);
+    //println!("red:{}",red);
+    //unlink(-100, "./test_unlink", OpenFlags::O_RDWR);
+    //let green = openat(-100, "./test_unlink", OpenFlags::O_RDONLY, 0);
+    //println!("green:{}",green);
     let mut line: String = String::new();
     print!(">> ");
     loop {

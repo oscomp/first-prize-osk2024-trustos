@@ -72,7 +72,7 @@ pub fn trap_handler() {
             cx.sepc += 4;
             // debug!("run syscall {}", cx.x[17]);
             // get system call return value
-            let result = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]);
+            let result = syscall(cx.x[17], [cx.x[10] as isize, cx.x[11] as isize, cx.x[12] as isize, cx.x[13] as isize, cx.x[14] as isize, cx.x[15] as isize]);
             // cx is changed during sys_exec, so we have to call it again
             cx = current_trap_cx();
             cx.x[10] = result as usize;

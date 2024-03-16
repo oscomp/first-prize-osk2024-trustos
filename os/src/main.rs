@@ -19,6 +19,9 @@
 //! userspace.
 
 // #![deny(warnings)]
+//#![deny(missing_docs)]
+#![allow(unused)]
+#![deny(warnings)]
 #![allow(unused_imports)]
 #![no_std]
 #![no_main]

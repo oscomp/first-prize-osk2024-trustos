@@ -27,6 +27,7 @@ pub fn sys_getpid() -> isize {
 }
 
 pub fn sys_fork() -> isize {
+    println!("start sys_fork!");
     let current_task = current_task().unwrap();
     let new_task = current_task.fork();
     let new_pid = new_task.pid.0;
@@ -43,7 +44,7 @@ pub fn sys_fork() -> isize {
 pub fn sys_exec(path: *const u8) -> isize {
     let token = current_user_token();
     let path = translated_str(token, path);
-    if let Some(app_inode) = open_file(path.as_str(), OpenFlags::RDONLY) {
+    if let Some(app_inode) = open_file(path.as_str(), OpenFlags::O_RDONLY) {
         let all_data = app_inode.read_all();
         let task = current_task().unwrap();
         task.exec(all_data.as_slice());
@@ -57,6 +58,8 @@ pub fn sys_exec(path: *const u8) -> isize {
 /// If there is not a child process whose pid is same as given, return -1.
 /// Else if there is a child process but it is still running, return -2.
 pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
+    //println!("start sys_waitpid!");
+    debug!("sys_waitpid: {}", pid);
     let task = current_task().unwrap();
     // find a child process
 

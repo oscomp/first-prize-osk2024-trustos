@@ -22,7 +22,8 @@ ifeq ($(MODE), debug)
 endif
 
 elf: $(APPS)
-	@cargo build $(MODE_ARG)
+#	@cargo build $(MODE_ARG)
+	@cargo build --release 
 ifeq ($(TEST), 1)
 	@$(CP) $(TARGET_DIR)/usertests $(TARGET_DIR)/initproc
 endif

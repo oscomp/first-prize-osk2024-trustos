@@ -264,13 +264,15 @@ impl MemorySet {
         memory_set.push(
             MapArea::new(
                 user_stack_bottom.into(),
-                user_stack_top.into(),
+                (user_stack_top + 10).into(),
                 MapType::Framed,
                 MapPermission::R | MapPermission::W | MapPermission::U,
                 MapAreaType::Stack,
             ),
             None,
         );
+
+        // map TrapContext
         memory_set.push(
             MapArea::new(
                 USER_TRAP_CONTEXT.into(),

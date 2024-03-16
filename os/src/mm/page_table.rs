@@ -258,6 +258,57 @@ impl UserBuffer {
         }
         total
     }
+    // 将一个Buffer的数据写入UserBuffer，返回写入长度
+    pub fn write(&mut self, buff: &[u8]) -> usize {
+        let len = self.len().min(buff.len());
+        let mut current = 0;
+        for sub_buff in self.buffers.iter_mut() {
+            let sblen = (*sub_buff).len();
+            for j in 0..sblen {
+                (*sub_buff)[j] = buff[current];
+                current += 1;
+                if current == len {
+                    return len;
+                }
+            }
+        }
+        return len;
+    }
+    //在指定位置写入数据
+    pub fn write_at(&mut self, offset: usize, buff: &[u8]) -> isize {
+        let len = buff.len();
+        if offset + len > self.len() {
+            return -1;
+        }
+        let mut head = 0; // offset of slice in UBuffer
+        let mut current = 0; // current offset of buff
+
+        for sub_buff in self.buffers.iter_mut() {
+            let sblen = (*sub_buff).len();
+            if head + sblen < offset {
+                continue;
+            } else if head < offset {
+                for j in (offset - head)..sblen {
+                    (*sub_buff)[j] = buff[current];
+                    current += 1;
+                    if current == len {
+                        return len as isize;
+                    }
+                }
+            } else {
+                //head + sblen > offset and head > offset
+                for j in 0..sblen {
+                    (*sub_buff)[j] = buff[current];
+                    current += 1;
+                    if current == len {
+                        return len as isize;
+                    }
+                }
+            }
+            head += sblen;
+        }
+        0
+    }
 }
 
 impl IntoIterator for UserBuffer {
