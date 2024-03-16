@@ -35,7 +35,6 @@ extern "C" {
 /// initialize CSR `stvec` as the entry of `__alltraps`
 pub fn init() {
     set_kernel_trap_entry();
-    println!("trap init successfully!");
 }
 
 fn set_kernel_trap_entry() {
@@ -54,7 +53,6 @@ pub fn enable_timer_interrupt() {
     unsafe {
         sie::set_stimer();
     }
-    println!("timer interrupt init successfully!");
 }
 
 #[no_mangle]
@@ -72,7 +70,17 @@ pub fn trap_handler() {
             cx.sepc += 4;
             // debug!("run syscall {}", cx.x[17]);
             // get system call return value
-            let result = syscall(cx.x[17], [cx.x[10] as isize, cx.x[11] as isize, cx.x[12] as isize, cx.x[13] as isize, cx.x[14] as isize, cx.x[15] as isize]);
+            let result = syscall(
+                cx.x[17],
+                [
+                    cx.x[10] as isize,
+                    cx.x[11] as isize,
+                    cx.x[12] as isize,
+                    cx.x[13] as isize,
+                    cx.x[14] as isize,
+                    cx.x[15] as isize,
+                ],
+            );
             // cx is changed during sys_exec, so we have to call it again
             cx = current_trap_cx();
             cx.x[10] = result as usize;

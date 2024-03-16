@@ -52,7 +52,6 @@ pub fn init() {
     log::set_logger(&LOGGER)
         .map(|()| log::set_max_level(LOG_LEVEL))
         .unwrap();
-    println!("logger init successfully!");
 }
 
 fn level_color(level: Level) -> u8 {

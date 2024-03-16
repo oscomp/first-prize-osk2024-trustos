@@ -25,7 +25,6 @@ impl<T> UPSafeCell<T> {
     }
     /// Exclusive access inner data in UPSafeCell. Panic if the data has been borrowed.
     pub fn exclusive_access(&self) -> RefMut<'_, T> {
-        //println!("I take it!");
         self.inner.borrow_mut()
     }
 }

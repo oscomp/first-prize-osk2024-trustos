@@ -11,23 +11,23 @@ impl Write for Stdout {
         Ok(())
     }
 }
-
+#[allow(dead_code)]
 pub fn print(args: fmt::Arguments) {
     Stdout.write_fmt(args).unwrap();
 }
-
+#[allow(unused_macros)]
 macro_rules! print {
         ($fmt: literal $(, $($arg: tt)+)?) => {
             $crate::console::print(format_args!($fmt $(, $($arg)+)?))
         }
     }
-
+#[allow(unused_macros)]
 macro_rules! println {
         ($fmt: literal $(, $($arg: tt)+)?) => {
             $crate::console::print(format_args!(concat!($fmt, "\n") $(, $($arg)+)?))
         }
     }
-
+#[allow(unused_macros)]
 macro_rules! color_text {
     ($text:expr, $color:expr) => {{
         format_args!("\x1b[{}m{}\x1b[0m", $color, $text)
@@ -42,29 +42,29 @@ macro_rules! color_text {
  */
 
 #[macro_export]
-macro_rules! error{
+macro_rules! error {
     ($info:expr) => {
-        println!("{}",color_text!($info,91));
-    }
+        println!("{}", color_text!($info, 91));
+    };
 }
 
 #[macro_export]
-macro_rules! debug{
+macro_rules! debug {
     ($info:expr) => {
-        println!("{}",color_text!($info,92));
-    }
+        println!("{}", color_text!($info, 92));
+    };
 }
 
 #[macro_export]
-macro_rules! warn{
+macro_rules! warn {
     ($info:expr) => {
-        println!("{}",color_text!($info,93));
-    }
+        println!("{}", color_text!($info, 93));
+    };
 }
 
 #[macro_export]
-macro_rules! info{
+macro_rules! info {
     ($info:expr) => {
-        println!("{}",color_text!($info,94));
-    }
+        println!("{}", color_text!($info, 94));
+    };
 }

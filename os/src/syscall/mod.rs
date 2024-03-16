@@ -42,21 +42,39 @@ use process::*;
 use crate::console::print;
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
-    //println!("hello!");
     match syscall_id {
-        SYSCALL_GETCWD => sys_getcwd(args[0] as *const u8,args[1] as usize),
+        SYSCALL_GETCWD => sys_getcwd(args[0] as *const u8, args[1] as usize),
         SYSCALL_DUP => sys_dup(args[0] as usize),
-        SYSCALL_DUP3 => sys_dup3(args[0] as usize,args[1] as usize),
-        SYSCALL_MKDIRAT => sys_mkdirat(args[0],args[1] as *const u8, args[2] as usize),
-        SYSCALL_UNLINKAT => sys_unlinkat(args[0],args[1] as *const u8, args[2] as u32),
-        SYSCALL_LINKAT => sys_linkat(args[0],args[1] as *const u8, args[2],args[3] as *const u8, args[4] as u32),
+        SYSCALL_DUP3 => sys_dup3(args[0] as usize, args[1] as usize),
+        SYSCALL_MKDIRAT => sys_mkdirat(args[0], args[1] as *const u8, args[2] as usize),
+        SYSCALL_UNLINKAT => sys_unlinkat(args[0], args[1] as *const u8, args[2] as u32),
+        SYSCALL_LINKAT => sys_linkat(
+            args[0],
+            args[1] as *const u8,
+            args[2],
+            args[3] as *const u8,
+            args[4] as u32,
+        ),
         SYSCALL_UMOUNT2 => sys_umount2(args[0] as *const u8, args[1] as u32),
-        SYSCALL_MOUNT => sys_mount(args[0] as *const u8, args[1] as *const u8, args[2] as *const u8 ,args[3] as u32, args[4] as *const u8),
+        SYSCALL_MOUNT => sys_mount(
+            args[0] as *const u8,
+            args[1] as *const u8,
+            args[2] as *const u8,
+            args[3] as u32,
+            args[4] as *const u8,
+        ),
         SYSCALL_CHDIR => sys_chdir(args[0] as *const u8),
-        SYSCALL_OPENAT => sys_openat(args[0],args[1] as *const u8, args[2] as u32,args[3] as usize),
+        SYSCALL_OPENAT => sys_openat(
+            args[0],
+            args[1] as *const u8,
+            args[2] as u32,
+            args[3] as usize,
+        ),
         SYSCALL_CLOSE => sys_close(args[0] as usize),
         SYSCALL_PIPE2 => sys_pipe2(args[0] as *mut u32),
-        SYSCALL_GETDENTS64 => sys_getdents64(args[0] as usize,args[1] as *const u8,args[2] as usize),
+        SYSCALL_GETDENTS64 => {
+            sys_getdents64(args[0] as usize, args[1] as *const u8, args[2] as usize)
+        }
         SYSCALL_READ => sys_read(args[0] as usize, args[1] as *const u8, args[2] as usize),
         SYSCALL_WRITE => sys_write(args[0] as usize, args[1] as *const u8, args[2] as usize),
         SYSCALL_FSTAT => sys_fstat(args[0] as usize, args[1] as *const u8),

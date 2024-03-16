@@ -65,7 +65,6 @@ impl BlockCache {
     /// 将缓冲区中的内容写回到磁盘块中
     fn sync(&mut self) {
         if self.modified {
-            //println!("drop cache, id = {}", self.block_id);
             self.modified = false;
             self.block_device.write_block(self.block_id, &self.cache);
         }
@@ -155,7 +154,6 @@ pub fn get_block_cache(
     block_device: Arc<dyn BlockDevice>,
 ) -> Arc<RwLock<BlockCache>> {
     // 这里的read是RWLock读写锁
-    //println!("{}",block_id);
     let phy_blk_id = BLOCK_CACHE_MANAGER.read().start_sec() + block_id;
     BLOCK_CACHE_MANAGER
         .write()

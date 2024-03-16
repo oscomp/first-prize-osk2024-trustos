@@ -60,7 +60,6 @@ impl VFile {
         }
     }
 
-
     fn read_short_dirent<V>(&self, f: impl FnOnce(&ShortDirEntry) -> V) -> V {
         if self.short_sector == 0 {
             // 根目录项
@@ -76,7 +75,9 @@ impl VFile {
 
     fn modify_long_dirent<V>(&self, index: usize, f: impl FnOnce(&mut LongDirEntry) -> V) -> V {
         let (sector, offset) = self.long_pos_vec[index];
-        get_block_cache(sector, self.block_device.clone()).write().modify(offset, f)
+        get_block_cache(sector, self.block_device.clone())
+            .write()
+            .modify(offset, f)
     }
 
     fn modify_short_dirent<V>(&self, f: impl FnOnce(&mut ShortDirEntry) -> V) -> V {
@@ -94,7 +95,12 @@ impl VFile {
     /// 获取文件偏移量所在的扇区和偏移
     fn get_pos(&self, offset: usize) -> (usize, usize) {
         let (_, section, offset) = self.read_short_dirent(|short_entry: &ShortDirEntry| {
-            short_entry.get_pos(offset, &self.fs, &self.fs.read().get_fat(), &self.block_device)
+            short_entry.get_pos(
+                offset,
+                &self.fs,
+                &self.fs.read().get_fat(),
+                &self.block_device,
+            )
         });
         (section, offset)
     }
@@ -109,13 +115,8 @@ impl VFile {
         let long_ent_num = name_vec.len();
         let mut offset: usize = 0;
         let mut long_entry = LongDirEntry::new();
-        //println!("name is {}",name);
-        /*for i in name_vec.iter() {
-            println!("namepart is {}",i);
-        }*/
         let mut long_pos_vec: Vec<(usize, usize)> = Vec::new();
         let name_last = name_vec.pop().unwrap();
-        //println!("name_last:{}",name_last);
         loop {
             long_pos_vec.clear();
             // 读取offset处的目录项
@@ -159,7 +160,9 @@ impl VFile {
                         return None;
                     }
                     // 匹配前一个名字段，如果失败就退出
-                    if long_entry.get_name_raw() != name_vec[long_ent_num - 1 - i] || long_entry.attr() != ATTR_LONG_NAME {
+                    if long_entry.get_name_raw() != name_vec[long_ent_num - 1 - i]
+                        || long_entry.attr() != ATTR_LONG_NAME
+                    {
                         is_match = false;
                         break;
                     }
@@ -286,7 +289,8 @@ impl VFile {
         }
         let manager_writer = self.fs.write();
         // 传给 fat32_manager 来计算需要多少簇
-        let needed = manager_writer.cluster_num_needed(old_size, new_size, self.is_dir(), first_cluster);
+        let needed =
+            manager_writer.cluster_num_needed(old_size, new_size, self.is_dir(), first_cluster);
         if needed == 0 {
             // 如果是普通文件，需要更新文件大小
             if !self.is_dir() {
@@ -310,7 +314,8 @@ impl VFile {
                 let fat = manager_writer.get_fat();
                 let fat_writer = fat.write();
                 // 找到最后一个簇
-                let final_cluster = fat_writer.final_cluster(first_cluster, self.block_device.clone());
+                let final_cluster =
+                    fat_writer.final_cluster(first_cluster, self.block_device.clone());
                 assert_ne!(cluster, 0);
                 // 设置 FAT 表进行链接
                 fat_writer.set_next_cluster(final_cluster, cluster, self.block_device.clone());
@@ -340,11 +345,9 @@ impl VFile {
         }
         // 定义一个空的短文件名目录项用于写入
         let mut tmp_short_ent = ShortDirEntry::new();
-        //println!("{} with {}space",name_.len(),ext_);
         if name_.len() > 8 || ext_.len() > 3 {
             // 长文件名
             // 生成短文件名及对应目录项
-            //println!("work here !");
             let short_name = generate_short_name(name);
             let (_name, _ext) = short_name_format(short_name.as_str());
             tmp_short_ent.initialize(&_name, &_ext, attribute);
@@ -365,9 +368,16 @@ impl VFile {
                     order |= 0x40;
                 }
                 // 初始化长文件名目录项
-                tmp_long_ent.initialize(v_long_name.pop().unwrap().as_bytes(), order, tmp_short_ent.checksum());
+                tmp_long_ent.initialize(
+                    v_long_name.pop().unwrap().as_bytes(),
+                    order,
+                    tmp_short_ent.checksum(),
+                );
                 // 写入长文件名目录项
-                assert_eq!(self.write_at(dirent_offset, tmp_long_ent.as_bytes_mut()), DIRENT_SZ);
+                assert_eq!(
+                    self.write_at(dirent_offset, tmp_long_ent.as_bytes_mut()),
+                    DIRENT_SZ
+                );
                 // 更新写入位置
                 dirent_offset += DIRENT_SZ;
             }
@@ -378,7 +388,10 @@ impl VFile {
             drop(manager_reader);
         }
         // 写短目录项（长文件名也是有短文件名目录项的）
-        assert_eq!(self.write_at(dirent_offset, tmp_short_ent.as_bytes_mut()), DIRENT_SZ);
+        assert_eq!(
+            self.write_at(dirent_offset, tmp_short_ent.as_bytes_mut()),
+            DIRENT_SZ
+        );
         // 这边的 if let 算是一个验证
         if let Some(vfile) = self.find_vfile_byname(name) {
             // 如果是目录类型，需要创建.和..
@@ -434,7 +447,8 @@ impl VFile {
             // 注意：Linux中文件创建都会创建一个长文件名目录项，用于处理文件大小写问题
             if file_entry.attr() != ATTR_LONG_NAME {
                 // 短文件名
-                let (_, se_array, _) = unsafe { file_entry.as_bytes_mut().align_to_mut::<ShortDirEntry>() };
+                let (_, se_array, _) =
+                    unsafe { file_entry.as_bytes_mut().align_to_mut::<ShortDirEntry>() };
                 let short_entry = se_array[0];
                 list.push((short_entry.get_name_lowercase(), short_entry.attr()));
             } else {
@@ -466,7 +480,13 @@ impl VFile {
 
     pub fn read_at(&self, offset: usize, buf: &mut [u8]) -> usize {
         self.read_short_dirent(|short_entry: &ShortDirEntry| {
-            short_entry.read_at(offset, buf, &self.fs, &self.fs.read().get_fat(), &self.block_device)
+            short_entry.read_at(
+                offset,
+                buf,
+                &self.fs,
+                &self.fs.read().get_fat(),
+                &self.block_device,
+            )
         })
     }
 
@@ -474,7 +494,13 @@ impl VFile {
         // 需要提前扩容
         self.increase_size((offset + buf.len()) as u32);
         self.modify_short_dirent(|short_entry: &mut ShortDirEntry| {
-            short_entry.write_at(offset, buf, &self.fs, &self.fs.read().get_fat(), &self.block_device)
+            short_entry.write_at(
+                offset,
+                buf,
+                &self.fs,
+                &self.fs.read().get_fat(),
+                &self.block_device,
+            )
         })
     }
 
@@ -560,7 +586,8 @@ impl VFile {
             let fs_reader = self.fs.read();
             let fat = fs_reader.get_fat();
             let fat_reader = fat.read();
-            let cluster_num = fat_reader.count_claster_num(first_cluster, self.block_device.clone());
+            let cluster_num =
+                fat_reader.count_claster_num(first_cluster, self.block_device.clone());
             let blocks = cluster_num * fs_reader.sectors_per_cluster();
             if self.is_dir() {
                 // 目录文件的 dir_file_size 字段为 0
@@ -598,9 +625,14 @@ impl VFile {
             }
             if file_entry.attr() != ATTR_LONG_NAME {
                 // 短文件名
-                let (_, se_array, _) = unsafe { file_entry.as_bytes_mut().align_to_mut::<ShortDirEntry>() };
+                let (_, se_array, _) =
+                    unsafe { file_entry.as_bytes_mut().align_to_mut::<ShortDirEntry>() };
                 let short_entry = se_array[0];
-                return Some((short_entry.get_name_lowercase(), offset as u32, short_entry.attr()));
+                return Some((
+                    short_entry.get_name_lowercase(),
+                    offset as u32,
+                    short_entry.attr(),
+                ));
             } else {
                 // 长文件名
                 // 如果是长文件名目录项，则必是长文件名最后的那一段

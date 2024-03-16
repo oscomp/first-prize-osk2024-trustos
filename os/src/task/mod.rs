@@ -130,5 +130,4 @@ pub fn init() {
             p.hartid = id;
         }
     }
-    println!("procs init successfully!");
 }

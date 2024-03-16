@@ -10,7 +10,6 @@ pub const FD_LIMIT: usize = 128;
 pub const AT_REMOVEDIR: u32 = 0x200;
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
-    //println!("start sys_write!");
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -31,7 +30,6 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
 }
 
 pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
-    //println!("start sys_read!");
     let token = current_user_token();
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -52,15 +50,12 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
 }
 
 pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> isize {
-    println!("start sys_openat!");
     let token = current_user_token();
     let task = current_task().unwrap();
     let path = translated_str(token, path);
     let path = String::from(path.trim_end_matches('\n'));
-    //println!("{}space",path);
     let mut inner = task.inner_lock();
     let flags = OpenFlags::from_bits(flags).unwrap();
-    //println!("ready to open:{},{}",fd,path);
     //若为绝对路径
     if path.starts_with('/') {
         drop(inner);
@@ -111,8 +106,6 @@ pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> isize
 }
 
 pub fn sys_close(fd: usize) -> isize {
-    println!("start sys_close!");
-    println!("close fd : {}", fd);
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     if fd >= inner.fd_table.len() {
@@ -126,7 +119,6 @@ pub fn sys_close(fd: usize) -> isize {
 }
 
 pub fn sys_getcwd(buf: *const u8, size: usize) -> isize {
-    println!("start sys_getcwd!");
     let token = current_user_token();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
@@ -137,7 +129,6 @@ pub fn sys_getcwd(buf: *const u8, size: usize) -> isize {
 }
 
 pub fn sys_dup(fd: usize) -> isize {
-    println!("start sys_dup!");
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
 
@@ -155,7 +146,6 @@ pub fn sys_dup(fd: usize) -> isize {
 }
 
 pub fn sys_dup3(old: usize, new: usize) -> isize {
-    println!("start sys_dup3!");
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
 
@@ -181,13 +171,11 @@ pub fn sys_dup3(old: usize, new: usize) -> isize {
 }
 
 pub fn sys_chdir(path: *const u8) -> isize {
-    println!("start sys_chdir!");
     let token = current_user_token();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
 
     let path = translated_str(token, path);
-    //println!("{}",path);
     if path.starts_with('/') {
         drop(inner);
         if let Some(inode) = open_file(path.as_str(), OpenFlags::O_RDONLY) {
@@ -199,7 +187,6 @@ pub fn sys_chdir(path: *const u8) -> isize {
         }
     } else {
         let now_path: String = inner.current_path.clone();
-        //println!("nowpath:{}",now_path);
         drop(inner);
         if let Some(inode) = open(now_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
             let mut inner = task.inner_lock();
@@ -216,7 +203,6 @@ pub fn sys_chdir(path: *const u8) -> isize {
 }
 
 pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: usize) -> isize {
-    println!("start sys_mkdirat!");
     let token = current_user_token();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
@@ -267,7 +253,6 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: usize) -> isize {
 }
 
 pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> isize {
-    println!("start sys_getdents64!");
     let token = current_user_token();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
@@ -292,9 +277,7 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> isize {
         let mut all_len: usize = 0;
         let mut dirent = Dirent::new();
         let dirent_size = core::mem::size_of::<Dirent>();
-        //println!("dirent_size:{},len:{}",dirent_size,len);
         loop {
-            //println!("alllen:{}",all_len);
             if len < dirent_size + all_len {
                 return all_len as isize;
             }
@@ -302,7 +285,6 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> isize {
             if readsize < 0 {
                 return all_len as isize;
             }
-            //println!("readsize:{},all_len:{}",readsize,all_len);
             buffer.write_at(all_len, dirent.as_bytes());
             all_len += dirent_size;
         }
@@ -322,7 +304,6 @@ pub fn sys_linkat(
 }
 
 pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
-    println!("start sys_unlinkat!");
     let token = current_user_token();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
@@ -353,7 +334,6 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
             drop(inner);
             if let Some(inode) = open(now_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
                 //断开链接(讨论flags)
-                //println!("{}",inode.is_dir());
                 if flags == AT_REMOVEDIR {
                     inode.delete();
                     return 0;
@@ -361,7 +341,6 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
                     if inode.is_dir() {
                         return -1;
                     } else {
-                        //println!("work here");
                         inode.delete();
                         return 0;
                     }
@@ -405,7 +384,6 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
 }
 
 pub fn sys_umount2(special: *const u8, flags: u32) -> isize {
-    println!("start sys_umount2!");
     let token = current_user_token();
     let special = translated_str(token, special);
 
@@ -419,7 +397,6 @@ pub fn sys_mount(
     flags: u32,
     data: *const u8,
 ) -> isize {
-    println!("start sys_mount!");
     let token = current_user_token();
     let special = translated_str(token, special);
     let dir = translated_str(token, dir);
@@ -435,7 +412,6 @@ pub fn sys_mount(
 }
 
 pub fn sys_fstat(fd: usize, kst: *const u8) -> isize {
-    println!("start sys_fstat!");
     let token = current_user_token();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
@@ -454,7 +430,6 @@ pub fn sys_fstat(fd: usize, kst: *const u8) -> isize {
 
     if let Some(file) = &inner.fd_table[fd] {
         let mut kstat = Kstat::new();
-        //println!("work here");
         let file = file.clone();
         drop(inner);
         file.get_fstat(&mut kstat);
@@ -466,7 +441,6 @@ pub fn sys_fstat(fd: usize, kst: *const u8) -> isize {
 }
 
 pub fn sys_pipe2(fd: *mut u32) -> isize {
-    println!("start pipe2!");
     let token = current_user_token();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
@@ -476,7 +450,6 @@ pub fn sys_pipe2(fd: *mut u32) -> isize {
     inner.fd_table[read_fd] = Some(read_pipe);
     let write_fd = inner.alloc_fd();
     inner.fd_table[write_fd] = Some(write_pipe);
-    println!("{} and {}", read_fd, write_fd);
     *translated_refmut(token, fd) = read_fd as u32;
     *translated_refmut(token, unsafe { fd.add(1) }) = write_fd as u32;
     0

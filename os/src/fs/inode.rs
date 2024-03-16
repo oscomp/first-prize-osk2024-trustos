@@ -106,7 +106,6 @@ pub fn open_file(path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     open(&"/", path, flags)
 }
 pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
-    //println!("{}spacece",path);
     let cur_inode = {
         if work_path == "/" {
             ROOT_INODE.clone()
@@ -133,7 +132,6 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode
             }
             let name = pathv.pop().unwrap();
             if let Some(temp_inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
-                //println!("{}spacecon",name);
                 temp_inode
                     .create(name, create_type)
                     .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
@@ -226,9 +224,7 @@ impl File for OSInode {
         }
         let mut inner = self.inner.lock();
         let offset = inner.offset as u32;
-        //println!("{}",offset);
         if let Some((name, off, _)) = inner.inode.dirent_info(offset as usize) {
-            //println!("get it:{} & {}",name,off);
             dirent.init(name.as_str());
             inner.offset = off as usize;
             let len = (name.len() + 8 * 4) as isize;

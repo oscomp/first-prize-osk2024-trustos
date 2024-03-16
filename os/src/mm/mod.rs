@@ -26,7 +26,6 @@ pub fn init() {
     heap_allocator::init_heap();
     frame_allocator::init_frame_allocator();
     activate_kernel_space();
-    println!("mm init successfully!");
 }
 
 pub fn activate_kernel_space() {
