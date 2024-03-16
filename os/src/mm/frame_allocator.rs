@@ -1,11 +1,11 @@
 //! Implementation of [`FrameAllocator`] which
 //! controls all the frames in the operating system.
 use super::{PhysAddr, PhysPageNum};
-use crate::sync::UPSafeCell;
 use crate::{config::board::MEMORY_END, mm::address::KernelAddr};
-use alloc::vec::Vec;
+use alloc::{sync::Arc, vec::Vec};
 use core::fmt::{self, Debug, Formatter};
 use lazy_static::*;
+use spin::Mutex;
 
 /// manage a frame which has the same lifecycle as the tracker
 pub struct FrameTracker {
@@ -17,7 +17,7 @@ impl FrameTracker {
     ///Create an empty `FrameTracker`
     pub fn new(ppn: PhysPageNum) -> Self {
         // page cleaning
-        let bytes_array = ppn.bytes_array();
+        let bytes_array = ppn.bytes_array_mut();
         for i in bytes_array {
             *i = 0;
         }
@@ -94,35 +94,36 @@ type FrameAllocatorImpl = StackFrameAllocator;
 
 lazy_static! {
     /// frame allocator instance through lazy_static!
-    pub static ref FRAME_ALLOCATOR: UPSafeCell<FrameAllocatorImpl> =
-        unsafe { UPSafeCell::new(FrameAllocatorImpl::new()) };
+    pub static ref FRAME_ALLOCATOR: Mutex<FrameAllocatorImpl> =
+         Mutex::new(FrameAllocatorImpl::new()) ;
 }
 /// initiate the frame allocator using `ekernel` and `MEMORY_END`
 pub fn init_frame_allocator() {
     extern "C" {
         fn ekernel();
     }
-    FRAME_ALLOCATOR.exclusive_access().init(
+    FRAME_ALLOCATOR.lock().init(
         PhysAddr::from(KernelAddr::from(ekernel as usize)).ceil(),
         PhysAddr::from(KernelAddr::from(MEMORY_END)).floor(),
     );
 }
 /// allocate a frame
-pub fn frame_alloc() -> Option<FrameTracker> {
+pub fn frame_alloc() -> Option<Arc<FrameTracker>> {
     FRAME_ALLOCATOR
-        .exclusive_access()
+        .lock()
         .alloc()
         .map(FrameTracker::new)
+        .map(Arc::new)
 }
 /// deallocate a frame
 pub fn frame_dealloc(ppn: PhysPageNum) {
-    FRAME_ALLOCATOR.exclusive_access().dealloc(ppn);
+    FRAME_ALLOCATOR.lock().dealloc(ppn);
 }
 
 #[allow(unused)]
 /// a simple test for frame allocator
 pub fn frame_allocator_test() {
-    let mut v: Vec<FrameTracker> = Vec::new();
+    let mut v: Vec<Arc<FrameTracker>> = Vec::new();
     for i in 0..5 {
         let frame = frame_alloc().unwrap();
         println!("{:?}", frame);

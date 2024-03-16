@@ -8,6 +8,7 @@ use lazy_static::*;
 use simple_fat32::BlockDevice;
 
 lazy_static! {
+    /// 实现 Trait BlockDevice时对内部操作加锁
     pub static ref BLOCK_DEVICE: Arc<dyn BlockDevice> = Arc::new(BlockDeviceImpl::new());
 }
 

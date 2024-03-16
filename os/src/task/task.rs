@@ -1,23 +1,26 @@
 //!Implementation of [`TaskControlBlock`]
-use super::TaskContext;
-use super::{pid_alloc, KernelStack, PidHandle};
-use crate::config::mm::USER_TRAP_CONTEXT;
-use crate::fs::{File, Stdin, Stdout};
-use crate::mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, VirtPageNum, KERNEL_SPACE};
-use crate::sync::UPSafeCell;
-use crate::trap::{trap_handler, TrapContext};
-use alloc::sync::{Arc, Weak};
-use alloc::vec;
-use alloc::vec::Vec;
+use super::{pid_alloc, KernelStack, PidHandle, TaskContext};
+use crate::{
+    config::mm::USER_TRAP_CONTEXT,
+    fs::{File, Stdin, Stdout},
+    mm::{MapAreaType, MapPermission, MemorySet, PhysPageNum, VirtAddr},
+    trap::{trap_handler, TrapContext},
+};
+use alloc::{
+    sync::{Arc, Weak},
+    vec,
+    vec::Vec,
+};
 use core::cell::RefMut;
 use log::{debug, info};
+use spin::{Mutex, MutexGuard};
 
 pub struct TaskControlBlock {
     // immutable
     pub pid: PidHandle,
     pub kernel_stack: KernelStack,
     // mutable
-    inner: UPSafeCell<TaskControlBlockInner>,
+    inner: Mutex<TaskControlBlockInner>,
 }
 
 pub struct TaskControlBlockInner {
@@ -57,8 +60,8 @@ impl TaskControlBlockInner {
 }
 
 impl TaskControlBlock {
-    pub fn inner_exclusive_access(&self) -> RefMut<'_, TaskControlBlockInner> {
-        self.inner.exclusive_access()
+    pub fn inner_lock(&self) -> MutexGuard<TaskControlBlockInner> {
+        self.inner.lock()
     }
     pub fn new(elf_data: &[u8]) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack
@@ -76,12 +79,13 @@ impl TaskControlBlock {
             kernel_stack_bottom.into(),
             kernel_stack_top.into(),
             MapPermission::R | MapPermission::W,
+            MapAreaType::Stack,
         );
         let task_control_block = Self {
             pid: pid_handle,
             kernel_stack,
-            inner: unsafe {
-                UPSafeCell::new(TaskControlBlockInner {
+            inner: 
+                Mutex::new(TaskControlBlockInner {
                     trap_cx_ppn,
                     base_size: user_sp,
                     task_cx: TaskContext::goto_trap_return(kernel_stack_top),
@@ -99,11 +103,10 @@ impl TaskControlBlock {
                         Some(Arc::new(Stdout)),
                     ],
                     current_path:alloc::string::String::from("/"),
-                })
-            },
+                }),
         };
         // prepare TrapContext in user space
-        let trap_cx = task_control_block.inner_exclusive_access().trap_cx();
+        let trap_cx = task_control_block.inner_lock().trap_cx();
         *trap_cx = TrapContext::app_init_context(
             entry_point,
             user_sp,
@@ -120,16 +123,17 @@ impl TaskControlBlock {
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
             .unwrap()
             .ppn();
+        // **** access current TCB exclusively
+        let mut inner = self.inner_lock();
         // map kernel stack
         let (kernel_stack_bottom, kernel_stack_top) = self.kernel_stack.pos();
-        memory_set.insert_framed_area(
+        memory_set.insert_given_framed_area(
             kernel_stack_bottom.into(),
             kernel_stack_top.into(),
             MapPermission::R | MapPermission::W,
+            MapAreaType::Stack,
+            inner.memory_set.kernel_stack_frame(),
         );
-
-        // **** access current TCB exclusively
-        let mut inner = self.inner_exclusive_access();
         // substitute memory_set
         inner.memory_set = memory_set;
         // update trap_cx ppn
@@ -141,12 +145,12 @@ impl TaskControlBlock {
             trap_handler as usize,
         );
         *inner.trap_cx() = trap_cx;
-        // debug!("task.exec.pid={}", self.pid.0);
+        debug!("task.exec.pid={}", self.pid.0);
         // **** release current PCB
     }
     pub fn fork(self: &Arc<TaskControlBlock>) -> Arc<TaskControlBlock> {
         // ---- hold parent PCB lock
-        let mut parent_inner = self.inner_exclusive_access();
+        let mut parent_inner = self.inner_lock();
         // copy user space(include trap context)
         let mut memory_set = MemorySet::from_existed_user(&parent_inner.memory_set);
         let trap_cx_ppn = memory_set
@@ -156,12 +160,12 @@ impl TaskControlBlock {
         // alloc a pid and a kernel stack in kernel space
         let pid_handle = pid_alloc();
         let kernel_stack = KernelStack::new(&pid_handle);
-        // let kernel_stack_top = kernel_stack.top();
         let (kernel_stack_bottom, kernel_stack_top) = kernel_stack.pos();
         memory_set.insert_framed_area(
             kernel_stack_bottom.into(),
             kernel_stack_top.into(),
             MapPermission::R | MapPermission::W,
+            MapAreaType::Stack,
         );
         // copy fd table
         let mut new_fd_table: Vec<Option<Arc<dyn File + Send + Sync>>> = Vec::new();
@@ -175,8 +179,8 @@ impl TaskControlBlock {
         let task_control_block = Arc::new(TaskControlBlock {
             pid: pid_handle,
             kernel_stack,
-            inner: unsafe {
-                UPSafeCell::new(TaskControlBlockInner {
+            inner: 
+                Mutex::new(TaskControlBlockInner {
                     trap_cx_ppn,
                     base_size: parent_inner.base_size,
                     task_cx: TaskContext::goto_trap_return(kernel_stack_top),
@@ -187,14 +191,14 @@ impl TaskControlBlock {
                     exit_code: 0,
                     fd_table: new_fd_table,
                     current_path:parent_inner.current_path.clone(),
-                })
-            },
+                }),
         });
         // add child
         parent_inner.children.push(task_control_block.clone());
         // modify kernel_sp in trap_cx
         // **** access child PCB exclusively
-        let trap_cx = task_control_block.inner_exclusive_access().trap_cx();
+        // let trap_cx = task_control_block.inner_exclusive_access().trap_cx();
+        let trap_cx = task_control_block.inner_lock().trap_cx();
         trap_cx.kernel_sp = kernel_stack_top;
         // return
         task_control_block

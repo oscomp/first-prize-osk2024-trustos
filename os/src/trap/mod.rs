@@ -14,11 +14,13 @@
 mod context;
 
 use crate::config::mm::TRAMPOLINE;
+use crate::sync::interrupt_on;
 use crate::syscall::syscall;
 use crate::task::{current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next};
 use crate::timer::set_next_trigger;
+use crate::utils::hart_id;
 use core::arch::{asm, global_asm};
-use log::debug;
+use log::{debug, info};
 use riscv::register::{
     mtvec::TrapMode,
     scause::{self, Exception, Interrupt, Trap},
@@ -58,7 +60,8 @@ pub fn enable_timer_interrupt() {
 #[no_mangle]
 /// handle an interrupt, exception, or system call from user space
 pub fn trap_handler() {
-    debug!("trap handler");
+    let hartid = hart_id();
+    // debug!("trap handler");
     set_kernel_trap_entry();
     let scause = scause::read();
     let stval = stval::read();
@@ -67,7 +70,7 @@ pub fn trap_handler() {
             // jump to next instruction anyway
             let mut cx = current_trap_cx();
             cx.sepc += 4;
-            debug!("syscall {}", cx.x[17]);
+            // debug!("run syscall {}", cx.x[17]);
             // get system call return value
             let result = syscall(cx.x[17], [cx.x[10] as isize, cx.x[11] as isize, cx.x[12] as isize, cx.x[13] as isize, cx.x[14] as isize, cx.x[15] as isize]);
             // cx is changed during sys_exec, so we have to call it again
@@ -81,7 +84,8 @@ pub fn trap_handler() {
         | Trap::Exception(Exception::LoadFault)
         | Trap::Exception(Exception::LoadPageFault) => {
             println!(
-                "[kernel] {:?} in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.",
+                "[kernel] hart {} {:?} in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.",
+                hartid,
                 scause.cause(),
                 stval,
                 current_trap_cx().sepc,
@@ -90,7 +94,10 @@ pub fn trap_handler() {
             exit_current_and_run_next(-2);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
-            println!("[kernel] IllegalInstruction in application, kernel killed it.");
+            println!(
+                "[kernel] [hart {}] IllegalInstruction in application, kernel killed it.",
+                hartid
+            );
             // illegal instruction exit code
             exit_current_and_run_next(-3);
         }
@@ -107,6 +114,7 @@ pub fn trap_handler() {
             );
         }
     }
+    // debug!("in trap handler,return to user space");
     // 手动内联trap_return
     set_user_trap_entry();
     extern "C" {
@@ -114,7 +122,9 @@ pub fn trap_handler() {
         fn __return_to_user(cx: *mut TrapContext);
     }
     unsafe {
-        __return_to_user(current_trap_cx());
+        // 方便调试进入__return_to_user
+        let trap_cx = current_trap_cx();
+        __return_to_user(trap_cx);
     }
 }
 
@@ -134,18 +144,6 @@ pub fn trap_return_for_new_task_once() {
         __return_to_user_for_new_task_once(current_trap_cx());
     }
 }
-// #[no_mangle]
-// #[inline(never)]
-// pub fn trap_return() {
-//     set_user_trap_entry();
-//     extern "C" {
-//         #[allow(improper_ctypes)]
-//         fn __return_to_user(cx: *mut TrapContext);
-//     }
-//     unsafe {
-//         __return_to_user(current_trap_cx());
-//     }
-// }
 
 #[no_mangle]
 /// Unimplement: traps/interrupts/exceptions from kernel mode
@@ -153,6 +151,11 @@ pub fn trap_return_for_new_task_once() {
 pub fn trap_from_kernel() -> ! {
     debug!("trap from kernel!");
     use riscv::register::sepc;
-    println!("stval = {:#x}, sepc = {:#x}", stval::read(), sepc::read());
-    panic!("a trap {:?} from kernel!", scause::read().cause());
+    panic!(
+        "stval = {:#x}, sepc = {:#x}\n
+        a trap {:?} from kernel!",
+        stval::read(),
+        sepc::read(),
+        scause::read().cause()
+    );
 }

@@ -1,4 +1,4 @@
-use crate::task::current_task;
+use crate::{task::current_task, utils::hart_id};
 use log::{Level, LevelFilter, Metadata, Record};
 
 #[cfg(feature = "error")]
@@ -36,9 +36,10 @@ impl log::Log for SimpleLogger {
         // }
         if self.enabled(record.metadata()) {
             println!(
-                "\x1b[{}m[{}] {}\x1b[0m",
+                "\x1b[{}m[{}] [PID{}] {}\x1b[0m",
                 level_color(record.level()),
                 record.level(),
+                hart_id(),
                 record.args()
             );
         }
