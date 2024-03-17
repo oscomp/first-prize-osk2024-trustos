@@ -1,4 +1,4 @@
-use crate::fs::{open_file, OpenFlags};
+use crate::fs::{open_file,open, OpenFlags};
 use crate::mm::{translated_refmut, translated_str, VirtAddr};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next,
@@ -43,9 +43,10 @@ pub fn sys_fork() -> isize {
 pub fn sys_exec(path: *const u8) -> isize {
     let token = current_user_token();
     let path = translated_str(token, path);
-    if let Some(app_inode) = open_file(path.as_str(), OpenFlags::O_RDONLY) {
+    let task = current_task().unwrap();
+    let cwd=task.inner_lock().current_path.clone();
+    if let Some(app_inode) = open(&cwd,path.as_str(), OpenFlags::O_RDONLY) {
         let all_data = app_inode.read_all();
-        let task = current_task().unwrap();
         task.exec(all_data.as_slice());
         task.inner_lock().memory_set.activate();
         0
