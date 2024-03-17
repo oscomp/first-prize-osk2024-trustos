@@ -7,9 +7,9 @@ sudo chmod 777 fat32.img
 pwd
 sudo mkdir ../simple-fat32/fs 
 sudo mount ../simple-fat32/fat32.img ../simple-fat32/fs 
-sudo cp ../user/target/riscv64gc-unknown-none-elf/release/initproc ../simple-fat32/fs/ 
-sudo cp ../user/target/riscv64gc-unknown-none-elf/release/user_shell ../simple-fat32/fs/ 
-sudo cp ../user/target/riscv64gc-unknown-none-elf/release/cat ../simple-fat32/fs/ 
+sudo mkdir ../simple-fat32/fs/rusttests
+sudo rm ../user/target/riscv64gc-unknown-none-elf/release/*.* 
+sudo cp ../user/target/riscv64gc-unknown-none-elf/release/* ../simple-fat32/fs/rusttests
 sudo cp -r ../testsuits-for-oskernel/riscv-syscalls-testing/user/build/riscv64/* ../simple-fat32/fs/ 
 
 sudo umount ../simple-fat32/fs 

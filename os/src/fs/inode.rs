@@ -74,6 +74,8 @@ pub fn list_apps() {
         if app.1 & ATTR_DIRECTORY == 0 {
             // 如果不是目录
             println!("{}", app.0);
+        }else{
+            println!("{}/",app.0);
         }
     }
     println!("**************/");
