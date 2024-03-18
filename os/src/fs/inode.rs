@@ -68,16 +68,35 @@ lazy_static! {
     };
 }
 
-pub fn list_apps() {
-    println!("/**** APPS ****");
-    for app in ROOT_INODE.ls().unwrap() {
-        if app.1 & ATTR_DIRECTORY == 0 {
+pub fn list_all(head:String ,node: Arc<VFile>) {
+    let head=head+&"/";
+    for app in node.ls().unwrap(){
+        if(app.0=="."||app.0==".."){
+            //跳过这俩
+            continue;
+        } else if app.1 & ATTR_DIRECTORY == 0 {
             // 如果不是目录
-            println!("{}", app.0);
-        }else{
-            println!("{}/",app.0);
+            println!("{}{}",head, app.0);
+        } else {
+            // 如果是目录
+            let mut v=open_file(&app.0,OpenFlags::O_RDONLY).unwrap().inner.lock().inode.clone();
+            list_all(head.clone()+&app.0,v.clone());
         }
     }
+}
+
+pub fn list_apps() {
+    println!("/**** APPS ****");
+    // for app in ROOT_INODE.ls().unwrap() {
+    //     if app.1 & ATTR_DIRECTORY == 0 {
+    //         // 如果不是目录
+    //         println!("{}", app.0);
+    //     } else {
+    //         // 如果是目录
+    //         println!("{}/", app.0);
+    //     }
+    // }
+    list_all("".into(),ROOT_INODE.clone());
     println!("**************/");
 }
 

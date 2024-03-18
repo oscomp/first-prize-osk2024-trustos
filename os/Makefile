@@ -1,3 +1,5 @@
+# make run 重新编译内核、rCore测例和官方测例，并全部写入镜像fat32.img后运行
+# make srun 重新编译内核、rCore测例，不重新编译官方测例，写入镜像fat32.img后运行
 # Building
 TARGET := riscv64gc-unknown-none-elf
 MODE := release
@@ -63,6 +65,8 @@ kernel:
 
 clean:
 	@cargo clean
+	@cd ../simple-fat32&&rm fat32.img
+	@cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean
 
 disasm: kernel
 	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) | less

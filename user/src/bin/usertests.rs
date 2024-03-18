@@ -11,21 +11,21 @@ extern crate user_lib;
 static SUCC_TESTS: &[(&str, &str, &str, &str, i32)] = &[
     // ("filetest_simple\0", "\0", "\0", "\0", 0),
     // ("cat_filea\0", "\0", "\0", "\0", 0),
-    ("exit\0", "\0", "\0", "\0", 0),
-    ("fantastic_text\0", "\0", "\0", "\0", 0),
-    ("forktest_simple\0", "\0", "\0", "\0", 0),
-    ("forktest\0", "\0", "\0", "\0", 0),
-    ("forktest2\0", "\0", "\0", "\0", 0),
-    ("forktree\0", "\0", "\0", "\0", 0),
-    ("hello_world\0", "\0", "\0", "\0", 0),
-    ("huge_write\0", "\0", "\0", "\0", 0),
-    ("matrix\0", "\0", "\0", "\0", 0),
-    ("sleep_simple\0", "\0", "\0", "\0", 0),
-    ("sleep\0", "\0", "\0", "\0", 0),
-    ("yield\0", "\0", "\0", "\0", 0),
+    ("rCoretests/exit\0", "\0", "\0", "\0", 0),
+    ("rCoretests/fantastic_text\0", "\0", "\0", "\0", 0),
+    ("rCoretests/forktest_simple\0", "\0", "\0", "\0", 0),
+    ("rCoretests/forktest\0", "\0", "\0", "\0", 0),
+    ("rCoretests/forktest2\0", "\0", "\0", "\0", 0),
+    ("rCoretests/forktree\0", "\0", "\0", "\0", 0),
+    ("rCoretests/hello_world\0", "\0", "\0", "\0", 0),
+    ("rCoretests/huge_write\0", "\0", "\0", "\0", 0),
+    ("rCoretests/matrix\0", "\0", "\0", "\0", 0),
+    ("rCoretests/sleep_simple\0", "\0", "\0", "\0", 0),
+    ("rCoretests/sleep\0", "\0", "\0", "\0", 0),
+    ("rCoretests/yield\0", "\0", "\0", "\0", 0),
 ];
 
-static FAIL_TESTS: &[(&str, &str, &str, &str, i32)] = &[("stack_overflow\0", "\0", "\0", "\0", -2)];
+static FAIL_TESTS: &[(&str, &str, &str, &str, i32)] = &[("rCoretests/stack_overflow\0", "\0", "\0", "\0", -2)];
 
 use user_lib::{exec, fork, waitpid};
 
