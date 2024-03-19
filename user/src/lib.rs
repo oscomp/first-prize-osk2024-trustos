@@ -161,3 +161,7 @@ pub fn fstat(fd:usize, kst:&mut [u8]) -> isize {
 pub fn pipe(fd:&mut [u32],zero:isize) -> isize {
     sys_pipe2(fd, zero)
 }
+
+pub fn getppid() -> isize {
+    sys_getppid()
+}

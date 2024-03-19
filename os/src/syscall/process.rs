@@ -26,6 +26,19 @@ pub fn sys_getpid() -> isize {
     current_task().unwrap().pid.0 as isize
 }
 
+pub fn sys_getppid() -> isize {
+    if let Some(weak_parent) = current_task().unwrap().inner_lock().parent.clone() {
+        if let Some(parent) = weak_parent.upgrade(){
+            parent.pid.0 as isize
+        } else {
+            -1
+        }
+    } else {
+        -1
+    }
+    
+}
+
 pub fn sys_fork() -> isize {
     let current_task = current_task().unwrap();
     let new_task = current_task.fork();

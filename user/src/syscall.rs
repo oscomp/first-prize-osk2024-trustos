@@ -20,6 +20,7 @@ const SYSCALL_EXIT: usize = 93;
 const SYSCALL_YIELD: usize = 124;
 const SYSCALL_GET_TIME: usize = 169;
 const SYSCALL_GETPID: usize = 172;
+const SYSCALL_GETPPID: usize = 173;
 const SYSCALL_FORK: usize = 220;
 const SYSCALL_EXEC: usize = 221;
 const SYSCALL_WAITPID: usize = 260;
@@ -134,4 +135,8 @@ pub fn sys_fstat(fd:usize,kst:&mut [u8]) -> isize {
 
 pub fn sys_pipe2(fd:&mut [u32],_zero:isize) -> isize {
     syscall(SYSCALL_PIPE2,[fd.as_mut_ptr() as isize, 0, 0, 0, 0, 0])
+}
+
+pub fn sys_getppid() -> isize {
+    syscall(SYSCALL_GETPPID, [0, 0, 0, 0, 0, 0])
 }
