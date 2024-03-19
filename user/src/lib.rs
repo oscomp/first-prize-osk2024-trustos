@@ -73,7 +73,8 @@ pub fn yield_() -> isize {
     sys_yield()
 }
 pub fn get_time() -> isize {
-    sys_get_time()
+    let mut ts: &mut [u8] = &mut [];
+    sys_gettimeofday(ts)
 }
 pub fn getpid() -> isize {
     sys_getpid()
@@ -108,8 +109,9 @@ pub fn waitpid(pid: usize, exit_code: &mut i32) -> isize {
     }
 }
 pub fn sleep(period_ms: usize) {
-    let start = sys_get_time();
-    while sys_get_time() < start + period_ms as isize {
+    let mut ts: &mut [u8] = &mut [];
+    let start = sys_gettimeofday(ts);
+    while sys_gettimeofday(ts) < start + period_ms as isize {
         sys_yield();
     }
 }

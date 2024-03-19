@@ -1,10 +1,10 @@
 use crate::fs::{open, open_file, OpenFlags};
-use crate::mm::{translated_refmut, translated_str, VirtAddr};
+use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer, VirtAddr};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next,
     suspend_current_and_run_next,
 };
-use crate::timer::get_time_ms;
+use crate::timer::{Timespec,get_time_ms};
 use alloc::sync::Arc;
 use log::{debug, info};
 
@@ -18,8 +18,12 @@ pub fn sys_yield() -> isize {
     0
 }
 
-pub fn sys_get_time() -> isize {
-    get_time_ms() as isize
+pub fn sys_gettimeofday(ts: *const u8) -> isize {
+    let token = current_user_token();
+    let mut ts = UserBuffer::new(translated_byte_buffer(token, ts,core::mem::size_of::<Timespec>()));
+    let mut timespec = Timespec::new(get_time_ms()/1000,(get_time_ms()%1000)*1000); 
+    ts.write(timespec.as_bytes());
+    0
 }
 
 pub fn sys_getpid() -> isize {
