@@ -4,7 +4,7 @@ use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next,
     suspend_current_and_run_next,
 };
-use crate::timer::{Timespec,get_time_ms};
+use crate::timer::{Timespec,Tms,get_time_ms};
 use alloc::sync::Arc;
 use log::{debug, info};
 
@@ -13,7 +13,7 @@ pub fn sys_exit(exit_code: i32) -> ! {
     panic!("Unreachable in sys_exit!");
 }
 
-pub fn sys_yield() -> isize {
+pub fn sys_sched_yield() -> isize {
     suspend_current_and_run_next();
     0
 }
@@ -23,6 +23,16 @@ pub fn sys_gettimeofday(ts: *const u8) -> isize {
     let mut ts = UserBuffer::new(translated_byte_buffer(token, ts,core::mem::size_of::<Timespec>()));
     let mut timespec = Timespec::new(get_time_ms()/1000,(get_time_ms()%1000)*1000); 
     ts.write(timespec.as_bytes());
+    0
+}
+
+pub fn sys_times(tms: *const u8) -> isize {
+    let token = current_user_token();
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let mut tms = UserBuffer::new(translated_byte_buffer(token, tms,core::mem::size_of::<Timespec>()));
+    let mut times = Tms::new(&inner.time_data); 
+    tms.write(times.as_bytes());
     0
 }
 
@@ -102,9 +112,15 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
             "process{} cant recycled",
             child.getpid()
         );
+
+        let mut childinner = child.inner_lock();
+
+        inner.time_data.cutime += childinner.time_data.utime;
+        inner.time_data.cstime += childinner.time_data.stime;
+
         let found_pid = child.getpid();
         // ++++ temporarily access child PCB exclusively
-        let exit_code = child.inner_lock().exit_code;
+        let exit_code = childinner.exit_code;
         // ++++ release child PCB
         if exit_code_ptr as usize != 0x0 {
             *translated_refmut(inner.memory_set.token(), exit_code_ptr) = exit_code;
