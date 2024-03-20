@@ -1,5 +1,7 @@
+use core::mem::size_of;
+
 use crate::fs::{open, open_file, OpenFlags};
-use crate::mm::{translated_refmut, translated_str, VirtAddr};
+use crate::mm::{UserBuffer,translated_refmut, translated_str,translated_byte_buffer, VirtAddr};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next,
     suspend_current_and_run_next,
@@ -97,4 +99,39 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         -2
     }
     // ---- release current PCB automatically
+}
+
+pub struct Utsname{
+    sysname: [u8; 65],
+    nodename: [u8; 65],
+    release: [u8; 65],
+    version: [u8; 65],
+    machine: [u8; 65],
+    domainname: [u8; 65],
+}
+pub fn sys_uname(buf: *mut u8) -> isize {
+    fn str2u8(s: &str) -> [u8; 65] {
+        let mut b = [0; 65];
+        b[0..s.len()].copy_from_slice(s.as_bytes());
+        b
+    }
+    let uname = Utsname {
+        sysname: str2u8("TrustOS"),
+        nodename: str2u8("TrustOS"),
+        release:  str2u8("Alpha"),
+        version:  str2u8("v1.0"),
+        machine:  str2u8("RISC-V64"),
+        domainname: str2u8("TrustOS"),
+    };
+    let token = current_user_token();
+    let mut buf_vec = translated_byte_buffer(token, buf, size_of::<Utsname>());
+    let mut userbuf = UserBuffer::new(buf_vec);
+    userbuf.write(
+        unsafe {
+            core::slice::from_raw_parts(
+                &uname as *const _ as usize as *const u8,
+                size_of::<Utsname>(),
+            )
+        });
+    0
 }
