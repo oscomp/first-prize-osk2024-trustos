@@ -9,8 +9,8 @@ extern crate user_lib;
 
 // item of TESTS : app_name(argv_0), argv_1, argv_2, argv_3, exit_code
 static SUCC_TESTS: &[(&str, &str, &str, &str, i32)] = &[
-    // ("filetest_simple\0", "\0", "\0", "\0", 0),
-    // ("cat_filea\0", "\0", "\0", "\0", 0),
+    ("rCoretests/filetest_simple\0", "\0", "\0", "\0", 0),
+    ("rCoretests/cat_filea\0", "\0", "\0", "\0", 0),
     ("rCoretests/exit\0", "\0", "\0", "\0", 0),
     ("rCoretests/fantastic_text\0", "\0", "\0", "\0", 0),
     ("rCoretests/forktest_simple\0", "\0", "\0", "\0", 0),

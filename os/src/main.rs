@@ -124,6 +124,7 @@ pub fn rust_main(hartid: usize) -> ! {
         logger::init();
         trap::init();
         task::init();
+        fs::flush_preload();
         task::add_initproc();
         INIT_FINISHED.store(true, Ordering::SeqCst);
         START_HART_ID.store(hartid, Ordering::SeqCst);
