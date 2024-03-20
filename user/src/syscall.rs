@@ -17,9 +17,11 @@ const SYSCALL_READ: usize = 63;
 const SYSCALL_WRITE: usize = 64;
 const SYSCALL_FSTAT: usize = 80;
 const SYSCALL_EXIT: usize = 93;
-const SYSCALL_YIELD: usize = 124;
-const SYSCALL_GET_TIME: usize = 169;
+const SYSCALL_SCHED_YIELD: usize = 124;
+const SYSCALL_TIMES: usize = 153;
+const SYSCALL_GETTIMEOFDAY: usize = 169;
 const SYSCALL_GETPID: usize = 172;
+const SYSCALL_GETPPID: usize = 173;
 const SYSCALL_FORK: usize = 220;
 const SYSCALL_EXEC: usize = 221;
 const SYSCALL_WAIT4: usize = 260;
@@ -93,11 +95,11 @@ pub fn sys_exit(exit_code: i32) -> ! {
 }
 
 pub fn sys_yield() -> isize {
-    syscall(SYSCALL_YIELD, [0, 0, 0, 0, 0, 0])
+    syscall(SYSCALL_SCHED_YIELD, [0, 0, 0, 0, 0, 0])
 }
 
-pub fn sys_get_time() -> isize {
-    syscall(SYSCALL_GET_TIME, [0, 0, 0, 0, 0, 0])
+pub fn sys_gettimeofday(ts:&mut [u8]) -> isize {
+    syscall(SYSCALL_GETTIMEOFDAY, [ts.as_mut_ptr() as isize, 0, 0, 0, 0, 0])
 }
 
 pub fn sys_getpid() -> isize {
@@ -207,6 +209,14 @@ pub fn sys_fstat(fd: usize, kst: &mut [u8]) -> isize {
     )
 }
 
-pub fn sys_pipe2(fd: &mut [u32], _zero: isize) -> isize {
-    syscall(SYSCALL_PIPE2, [fd.as_mut_ptr() as isize, 0, 0, 0, 0, 0])
+pub fn sys_pipe2(fd:&mut [u32],_zero:isize) -> isize {
+    syscall(SYSCALL_PIPE2,[fd.as_mut_ptr() as isize, 0, 0, 0, 0, 0])
+}
+
+pub fn sys_getppid() -> isize {
+    syscall(SYSCALL_GETPPID, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn sys_times(tms:&mut [u8]) -> isize {
+    syscall(SYSCALL_TIMES, [tms.as_mut_ptr() as isize, 0, 0, 0, 0, 0])
 }

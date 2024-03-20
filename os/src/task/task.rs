@@ -1,10 +1,7 @@
 //!Implementation of [`TaskControlBlock`]
 use super::{pid_alloc, KernelStack, PidHandle, TaskContext};
 use crate::{
-    config::mm::USER_TRAP_CONTEXT,
-    fs::{File, Stdin, Stdout},
-    mm::{MapAreaType, MapPermission, MemorySet, PhysPageNum, VirtAddr},
-    trap::{trap_handler, TrapContext},
+    config::mm::USER_TRAP_CONTEXT, fs::{File, Stdin, Stdout}, mm::{MapAreaType, MapPermission, MemorySet, PhysPageNum, VirtAddr}, timer::TimeData, trap::{trap_handler, TrapContext}
 };
 use alloc::{
     sync::{Arc, Weak},
@@ -14,6 +11,8 @@ use alloc::{
 use core::cell::RefMut;
 use log::{debug, info};
 use spin::{Mutex, MutexGuard};
+
+
 
 pub struct TaskControlBlock {
     // immutable
@@ -34,6 +33,7 @@ pub struct TaskControlBlockInner {
     pub exit_code: i32,
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
     pub current_path: alloc::string::String,
+    pub time_data: TimeData,
 }
 
 impl TaskControlBlockInner {
@@ -102,6 +102,7 @@ impl TaskControlBlock {
                     Some(Arc::new(Stdout)),
                 ],
                 current_path: alloc::string::String::from("/"),
+                time_data: TimeData::new(),
             }),
         };
         // prepare TrapContext in user space
@@ -124,6 +125,9 @@ impl TaskControlBlock {
             .ppn();
         // **** access current TCB exclusively
         let mut inner = self.inner_lock();
+
+        inner.time_data.clear();
+
         // map kernel stack
         let (kernel_stack_bottom, kernel_stack_top) = self.kernel_stack.pos();
         memory_set.insert_given_framed_area(
@@ -189,6 +193,7 @@ impl TaskControlBlock {
                 exit_code: 0,
                 fd_table: new_fd_table,
                 current_path: parent_inner.current_path.clone(),
+                time_data: TimeData::new(),
             }),
         });
         // add child
