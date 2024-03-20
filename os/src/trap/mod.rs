@@ -157,7 +157,6 @@ pub fn trap_return_for_new_task_once() {
 /// Unimplement: traps/interrupts/exceptions from kernel mode
 /// Todo: Chapter 9: I/O device
 pub fn trap_from_kernel() -> ! {
-    debug!("trap from kernel!");
     use riscv::register::sepc;
     panic!(
         "stval = {:#x}, sepc = {:#x}\n

@@ -31,12 +31,14 @@ const SYSCALL_GET_TIME: usize = 169;
 const SYSCALL_GETPID: usize = 172;
 const SYSCALL_FORK: usize = 220;
 const SYSCALL_EXEC: usize = 221;
-const SYSCALL_WAITPID: usize = 260;
+const SYSCALL_WAIT4: usize = 260;
 
 mod fs;
+mod options;
 mod process;
 
 use fs::*;
+use options::*;
 use process::*;
 
 use crate::console::print;
@@ -84,7 +86,7 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
         SYSCALL_GETPID => sys_getpid(),
         SYSCALL_FORK => sys_fork(),
         SYSCALL_EXEC => sys_exec(args[0] as *const u8),
-        SYSCALL_WAITPID => sys_waitpid(args[0] as isize, args[1] as *mut i32),
+        SYSCALL_WAIT4 => sys_wait4(args[0] as isize, args[1] as *mut i32, args[2] as i32),
         _ => panic!("Unsupported syscall_id: {}", syscall_id),
     }
 }

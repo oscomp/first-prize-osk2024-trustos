@@ -36,7 +36,7 @@ impl log::Log for SimpleLogger {
         // }
         if self.enabled(record.metadata()) {
             println!(
-                "\x1b[{}m[{}] [PID{}] {}\x1b[0m",
+                "\x1b[{}m[{}] [HART{}] {}\x1b[0m",
                 level_color(record.level()),
                 record.level(),
                 hart_id(),

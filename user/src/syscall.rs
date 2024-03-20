@@ -22,7 +22,7 @@ const SYSCALL_GET_TIME: usize = 169;
 const SYSCALL_GETPID: usize = 172;
 const SYSCALL_FORK: usize = 220;
 const SYSCALL_EXEC: usize = 221;
-const SYSCALL_WAITPID: usize = 260;
+const SYSCALL_WAIT4: usize = 260;
 
 fn syscall(id: usize, args: [isize; 6]) -> isize {
     let mut ret: isize;
@@ -41,23 +41,50 @@ fn syscall(id: usize, args: [isize; 6]) -> isize {
     ret
 }
 
-pub fn sys_openat(fd:isize,path: &str, flags: u32,mode:usize) -> isize {
-    syscall(SYSCALL_OPENAT, [fd,path.as_ptr() as isize, flags as isize, mode as isize, 0, 0])
+pub fn sys_openat(fd: isize, path: &str, flags: u32, mode: usize) -> isize {
+    syscall(
+        SYSCALL_OPENAT,
+        [
+            fd,
+            path.as_ptr() as isize,
+            flags as isize,
+            mode as isize,
+            0,
+            0,
+        ],
+    )
 }
 
 pub fn sys_close(fd: usize) -> isize {
     syscall(SYSCALL_CLOSE, [fd as isize, 0, 0, 0, 0, 0])
 }
 
-pub fn sys_read(fd: usize, buffer: &mut [u8], count:usize) -> isize {
+pub fn sys_read(fd: usize, buffer: &mut [u8], count: usize) -> isize {
     syscall(
         SYSCALL_READ,
-        [fd as isize, buffer.as_mut_ptr() as isize, count as isize, 0, 0, 0],
+        [
+            fd as isize,
+            buffer.as_mut_ptr() as isize,
+            count as isize,
+            0,
+            0,
+            0,
+        ],
     )
 }
 
-pub fn sys_write(fd: usize, buffer: &[u8],count:usize) -> isize {
-    syscall(SYSCALL_WRITE, [fd as isize, buffer.as_ptr() as isize, count as isize, 0, 0, 0])
+pub fn sys_write(fd: usize, buffer: &[u8], count: usize) -> isize {
+    syscall(
+        SYSCALL_WRITE,
+        [
+            fd as isize,
+            buffer.as_ptr() as isize,
+            count as isize,
+            0,
+            0,
+            0,
+        ],
+    )
 }
 
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -85,18 +112,24 @@ pub fn sys_exec(path: &str) -> isize {
     syscall(SYSCALL_EXEC, [path.as_ptr() as isize, 0, 0, 0, 0, 0])
 }
 
-pub fn sys_waitpid(pid: isize, exit_code: *mut i32) -> isize {
-    syscall(SYSCALL_WAITPID, [pid as isize, exit_code as isize, 0, 0, 0, 0])
+pub fn sys_waitpid(pid: isize, exit_code: *mut i32, options: i32) -> isize {
+    syscall(
+        SYSCALL_WAIT4,
+        [pid as isize, exit_code as isize, options as isize, 0, 0, 0],
+    )
 }
 pub fn sys_getcwd(buf: &mut [u8], size: usize) -> isize {
-    syscall(SYSCALL_GETCWD, [buf.as_mut_ptr() as isize, size as isize, 0, 0, 0, 0])
+    syscall(
+        SYSCALL_GETCWD,
+        [buf.as_mut_ptr() as isize, size as isize, 0, 0, 0, 0],
+    )
 }
 
 pub fn sys_dup(fd: usize) -> isize {
     syscall(SYSCALL_DUP, [fd as isize, 0, 0, 0, 0, 0])
 }
 
-pub fn sys_dup3(old: usize,new: usize) -> isize {
+pub fn sys_dup3(old: usize, new: usize) -> isize {
     syscall(SYSCALL_DUP3, [old as isize, new as isize, 0, 0, 0, 0])
 }
 
@@ -104,34 +137,76 @@ pub fn sys_chdir(path: &str) -> isize {
     syscall(SYSCALL_CHDIR, [path.as_ptr() as isize, 0, 0, 0, 0, 0])
 }
 
-pub fn sys_mkdirat(dirfd:isize,path: &str,mode:usize) -> isize {
-    syscall(SYSCALL_MKDIRAT,[dirfd,path.as_ptr() as isize, mode as isize, 0, 0, 0])
+pub fn sys_mkdirat(dirfd: isize, path: &str, mode: usize) -> isize {
+    syscall(
+        SYSCALL_MKDIRAT,
+        [dirfd, path.as_ptr() as isize, mode as isize, 0, 0, 0],
+    )
 }
 
-pub fn sys_getdents64(fd:usize,buf: &mut [u8],len:usize) -> isize {
-    syscall(SYSCALL_GETDENTS64,[fd as isize,buf.as_mut_ptr() as isize,len as isize, 0, 0, 0])
+pub fn sys_getdents64(fd: usize, buf: &mut [u8], len: usize) -> isize {
+    syscall(
+        SYSCALL_GETDENTS64,
+        [
+            fd as isize,
+            buf.as_mut_ptr() as isize,
+            len as isize,
+            0,
+            0,
+            0,
+        ],
+    )
 }
 
-pub fn sys_linkat(oldfd:isize,oldpath: &str,newfd:isize,newpath: &str,flags:u32) -> isize {
-    syscall(SYSCALL_LINKAT,[oldfd,oldpath.as_ptr() as isize,newfd,newpath.as_ptr() as isize,flags as isize, 0])
+pub fn sys_linkat(oldfd: isize, oldpath: &str, newfd: isize, newpath: &str, flags: u32) -> isize {
+    syscall(
+        SYSCALL_LINKAT,
+        [
+            oldfd,
+            oldpath.as_ptr() as isize,
+            newfd,
+            newpath.as_ptr() as isize,
+            flags as isize,
+            0,
+        ],
+    )
 }
 
-pub fn sys_unlinkat(dirfd:isize,path: &str,flags:u32) -> isize {
-    syscall(SYSCALL_UNLINKAT,[dirfd,path.as_ptr() as isize,flags as isize, 0, 0, 0])
+pub fn sys_unlinkat(dirfd: isize, path: &str, flags: u32) -> isize {
+    syscall(
+        SYSCALL_UNLINKAT,
+        [dirfd, path.as_ptr() as isize, flags as isize, 0, 0, 0],
+    )
 }
 
-pub fn sys_umount2(special: &str,flags:u32) -> isize {
-    syscall(SYSCALL_UMOUNT2,[special.as_ptr() as isize,flags as isize, 0, 0, 0, 0])
+pub fn sys_umount2(special: &str, flags: u32) -> isize {
+    syscall(
+        SYSCALL_UMOUNT2,
+        [special.as_ptr() as isize, flags as isize, 0, 0, 0, 0],
+    )
 }
 
-pub fn sys_mount(special: &str, dir: &str, ftype: &str,flags:u32, data:&mut [u8]) -> isize {
-    syscall(SYSCALL_MOUNT,[special.as_ptr() as isize,dir.as_ptr() as isize,ftype.as_ptr() as isize,flags as isize, data.as_ptr() as isize, 0])
+pub fn sys_mount(special: &str, dir: &str, ftype: &str, flags: u32, data: &mut [u8]) -> isize {
+    syscall(
+        SYSCALL_MOUNT,
+        [
+            special.as_ptr() as isize,
+            dir.as_ptr() as isize,
+            ftype.as_ptr() as isize,
+            flags as isize,
+            data.as_ptr() as isize,
+            0,
+        ],
+    )
 }
 
-pub fn sys_fstat(fd:usize,kst:&mut [u8]) -> isize {
-    syscall(SYSCALL_FSTAT,[fd as isize,kst.as_mut_ptr() as isize, 0, 0, 0, 0])
+pub fn sys_fstat(fd: usize, kst: &mut [u8]) -> isize {
+    syscall(
+        SYSCALL_FSTAT,
+        [fd as isize, kst.as_mut_ptr() as isize, 0, 0, 0, 0],
+    )
 }
 
-pub fn sys_pipe2(fd:&mut [u32],_zero:isize) -> isize {
-    syscall(SYSCALL_PIPE2,[fd.as_mut_ptr() as isize, 0, 0, 0, 0, 0])
+pub fn sys_pipe2(fd: &mut [u32], _zero: isize) -> isize {
+    syscall(SYSCALL_PIPE2, [fd.as_mut_ptr() as isize, 0, 0, 0, 0, 0])
 }

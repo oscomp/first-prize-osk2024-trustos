@@ -54,17 +54,17 @@ bitflags! {
     }
 }
 
-pub fn openat(fd:isize,path: &str, flags: OpenFlags,mode:usize) -> isize {
-    sys_openat(fd,path, flags.bits,mode)
+pub fn openat(fd: isize, path: &str, flags: OpenFlags, mode: usize) -> isize {
+    sys_openat(fd, path, flags.bits, mode)
 }
 pub fn close(fd: usize) -> isize {
     sys_close(fd)
 }
-pub fn read(fd: usize, buf: &mut [u8],count:usize) -> isize {
-    sys_read(fd, buf,count)
+pub fn read(fd: usize, buf: &mut [u8], count: usize) -> isize {
+    sys_read(fd, buf, count)
 }
-pub fn write(fd: usize, buf: &[u8],count:usize) -> isize {
-    sys_write(fd, buf,count)
+pub fn write(fd: usize, buf: &[u8], count: usize) -> isize {
+    sys_write(fd, buf, count)
 }
 pub fn exit(exit_code: i32) -> ! {
     sys_exit(exit_code);
@@ -85,27 +85,11 @@ pub fn exec(path: &str) -> isize {
     sys_exec(path)
 }
 pub fn wait(exit_code: &mut i32) -> isize {
-    loop {
-        match sys_waitpid(-1, exit_code as *mut _) {
-            -2 => {
-                yield_();
-            }
-            // -1 or a real pid
-            exit_pid => return exit_pid,
-        }
-    }
+    sys_waitpid(-1, exit_code as *mut _, 0)
 }
 
 pub fn waitpid(pid: usize, exit_code: &mut i32) -> isize {
-    loop {
-        match sys_waitpid(pid as isize, exit_code as *mut _) {
-            -2 => {
-                yield_();
-            }
-            // -1 or a real pid
-            exit_pid => return exit_pid,
-        }
-    }
+    sys_waitpid(pid as isize, exit_code as *mut _, 0)
 }
 pub fn sleep(period_ms: usize) {
     let start = sys_get_time();
@@ -122,42 +106,42 @@ pub fn dup(fd: usize) -> isize {
     sys_dup(fd)
 }
 
-pub fn dup2(old:usize,new: usize,_zero:usize) -> isize {
-    sys_dup3(old,new)
+pub fn dup2(old: usize, new: usize, _zero: usize) -> isize {
+    sys_dup3(old, new)
 }
 
 pub fn chdir(path: &str) -> isize {
     sys_chdir(path)
 }
 
-pub fn mkdir(dirfd:isize,path:&str,mode:usize)->isize{
-    sys_mkdirat(dirfd,path,mode)
+pub fn mkdir(dirfd: isize, path: &str, mode: usize) -> isize {
+    sys_mkdirat(dirfd, path, mode)
 }
 
-pub fn getdents(fd:usize,buf:&mut [u8],len:usize) -> isize{
+pub fn getdents(fd: usize, buf: &mut [u8], len: usize) -> isize {
     sys_getdents64(fd, buf, len)
 }
 
-pub fn link(oldfd:isize,oldpath:&str,newfd:isize,newpath:&str,flags:u32)->isize {
+pub fn link(oldfd: isize, oldpath: &str, newfd: isize, newpath: &str, flags: u32) -> isize {
     sys_linkat(oldfd, oldpath, newfd, newpath, flags)
 }
 
-pub fn unlink(dirfd:isize,path:&str,flags:OpenFlags)->isize {
+pub fn unlink(dirfd: isize, path: &str, flags: OpenFlags) -> isize {
     sys_unlinkat(dirfd, path, flags.bits)
 }
 
-pub fn umount(special: &str,flags:u32) -> isize {
+pub fn umount(special: &str, flags: u32) -> isize {
     sys_umount2(special, flags)
 }
 
-pub fn mount(special: &str, dir: &str, ftype: &str,flags:u32, data:&mut [u8]) -> isize {
+pub fn mount(special: &str, dir: &str, ftype: &str, flags: u32, data: &mut [u8]) -> isize {
     sys_mount(special, dir, ftype, flags, data)
 }
 
-pub fn fstat(fd:usize, kst:&mut [u8]) -> isize {
+pub fn fstat(fd: usize, kst: &mut [u8]) -> isize {
     sys_fstat(fd, kst)
 }
 
-pub fn pipe(fd:&mut [u32],zero:isize) -> isize {
+pub fn pipe(fd: &mut [u32], zero: isize) -> isize {
     sys_pipe2(fd, zero)
 }

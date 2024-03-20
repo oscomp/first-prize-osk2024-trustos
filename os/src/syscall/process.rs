@@ -49,14 +49,62 @@ pub fn sys_exec(path: *const u8) -> isize {
         let all_data = app_inode.read_all();
         task.exec(all_data.as_slice());
         task.inner_lock().memory_set.activate();
+        debug!("sys_exec end");
         0
     } else {
         -1
     }
 }
+/// 等待子进程状态发生变化,即子进程终止或被信号停止或被信号挂起
+pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
+    // TODO(ZMY) 加入信号和进程组支持
+    assert!(options == 0, "not support options yet");
+    loop {
+        let task = current_task().unwrap();
+        // find a child process
+        // ---- access current PCB exclusively
+        let mut inner = task.inner_lock();
+        if !inner
+            .children
+            .iter()
+            .any(|p| pid == -1 || pid as usize == p.getpid())
+        {
+            return -1;
+            // ---- release current PCB
+        }
+        let pair = inner.children.iter().enumerate().find(|(_, p)| {
+            // ++++ temporarily access child PCB exclusively
+            p.inner_lock().is_zombie() && (pid == -1 || pid as usize == p.getpid())
+            // ++++ release child PCB
+        });
+        if let Some((idx, _)) = pair {
+            let child = inner.children.remove(idx);
+            // confirm that child will be deallocated after being removed from children list
+            assert_eq!(
+                Arc::strong_count(&child),
+                1,
+                "process{} cant recycled",
+                child.getpid()
+            );
+            let found_pid = child.getpid();
+            // ++++ temporarily access child PCB exclusively
+            let exit_code = child.inner_lock().exit_code;
+            // ++++ release child PCB
+            if wstatus as usize != 0x0 {
+                *translated_refmut(inner.memory_set.token(), wstatus) = exit_code;
+            }
+            return found_pid as isize;
+        } else {
+            drop(inner);
+            drop(task);
+            suspend_current_and_run_next();
+        }
+    }
+}
 
 /// If there is not a child process whose pid is same as given, return -1.
 /// Else if there is a child process but it is still running, return -2.
+#[allow(unused)]
 pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
     let task = current_task().unwrap();
     // find a child process
