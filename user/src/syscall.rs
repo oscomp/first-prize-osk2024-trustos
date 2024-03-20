@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use core::arch::asm;
 
 const SYSCALL_GETCWD: usize = 17;
@@ -99,8 +100,11 @@ pub fn sys_yield() -> isize {
     syscall(SYSCALL_SCHED_YIELD, [0, 0, 0, 0, 0, 0])
 }
 
-pub fn sys_gettimeofday(ts:&mut [u8]) -> isize {
-    syscall(SYSCALL_GETTIMEOFDAY, [ts.as_mut_ptr() as isize, 0, 0, 0, 0, 0])
+pub fn sys_gettimeofday(ts: &mut [u8]) -> isize {
+    syscall(
+        SYSCALL_GETTIMEOFDAY,
+        [ts.as_mut_ptr() as isize, 0, 0, 0, 0, 0],
+    )
 }
 
 pub fn sys_getpid() -> isize {
@@ -210,18 +214,28 @@ pub fn sys_fstat(fd: usize, kst: &mut [u8]) -> isize {
     )
 }
 
-pub fn sys_pipe2(fd:&mut [u32],_zero:isize) -> isize {
-    syscall(SYSCALL_PIPE2,[fd.as_mut_ptr() as isize, 0, 0, 0, 0, 0])
+pub fn sys_pipe2(fd: &mut [u32], _zero: isize) -> isize {
+    syscall(SYSCALL_PIPE2, [fd.as_mut_ptr() as isize, 0, 0, 0, 0, 0])
 }
 
 pub fn sys_getppid() -> isize {
     syscall(SYSCALL_GETPPID, [0, 0, 0, 0, 0, 0])
 }
 
-pub fn sys_times(tms:&mut [u8]) -> isize {
+pub fn sys_times(tms: &mut [u8]) -> isize {
     syscall(SYSCALL_TIMES, [tms.as_mut_ptr() as isize, 0, 0, 0, 0, 0])
 }
 
-pub fn sys_nanosleep(req:&mut [u8], rem:&mut [u8]) ->isize {
-    syscall(SYSCALL_NANOSLEEP, [req.as_mut_ptr() as isize, rem.as_mut_ptr() as isize, 0, 0, 0, 0])
+pub fn sys_nanosleep(req: &mut [u8], rem: &mut [u8]) -> isize {
+    syscall(
+        SYSCALL_NANOSLEEP,
+        [
+            req.as_mut_ptr() as isize,
+            rem.as_mut_ptr() as isize,
+            0,
+            0,
+            0,
+            0,
+        ],
+    )
 }

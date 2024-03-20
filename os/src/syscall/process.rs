@@ -1,12 +1,14 @@
 use core::mem::size_of;
 
 use crate::fs::{open, open_file, OpenFlags};
-use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr};
+use crate::mm::{
+    translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr,
+};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next,
     suspend_current_and_run_next,
 };
-use crate::timer::{Timespec,Tms,get_time_ms};
+use crate::timer::{get_time_ms, Timespec, Tms};
 use alloc::sync::Arc;
 use log::{debug, info};
 
@@ -22,8 +24,12 @@ pub fn sys_sched_yield() -> isize {
 
 pub fn sys_gettimeofday(ts: *const u8) -> isize {
     let token = current_user_token();
-    let mut ts = UserBuffer::new(translated_byte_buffer(token, ts,core::mem::size_of::<Timespec>()));
-    let mut timespec = Timespec::new(get_time_ms()/1000,(get_time_ms()%1000)*1000000); 
+    let mut ts = UserBuffer::new(translated_byte_buffer(
+        token,
+        ts,
+        core::mem::size_of::<Timespec>(),
+    ));
+    let mut timespec = Timespec::new(get_time_ms() / 1000, (get_time_ms() % 1000) * 1000000);
     ts.write(timespec.as_bytes());
     0
 }
@@ -32,8 +38,12 @@ pub fn sys_times(tms: *const u8) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
-    let mut tms = UserBuffer::new(translated_byte_buffer(token, tms,core::mem::size_of::<Timespec>()));
-    let mut times = Tms::new(&inner.time_data); 
+    let mut tms = UserBuffer::new(translated_byte_buffer(
+        token,
+        tms,
+        core::mem::size_of::<Timespec>(),
+    ));
+    let mut times = Tms::new(&inner.time_data);
     tms.write(times.as_bytes());
     0
 }
@@ -44,7 +54,7 @@ pub fn sys_getpid() -> isize {
 
 pub fn sys_getppid() -> isize {
     if let Some(weak_parent) = current_task().unwrap().inner_lock().parent.clone() {
-        if let Some(parent) = weak_parent.upgrade(){
+        if let Some(parent) = weak_parent.upgrade() {
             parent.pid.0 as isize
         } else {
             -1
@@ -52,7 +62,6 @@ pub fn sys_getppid() -> isize {
     } else {
         -1
     }
-    
 }
 
 pub fn sys_fork() -> isize {
@@ -126,7 +135,6 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
             let exit_code = childinner.exit_code;
             // ++++ release child PCB
             if wstatus as usize != 0x0 {
-                //println!("work here");
                 *translated_refmut(inner.memory_set.token(), wstatus) = exit_code;
             }
             return found_pid as isize;
@@ -137,75 +145,24 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
         }
     }
 }
-/*
-/// If there is not a child process whose pid is same as given, return -1.
-/// Else if there is a child process but it is still running, return -2.
-#[allow(unused)]
-pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
-    let task = current_task().unwrap();
-    // find a child process
 
-    // ---- access current PCB exclusively
-    let mut inner = task.inner_lock();
-    if !inner
-        .children
-        .iter()
-        .any(|p| pid == -1 || pid as usize == p.getpid())
-    {
-        return -1;
-        // ---- release current PCB
-    }
-    let pair = inner.children.iter().enumerate().find(|(_, p)| {
-        // ++++ temporarily access child PCB exclusively
-        p.inner_lock().is_zombie() && (pid == -1 || pid as usize == p.getpid())
-        // ++++ release child PCB
-    });
-    if let Some((idx, _)) = pair {
-        let child = inner.children.remove(idx);
-        // confirm that child will be deallocated after being removed from children list
-        assert_eq!(
-            Arc::strong_count(&child),
-            1,
-            "process{} cant recycled",
-            child.getpid()
-        );
-
-        let mut childinner = child.inner_lock();
-
-        inner.time_data.cutime += childinner.time_data.utime;
-        inner.time_data.cstime += childinner.time_data.stime;
-
-        let found_pid = child.getpid();
-        // ++++ temporarily access child PCB exclusively
-        let exit_code = childinner.exit_code;
-        // ++++ release child PCB
-        if exit_code_ptr as usize != 0x0 {
-            *translated_refmut(inner.memory_set.token(), exit_code_ptr) = exit_code;
-        }
-        found_pid as isize
-    } else {
-        -2
-    }
-    // ---- release current PCB automatically
-}
-*/
-pub fn sys_nanosleep(req: *const u8, _rem: *const u8) ->isize {
+pub fn sys_nanosleep(req: *const u8, _rem: *const u8) -> isize {
     let token = current_user_token();
-    let req =translated_ref(token, req as *const Timespec);
+    let req = translated_ref(token, req as *const Timespec);
 
     let begin = get_time_ms();
-    let waittime = req.tv_sec*1000+req.tv_nsec/1000000;
+    let waittime = req.tv_sec * 1000 + req.tv_nsec / 1000000;
 
-    loop{
+    loop {
         let now = get_time_ms();
-        if now-begin >= waittime {
+        if now - begin >= waittime {
             break;
         }
     }
     0
 }
 
-pub struct Utsname{
+pub struct Utsname {
     sysname: [u8; 65],
     nodename: [u8; 65],
     release: [u8; 65],
@@ -222,20 +179,19 @@ pub fn sys_uname(buf: *mut u8) -> isize {
     let uname = Utsname {
         sysname: str2u8("TrustOS"),
         nodename: str2u8("TrustOS"),
-        release:  str2u8("Alpha"),
-        version:  str2u8("v1.0"),
-        machine:  str2u8("RISC-V64"),
+        release: str2u8("Alpha"),
+        version: str2u8("v1.0"),
+        machine: str2u8("RISC-V64"),
         domainname: str2u8("TrustOS"),
     };
     let token = current_user_token();
     let mut buf_vec = translated_byte_buffer(token, buf, size_of::<Utsname>());
     let mut userbuf = UserBuffer::new(buf_vec);
-    userbuf.write(
-        unsafe {
-            core::slice::from_raw_parts(
-                &uname as *const _ as usize as *const u8,
-                size_of::<Utsname>(),
-            )
-        });
+    userbuf.write(unsafe {
+        core::slice::from_raw_parts(
+            &uname as *const _ as usize as *const u8,
+            size_of::<Utsname>(),
+        )
+    });
     0
 }

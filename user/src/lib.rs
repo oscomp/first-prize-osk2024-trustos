@@ -72,10 +72,16 @@ pub fn exit(exit_code: i32) -> ! {
 pub fn yield_() -> isize {
     sys_yield()
 }
+/// 返回ms
 pub fn get_time() -> isize {
-    //let mut ts: &mut [u8] = &mut [];
-    //sys_gettimeofday(ts);
-    todo!()
+    let mut time_sepc: [usize; 2] = [0, 0];
+    unsafe {
+        sys_gettimeofday(core::slice::from_raw_parts_mut(
+            &mut time_sepc as *mut usize as *mut u8,
+            2 * core::mem::size_of::<usize>(),
+        ));
+    }
+    return (time_sepc[0] * 1000 + time_sepc[1] / 1000) as isize;
 }
 pub fn getpid() -> isize {
     sys_getpid()
@@ -93,13 +99,23 @@ pub fn wait(exit_code: &mut i32) -> isize {
 pub fn waitpid(pid: usize, exit_code: &mut i32) -> isize {
     sys_waitpid(pid as isize, exit_code as *mut _, 0)
 }
+
+pub struct Timespec {
+    pub tv_sec: usize,  //秒
+    pub tv_nsec: usize, //纳秒
+}
+
 pub fn sleep(period_ms: usize) {
-    //let mut ts: &mut [u8] = &mut [];
-    //let start = sys_gettimeofday(ts);
-    //while sys_gettimeofday(ts) < start + period_ms as isize {
-    //    sys_yield();
-    //}
-    todo!()
+    let mut req: [usize; 2] = [0, period_ms * 1000];
+    let mut rem: [usize; 2] = [0, 0];
+    unsafe {
+        use ::core::slice::from_raw_parts_mut;
+        use core::mem::size_of;
+        sys_nanosleep(
+            from_raw_parts_mut(&mut req as *mut usize as *mut u8, size_of::<usize>()),
+            from_raw_parts_mut(&mut rem as *mut usize as *mut _, size_of::<usize>()),
+        );
+    }
 }
 
 pub fn getcwd(buf: &mut [u8], size: usize) -> isize {
@@ -154,6 +170,6 @@ pub fn getppid() -> isize {
     sys_getppid()
 }
 
-pub fn times(tms:&mut [u8]) -> isize {
+pub fn times(tms: &mut [u8]) -> isize {
     sys_times(tms)
 }

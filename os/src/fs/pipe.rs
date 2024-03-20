@@ -208,7 +208,6 @@ impl File for Pipe {
                     ring_buffer.write_byte(unsafe { *byte_ref });
                     write_size += 1;
                 } else {
-                    println!("finish write");
                     return write_size;
                 }
             }
