@@ -115,11 +115,18 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
                 "process{} cant recycled",
                 child.getpid()
             );
+
+            let mut childinner = child.inner_lock();
+
+            inner.time_data.cutime += childinner.time_data.utime;
+            inner.time_data.cstime += childinner.time_data.stime;
+
             let found_pid = child.getpid();
             // ++++ temporarily access child PCB exclusively
-            let exit_code = child.inner_lock().exit_code;
+            let exit_code = childinner.exit_code;
             // ++++ release child PCB
             if wstatus as usize != 0x0 {
+                //println!("work here");
                 *translated_refmut(inner.memory_set.token(), wstatus) = exit_code;
             }
             return found_pid as isize;
@@ -130,7 +137,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
         }
     }
 }
-
+/*
 /// If there is not a child process whose pid is same as given, return -1.
 /// Else if there is a child process but it is still running, return -2.
 #[allow(unused)]
@@ -181,7 +188,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
     }
     // ---- release current PCB automatically
 }
-
+*/
 pub fn sys_nanosleep(req: *const u8, _rem: *const u8) ->isize {
     let token = current_user_token();
     let req =translated_ref(token, req as *const Timespec);
