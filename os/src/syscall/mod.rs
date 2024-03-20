@@ -26,6 +26,7 @@ const SYSCALL_READ: usize = 63;
 const SYSCALL_WRITE: usize = 64;
 const SYSCALL_FSTAT: usize = 80;
 const SYSCALL_EXIT: usize = 93;
+const SYSCALL_NANOSLEEP: usize = 101;
 const SYSCALL_SCHED_YIELD: usize = 124;
 const SYSCALL_TIMES: usize = 153;
 const SYSCALL_GETTIMEOFDAY: usize = 169;
@@ -83,6 +84,7 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
         SYSCALL_WRITE => sys_write(args[0] as usize, args[1] as *const u8, args[2] as usize),
         SYSCALL_FSTAT => sys_fstat(args[0] as usize, args[1] as *const u8),
         SYSCALL_EXIT => sys_exit(args[0] as i32),
+        SYSCALL_NANOSLEEP => sys_nanosleep(args[0] as *const u8,args[1] as *const u8),
         SYSCALL_SCHED_YIELD => sys_sched_yield(),
         SYSCALL_TIMES => sys_times(args[0] as *const u8),
         SYSCALL_GETTIMEOFDAY => sys_gettimeofday(args[0] as *const u8),

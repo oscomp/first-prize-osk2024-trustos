@@ -1,5 +1,5 @@
 use crate::fs::{open, open_file, OpenFlags};
-use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer, VirtAddr};
+use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr};
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next,
     suspend_current_and_run_next,
@@ -21,7 +21,7 @@ pub fn sys_sched_yield() -> isize {
 pub fn sys_gettimeofday(ts: *const u8) -> isize {
     let token = current_user_token();
     let mut ts = UserBuffer::new(translated_byte_buffer(token, ts,core::mem::size_of::<Timespec>()));
-    let mut timespec = Timespec::new(get_time_ms()/1000,(get_time_ms()%1000)*1000); 
+    let mut timespec = Timespec::new(get_time_ms()/1000,(get_time_ms()%1000)*1000000); 
     ts.write(timespec.as_bytes());
     0
 }
@@ -178,4 +178,21 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         -2
     }
     // ---- release current PCB automatically
+}
+
+pub fn sys_nanosleep(req: *const u8, _rem: *const u8) ->isize {
+    let token = current_user_token();
+    let req =translated_ref(token, req as *const Timespec);
+
+    let begin = get_time_ms();
+    let waittime = req.tv_sec*1000+req.tv_nsec/1000000;
+
+    loop{
+        let now = get_time_ms();
+        if now-begin >= waittime {
+            break;
+        }
+    }
+
+    0
 }

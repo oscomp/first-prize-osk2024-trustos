@@ -17,6 +17,7 @@ const SYSCALL_READ: usize = 63;
 const SYSCALL_WRITE: usize = 64;
 const SYSCALL_FSTAT: usize = 80;
 const SYSCALL_EXIT: usize = 93;
+const SYSCALL_NANOSLEEP: usize = 101;
 const SYSCALL_SCHED_YIELD: usize = 124;
 const SYSCALL_TIMES: usize = 153;
 const SYSCALL_GETTIMEOFDAY: usize = 169;
@@ -219,4 +220,8 @@ pub fn sys_getppid() -> isize {
 
 pub fn sys_times(tms:&mut [u8]) -> isize {
     syscall(SYSCALL_TIMES, [tms.as_mut_ptr() as isize, 0, 0, 0, 0, 0])
+}
+
+pub fn sys_nanosleep(req:&mut [u8], rem:&mut [u8]) ->isize {
+    syscall(SYSCALL_NANOSLEEP, [req.as_mut_ptr() as isize, rem.as_mut_ptr() as isize, 0, 0, 0, 0])
 }

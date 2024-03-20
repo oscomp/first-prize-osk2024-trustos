@@ -227,9 +227,9 @@ pub fn translated_str(token: usize, ptr: *const u8) -> String {
 ///Translate a generic through page table and return a reference
 pub fn translated_ref<T>(token: usize, ptr: *const T) -> &'static T {
     let page_table = PageTable::from_token(token);
-    page_table
+    KernelAddr::from(page_table
         .translate_va(VirtAddr::from(ptr as usize))
-        .unwrap()
+        .unwrap())
         .as_ref()
 }
 ///Translate a generic through page table and return a mutable reference

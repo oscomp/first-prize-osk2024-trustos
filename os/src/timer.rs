@@ -8,8 +8,8 @@ const TICKS_PER_SEC: usize = 100;
 const MSEC_PER_SEC: usize = 1000;
 
 pub struct Timespec {
-    tv_sec : usize,     //秒
-    tv_nsec : usize,    //纳秒
+    pub tv_sec : usize,     //秒
+    pub tv_nsec : usize,    //纳秒
 }
 
 impl Timespec {
