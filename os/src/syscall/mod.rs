@@ -28,6 +28,7 @@ const SYSCALL_FSTAT: usize = 80;
 const SYSCALL_EXIT: usize = 93;
 const SYSCALL_SCHED_YIELD: usize = 124;
 const SYSCALL_TIMES: usize = 153;
+const SYSCALL_UNAME:usize=160;
 const SYSCALL_GETTIMEOFDAY: usize = 169;
 const SYSCALL_GETPID: usize = 172;
 const SYSCALL_GETPPID: usize = 173;
@@ -86,6 +87,7 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
         SYSCALL_SCHED_YIELD => sys_sched_yield(),
         SYSCALL_TIMES => sys_times(args[0] as *const u8),
         SYSCALL_GETTIMEOFDAY => sys_gettimeofday(args[0] as *const u8),
+        SYSCALL_UNAME => sys_uname(args[0] as *mut u8),
         SYSCALL_GETPID => sys_getpid(),
         SYSCALL_GETPPID => sys_getppid(),
         SYSCALL_FORK => sys_fork(),
