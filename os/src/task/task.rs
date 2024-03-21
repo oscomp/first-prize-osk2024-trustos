@@ -19,8 +19,8 @@ use spin::{Mutex, MutexGuard};
 pub struct TaskControlBlock {
     // immutable
     tid: TidHandle,
-    pub ppid: usize,
-    pub pid: usize,
+    ppid: usize,
+    pid: usize,
     pub kernel_stack: KernelStack,
     // mutable
     inner: Mutex<TaskControlBlockInner>,
@@ -28,7 +28,7 @@ pub struct TaskControlBlock {
 
 pub struct TaskControlBlockInner {
     pub trap_cx_ppn: PhysPageNum,
-    pub base_size: usize,
+    pub user_stack_top: usize, // exclusive
     pub task_cx: TaskContext,
     pub task_status: TaskStatus,
     pub memory_set: MemorySet,
@@ -70,6 +70,12 @@ impl TaskControlBlock {
     pub fn tid(&self) -> usize {
         self.tid.0
     }
+    pub fn pid(&self) -> usize {
+        self.pid
+    }
+    pub fn ppid(&self) -> usize {
+        self.ppid
+    }
     /// 只有initproc会调用
     pub fn new(elf_data: &[u8]) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack
@@ -96,7 +102,7 @@ impl TaskControlBlock {
             kernel_stack,
             inner: Mutex::new(TaskControlBlockInner {
                 trap_cx_ppn,
-                base_size: user_sp,
+                user_stack_top: user_sp,
                 task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                 task_status: TaskStatus::Ready,
                 memory_set,
@@ -158,14 +164,17 @@ impl TaskControlBlock {
             trap_handler as usize,
         );
         *inner.trap_cx() = trap_cx;
-        debug!("task.exec.pid={}", self.tid.0);
+        debug!("task.exec.tid={}", self.tid.0);
         // **** release current PCB
     }
-    pub fn fork(self: &Arc<TaskControlBlock>) -> Arc<TaskControlBlock> {
+    ///
+    pub fn fork(self: &Arc<TaskControlBlock>, stack: Option<usize>) -> Arc<TaskControlBlock> {
         // ---- hold parent PCB lock
         let mut parent_inner = self.inner_lock();
+        let copy_user_stack = stack.is_none();
         // copy user space(include trap context)
-        let mut memory_set = MemorySet::from_existed_user(&parent_inner.memory_set);
+        let mut memory_set =
+            MemorySet::from_existed_user(&parent_inner.memory_set, copy_user_stack);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
             .unwrap()
@@ -190,6 +199,11 @@ impl TaskControlBlock {
                 new_fd_table.push(None);
             }
         }
+        let user_stack_top = if !copy_user_stack {
+            stack.unwrap()
+        } else {
+            parent_inner.user_stack_top
+        };
         let task_control_block = Arc::new(TaskControlBlock {
             tid: tid_handle,
             pid,
@@ -197,7 +211,7 @@ impl TaskControlBlock {
             kernel_stack,
             inner: Mutex::new(TaskControlBlockInner {
                 trap_cx_ppn,
-                base_size: parent_inner.base_size,
+                user_stack_top,
                 task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                 task_status: TaskStatus::Ready,
                 memory_set,
@@ -213,16 +227,15 @@ impl TaskControlBlock {
         parent_inner.children.push(task_control_block.clone());
         // modify kernel_sp in trap_cx
         // **** access child PCB exclusively
-        // let trap_cx = task_control_block.inner_exclusive_access().trap_cx();
         let trap_cx = task_control_block.inner_lock().trap_cx();
         trap_cx.kernel_sp = kernel_stack_top;
+        if !copy_user_stack {
+            trap_cx.set_sp(user_stack_top);
+        }
         // return
         task_control_block
         // **** release child PCB
         // ---- release parent PCB
-    }
-    pub fn getpid(&self) -> usize {
-        self.pid
     }
 }
 

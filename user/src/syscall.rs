@@ -24,7 +24,7 @@ const SYSCALL_TIMES: usize = 153;
 const SYSCALL_GETTIMEOFDAY: usize = 169;
 const SYSCALL_GETPID: usize = 172;
 const SYSCALL_GETPPID: usize = 173;
-const SYSCALL_FORK: usize = 220;
+const SYSCALL_CLONE: usize = 220;
 const SYSCALL_EXEC: usize = 221;
 const SYSCALL_WAIT4: usize = 260;
 
@@ -112,7 +112,8 @@ pub fn sys_getpid() -> isize {
 }
 
 pub fn sys_fork() -> isize {
-    syscall(SYSCALL_FORK, [0, 0, 0, 0, 0, 0])
+    const SIGCHLD: usize = 17;
+    syscall(SYSCALL_CLONE, [SIGCHLD as isize, 0, 0, 0, 0, 0])
 }
 
 pub fn sys_exec(path: &str) -> isize {

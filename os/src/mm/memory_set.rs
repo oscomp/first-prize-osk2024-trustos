@@ -261,6 +261,7 @@ impl MemorySet {
         // guard page
         user_stack_bottom += PAGE_SIZE;
         let user_stack_top = user_stack_bottom + USER_STACK_SIZE;
+        // TODO(ZMY) 实现execve后回调user_stack_top
         memory_set.push(
             MapArea::new(
                 user_stack_bottom.into(),
@@ -290,12 +291,15 @@ impl MemorySet {
         )
     }
     ///Clone a same `MemorySet`
-    pub fn from_existed_user(user_space: &MemorySet) -> MemorySet {
+    pub fn from_existed_user(user_space: &MemorySet, copy_user_stack: bool) -> MemorySet {
         let mut memory_set = Self::new_from_kernel();
         // copy data sections/trap_context/user_stack
         for area in user_space.areas.iter() {
             // don't copy kernel stack
             if area.area_type == MapAreaType::Stack && !area.map_perm.contains(MapPermission::U) {
+                continue;
+            }
+            if !copy_user_stack && area.area_type == MapAreaType::Stack {
                 continue;
             }
             let new_area = MapArea::from_another(area);

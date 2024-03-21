@@ -4,6 +4,7 @@ use crate::fs::{open, open_file, OpenFlags};
 use crate::mm::{
     translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr,
 };
+use crate::syscall::CloneFlags;
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next,
     suspend_current_and_run_next,
@@ -49,29 +50,54 @@ pub fn sys_times(tms: *const u8) -> isize {
 }
 
 pub fn sys_getpid() -> isize {
-    current_task().unwrap().pid as isize
+    current_task().unwrap().pid() as isize
 }
 
 pub fn sys_getppid() -> isize {
-    current_task().unwrap().ppid as isize
+    current_task().unwrap().ppid() as isize
 }
 
 pub fn sys_gettid() -> isize {
     current_task().unwrap().tid() as isize
 }
 
-pub fn sys_fork() -> isize {
-    let current_task = current_task().unwrap();
-    let new_task = current_task.fork();
-    let new_tid = new_task.tid();
-    // modify trap context of new_task, because it returns immediately after switching
-    let trap_cx = new_task.inner_lock().trap_cx();
-    // we do not have to move to next instruction since we have done it before
-    // for child process, fork returns 0
-    trap_cx.x[10] = 0;
-    // add new task to scheduler
-    add_task(new_task);
-    new_tid as isize
+/// void (*fn)(void* arg) 参数通过栈传递,如果stack_ptr!=0, fn=0(stack),arg=8(stack)
+pub fn sys_clone(
+    flags: usize,
+    stack_ptr: usize,
+    parent_tid_ptr: usize,
+    tls_ptr: usize,
+    chilren_tid_ptr: usize,
+) -> isize {
+    let flags = CloneFlags::from_bits(flags as u32).unwrap();
+    info!("[sys_clone] flags {:?}", flags);
+
+    let stack = match stack_ptr {
+        0 => None,
+        stack => {
+            debug!("[sys_clone] assign the user stack {:#x}", stack);
+            // UserCheck::new().check_writable_slice(stack as *mut u8, USER_STACK_SIZE)?;
+            Some(stack as usize)
+        }
+    };
+    // fork or create new
+    if flags.is_fork() {
+        //通常使用默认的 CLONE_CHILD_CLEARTID、CLONE_CHILD_SETTID 和 SIGCHLD 标志。
+        //ptid、tls、ctid 通常设置为 NULL
+        let current_task = current_task().unwrap();
+        let new_task = current_task.fork(stack);
+        let new_pid = new_task.pid();
+        // modify trap context of new_task, because it returns immediately after switching
+        let trap_cx = new_task.inner_lock().trap_cx();
+        // we do not have to move to next instruction since we have done it before
+        // for child process, fork returns 0
+        trap_cx.x[10] = 0;
+        // add new task to scheduler
+        add_task(new_task);
+        new_pid as isize
+    } else {
+        unimplemented!();
+    }
 }
 
 pub fn sys_exec(path: *const u8) -> isize {
@@ -101,14 +127,14 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
         if !inner
             .children
             .iter()
-            .any(|p| pid == -1 || pid as usize == p.getpid())
+            .any(|p| pid == -1 || pid as usize == p.pid())
         {
             return -1;
             // ---- release current PCB
         }
         let pair = inner.children.iter().enumerate().find(|(_, p)| {
             // ++++ temporarily access child PCB exclusively
-            p.inner_lock().is_zombie() && (pid == -1 || pid as usize == p.getpid())
+            p.inner_lock().is_zombie() && (pid == -1 || pid as usize == p.pid())
             // ++++ release child PCB
         });
         if let Some((idx, _)) = pair {
@@ -118,7 +144,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
                 Arc::strong_count(&child),
                 1,
                 "process{} cant recycled",
-                child.getpid()
+                child.pid()
             );
 
             let mut childinner = child.inner_lock();
@@ -126,7 +152,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
             inner.time_data.cutime += childinner.time_data.utime;
             inner.time_data.cstime += childinner.time_data.stime;
 
-            let found_pid = child.getpid();
+            let found_pid = child.pid();
             // ++++ temporarily access child PCB exclusively
             let exit_code = childinner.exit_code;
             // ++++ release child PCB
