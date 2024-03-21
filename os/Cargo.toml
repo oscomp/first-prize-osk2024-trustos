@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = [
     "Maoyang Zheng <925349624@qq.com>",
     "Zheyu Weng <windflower_weng@qq.com>",
-    "Chenhao Zhang <934111946@qq.com>"
+    "Chenhao Zhang <934111946@qq.com>",
 ]
 edition = "2021"
 

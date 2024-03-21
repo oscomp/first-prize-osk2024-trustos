@@ -16,12 +16,12 @@
 //! might not be what you expect.
 mod context;
 mod manager;
-mod pid;
 mod processor;
 mod switch;
 #[allow(clippy::module_inception)]
 #[allow(rustdoc::private_intra_doc_links)]
 mod task;
+mod tid;
 
 use crate::fs::{open_file, OpenFlags};
 use crate::sbi::shutdown;
@@ -33,11 +33,11 @@ pub use manager::{add_task, fetch_task, lock_task_manager, TaskManager};
 use switch::__switch;
 use task::{TaskControlBlock, TaskStatus};
 
-pub use pid::{tid_alloc, KernelStack, TidAllocator, TidHandle};
 pub use processor::{
     current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
     Processor, PROCESSORS,
 };
+pub use tid::{tid_alloc, KernelStack, TidAllocator, TidHandle};
 
 use self::processor::get_proc_by_hartid;
 /// Suspend the current 'Running' task and run the next task in task list.

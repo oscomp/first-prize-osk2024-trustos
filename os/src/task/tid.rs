@@ -19,24 +19,24 @@ impl TidAllocator {
             recycled: Vec::new(),
         }
     }
-    ///Allocate a pid
+    ///Allocate a tid
     pub fn alloc(&mut self) -> TidHandle {
-        if let Some(pid) = self.recycled.pop() {
-            TidHandle(pid)
+        if let Some(tid) = self.recycled.pop() {
+            TidHandle(tid)
         } else {
             self.current += 1;
             TidHandle(self.current - 1)
         }
     }
-    ///Recycle a pid
-    pub fn dealloc(&mut self, pid: usize) {
-        assert!(pid < self.current);
+    ///Recycle a tid
+    pub fn dealloc(&mut self, tid: usize) {
+        assert!(tid < self.current);
         assert!(
-            !self.recycled.iter().any(|ppid| *ppid == pid),
+            !self.recycled.iter().any(|ttid| *ttid == tid),
             "pid {} has been deallocated!",
-            pid
+            tid
         );
-        self.recycled.push(pid);
+        self.recycled.push(tid);
     }
 }
 

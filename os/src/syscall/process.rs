@@ -56,10 +56,14 @@ pub fn sys_getppid() -> isize {
     current_task().unwrap().ppid as isize
 }
 
+pub fn sys_gettid() -> isize {
+    current_task().unwrap().tid() as isize
+}
+
 pub fn sys_fork() -> isize {
     let current_task = current_task().unwrap();
     let new_task = current_task.fork();
-    let new_pid = new_task.pid;
+    let new_tid = new_task.tid();
     // modify trap context of new_task, because it returns immediately after switching
     let trap_cx = new_task.inner_lock().trap_cx();
     // we do not have to move to next instruction since we have done it before
@@ -67,7 +71,7 @@ pub fn sys_fork() -> isize {
     trap_cx.x[10] = 0;
     // add new task to scheduler
     add_task(new_task);
-    new_pid as isize
+    new_tid as isize
 }
 
 pub fn sys_exec(path: *const u8) -> isize {
