@@ -6,15 +6,15 @@ use lazy_static::*;
 use log::debug;
 use spin::Mutex;
 ///Pid Allocator struct
-pub struct PidAllocator {
+pub struct TidAllocator {
     current: usize,
     recycled: Vec<usize>,
 }
 
-impl PidAllocator {
-    ///Create an empty `PidAllocator`
+impl TidAllocator {
+    ///Create an empty `TidAllocator`
     pub fn new() -> Self {
-        PidAllocator {
+        TidAllocator {
             current: 0,
             recycled: Vec::new(),
         }
@@ -41,7 +41,7 @@ impl PidAllocator {
 }
 
 lazy_static! {
-    pub static ref TID_ALLOCATOR: Mutex<PidAllocator> = Mutex::new(PidAllocator::new());
+    pub static ref TID_ALLOCATOR: Mutex<TidAllocator> = Mutex::new(TidAllocator::new());
 }
 ///Bind pid lifetime to `TidHandle`
 pub struct TidHandle(pub usize);

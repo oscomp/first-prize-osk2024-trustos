@@ -33,7 +33,7 @@ pub use manager::{add_task, fetch_task, lock_task_manager, TaskManager};
 use switch::__switch;
 use task::{TaskControlBlock, TaskStatus};
 
-pub use pid::{tid_alloc, KernelStack, PidAllocator, TidHandle};
+pub use pid::{tid_alloc, KernelStack, TidAllocator, TidHandle};
 pub use processor::{
     current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
     Processor, PROCESSORS,
