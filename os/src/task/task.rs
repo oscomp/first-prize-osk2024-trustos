@@ -237,6 +237,12 @@ impl TaskControlBlock {
         // **** release child PCB
         // ---- release parent PCB
     }
+    pub fn clone_process(
+        self: &Arc<TaskControlBlock>,
+        stack: Option<usize>,
+    ) -> Arc<TaskControlBlock> {
+        todo!()
+    }
 }
 
 #[derive(Copy, Clone, PartialEq)]
