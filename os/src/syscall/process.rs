@@ -195,3 +195,12 @@ pub fn sys_uname(buf: *mut u8) -> isize {
     });
     0
 }
+
+pub fn sys_brk(brk_addr: usize) -> isize{
+    let former_addr = current_task().unwrap().growproc(0);
+    if brk_addr==0 {
+        return former_addr as isize;
+    }
+    let grow_size: isize = (brk_addr - former_addr) as isize;
+    current_task().unwrap().growproc(grow_size) as isize
+}

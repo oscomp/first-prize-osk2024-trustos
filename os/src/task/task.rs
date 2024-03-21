@@ -1,7 +1,7 @@
 //!Implementation of [`TaskControlBlock`]
 use super::{pid_alloc, KernelStack, PidHandle, TaskContext};
 use crate::{
-    config::mm::USER_TRAP_CONTEXT, fs::{File, Stdin, Stdout}, mm::{MapAreaType, MapPermission, MemorySet, PhysPageNum, VirtAddr}, timer::TimeData, trap::{trap_handler, TrapContext}
+    config::mm::{USER_TRAP_CONTEXT,USER_HEAP_SIZE}, fs::{File, Stdin, Stdout}, mm::{MapAreaType, MapPermission, MemorySet, PhysPageNum, VirtAddr}, timer::TimeData, trap::{trap_handler, TrapContext}
 };
 use alloc::{
     sync::{Arc, Weak},
@@ -34,6 +34,8 @@ pub struct TaskControlBlockInner {
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
     pub current_path: alloc::string::String,
     pub time_data: TimeData,
+    pub user_heappoint: usize,
+    pub user_heapbottom: usize,
 }
 
 impl TaskControlBlockInner {
@@ -65,7 +67,7 @@ impl TaskControlBlock {
     }
     pub fn new(elf_data: &[u8]) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack
-        let (mut memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+        let (mut memory_set, user_sp,user_heapbottom, entry_point) = MemorySet::from_elf(elf_data);
         debug!("entry point: {:x}", entry_point);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
@@ -103,6 +105,8 @@ impl TaskControlBlock {
                 ],
                 current_path: alloc::string::String::from("/"),
                 time_data: TimeData::new(),
+                user_heappoint:user_heapbottom,
+                user_heapbottom
             }),
         };
         // prepare TrapContext in user space
@@ -118,7 +122,7 @@ impl TaskControlBlock {
     }
     pub fn exec(&self, elf_data: &[u8]) {
         // memory_set with elf program headers/trampoline/trap context/user stack
-        let (mut memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+        let (mut memory_set, user_sp,user_hp, entry_point) = MemorySet::from_elf(elf_data);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
             .unwrap()
@@ -148,6 +152,8 @@ impl TaskControlBlock {
             trap_handler as usize,
         );
         *inner.trap_cx() = trap_cx;
+        inner.user_heappoint=user_hp;
+        inner.user_heapbottom=user_hp;
         debug!("task.exec.pid={}", self.pid.0);
         // **** release current PCB
     }
@@ -194,6 +200,8 @@ impl TaskControlBlock {
                 fd_table: new_fd_table,
                 current_path: parent_inner.current_path.clone(),
                 time_data: TimeData::new(),
+                user_heappoint: parent_inner.user_heappoint,
+                user_heapbottom:parent_inner.user_heapbottom
             }),
         });
         // add child
@@ -210,6 +218,25 @@ impl TaskControlBlock {
     }
     pub fn getpid(&self) -> usize {
         self.pid.0
+    }
+    
+    pub fn growproc(&self, grow_size: isize) -> usize {
+        if grow_size > 0 {
+            let growed_addr: usize = self.inner.lock().user_heappoint + grow_size as usize;
+            let limit = self.inner.lock().user_heapbottom + USER_HEAP_SIZE;
+            if growed_addr > limit {
+                panic!("heap overflow at {:#X}!",growed_addr);
+            }
+            self.inner.lock().user_heappoint = growed_addr;
+        }
+        else {
+            let shrinked_addr: usize = self.inner.lock().user_heappoint + grow_size as usize;
+            if shrinked_addr < self.inner.lock().user_heapbottom {
+                panic!("heap downflow at {:#X}!",shrinked_addr);
+            }
+            self.inner.lock().user_heappoint = shrinked_addr;
+        }
+        return self.inner.lock().user_heappoint;
     }
 }
 

@@ -7,8 +7,8 @@ use crate::config::{
     board::{MEMORY_END, MMIO},
     mm::{
         KERNEL_ADDR_OFFSET, KERNEL_PGNUM_OFFSET, PAGE_SIZE, TRAMPOLINE, USER_SPACE_SIZE,
-        USER_STACK_SIZE, USER_TRAP_CONTEXT,
-    },
+        USER_STACK_SIZE, USER_TRAP_CONTEXT,USER_HEAP_SIZE
+    }, 
 };
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 use core::arch::asm;
@@ -215,7 +215,7 @@ impl MemorySet {
     }
     /// Include sections in elf and trampoline and TrapContext and user stack,
     /// also returns user_sp and entry point.
-    pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize) {
+    pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize,usize) {
         let mut memory_set = Self::new_from_kernel();
         // debug!("from_elf new stap={:#x}", memory_set.page_table.token());
         // map program headers of elf, with U flag
@@ -255,16 +255,29 @@ impl MemorySet {
                 );
             }
         }
-        // map user stack with U flags
+        //map user heap
         let max_end_va: VirtAddr = max_end_vpn.into();
-        let mut user_stack_bottom: usize = max_end_va.into();
-        // guard page
-        user_stack_bottom += PAGE_SIZE;
-        let user_stack_top = user_stack_bottom + USER_STACK_SIZE;
+        let mut user_heap_bottom: usize = max_end_va.into();
+        //guard page
+        user_heap_bottom += PAGE_SIZE;
+        let user_heap_top: usize = user_heap_bottom + USER_HEAP_SIZE;
+        memory_set.push(
+            MapArea::new(
+                user_heap_bottom.into(),
+                user_heap_top.into(),
+                MapType::Framed,
+                MapPermission::R | MapPermission::W | MapPermission::U,
+                MapAreaType::Brk,
+            ), None
+        );
+
+        // map user stack with U flags
+        let user_stack_top = USER_TRAP_CONTEXT-PAGE_SIZE;
+        let user_stack_bottom=user_stack_top-USER_STACK_SIZE;
         memory_set.push(
             MapArea::new(
                 user_stack_bottom.into(),
-                (user_stack_top + 10).into(),
+                (user_stack_top+10).into(),//这个+10迟早删
                 MapType::Framed,
                 MapPermission::R | MapPermission::W | MapPermission::U,
                 MapAreaType::Stack,
@@ -286,6 +299,7 @@ impl MemorySet {
         (
             memory_set,
             user_stack_top,
+            user_heap_bottom,
             elf.header.pt2.entry_point() as usize,
         )
     }
