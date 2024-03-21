@@ -20,12 +20,12 @@ impl PidAllocator {
         }
     }
     ///Allocate a pid
-    pub fn alloc(&mut self) -> PidHandle {
+    pub fn alloc(&mut self) -> TidHandle {
         if let Some(pid) = self.recycled.pop() {
-            PidHandle(pid)
+            TidHandle(pid)
         } else {
             self.current += 1;
-            PidHandle(self.current - 1)
+            TidHandle(self.current - 1)
         }
     }
     ///Recycle a pid
@@ -41,19 +41,19 @@ impl PidAllocator {
 }
 
 lazy_static! {
-    pub static ref PID_ALLOCATOR: Mutex<PidAllocator> = Mutex::new(PidAllocator::new());
+    pub static ref TID_ALLOCATOR: Mutex<PidAllocator> = Mutex::new(PidAllocator::new());
 }
-///Bind pid lifetime to `PidHandle`
-pub struct PidHandle(pub usize);
+///Bind pid lifetime to `TidHandle`
+pub struct TidHandle(pub usize);
 
-impl Drop for PidHandle {
+impl Drop for TidHandle {
     fn drop(&mut self) {
-        PID_ALLOCATOR.lock().dealloc(self.0);
+        TID_ALLOCATOR.lock().dealloc(self.0);
     }
 }
 ///Allocate a pid from PID_ALLOCATOR
-pub fn pid_alloc() -> PidHandle {
-    PID_ALLOCATOR.lock().alloc()
+pub fn tid_alloc() -> TidHandle {
+    TID_ALLOCATOR.lock().alloc()
 }
 
 /// Return (bottom, top) of a kernel stack in kernel space.
@@ -69,14 +69,14 @@ pub struct KernelStack {
 
 impl KernelStack {
     ///Create a kernelstack from pid
-    pub fn new(pid_handle: &PidHandle) -> Self {
-        let pid = pid_handle.0;
-        let (kernel_stack_bottom, kernel_stack_top) = kernel_stack_position(pid);
+    pub fn new(tid_handle: &TidHandle) -> Self {
+        let tid = tid_handle.0;
+        let (kernel_stack_bottom, kernel_stack_top) = kernel_stack_position(tid);
         debug!(
             "kernel stack pos [{:#x},{:#x})",
             kernel_stack_bottom, kernel_stack_top
         );
-        KernelStack { pid: pid_handle.0 }
+        KernelStack { pid: tid_handle.0 }
     }
     #[allow(unused)]
     ///Push a value on top of kernelstack

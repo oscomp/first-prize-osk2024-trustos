@@ -1,7 +1,11 @@
 //!Implementation of [`TaskControlBlock`]
-use super::{pid_alloc, KernelStack, PidHandle, TaskContext};
+use super::{tid_alloc, KernelStack, TaskContext, TidHandle};
 use crate::{
-    config::mm::USER_TRAP_CONTEXT, fs::{File, Stdin, Stdout}, mm::{MapAreaType, MapPermission, MemorySet, PhysPageNum, VirtAddr}, timer::TimeData, trap::{trap_handler, TrapContext}
+    config::mm::USER_TRAP_CONTEXT,
+    fs::{File, Stdin, Stdout},
+    mm::{MapAreaType, MapPermission, MemorySet, PhysPageNum, VirtAddr},
+    timer::TimeData,
+    trap::{trap_handler, TrapContext},
 };
 use alloc::{
     sync::{Arc, Weak},
@@ -12,11 +16,11 @@ use core::cell::RefMut;
 use log::{debug, info};
 use spin::{Mutex, MutexGuard};
 
-
-
 pub struct TaskControlBlock {
     // immutable
-    pub pid: PidHandle,
+    tid: TidHandle,
+    pub ppid: usize,
+    pub pid: usize,
     pub kernel_stack: KernelStack,
     // mutable
     inner: Mutex<TaskControlBlockInner>,
@@ -63,6 +67,7 @@ impl TaskControlBlock {
     pub fn inner_lock(&self) -> MutexGuard<TaskControlBlockInner> {
         self.inner.lock()
     }
+    /// 只有initproc会调用
     pub fn new(elf_data: &[u8]) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (mut memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
@@ -72,8 +77,8 @@ impl TaskControlBlock {
             .unwrap()
             .ppn();
         // alloc a pid and a kernel stack in kernel space
-        let pid_handle = pid_alloc();
-        let kernel_stack = KernelStack::new(&pid_handle);
+        let tid_handle = tid_alloc();
+        let kernel_stack = KernelStack::new(&tid_handle);
         let (kernel_stack_bottom, kernel_stack_top) = kernel_stack.pos();
         memory_set.insert_framed_area(
             kernel_stack_bottom.into(),
@@ -82,7 +87,9 @@ impl TaskControlBlock {
             MapAreaType::Stack,
         );
         let task_control_block = Self {
-            pid: pid_handle,
+            tid: tid_handle,
+            pid: 0,
+            ppid: 0,
             kernel_stack,
             inner: Mutex::new(TaskControlBlockInner {
                 trap_cx_ppn,
@@ -113,7 +120,7 @@ impl TaskControlBlock {
             kernel_stack_top,
             trap_handler as usize,
         );
-        debug!("create task {}", task_control_block.pid.0);
+        debug!("create task {}", task_control_block.tid.0);
         task_control_block
     }
     pub fn exec(&self, elf_data: &[u8]) {
@@ -148,7 +155,7 @@ impl TaskControlBlock {
             trap_handler as usize,
         );
         *inner.trap_cx() = trap_cx;
-        debug!("task.exec.pid={}", self.pid.0);
+        debug!("task.exec.pid={}", self.tid.0);
         // **** release current PCB
     }
     pub fn fork(self: &Arc<TaskControlBlock>) -> Arc<TaskControlBlock> {
@@ -161,8 +168,9 @@ impl TaskControlBlock {
             .unwrap()
             .ppn();
         // alloc a pid and a kernel stack in kernel space
-        let pid_handle = pid_alloc();
-        let kernel_stack = KernelStack::new(&pid_handle);
+        let tid_handle = tid_alloc();
+        let pid = tid_handle.0;
+        let kernel_stack = KernelStack::new(&tid_handle);
         let (kernel_stack_bottom, kernel_stack_top) = kernel_stack.pos();
         memory_set.insert_framed_area(
             kernel_stack_bottom.into(),
@@ -180,7 +188,9 @@ impl TaskControlBlock {
             }
         }
         let task_control_block = Arc::new(TaskControlBlock {
-            pid: pid_handle,
+            tid: tid_handle,
+            pid,
+            ppid: self.pid,
             kernel_stack,
             inner: Mutex::new(TaskControlBlockInner {
                 trap_cx_ppn,
@@ -209,7 +219,7 @@ impl TaskControlBlock {
         // ---- release parent PCB
     }
     pub fn getpid(&self) -> usize {
-        self.pid.0
+        self.pid
     }
 }
 
