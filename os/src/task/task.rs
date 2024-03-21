@@ -1,7 +1,7 @@
 //!Implementation of [`TaskControlBlock`]
 use super::{pid_alloc, KernelStack, PidHandle, TaskContext};
 use crate::{
-    config::mm::{USER_TRAP_CONTEXT,USER_HEAP_SIZE}, fs::{File, Stdin, Stdout}, mm::{MapAreaType, MapPermission, MemorySet, PhysPageNum, VirtAddr}, timer::TimeData, trap::{trap_handler, TrapContext}
+    config::mm::{USER_HEAP_SIZE, USER_TRAP_CONTEXT}, fs::{File, Stdin, Stdout}, mm::{translated_refmut, MapAreaType, MapPermission, MemorySet, PhysPageNum, VirtAddr}, timer::TimeData, trap::{trap_handler, TrapContext}
 };
 use alloc::{
     sync::{Arc, Weak},
@@ -120,13 +120,34 @@ impl TaskControlBlock {
         debug!("create task {}", task_control_block.pid.0);
         task_control_block
     }
-    pub fn exec(&self, elf_data: &[u8]) {
+    pub fn exec(&self, elf_data: &[u8], argv: &Vec<alloc::string::String>) {
         // memory_set with elf program headers/trampoline/trap context/user stack
-        let (mut memory_set, user_sp,user_hp, entry_point) = MemorySet::from_elf(elf_data);
+        let (mut memory_set,mut user_sp,user_hp, entry_point) = MemorySet::from_elf(elf_data);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
             .unwrap()
             .ppn();
+
+        //放入argv参数数组入用户栈
+        user_sp -= (argv.len() + 1) * core::mem::size_of::<usize>();    //这块空间供字符串指针使用
+        let mut argv_ptr_addr = user_sp;
+        for i in 0..argv.len() {
+            user_sp -= argv[i].len()+1;     //这块空间供字符串（含结束标志）使用
+            //存放字符串地址
+            *translated_refmut(memory_set.token(), argv_ptr_addr as *mut usize) = user_sp;
+            argv_ptr_addr += core::mem::size_of::<usize>();
+            //存放字符串
+            let mut string_addr = user_sp;
+            for j in argv[i].as_bytes() {
+                *translated_refmut(memory_set.token(), string_addr as *mut u8) = *j;
+                string_addr += 1;
+            }
+            *translated_refmut(memory_set.token(), string_addr as *mut u8) = 0;
+        }
+        *translated_refmut(memory_set.token(), argv_ptr_addr as *mut usize) = 0;    //存放字符串指针空间的结束标志
+
+        user_sp -= user_sp % core::mem::size_of::<usize>();     //以8字节对齐
+
         // **** access current TCB exclusively
         let mut inner = self.inner_lock();
 
