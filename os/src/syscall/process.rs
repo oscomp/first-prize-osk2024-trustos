@@ -70,7 +70,7 @@ pub fn sys_clone(
     chilren_tid_ptr: usize,
 ) -> isize {
     let flags = CloneFlags::from_bits(flags as u32).unwrap();
-    info!("[sys_clone] flags {:?}", flags);
+    debug!("[sys_clone] flags {:?}", flags);
 
     let stack = match stack_ptr {
         0 => None,
@@ -129,6 +129,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
             .iter()
             .any(|p| pid == -1 || pid as usize == p.pid())
         {
+            info!("[sys_wait4] no child process");
             return -1;
             // ---- release current PCB
         }
@@ -143,7 +144,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
             assert_eq!(
                 Arc::strong_count(&child),
                 1,
-                "process{} cant recycled",
+                "process{} can't recycled",
                 child.pid()
             );
 
@@ -157,6 +158,10 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
             let exit_code = childinner.exit_code;
             // ++++ release child PCB
             if wstatus as usize != 0x0 {
+                // info!(
+                //     "[sys_wait4] child {} exit with code {}, wstatus= {:#x}",
+                //     found_pid, exit_code, wstatus as usize
+                // );
                 *translated_refmut(inner.memory_set.token(), wstatus) = exit_code;
             }
             return found_pid as isize;

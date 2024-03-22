@@ -67,7 +67,8 @@ pub fn run_tasks() {
             if let Some(next_task) = fetch_task() {
                 // info!(
                 //     "drop task {},fetch task {}",
-                //     cur_task.pid.0, next_task.pid.0
+                //     cur_task.pid(),
+                //     next_task.pid()
                 // );
                 let mut next_task_inner = next_task.inner_lock();
                 let next_task_cx_ptr = &next_task_inner.task_cx as *const TaskContext;
@@ -92,7 +93,7 @@ pub fn run_tasks() {
         } else {
             // 第一次调度，抢占
             if let Some(task) = fetch_task() {
-                // info!("first fetch task {}", task.pid.0);
+                // info!("first fetch task {}", task.pid());
                 let mut task_inner = task.inner_lock();
                 let next_task_cx_ptr = &task_inner.task_cx as *const TaskContext;
                 task_inner.task_status = TaskStatus::Running;
