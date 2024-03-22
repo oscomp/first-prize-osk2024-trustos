@@ -278,7 +278,7 @@ impl MemorySet {
         memory_set.push(
             MapArea::new(
                 user_stack_bottom.into(),
-                (user_stack_top + 10).into(), //这个+10迟早删
+                user_stack_top.into(),
                 MapType::Framed,
                 MapPermission::R | MapPermission::W | MapPermission::U,
                 MapAreaType::Stack,
