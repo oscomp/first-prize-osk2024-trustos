@@ -18,28 +18,19 @@ impl log::Log for SimpleLogger {
         true
     }
     fn log(&self, record: &Record) {
-        // let (pid, tid) = if let Some(task) = current_task() {
-        //     (task.get_pid() as isize, task.get_tid() as isize)
-        // } else {
-        //     (-1, -1)
-        // };
-
-        // if self.enabled(record.metadata()) {
-        //     println!(
-        //         "\x1b[{}m[{}] [PID{}] [TID{}] {}\x1b[0m",
-        //         level_color(record.level()),
-        //         record.level(),
-        //         pid,
-        //         tid,
-        //         record.args()
-        //     );
-        // }
+        let (pid, tid) = if let Some(task) = current_task() {
+            (task.pid() as isize, task.tid() as isize)
+        } else {
+            (-1, -1)
+        };
         if self.enabled(record.metadata()) {
             println!(
-                "\x1b[{}m[{}] [HART{}] {}\x1b[0m",
+                "\x1b[{}m[{}] [HART{}] [PID {}] [TID {}] {}\x1b[0m",
                 level_color(record.level()),
                 record.level(),
                 hart_id(),
+                pid,
+                tid,
                 record.args()
             );
         }

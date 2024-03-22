@@ -34,16 +34,20 @@ const SYSCALL_GETTIMEOFDAY: usize = 169;
 const SYSCALL_GETPID: usize = 172;
 const SYSCALL_GETPPID: usize = 173;
 const SYSCALL_GETTID: usize = 178;
-const SYSCALL_CLONE: usize = 220;
 const SYSCALL_BRK: usize = 214;
+const SYSCALL_MUNMAP: usize = 215;
+const SYSCALL_CLONE: usize = 220;
+const SYSCALL_MMAP: usize = 222;
 const SYSCALL_EXECVE: usize = 221;
 const SYSCALL_WAIT4: usize = 260;
 
 mod fs;
+mod memory;
 mod options;
 mod process;
 
 use fs::*;
+use memory::*;
 use options::*;
 use process::*;
 
@@ -108,6 +112,15 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
             args[1] as *const usize,
             args[2] as *const u8,
         ),
+        SYSCALL_MMAP => sys_mmap(
+            args[0] as usize,
+            args[1] as usize,
+            args[2] as u32,
+            args[3] as u32,
+            args[4] as usize,
+            args[5] as usize,
+        ),
+        SYSCALL_MUNMAP => sys_munmap(args[0] as usize, args[1] as usize),
         SYSCALL_WAIT4 => sys_wait4(args[0] as isize, args[1] as *mut i32, args[2] as i32),
         _ => panic!("Unsupported syscall_id: {}", syscall_id),
     }

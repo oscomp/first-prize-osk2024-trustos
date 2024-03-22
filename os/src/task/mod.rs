@@ -24,11 +24,13 @@ mod task;
 mod tid;
 
 use crate::fs::{open_file, OpenFlags};
+use crate::mm::activate_kernel_space;
 use crate::sbi::shutdown;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 pub use context::TaskContext;
 use lazy_static::*;
+use log::info;
 pub use manager::{add_task, fetch_task, lock_task_manager, TaskManager};
 use switch::__switch;
 use task::{TaskControlBlock, TaskStatus};
@@ -63,7 +65,11 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     let mut initproc_inner = INITPROC.inner_lock();
     // take from Processor
     let task = take_current_task().unwrap();
-
+    // info!(
+    //     "[sys_exit] process {} ,thread {} exit!",
+    //     task.pid(),
+    //     task.tid()
+    // );
     let pid = task.pid();
     if pid == IDLE_PID {
         println!(
