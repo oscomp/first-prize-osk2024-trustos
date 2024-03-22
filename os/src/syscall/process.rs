@@ -100,14 +100,27 @@ pub fn sys_clone(
     }
 }
 
-pub fn sys_exec(path: *const u8) -> isize {
+pub fn sys_execve(path: *const u8,mut argv: *const usize, _envp: *const u8) -> isize {
     let token = current_user_token();
     let path = translated_str(token, path);
+
+    //处理argv参数
+    let mut argv_vec = alloc::vec::Vec::<alloc::string::String>::new();
+    loop{
+        if argv.is_null() { break; }
+        let argv_ptr = *translated_ref(token, argv);
+        if argv_ptr == 0 {
+            break;
+        }
+        argv_vec.push(translated_str(token, argv_ptr as *const u8));
+        unsafe{ argv=argv.add(1); }
+    }
+
     let task = current_task().unwrap();
     let cwd = task.inner_lock().current_path.clone();
     if let Some(app_inode) = open(&cwd, path.as_str(), OpenFlags::O_RDONLY) {
         let all_data = app_inode.read_all();
-        task.exec(all_data.as_slice());
+        task.exec(all_data.as_slice(),&argv_vec);
         task.inner_lock().memory_set.activate();
         debug!("sys_exec end");
         0
@@ -221,4 +234,13 @@ pub fn sys_uname(buf: *mut u8) -> isize {
         )
     });
     0
+}
+
+pub fn sys_brk(brk_addr: usize) -> isize{
+    let former_addr = current_task().unwrap().growproc(0);
+    if brk_addr==0 {
+        return former_addr as isize;
+    }
+    let grow_size: isize = (brk_addr - former_addr) as isize;
+    current_task().unwrap().growproc(grow_size) as isize
 }

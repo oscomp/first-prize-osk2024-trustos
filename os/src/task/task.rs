@@ -1,9 +1,9 @@
 //!Implementation of [`TaskControlBlock`]
 use super::{tid_alloc, KernelStack, TaskContext, TidHandle};
 use crate::{
-    config::mm::USER_TRAP_CONTEXT,
+    config::mm::{USER_HEAP_SIZE, USER_TRAP_CONTEXT},
     fs::{File, Stdin, Stdout},
-    mm::{MapAreaType, MapPermission, MemorySet, PhysPageNum, VirtAddr},
+    mm::{translated_refmut, MapAreaType, MapPermission, MemorySet, PhysPageNum, VirtAddr},
     timer::TimeData,
     trap::{trap_handler, TrapContext},
 };
@@ -38,6 +38,8 @@ pub struct TaskControlBlockInner {
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
     pub current_path: alloc::string::String,
     pub time_data: TimeData,
+    pub user_heappoint: usize,
+    pub user_heapbottom: usize,
 }
 
 impl TaskControlBlockInner {
@@ -79,7 +81,7 @@ impl TaskControlBlock {
     /// 只有initproc会调用
     pub fn new(elf_data: &[u8]) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack
-        let (mut memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+        let (mut memory_set, user_sp, user_heapbottom, entry_point) = MemorySet::from_elf(elf_data);
         debug!("entry point: {:x}", entry_point);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
@@ -119,6 +121,8 @@ impl TaskControlBlock {
                 ],
                 current_path: alloc::string::String::from("/"),
                 time_data: TimeData::new(),
+                user_heappoint: user_heapbottom,
+                user_heapbottom,
             }),
         };
         // prepare TrapContext in user space
@@ -132,13 +136,34 @@ impl TaskControlBlock {
         debug!("create task {}", task_control_block.tid.0);
         task_control_block
     }
-    pub fn exec(&self, elf_data: &[u8]) {
+    pub fn exec(&self, elf_data: &[u8], argv: &Vec<alloc::string::String>) {
         // memory_set with elf program headers/trampoline/trap context/user stack
-        let (mut memory_set, user_sp, entry_point) = MemorySet::from_elf(elf_data);
+        let (mut memory_set, mut user_sp, user_hp, entry_point) = MemorySet::from_elf(elf_data);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
             .unwrap()
             .ppn();
+
+        //放入argv参数数组入用户栈
+        user_sp -= (argv.len() + 1) * core::mem::size_of::<usize>(); //这块空间供字符串指针使用
+        let mut argv_ptr_addr = user_sp;
+        for i in 0..argv.len() {
+            user_sp -= argv[i].len() + 1; //这块空间供字符串（含结束标志）使用
+                                          //存放字符串地址
+            *translated_refmut(memory_set.token(), argv_ptr_addr as *mut usize) = user_sp;
+            argv_ptr_addr += core::mem::size_of::<usize>();
+            //存放字符串
+            let mut string_addr = user_sp;
+            for j in argv[i].as_bytes() {
+                *translated_refmut(memory_set.token(), string_addr as *mut u8) = *j;
+                string_addr += 1;
+            }
+            *translated_refmut(memory_set.token(), string_addr as *mut u8) = 0;
+        }
+        *translated_refmut(memory_set.token(), argv_ptr_addr as *mut usize) = 0; //存放字符串指针空间的结束标志
+
+        user_sp -= user_sp % core::mem::size_of::<usize>(); //以8字节对齐
+
         // **** access current TCB exclusively
         let mut inner = self.inner_lock();
 
@@ -165,6 +190,8 @@ impl TaskControlBlock {
         );
         *inner.trap_cx() = trap_cx;
         debug!("task.exec.tid={}", self.tid.0);
+        inner.user_heappoint = user_hp;
+        inner.user_heapbottom = user_hp;
         // **** release current PCB
     }
     ///
@@ -221,6 +248,8 @@ impl TaskControlBlock {
                 fd_table: new_fd_table,
                 current_path: parent_inner.current_path.clone(),
                 time_data: TimeData::new(),
+                user_heappoint: parent_inner.user_heappoint,
+                user_heapbottom: parent_inner.user_heapbottom,
             }),
         });
         // add child
@@ -242,6 +271,24 @@ impl TaskControlBlock {
         stack: Option<usize>,
     ) -> Arc<TaskControlBlock> {
         todo!()
+    }
+
+    pub fn growproc(&self, grow_size: isize) -> usize {
+        if grow_size > 0 {
+            let growed_addr: usize = self.inner.lock().user_heappoint + grow_size as usize;
+            let limit = self.inner.lock().user_heapbottom + USER_HEAP_SIZE;
+            if growed_addr > limit {
+                panic!("heap overflow at {:#X}!", growed_addr);
+            }
+            self.inner.lock().user_heappoint = growed_addr;
+        } else {
+            let shrinked_addr: usize = self.inner.lock().user_heappoint + grow_size as usize;
+            if shrinked_addr < self.inner.lock().user_heapbottom {
+                panic!("heap downflow at {:#X}!", shrinked_addr);
+            }
+            self.inner.lock().user_heappoint = shrinked_addr;
+        }
+        return self.inner.lock().user_heappoint;
     }
 }
 

@@ -25,7 +25,7 @@ const SYSCALL_GETTIMEOFDAY: usize = 169;
 const SYSCALL_GETPID: usize = 172;
 const SYSCALL_GETPPID: usize = 173;
 const SYSCALL_CLONE: usize = 220;
-const SYSCALL_EXEC: usize = 221;
+const SYSCALL_EXECVE: usize = 221;
 const SYSCALL_WAIT4: usize = 260;
 
 fn syscall(id: usize, args: [isize; 6]) -> isize {
@@ -117,7 +117,7 @@ pub fn sys_fork() -> isize {
 }
 
 pub fn sys_exec(path: &str) -> isize {
-    syscall(SYSCALL_EXEC, [path.as_ptr() as isize, 0, 0, 0, 0, 0])
+    syscall(SYSCALL_EXECVE, [path.as_ptr() as isize, 0, 0, 0, 0, 0])
 }
 
 pub fn sys_waitpid(pid: isize, exit_code: *mut i32, options: i32) -> isize {
