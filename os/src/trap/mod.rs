@@ -16,9 +16,11 @@ mod context;
 use crate::config::mm::TRAMPOLINE;
 use crate::sync::interrupt_on;
 use crate::syscall::syscall;
-use crate::task::{current_task,current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next};
+use crate::task::{
+    current_task, current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next,
+};
 use crate::timer::set_next_trigger;
-use crate::utils::hart_id;
+use crate::utils::{backtrace, hart_id};
 use core::arch::{asm, global_asm};
 use log::{debug, info};
 use riscv::register::{
@@ -59,7 +61,11 @@ pub fn enable_timer_interrupt() {
 /// handle an interrupt, exception, or system call from user space
 pub fn trap_handler() {
     //记录用户空间花费CPU时间，同时准备内核空间花费CPU时间
-    current_task().unwrap().inner_lock().time_data.update_utime();
+    current_task()
+        .unwrap()
+        .inner_lock()
+        .time_data
+        .update_utime();
 
     let hartid = hart_id();
     // debug!("trap handler");
@@ -127,7 +133,11 @@ pub fn trap_handler() {
     }
 
     //记录内核空间花费CPU时间，同时准备用户空间花费CPU时间
-    current_task().unwrap().inner_lock().time_data.update_stime();
+    current_task()
+        .unwrap()
+        .inner_lock()
+        .time_data
+        .update_stime();
 
     // debug!("in trap handler,return to user space");
     // 手动内联trap_return
@@ -165,6 +175,7 @@ pub fn trap_return_for_new_task_once() {
 /// Todo: Chapter 9: I/O device
 pub fn trap_from_kernel() -> ! {
     use riscv::register::sepc;
+    backtrace();
     panic!(
         "stval = {:#x}, sepc = {:#x}\n
         a trap {:?} from kernel!",
