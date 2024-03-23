@@ -13,6 +13,6 @@ initproc_end:
     .global shell_end
     .align 12
 shell_start:
-    .incbin "../user/target/riscv64gc-unknown-none-elf/release/user_shell"
+    .incbin "../user/target/riscv64gc-unknown-none-elf/release/onlinetests"
 shell_end:
     .align 12

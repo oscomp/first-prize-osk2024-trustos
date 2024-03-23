@@ -28,6 +28,8 @@ const SYSCALL_CLONE: usize = 220;
 const SYSCALL_EXECVE: usize = 221;
 const SYSCALL_WAIT4: usize = 260;
 
+const SYSCALL_SHUTDOWN:usize=1000;
+
 fn syscall(id: usize, args: [isize; 6]) -> isize {
     let mut ret: isize;
     unsafe {
@@ -98,6 +100,10 @@ pub fn sys_exit(exit_code: i32) -> ! {
 
 pub fn sys_yield() -> isize {
     syscall(SYSCALL_SCHED_YIELD, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn sys_shutdown() -> isize {
+    syscall(SYSCALL_SHUTDOWN, [0, 0, 0, 0, 0, 0])
 }
 
 pub fn sys_gettimeofday(ts: &mut [u8]) -> isize {

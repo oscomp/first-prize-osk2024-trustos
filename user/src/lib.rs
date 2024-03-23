@@ -72,6 +72,10 @@ pub fn exit(exit_code: i32) -> ! {
 pub fn yield_() -> isize {
     sys_yield()
 }
+pub fn shutdown() -> isize {
+    println!("shutdown!");
+    sys_shutdown()
+}
 /// 返回ms
 pub fn get_time() -> isize {
     let mut time_sepc: [usize; 2] = [0, 0];

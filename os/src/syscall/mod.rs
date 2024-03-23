@@ -41,6 +41,9 @@ const SYSCALL_MMAP: usize = 222;
 const SYSCALL_EXECVE: usize = 221;
 const SYSCALL_WAIT4: usize = 260;
 
+//非标准系统调用
+const SYSCALL_SHUTDOWN: usize = 1000;
+
 mod fs;
 mod memory;
 mod options;
@@ -52,6 +55,7 @@ use options::*;
 use process::*;
 
 use crate::console::print;
+use crate::sbi::shutdown;
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
     match syscall_id {
@@ -122,6 +126,7 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
         ),
         SYSCALL_MUNMAP => sys_munmap(args[0] as usize, args[1] as usize),
         SYSCALL_WAIT4 => sys_wait4(args[0] as isize, args[1] as *mut i32, args[2] as i32),
+        SYSCALL_SHUTDOWN=>shutdown(false),
         _ => panic!("Unsupported syscall_id: {}", syscall_id),
     }
 }

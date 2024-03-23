@@ -8,13 +8,12 @@ pwd
 sudo mkdir ../simple-fat32/fs 
 sudo mount ../simple-fat32/fat32.img ../simple-fat32/fs 
 #sudo cp ../user/target/riscv64gc-unknown-none-elf/release/initproc ../simple-fat32/fs/ 
-#sudo cp ../user/target/riscv64gc-unknown-none-elf/release/user_shell ../simple-fat32/fs/ 
+sudo cp ../user/target/riscv64gc-unknown-none-elf/release/user_shell ../simple-fat32/fs/ 
 sudo mkdir ../simple-fat32/fs/rCoretests
 sudo rm ../user/target/riscv64gc-unknown-none-elf/release/*.*
 sudo cp ../user/target/riscv64gc-unknown-none-elf/release/* ../simple-fat32/fs/rCoretests/ 
 sudo rm ../simple-fat32/fs/rCoretests/usertests 
 sudo rm ../simple-fat32/fs/rCoretests/initproc 
-sudo rm ../simple-fat32/fs/rCoretests/user_shell 
 sudo cp ../user/target/riscv64gc-unknown-none-elf/release/usertests ../simple-fat32/fs
 sudo cp -r ../testsuits-for-oskernel/riscv-syscalls-testing/user/build/riscv64/* ../simple-fat32/fs/ 
 

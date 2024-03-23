@@ -53,13 +53,8 @@ pub fn flush_preload() {
         ) as &'static mut [u8]
     });
     initproc.write(UserBuffer::new(v));
-    // for ppn in crate::mm::PPNRange::new(
-    //     crate::mm::PhysAddr::from(sinitproc as usize).floor(),
-    //     crate::mm::PhysAddr::from(einitproc as usize).floor(),
-    // ) {
-    //     crate::mm::frame_dealloc(ppn);
-    // }
-    let shell = open_file("user_shell", OpenFlags::O_CREATE).unwrap();
+    
+    let onlinetests = open_file("onlinetests", OpenFlags::O_CREATE).unwrap();
     let mut v=Vec::new();
     v.push(unsafe {
         core::slice::from_raw_parts_mut(
@@ -67,12 +62,6 @@ pub fn flush_preload() {
             shell_end as usize - shell_start as usize,
         ) as &'static mut [u8]
     });
-    shell.write(UserBuffer::new(v));
-    // for ppn in crate::mm::PPNRange::new(
-    //     crate::mm::PhysAddr::from(sbash as usize).floor(),
-    //     crate::mm::PhysAddr::from(ebash as usize).floor(),
-    // ) {
-    //     crate::mm::frame_dealloc(ppn);
-    // }
+    onlinetests.write(UserBuffer::new(v));
 }
 
