@@ -90,7 +90,8 @@ QEMU_ARGS := -machine virt \
 
 run-inner: build copy_to_fs
 	@qemu-system-riscv64 $(QEMU_ARGS)
-
+ssrun: 
+	@qemu-system-riscv64 $(QEMU_ARGS)
 debug: build copy_to_fs
 	@tmux new-session -d \
 		"qemu-system-riscv64 $(QEMU_ARGS) -s -S" && \
@@ -104,4 +105,4 @@ gdbserver: build
 gdbclient:
 	@riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'
 
-.PHONY: build env kernel clean disasm disasm-vim run-inner copy-to-fs procinit gdbserver gdbclient srun
+.PHONY: build env kernel clean disasm disasm-vim run-inner copy-to-fs procinit gdbserver gdbclient srun ssrun
