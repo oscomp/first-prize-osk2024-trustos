@@ -10,7 +10,7 @@ run:
 		-nographic \
 		-smp 2 \
 		-bios sbi-qemu \
-		-drive file=fat32.img,if=none,format=raw,id=x0  \
+		-drive file=disk.img,if=none,format=raw,id=x0  \
 		-device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
 		-device virtio-net-device,netdev=net \
 		-netdev user,id=net
