@@ -1,8 +1,8 @@
 //! Implementation of [`MapArea`] and [`MemorySet`].
 use super::{
-    frame_alloc, FrameTracker, KernelAddr, MapArea, MapAreaType, MapPermission, MapType,
-    MmapPageFaultHandler, PTEFlags, PageFaultHandler, PageTable, PageTableEntry, PhysAddr,
-    PhysPageNum, StepByOne, VPNRange, VirtAddr, VirtPageNum,
+    frame_alloc, translated_byte_buffer, FrameTracker, KernelAddr, MapArea, MapAreaType,
+    MapPermission, MapType, MmapPageFaultHandler, PTEFlags, PageFaultHandler, PageTable,
+    PageTableEntry, PhysAddr, PhysPageNum, StepByOne, UserBuffer, VPNRange, VirtAddr, VirtPageNum,
 };
 use crate::{
     config::{
@@ -52,6 +52,9 @@ pub struct MemorySet {
 }
 
 impl MemorySet {
+    pub fn debug_trans(&self, addr: usize) -> bool {
+        self.page_table.translate_va(VirtAddr::from(addr)).is_some()
+    }
     ///Create an empty `MemorySet`
     pub fn new_bare() -> Self {
         Self {
@@ -144,6 +147,7 @@ impl MemorySet {
                 flags,
                 Arc::new(MmapPageFaultHandler {}),
             ));
+            addr
         } else {
             // 自行选择地址,计算已经使用的MMap地址
             let map_size: usize = self
@@ -167,11 +171,66 @@ impl MemorySet {
                 flags,
                 Arc::new(MmapPageFaultHandler {}),
             ));
+            addr
         }
-        addr
+        // addr
+    }
+    /// munmap
+    pub fn munmap(&mut self, addr: usize, len: usize) {
+        let start_vpn = VirtPageNum::from(VirtAddr::from(addr));
+        let end_vpn = VirtPageNum::from(VirtAddr::from(addr + len));
+        info!(
+            "munmap addr={:#x},len={},start_vpn: {}, end_vpn: {}",
+            addr, len, start_vpn.0, end_vpn.0
+        );
+        let area = self
+            .areas
+            .iter_mut()
+            .enumerate()
+            .filter(|(_, area)| area.area_type == MapAreaType::Mmap)
+            .find(|(idx, area)| {
+                let (start, end) = area.vpn_range.range();
+                start == start_vpn
+            });
+        if area.is_some() {
+            let (idx, area_inner) = area.unwrap();
+            // 检查是否需要写回
+            if area_inner.mmap_flags.contains(MmapFlags::MAP_SHARED)
+                && area_inner.map_perm.contains(MapPermission::W)
+            {
+                // info!("write back?");
+                let mapped_len: usize = VPNRange::new(start_vpn, end_vpn)
+                    .into_iter()
+                    .filter(|vpn| area_inner.data_frames.contains_key(&vpn))
+                    .count()
+                    * PAGE_SIZE;
+                let file = area_inner.file.clone().unwrap();
+                file.write(UserBuffer {
+                    buffers: translated_byte_buffer(
+                        self.page_table.token(),
+                        addr as *const u8,
+                        mapped_len,
+                    ),
+                });
+            }
+            // info!("unmapping");
+            // 取消映射
+            for vpn in VPNRange::new(start_vpn, end_vpn) {
+                area_inner.unmap_one(&mut self.page_table, vpn);
+            }
+            let area_end_vpn = area_inner.vpn_range.end();
+            // 是否回收
+            if area_end_vpn == end_vpn {
+                info!("recycle mmap area");
+                self.areas.remove(idx);
+            } else {
+                area_inner.vpn_range = VPNRange::new(end_vpn, area_end_vpn);
+            }
+        }
+        // info!("munmap end");
     }
     pub fn mmap_page_fault(&mut self, vpn: VirtPageNum) -> bool {
-        info!("mmap page fault");
+        // info!("mmap page fault,vpn={}", vpn.0);
         let area = self
             .areas
             .iter_mut()
@@ -180,6 +239,7 @@ impl MemorySet {
                 let (start, end) = area.vpn_range.range();
                 start <= vpn && vpn < end
             });
+
         if area.is_some() {
             let area_inner = area.unwrap();
             let handler = area_inner.page_fault_handler.as_ref().unwrap().clone();
@@ -202,6 +262,11 @@ impl MemorySet {
     }
     /// 不映射MapArea里的虚拟页面
     fn push_lazily(&mut self, map_area: MapArea) {
+        info!(
+            "mmap vpn from {} to {}",
+            map_area.vpn_range.start().0,
+            map_area.vpn_range.end().0
+        );
         self.areas.push(map_area);
     }
     /// Without kernel stacks.

@@ -83,7 +83,12 @@ impl Hal for VirtioHal {
     }
 
     fn virt_to_phys(vaddr: usize) -> usize {
-        PageTable::from_token(current_task().map_or(kernel_token(), |_| current_user_token()))
+        let token = if current_user_token().is_some() {
+            current_user_token().unwrap()
+        } else {
+            kernel_token()
+        };
+        PageTable::from_token(token)
             .translate_va(VirtAddr::from(vaddr))
             .unwrap()
             .0

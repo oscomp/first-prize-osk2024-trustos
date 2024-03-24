@@ -5,6 +5,7 @@ use _core::str::FromStr;
 use alloc::{string::String, sync::Arc, vec::Vec};
 use bitflags::*;
 use lazy_static::*;
+use log::info;
 use simple_fat32::{create_root_vfile, FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
 use spin::Mutex;
 
@@ -233,6 +234,7 @@ impl File for OSInode {
             inner.offset += write_size;
             total_write_size += write_size;
         }
+        // info!("write file end\n");
         total_write_size
     }
 

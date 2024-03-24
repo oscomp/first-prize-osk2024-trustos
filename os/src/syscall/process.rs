@@ -24,7 +24,7 @@ pub fn sys_sched_yield() -> isize {
 }
 
 pub fn sys_gettimeofday(ts: *const u8) -> isize {
-    let token = current_user_token();
+    let token = current_user_token().unwrap();
     let mut ts = UserBuffer::new(translated_byte_buffer(
         token,
         ts,
@@ -36,7 +36,7 @@ pub fn sys_gettimeofday(ts: *const u8) -> isize {
 }
 
 pub fn sys_times(tms: *const u8) -> isize {
-    let token = current_user_token();
+    let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     let mut tms = UserBuffer::new(translated_byte_buffer(
@@ -101,7 +101,7 @@ pub fn sys_clone(
 }
 
 pub fn sys_execve(path: *const u8, mut argv: *const usize, _envp: *const u8) -> isize {
-    let token = current_user_token();
+    let token = current_user_token().unwrap();
     let path = translated_str(token, path);
 
     //处理argv参数
@@ -191,7 +191,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
 }
 
 pub fn sys_nanosleep(req: *const u8, _rem: *const u8) -> isize {
-    let token = current_user_token();
+    let token = current_user_token().unwrap();
     let req = translated_ref(token, req as *const Timespec);
 
     let begin = get_time_ms();
@@ -228,7 +228,7 @@ pub fn sys_uname(buf: *mut u8) -> isize {
         machine: str2u8("RISC-V64"),
         domainname: str2u8("TrustOS"),
     };
-    let token = current_user_token();
+    let token = current_user_token().unwrap();
     let mut buf_vec = translated_byte_buffer(token, buf, size_of::<Utsname>());
     let mut userbuf = UserBuffer::new(buf_vec);
     userbuf.write(unsafe {

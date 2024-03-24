@@ -12,8 +12,8 @@ use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 /// 逻辑段
 pub struct MapArea {
     pub vpn_range: VPNRange,
-    data_frames: BTreeMap<VirtPageNum, Arc<FrameTracker>>,
-    map_type: MapType,
+    pub data_frames: BTreeMap<VirtPageNum, Arc<FrameTracker>>,
+    pub map_type: MapType,
     pub map_perm: MapPermission,
     pub area_type: MapAreaType,
     pub file: Option<Arc<RFile>>,

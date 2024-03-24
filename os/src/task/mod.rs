@@ -41,7 +41,7 @@ pub use processor::{
 };
 pub use tid::{tid_alloc, KernelStack, TidAllocator, TidHandle};
 
-use self::processor::get_proc_by_hartid;
+use self::processor::{get_proc_by_hartid, take_current_token};
 /// Suspend the current 'Running' task and run the next task in task list.
 pub fn suspend_current_and_run_next() {
     // There must be
@@ -65,6 +65,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     let mut initproc_inner = INITPROC.inner_lock();
     // take from Processor
     let task = take_current_task().unwrap();
+    let _ = take_current_token();
     // info!(
     //     "[sys_exit] process {} ,thread {} exit!",
     //     task.pid(),

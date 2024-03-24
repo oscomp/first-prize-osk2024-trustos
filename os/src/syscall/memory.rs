@@ -37,11 +37,9 @@ pub fn sys_mmap(addr: usize, len: usize, prot: u32, flags: u32, fd: usize, off: 
         .mmap(addr, len, map_perm, flags, file, off) as isize
 }
 
-pub fn sys_munmap(addr: usize, length: usize) -> isize {
+pub fn sys_munmap(addr: usize, len: usize) -> isize {
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
-    task_inner
-        .memory_set
-        .remove_area_with_start_vpn(VirtAddr::from(addr).into());
+    task_inner.memory_set.munmap(addr, len);
     0
 }

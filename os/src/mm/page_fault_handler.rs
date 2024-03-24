@@ -16,26 +16,22 @@ pub trait PageFaultHandler: Send + Sync {
         page_table: &mut PageTable,
         vma: Option<&mut MapArea>,
     );
-    fn arc_clone(&self) -> Arc<dyn PageFaultHandler>;
 }
 
 #[derive(Clone)]
 pub struct MmapPageFaultHandler {}
 
 impl PageFaultHandler for MmapPageFaultHandler {
-    fn arc_clone(&self) -> Arc<dyn PageFaultHandler> {
-        Arc::new(self.clone())
-    }
     fn handle_page_fault(
         &self,
         va: VirtAddr,
         page_table: &mut PageTable,
         vma: Option<&mut MapArea>,
     ) {
-        info!("handler page fault");
+        // info!("handle page fault va={:#x}", va.0);
         // 映射页面,拷贝数据
         let vma = vma.unwrap();
-        vma.map_one(page_table, VirtAddr::from(va).floor());
+        vma.map_one(page_table, va.into());
         let file = vma.file.clone().unwrap();
         let old_offset = file.offset();
         let start_addr: VirtAddr = vma.vpn_range.start().into();

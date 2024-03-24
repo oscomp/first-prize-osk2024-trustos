@@ -96,13 +96,19 @@ pub fn trap_handler() {
             cx.x[10] = result as usize;
         }
         Trap::Exception(Exception::StorePageFault) | Trap::Exception(Exception::LoadPageFault) => {
-            info!("page fault");
+            info!(
+                "page fault num = {},addr={:#x}",
+                VirtAddr::from(stval).floor().0,
+                VirtAddr::from(stval).0
+            );
             // page fault
             let task = current_task().unwrap();
             let mut task_inner = task.inner_lock();
             let ok = task_inner
                 .memory_set
                 .mmap_page_fault(VirtAddr::from(stval).floor());
+            let exist = task_inner.memory_set.debug_trans(0x0000002fffff9000_usize);
+            assert!(exist);
             if (!ok) {
                 println!(
                 "[kernel] hart {} {:?} in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.",
@@ -113,8 +119,6 @@ pub fn trap_handler() {
             );
                 // page fault exit code
                 exit_current_and_run_next(-2);
-            } else {
-                info!("[kernel] page fault stval={:#x}", stval);
             }
         }
         Trap::Exception(Exception::StoreFault)
