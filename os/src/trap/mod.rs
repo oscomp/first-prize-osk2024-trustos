@@ -107,8 +107,6 @@ pub fn trap_handler() {
             let ok = task_inner
                 .memory_set
                 .mmap_page_fault(VirtAddr::from(stval).floor());
-            let exist = task_inner.memory_set.debug_trans(0x0000002fffff9000_usize);
-            assert!(exist);
             if (!ok) {
                 println!(
                 "[kernel] hart {} {:?} in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.",

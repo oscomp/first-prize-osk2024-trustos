@@ -52,9 +52,6 @@ pub struct MemorySet {
 }
 
 impl MemorySet {
-    pub fn debug_trans(&self, addr: usize) -> bool {
-        self.page_table.translate_va(VirtAddr::from(addr)).is_some()
-    }
     ///Create an empty `MemorySet`
     pub fn new_bare() -> Self {
         Self {
@@ -225,6 +222,9 @@ impl MemorySet {
                 self.areas.remove(idx);
             } else {
                 area_inner.vpn_range = VPNRange::new(end_vpn, area_end_vpn);
+            }
+            unsafe {
+                asm!("sfence.vma");
             }
         }
         // info!("munmap end");
