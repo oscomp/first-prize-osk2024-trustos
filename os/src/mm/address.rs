@@ -299,7 +299,7 @@ impl StepByOne for PhysPageNum {
 }
 
 #[derive(Copy, Clone)]
-/// a simple range structure for type T
+/// a simple [l,r) range structure for type T
 pub struct SimpleRange<T>
 where
     T: StepByOne + Copy + PartialEq + PartialOrd + Debug,
@@ -315,11 +315,14 @@ where
         assert!(start <= end, "start {:?} > end {:?}!", start, end);
         Self { l: start, r: end }
     }
-    pub fn get_start(&self) -> T {
+    pub fn start(&self) -> T {
         self.l
     }
-    pub fn get_end(&self) -> T {
+    pub fn end(&self) -> T {
         self.r
+    }
+    pub fn range(&self) -> (T, T) {
+        (self.l, self.r)
     }
 }
 impl<T> IntoIterator for SimpleRange<T>

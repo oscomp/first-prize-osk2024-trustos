@@ -1,4 +1,5 @@
 /// 存放系统调用的各种Option
+use crate::mm::MapPermission;
 bitflags! {
     pub struct WaitOption:u8{
         const DEFAULT = 0;
@@ -67,5 +68,54 @@ bitflags! {
 impl CloneFlags {
     pub fn is_fork(&self) -> bool {
         self.contains(CloneFlags::SIGCHLD)
+    }
+}
+
+// For Mmap
+bitflags! {
+    /// Mmap permissions
+    pub struct MmapProt: u32 {
+        /// None
+        const PROT_NONE = 0;
+        /// Readable
+        const PROT_READ = 1 << 0;
+        /// Writable
+        const PROT_WRITE = 1 << 1;
+        /// Executable
+        const PROT_EXEC = 1 << 2;
+    }
+}
+
+impl From<MmapProt> for MapPermission {
+    fn from(prot: MmapProt) -> Self {
+        let mut map_permission = MapPermission::U;
+        if prot.contains(MmapProt::PROT_READ) {
+            map_permission |= MapPermission::R;
+        }
+        if prot.contains(MmapProt::PROT_WRITE) {
+            map_permission |= MapPermission::W;
+        }
+        if prot.contains(MmapProt::PROT_EXEC) {
+            map_permission |= MapPermission::X;
+        }
+        map_permission
+    }
+}
+
+bitflags! {
+    /// Mmap flags
+    pub struct MmapFlags: u32 {
+        /// Shared
+        const MAP_SHARED = 1;
+        /// Private
+        const MAP_PRIVATE = 1 << 1;
+        /// Fixed
+        const MAP_FIXED = 1 << 4;
+        /// Anonymous
+        const MAP_ANONYMOUS = 1 << 5;
+        /// Compatity
+        const MAP_DENYWRITE = 1 << 11;
+        /// Stack
+        const MAP_STACK = 1 << 17;
     }
 }

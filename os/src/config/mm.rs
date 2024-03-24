@@ -14,10 +14,11 @@ pub const KERNEL_PGNUM_OFFSET: usize = KERNEL_ADDR_OFFSET >> PAGE_SIZE_BITS;
 
 pub const USER_SPACE_SIZE: usize = 0x30_0000_0000;
 
-// pub const USER_TRAMPOLINE: usize = USER_SPACE_SIZE - PAGE_SIZE;
-
+/// User Space layout
+/// TrapContext GuardPage UserStack GuardPage MMapTop MMapEnd GuardPage
 pub const USER_TRAP_CONTEXT: usize = USER_SPACE_SIZE - PAGE_SIZE;
-
+pub const MMAP_TOP: usize = USER_TRAP_CONTEXT - PAGE_SIZE - USER_STACK_SIZE - PAGE_SIZE;
+/// Kernel Stack Start
 pub const TRAMPOLINE: usize = usize::MAX - PAGE_SIZE + 1;
 // pub const TRAP_CONTEXT: usize = TRAMPOLINE - PAGE_SIZE;
 

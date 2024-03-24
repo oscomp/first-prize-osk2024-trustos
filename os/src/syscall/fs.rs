@@ -87,7 +87,7 @@ pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> isize
                 return -1;
             }
             if let Some(file) = &inner.fd_table[fd] {
-                let filename: String = file.get_name().clone();
+                let filename: String = file.name().clone();
                 drop(inner);
                 if let Some(inode) = open(filename.as_str(), path.as_str(), flags) {
                     let mut inner = task.inner_lock();
@@ -237,7 +237,7 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: usize) -> isize {
             }
 
             if let Some(file) = &inner.fd_table[dirfd] {
-                let filename: String = file.get_name().clone();
+                let filename: String = file.name().clone();
                 drop(inner);
                 if let Some(_) = open(filename.as_str(), path.as_str(), OpenFlags::O_DIRECTROY) {
                     0
@@ -281,7 +281,7 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> isize {
             if len < dirent_size + all_len {
                 return all_len as isize;
             }
-            let readsize: isize = file.get_dirent(&mut dirent);
+            let readsize: isize = file.dirent(&mut dirent);
             if readsize < 0 {
                 return all_len as isize;
             }
@@ -358,7 +358,7 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
             }
 
             if let Some(file) = &inner.fd_table[dirfd] {
-                let filename: String = file.get_name().clone();
+                let filename: String = file.name().clone();
                 drop(inner);
                 if let Some(inode) = open(filename.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
                     //断开链接(讨论flags)
@@ -432,7 +432,7 @@ pub fn sys_fstat(fd: usize, kst: *const u8) -> isize {
         let mut kstat = Kstat::new();
         let file = file.clone();
         drop(inner);
-        file.get_fstat(&mut kstat);
+        file.fstat(&mut kstat);
         kst.write(kstat.as_bytes());
         0
     } else {

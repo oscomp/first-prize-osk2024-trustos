@@ -48,7 +48,7 @@ mod process;
 
 use fs::*;
 use memory::*;
-use options::*;
+pub use options::*;
 use process::*;
 
 use crate::console::print;

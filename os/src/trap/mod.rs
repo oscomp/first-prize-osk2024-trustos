@@ -14,6 +14,7 @@
 mod context;
 
 use crate::config::mm::TRAMPOLINE;
+use crate::mm::VirtAddr;
 use crate::sync::interrupt_on;
 use crate::syscall::syscall;
 use crate::task::{
@@ -94,12 +95,32 @@ pub fn trap_handler() {
             cx = current_trap_cx();
             cx.x[10] = result as usize;
         }
+        Trap::Exception(Exception::StorePageFault) | Trap::Exception(Exception::LoadPageFault) => {
+            info!("page fault");
+            // page fault
+            let task = current_task().unwrap();
+            let mut task_inner = task.inner_lock();
+            let ok = task_inner
+                .memory_set
+                .mmap_page_fault(VirtAddr::from(stval).floor());
+            if (!ok) {
+                println!(
+                "[kernel] hart {} {:?} in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.",
+                hartid,
+                scause.cause(),
+                stval,
+                current_trap_cx().sepc,
+            );
+                // page fault exit code
+                exit_current_and_run_next(-2);
+            } else {
+                info!("[kernel] page fault stval={:#x}", stval);
+            }
+        }
         Trap::Exception(Exception::StoreFault)
-        | Trap::Exception(Exception::StorePageFault)
         | Trap::Exception(Exception::InstructionFault)
         | Trap::Exception(Exception::InstructionPageFault)
-        | Trap::Exception(Exception::LoadFault)
-        | Trap::Exception(Exception::LoadPageFault) => {
+        | Trap::Exception(Exception::LoadFault) => {
             println!(
                 "[kernel] hart {} {:?} in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.",
                 hartid,
@@ -171,8 +192,6 @@ pub fn trap_return_for_new_task_once() {
 }
 
 #[no_mangle]
-/// Unimplement: traps/interrupts/exceptions from kernel mode
-/// Todo: Chapter 9: I/O device
 pub fn trap_from_kernel() -> ! {
     use riscv::register::sepc;
     backtrace();
