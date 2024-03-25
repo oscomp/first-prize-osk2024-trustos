@@ -47,6 +47,13 @@ impl Processor {
     pub fn current(&self) -> Option<Arc<TaskControlBlock>> {
         self.current.as_ref().map(Arc::clone)
     }
+
+    pub fn token(&self) -> Option<usize> {
+        self.token.clone()
+    }
+    pub fn take_token(&mut self) -> Option<usize> {
+        self.token.take()
+    }
 }
 
 const EMPTY_PROCESSOR: Processor = Processor::new();
@@ -123,14 +130,11 @@ pub fn current_task() -> Option<Arc<TaskControlBlock>> {
 }
 ///Get token of the address space of current task
 pub fn current_user_token() -> Option<usize> {
-    get_proc_by_hartid(hart_id()).token
-    // let task = current_task().unwrap();
-    // let token = task.inner_lock().user_token();
-    // token
+    get_proc_by_hartid(hart_id()).token()
 }
 
 pub fn take_current_token() -> Option<usize> {
-    get_proc_by_hartid(hart_id()).token.take()
+    get_proc_by_hartid(hart_id()).take_token()
 }
 ///Get the mutable reference to trap context of current task
 pub fn current_trap_cx() -> &'static mut TrapContext {
