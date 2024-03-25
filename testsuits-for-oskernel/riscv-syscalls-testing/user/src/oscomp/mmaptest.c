@@ -199,32 +199,39 @@ void mmap_test(void) {
     err("open mmap1");
   if (write(fd1, "12345", 5) != 5)
     err("write mmap1");
+  close(fd1);
+  fd1 = open("mmap1", O_RDWR);
+
   char *p1 = mmap(0, PGSIZE, PROT_READ, MAP_PRIVATE, fd1, 0);
+
   if (p1 == MAP_FAILED)
     err("mmap mmap1");
-  close(fd1);
-  unlink("mmap1");
 
   int fd2;
   if ((fd2 = open("mmap2", O_RDWR | O_CREATE)) < 0)
     err("open mmap2");
   if (write(fd2, "67890", 5) != 5)
     err("write mmap2");
+  close(fd2);
+  fd2 = open("mmap2", O_RDWR);
   char *p2 = mmap(0, PGSIZE, PROT_READ, MAP_PRIVATE, fd2, 0);
   if (p2 == MAP_FAILED)
     err("mmap mmap2");
-  close(fd2);
-  unlink("mmap2");
 
-  if (strncmp(p1, "12345", 5) != 0)
+  if (strncmp(p1, "12345", 5) != 0) {
     err("mmap1 mismatch");
+  }
+  close(fd1);
+  unlink("mmap1");
   if (strncmp(p2, "67890", 5) != 0)
     err("mmap2 mismatch");
 
   munmap(p1, PGSIZE);
   if (strncmp(p2, "67890", 5) != 0)
     err("mmap2 mismatch (2)");
+  close(fd2);
   munmap(p2, PGSIZE);
+  unlink("mmap2");
 
   printf("test mmap two files: OK\n");
 
@@ -247,7 +254,6 @@ void fork_test(void) {
   makefile(f);
   if ((fd = open(f, O_RDONLY)) == -1)
     err("open");
-  unlink(f);
   char *p1 = mmap(0, PGSIZE * 2, PROT_READ, MAP_SHARED, fd, 0);
   if (p1 == MAP_FAILED)
     err("mmap (4)");
@@ -278,6 +284,7 @@ void fork_test(void) {
   // check that the parent's mappings are still there.
   _v1(p1);
   _v1(p2);
+  unlink(f);
 
   printf("fork_test OK\n");
 }

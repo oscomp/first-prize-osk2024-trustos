@@ -28,7 +28,6 @@ impl PageFaultHandler for MmapPageFaultHandler {
         page_table: &mut PageTable,
         vma: Option<&mut MapArea>,
     ) {
-        // info!("handle page fault va={:#x}", va.0);
         // 映射页面,拷贝数据
         let vma = vma.unwrap();
         vma.map_one(page_table, va.into());

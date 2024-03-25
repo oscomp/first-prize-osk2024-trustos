@@ -93,15 +93,6 @@ pub fn list_all(head: String, node: Arc<VFile>) {
 
 pub fn list_apps() {
     println!("/**** APPS ****");
-    // for app in ROOT_INODE.ls().unwrap() {
-    //     if app.1 & ATTR_DIRECTORY == 0 {
-    //         // 如果不是目录
-    //         println!("{}", app.0);
-    //     } else {
-    //         // 如果是目录
-    //         println!("{}/", app.0);
-    //     }
-    // }
     list_all("".into(), ROOT_INODE.clone());
     println!("**************/");
 }
@@ -234,7 +225,6 @@ impl File for OSInode {
             inner.offset += write_size;
             total_write_size += write_size;
         }
-        // info!("write file end\n");
         total_write_size
     }
 

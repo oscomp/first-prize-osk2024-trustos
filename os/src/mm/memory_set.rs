@@ -176,10 +176,6 @@ impl MemorySet {
     pub fn munmap(&mut self, addr: usize, len: usize) {
         let start_vpn = VirtPageNum::from(VirtAddr::from(addr));
         let end_vpn = VirtPageNum::from(VirtAddr::from(addr + len));
-        info!(
-            "munmap addr={:#x},len={},start_vpn: {}, end_vpn: {}",
-            addr, len, start_vpn.0, end_vpn.0
-        );
         let area = self
             .areas
             .iter_mut()
@@ -195,7 +191,6 @@ impl MemorySet {
             if area_inner.mmap_flags.contains(MmapFlags::MAP_SHARED)
                 && area_inner.map_perm.contains(MapPermission::W)
             {
-                // info!("write back?");
                 let mapped_len: usize = VPNRange::new(start_vpn, end_vpn)
                     .into_iter()
                     .filter(|vpn| area_inner.data_frames.contains_key(&vpn))
@@ -210,7 +205,6 @@ impl MemorySet {
                     ),
                 });
             }
-            // info!("unmapping");
             // 取消映射
             for vpn in VPNRange::new(start_vpn, end_vpn) {
                 area_inner.unmap_one(&mut self.page_table, vpn);
@@ -218,7 +212,6 @@ impl MemorySet {
             let area_end_vpn = area_inner.vpn_range.end();
             // 是否回收
             if area_end_vpn == end_vpn {
-                info!("recycle mmap area");
                 self.areas.remove(idx);
             } else {
                 area_inner.vpn_range = VPNRange::new(end_vpn, area_end_vpn);
@@ -227,10 +220,8 @@ impl MemorySet {
                 asm!("sfence.vma");
             }
         }
-        // info!("munmap end");
     }
     pub fn mmap_page_fault(&mut self, vpn: VirtPageNum) -> bool {
-        // info!("mmap page fault,vpn={}", vpn.0);
         let area = self
             .areas
             .iter_mut()
@@ -262,11 +253,6 @@ impl MemorySet {
     }
     /// 不映射MapArea里的虚拟页面
     fn push_lazily(&mut self, map_area: MapArea) {
-        info!(
-            "mmap vpn from {} to {}",
-            map_area.vpn_range.start().0,
-            map_area.vpn_range.end().0
-        );
         self.areas.push(map_area);
     }
     /// Without kernel stacks.
@@ -456,7 +442,13 @@ impl MemorySet {
                 continue;
             }
             let new_area = MapArea::from_another(area);
+            /// Mmap是lazy allocation
+            if area.area_type == MapAreaType::Mmap {
+                memory_set.push_lazily(new_area);
+                continue;
+            }
             memory_set.push(new_area, None);
+
             // copy data from another space
             for vpn in area.vpn_range {
                 let src_ppn = user_space.translate(vpn).unwrap().ppn();
@@ -483,6 +475,30 @@ impl MemorySet {
     }
     ///Remove all `MapArea`
     pub fn recycle_data_pages(&mut self) {
+        // 先检测是否需要munmap
+        for (idx, area) in self.areas.iter_mut().enumerate() {
+            if area.area_type == MapAreaType::Mmap {
+                if area.mmap_flags.contains(MmapFlags::MAP_SHARED)
+                    && area.map_perm.contains(MapPermission::W)
+                {
+                    let addr: VirtAddr = area.vpn_range.start().into();
+                    let mapped_len: usize = area
+                        .vpn_range
+                        .into_iter()
+                        .filter(|vpn| area.data_frames.contains_key(&vpn))
+                        .count()
+                        * PAGE_SIZE;
+                    let file = area.file.clone().unwrap();
+                    file.write(UserBuffer {
+                        buffers: translated_byte_buffer(
+                            self.page_table.token(),
+                            addr.0 as *const u8,
+                            mapped_len,
+                        ),
+                    });
+                }
+            }
+        }
         self.areas.clear();
     }
 }

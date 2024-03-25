@@ -96,11 +96,6 @@ pub fn trap_handler() {
             cx.x[10] = result as usize;
         }
         Trap::Exception(Exception::StorePageFault) | Trap::Exception(Exception::LoadPageFault) => {
-            info!(
-                "page fault num = {},addr={:#x}",
-                VirtAddr::from(stval).floor().0,
-                VirtAddr::from(stval).0
-            );
             // page fault
             let task = current_task().unwrap();
             let mut task_inner = task.inner_lock();
