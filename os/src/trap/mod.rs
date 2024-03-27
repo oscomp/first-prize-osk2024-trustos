@@ -97,11 +97,15 @@ pub fn trap_handler() {
         }
         Trap::Exception(Exception::StorePageFault) | Trap::Exception(Exception::LoadPageFault) => {
             // page fault
-            let task = current_task().unwrap();
-            let mut task_inner = task.inner_lock();
-            let ok = task_inner
-                .memory_set
-                .mmap_page_fault(VirtAddr::from(stval).floor());
+            let ok: bool;
+            {
+                let task = current_task().unwrap();
+                let mut task_inner = task.inner_lock();
+                ok = task_inner
+                    .memory_set
+                    .mmap_page_fault(VirtAddr::from(stval).floor());
+                // drop task inner and task to avoid deadlock and exit exception
+            }
             if (!ok) {
                 println!(
                 "[kernel] hart {} {:?} in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.",
