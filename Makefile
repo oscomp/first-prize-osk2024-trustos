@@ -1,6 +1,6 @@
 all:
 	# @cd ./os&&make build
-	# @cp os/target/riscv64gc-unknown-none-elf/release/os.bin ./kernel-qemu
+	@cp os/target/riscv64gc-unknown-none-elf/release/os.bin ./kernel-qemu
 	@pwd
 
 run:
