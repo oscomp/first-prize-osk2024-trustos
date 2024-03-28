@@ -30,7 +30,7 @@ use alloc::boxed::Box;
 use alloc::sync::Arc;
 pub use context::TaskContext;
 use lazy_static::*;
-use log::info;
+use log::{debug, info};
 pub use manager::{add_task, fetch_task, lock_task_manager, TaskManager};
 use switch::__switch;
 use task::{TaskControlBlock, TaskStatus};
@@ -66,11 +66,12 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     // take from Processor
     let task = take_current_task().unwrap();
     let _ = take_current_token();
-    // info!(
-    //     "[sys_exit] process {} ,thread {} exit!",
-    //     task.pid(),
-    //     task.tid()
-    // );
+    debug!(
+        "[sys_exit] process {} ,thread {} exit! exit_code={}",
+        task.pid(),
+        task.tid(),
+        exit_code
+    );
     let pid = task.pid();
     if pid == IDLE_PID {
         println!(

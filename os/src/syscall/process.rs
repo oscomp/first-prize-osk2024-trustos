@@ -175,11 +175,11 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
             let exit_code = childinner.exit_code;
             // ++++ release child PCB
             if wstatus as usize != 0x0 {
-                // info!(
-                //     "[sys_wait4] child {} exit with code {}, wstatus= {:#x}",
-                //     found_pid, exit_code, wstatus as usize
-                // );
-                *translated_refmut(inner.memory_set.token(), wstatus) = exit_code;
+                debug!(
+                    "[sys_wait4] child {} exit with code {}, wstatus= {:#x}",
+                    found_pid, exit_code, wstatus as usize
+                );
+                *translated_refmut(inner.memory_set.token(), wstatus) = exit_code << 8;
             }
             return found_pid as isize;
         } else {
