@@ -5,7 +5,7 @@ use core::arch::asm;
 pub use hart::hart_id;
 use log::warn;
 
-use crate::mm::VirtAddr;
+use crate::{config::mm::PAGE_SIZE, mm::VirtAddr};
 
 /// 跟踪函数的调用栈
 pub fn backtrace() {
@@ -20,5 +20,13 @@ pub fn backtrace() {
             warn!("[stack_backtrace] {:#x},", ptr.offset(-8).read());
             fp = ptr.offset(-16).read();
         }
+    }
+}
+/// 对齐到页
+pub fn page_round_up(v: usize) -> usize {
+    if v % PAGE_SIZE == 0 {
+        v
+    } else {
+        v - (v % PAGE_SIZE) + PAGE_SIZE
     }
 }
