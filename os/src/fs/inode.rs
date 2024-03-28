@@ -5,6 +5,7 @@ use _core::str::FromStr;
 use alloc::{string::String, sync::Arc, vec::Vec};
 use bitflags::*;
 use lazy_static::*;
+use log::info;
 use simple_fat32::{create_root_vfile, FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
 use spin::Mutex;
 
@@ -68,35 +69,31 @@ lazy_static! {
     };
 }
 
-pub fn list_all(head:String ,node: Arc<VFile>) {
-    let head=head+&"/";
-    for app in node.ls().unwrap(){
-        if(app.0=="."||app.0==".."){
+pub fn list_all(head: String, node: Arc<VFile>) {
+    let head = head + &"/";
+    for app in node.ls().unwrap() {
+        if (app.0 == "." || app.0 == "..") {
             //跳过这俩
             continue;
         } else if app.1 & ATTR_DIRECTORY == 0 {
             // 如果不是目录
-            println!("{}{}",head, app.0);
+            println!("{}{}", head, app.0);
         } else {
             // 如果是目录
-            let mut v=open_file(&app.0,OpenFlags::O_RDONLY).unwrap().inner.lock().inode.clone();
-            list_all(head.clone()+&app.0,v.clone());
+            let mut v = open_file(&app.0, OpenFlags::O_RDONLY)
+                .unwrap()
+                .inner
+                .lock()
+                .inode
+                .clone();
+            list_all(head.clone() + &app.0, v.clone());
         }
     }
 }
 
 pub fn list_apps() {
     println!("/**** APPS ****");
-    // for app in ROOT_INODE.ls().unwrap() {
-    //     if app.1 & ATTR_DIRECTORY == 0 {
-    //         // 如果不是目录
-    //         println!("{}", app.0);
-    //     } else {
-    //         // 如果是目录
-    //         println!("{}/", app.0);
-    //     }
-    // }
-    list_all("".into(),ROOT_INODE.clone());
+    list_all("".into(), ROOT_INODE.clone());
     println!("**************/");
 }
 
@@ -231,7 +228,7 @@ impl File for OSInode {
         total_write_size
     }
 
-    fn get_fstat(&self, kstat: &mut Kstat) {
+    fn fstat(&self, kstat: &mut Kstat) {
         let inner = self.inner.lock();
         let vfile = inner.inode.clone();
         // todo
@@ -239,7 +236,7 @@ impl File for OSInode {
         kstat.init(st_size, st_blksize, st_blocks);
     }
 
-    fn get_dirent(&self, dirent: &mut Dirent) -> isize {
+    fn dirent(&self, dirent: &mut Dirent) -> isize {
         if !self.is_dir() {
             return -1;
         }
@@ -255,12 +252,16 @@ impl File for OSInode {
         }
     }
 
-    fn get_name(&self) -> String {
+    fn name(&self) -> String {
         self.name()
     }
 
     fn set_offset(&self, offset: usize) {
         let mut inner = self.inner.lock();
         inner.offset = offset;
+    }
+
+    fn offset(&self) -> usize {
+        self.inner.lock().offset
     }
 }

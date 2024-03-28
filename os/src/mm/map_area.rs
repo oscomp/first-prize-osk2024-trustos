@@ -1,17 +1,25 @@
 use super::{
-    frame_alloc, FrameTracker, PTEFlags, PageTable, PhysPageNum, StepByOne, VPNRange, VirtAddr,
-    VirtPageNum,
+    frame_alloc, FrameTracker, PTEFlags, PageFaultHandler, PageTable, PhysPageNum, StepByOne,
+    VPNRange, VirtAddr, VirtPageNum,
 };
-use crate::config::mm::{KERNEL_PGNUM_OFFSET, PAGE_SIZE};
+use crate::{
+    config::mm::{KERNEL_PGNUM_OFFSET, PAGE_SIZE},
+    fs::RFile,
+    syscall::MmapFlags,
+};
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 /// map area structure, controls a contiguous piece of virtual memory
 /// 逻辑段
 pub struct MapArea {
     pub vpn_range: VPNRange,
-    data_frames: BTreeMap<VirtPageNum, Arc<FrameTracker>>,
-    map_type: MapType,
+    pub data_frames: BTreeMap<VirtPageNum, Arc<FrameTracker>>,
+    pub map_type: MapType,
     pub map_perm: MapPermission,
     pub area_type: MapAreaType,
+    pub file: Option<Arc<RFile>>,
+    pub offset: usize,
+    pub mmap_flags: MmapFlags,
+    pub page_fault_handler: Option<Arc<dyn PageFaultHandler>>,
 }
 
 impl MapArea {
@@ -30,15 +38,48 @@ impl MapArea {
             map_type,
             map_perm,
             area_type,
+            file: None,
+            offset: 0,
+            mmap_flags: MmapFlags::empty(),
+            page_fault_handler: None,
+        }
+    }
+    pub fn new_mmap(
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+        map_type: MapType,
+        map_perm: MapPermission,
+        area_type: MapAreaType,
+        file: Arc<RFile>,
+        offset: usize,
+        mmap_flags: MmapFlags,
+        page_fault_handler: Arc<dyn PageFaultHandler>,
+    ) -> Self {
+        let start_vpn: VirtPageNum = start_va.floor();
+        let end_vpn: VirtPageNum = end_va.ceil();
+        Self {
+            vpn_range: VPNRange::new(start_vpn, end_vpn),
+            data_frames: BTreeMap::new(),
+            map_type,
+            map_perm,
+            area_type,
+            file: Some(file),
+            offset,
+            mmap_flags,
+            page_fault_handler: Some(page_fault_handler),
         }
     }
     pub fn from_another(another: &MapArea) -> Self {
         Self {
-            vpn_range: VPNRange::new(another.vpn_range.get_start(), another.vpn_range.get_end()),
+            vpn_range: VPNRange::new(another.vpn_range.start(), another.vpn_range.end()),
             data_frames: BTreeMap::new(),
             map_type: another.map_type,
             map_perm: another.map_perm,
             area_type: another.area_type,
+            file: another.file.clone(),
+            offset: another.offset,
+            mmap_flags: another.mmap_flags,
+            page_fault_handler: another.page_fault_handler.clone(),
         }
     }
     pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
@@ -92,7 +133,7 @@ impl MapArea {
     pub fn copy_data(&mut self, page_table: &mut PageTable, data: &[u8]) {
         assert_eq!(self.map_type, MapType::Framed);
         let mut start: usize = 0;
-        let mut current_vpn = self.vpn_range.get_start();
+        let mut current_vpn = self.vpn_range.start();
         let len = data.len();
         loop {
             let src = &data[start..len.min(start + PAGE_SIZE)];

@@ -110,14 +110,14 @@ pub struct Timespec {
 }
 
 pub fn sleep(period_ms: usize) {
-    let mut req: [usize; 2] = [0, period_ms * 1000];
+    let mut req: [usize; 2] = [0, period_ms * 1_000_000];
     let mut rem: [usize; 2] = [0, 0];
     unsafe {
         use ::core::slice::from_raw_parts_mut;
         use core::mem::size_of;
         sys_nanosleep(
-            from_raw_parts_mut(&mut req as *mut usize as *mut u8, size_of::<usize>()),
-            from_raw_parts_mut(&mut rem as *mut usize as *mut _, size_of::<usize>()),
+            from_raw_parts_mut(&mut req as *mut usize as *mut _, size_of::<Timespec>()),
+            from_raw_parts_mut(&mut rem as *mut usize as *mut _, size_of::<Timespec>()),
         );
     }
 }

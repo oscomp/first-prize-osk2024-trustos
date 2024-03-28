@@ -2,12 +2,13 @@
 use super::{tid_alloc, KernelStack, TaskContext, TidHandle};
 use crate::{
     config::mm::{USER_HEAP_SIZE, USER_TRAP_CONTEXT},
-    fs::{File, Stdin, Stdout},
+    fs::{File, RFile, Stdin, Stdout},
     mm::{translated_refmut, MapAreaType, MapPermission, MemorySet, PhysPageNum, VirtAddr},
     timer::TimeData,
     trap::{trap_handler, TrapContext},
 };
 use alloc::{
+    string::String,
     sync::{Arc, Weak},
     vec,
     vec::Vec,
@@ -35,8 +36,8 @@ pub struct TaskControlBlockInner {
     pub parent: Option<Weak<TaskControlBlock>>,
     pub children: Vec<Arc<TaskControlBlock>>,
     pub exit_code: i32,
-    pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
-    pub current_path: alloc::string::String,
+    pub fd_table: Vec<Option<Arc<RFile>>>,
+    pub current_path: String,
     pub time_data: TimeData,
     pub user_heappoint: usize,
     pub user_heapbottom: usize,
@@ -218,7 +219,7 @@ impl TaskControlBlock {
             MapAreaType::Stack,
         );
         // copy fd table
-        let mut new_fd_table: Vec<Option<Arc<dyn File + Send + Sync>>> = Vec::new();
+        let mut new_fd_table: Vec<Option<Arc<RFile>>> = Vec::new();
         for fd in parent_inner.fd_table.iter() {
             if let Some(file) = fd {
                 new_fd_table.push(Some(file.clone()));

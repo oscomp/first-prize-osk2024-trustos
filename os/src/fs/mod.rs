@@ -8,6 +8,8 @@ mod stdio;
 use crate::mm::UserBuffer;
 use alloc::string::String;
 
+pub type RFile = dyn File + Send + Sync;
+
 pub trait File: Send + Sync {
     fn readable(&self) -> bool;
     fn writable(&self) -> bool;
@@ -16,22 +18,26 @@ pub trait File: Send + Sync {
     /// 将缓冲区中的数据写入文件，最多将缓冲区中的数据全部写入，并返回直接写入的字节数
     fn write(&self, buf: UserBuffer) -> usize;
 
-    fn get_fstat(&self, kstat: &mut Kstat);
+    fn fstat(&self, kstat: &mut Kstat);
 
-    fn get_dirent(&self, dirent: &mut Dirent) -> isize;
+    fn dirent(&self, dirent: &mut Dirent) -> isize;
 
-    fn get_name(&self) -> String;
+    fn name(&self) -> String;
 
     fn set_offset(&self, offset: usize);
+    /// 获取当前文件偏移,INODE需实现该函数
+    fn offset(&self) -> usize {
+        0
+    }
 }
 
+use alloc::{sync::Arc, vec, vec::Vec};
 pub use dirent::Dirent;
-pub use inode::{chdir, list_apps, open, open_file, OSInode, OpenFlags,ROOT_INODE};
+pub use inode::{chdir, list_apps, open, open_file, OSInode, OpenFlags, ROOT_INODE};
 pub use mount::MNT_TABLE;
 pub use pipe::{make_pipe, Pipe};
 pub use stat::Kstat;
 pub use stdio::{Stdin, Stdout};
-use alloc::{sync::Arc, vec, vec::Vec};
 core::arch::global_asm!(include_str!("preload.S"));
 
 // os\src\fs\mod.rs
@@ -45,7 +51,7 @@ pub fn flush_preload() {
     }
 
     let initproc = open_file("initproc", OpenFlags::O_CREATE).unwrap();
-    let mut v=Vec::new();
+    let mut v = Vec::new();
     v.push(unsafe {
         core::slice::from_raw_parts_mut(
             initproc_start as *mut u8,
@@ -55,7 +61,7 @@ pub fn flush_preload() {
     initproc.write(UserBuffer::new(v));
     
     let onlinetests = open_file("onlinetests", OpenFlags::O_CREATE).unwrap();
-    let mut v=Vec::new();
+    let mut v = Vec::new();
     v.push(unsafe {
         core::slice::from_raw_parts_mut(
             shell_start as *mut u8,
@@ -63,5 +69,11 @@ pub fn flush_preload() {
         ) as &'static mut [u8]
     });
     onlinetests.write(UserBuffer::new(v));
+    // for ppn in crate::mm::PPNRange::new(
+    //     crate::mm::PhysAddr::from(sbash as usize).floor(),
+    //     crate::mm::PhysAddr::from(ebash as usize).floor(),
+    // ) {
+    //     crate::mm::frame_dealloc(ppn);
+    // }
 }
 

@@ -30,7 +30,7 @@ use alloc::boxed::Box;
 use alloc::sync::Arc;
 pub use context::TaskContext;
 use lazy_static::*;
-use log::info;
+use log::{debug, info};
 pub use manager::{add_task, fetch_task, lock_task_manager, TaskManager};
 use switch::__switch;
 use task::{TaskControlBlock, TaskStatus};
@@ -41,7 +41,7 @@ pub use processor::{
 };
 pub use tid::{tid_alloc, KernelStack, TidAllocator, TidHandle};
 
-use self::processor::get_proc_by_hartid;
+use self::processor::{get_proc_by_hartid, take_current_token};
 /// Suspend the current 'Running' task and run the next task in task list.
 pub fn suspend_current_and_run_next() {
     // There must be
@@ -65,11 +65,13 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     let mut initproc_inner = INITPROC.inner_lock();
     // take from Processor
     let task = take_current_task().unwrap();
-    // info!(
-    //     "[sys_exit] process {} ,thread {} exit!",
-    //     task.pid(),
-    //     task.tid()
-    // );
+    let _ = take_current_token();
+    debug!(
+        "[sys_exit] process {} ,thread {} exit! exit_code={}",
+        task.pid(),
+        task.tid(),
+        exit_code
+    );
     let pid = task.pid();
     if pid == IDLE_PID {
         println!(

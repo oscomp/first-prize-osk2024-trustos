@@ -215,16 +215,16 @@ impl File for Pipe {
     }
 
     #[allow(unused_variables)]
-    fn get_fstat(&self, kstat: &mut Kstat) {
+    fn fstat(&self, kstat: &mut Kstat) {
         panic!("pipe not implement get_fstat");
     }
 
     #[allow(unused_variables)]
-    fn get_dirent(&self, dirent: &mut Dirent) -> isize {
+    fn dirent(&self, dirent: &mut Dirent) -> isize {
         panic!("pipe not implement get_dirent");
     }
 
-    fn get_name(&self) -> String {
+    fn name(&self) -> String {
         panic!("pipe not implement get_name");
     }
 
