@@ -55,12 +55,13 @@ static SUCC_TESTS: &[(&str, &str, &str, &str, i32)] = &[
     ("execve\0", "\0", "\0", "\0", 0),
     ("mmap\0", "\0", "\0", "\0", 0),
     ("munmap\0", "\0", "\0", "\0", 0),
+    ("mmaptest\0", "\0", "\0", "\0", 0),
 ];
 
 static FAIL_TESTS: &[(&str, &str, &str, &str, i32)] =
     &[("rCoretests/stack_overflow\0", "\0", "\0", "\0", -2)];
 
-use user_lib::{exec, fork, waitpid,shutdown};
+use user_lib::{exec, fork, waitpid};
 
 fn run_tests(tests: &[(&str, &str, &str, &str, i32)]) -> i32 {
     let mut pass_num = 0;
@@ -104,7 +105,7 @@ fn run_tests(tests: &[(&str, &str, &str, &str, i32)]) -> i32 {
             let mut exit_code: i32 = Default::default();
             let wait_pid = waitpid(pid as usize, &mut exit_code);
             assert_eq!(pid, wait_pid);
-            if exit_code == test.4 {
+            if exit_code >> 8 == test.4 {
                 // summary apps with  exit_code
                 pass_num = pass_num + 1;
             }
@@ -127,7 +128,6 @@ pub fn main() -> i32 {
             SUCC_TESTS.len(),
             FAIL_TESTS.len()
         );
-        shutdown();
         return 0;
     }
     if succ_num != SUCC_TESTS.len() as i32 {
@@ -145,6 +145,5 @@ pub fn main() -> i32 {
         );
     }
     println!(" Usertests failed!");
-    shutdown();
     return -1;
 }

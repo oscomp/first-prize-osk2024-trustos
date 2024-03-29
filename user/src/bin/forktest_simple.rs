@@ -18,7 +18,7 @@ pub fn main() -> i32 {
         // parent process
         let mut exit_code: i32 = 0;
         assert_eq!(pid, wait(&mut exit_code));
-        assert_eq!(exit_code, 100);
+        assert_eq!(exit_code >> 8, 100);
         println!("child process pid = {}, exit code = {}", pid, exit_code);
         0
     }
