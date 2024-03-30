@@ -13,6 +13,7 @@ use crate::{
         },
     },
     fs::RFile,
+    mm::flush_tlb,
     syscall::MmapFlags,
 };
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
@@ -216,9 +217,7 @@ impl MemorySet {
             } else {
                 area_inner.vpn_range = VPNRange::new(end_vpn, area_end_vpn);
             }
-            unsafe {
-                asm!("sfence.vma");
-            }
+            flush_tlb();
         }
     }
     pub fn mmap_page_fault(&mut self, vpn: VirtPageNum) -> bool {
@@ -473,7 +472,7 @@ impl MemorySet {
                     let pte = page_table.translate(vpn).unwrap();
                     let pte_flags = pte.flags() & !PTEFlags::W;
                     let src_ppn = pte.ppn();
-                    // 清空可写位，设置COW位
+                    //清空可写位，设置COW位
                     //下面两步不合起来是因为flags只有8位，全都用掉了
                     //所以Cow位没有放到flags里面
                     page_table.set_flags(vpn, pte_flags);
@@ -481,15 +480,13 @@ impl MemorySet {
                     // 设置新的pagetable
                     memory_set.page_table.map(vpn, src_ppn, pte_flags);
                     memory_set.page_table.set_cow(vpn);
-                    // new_area
-                    //     .data_frames
-                    //     .insert(vpn, area.data_frames[&vpn].clone());
                 }
+
                 new_area.data_frames = area.data_frames.clone();
                 memory_set.push_lazily(new_area);
                 continue;
             }
-
+            //既不是cow也不是mmap
             memory_set.push(new_area, None);
 
             // copy data from another space
@@ -501,6 +498,8 @@ impl MemorySet {
                     .copy_from_slice(src_ppn.bytes_array_mut());
             }
         }
+
+        flush_tlb();
         memory_set
     }
     ///Refresh TLB with `sfence.vma`

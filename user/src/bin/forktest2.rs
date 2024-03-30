@@ -15,7 +15,7 @@ pub fn main() -> i32 {
         if pid == 0 {
             let current_time = get_time();
             let sleep_length =
-                (current_time as i32 as isize) * (current_time as i32 as isize) % 1000 + 1000;
+                (current_time as i32 as isize) * (current_time as i32 as isize) % 10 + 10;
             println!("pid {} sleep for {} ms", getpid(), sleep_length);
             sleep(sleep_length as usize);
             println!("pid {} OK!", getpid());

@@ -9,6 +9,12 @@ use super::{
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use bitflags::*;
 
+use core::arch::asm;
+pub fn flush_tlb() {
+    unsafe {
+        asm!("sfence.vma");
+    }
+}
 bitflags! {
     pub struct PTEFlags: u8 {
         const V = 1 << 0;
