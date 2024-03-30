@@ -8,13 +8,13 @@ const TICKS_PER_SEC: usize = 100;
 const MSEC_PER_SEC: usize = 1000;
 
 pub struct Timespec {
-    pub tv_sec : usize,     //秒
-    pub tv_nsec : usize,    //纳秒
+    pub tv_sec: usize,  //秒
+    pub tv_nsec: usize, //纳秒
 }
 
 impl Timespec {
-    pub fn new(sec:usize,nsec:usize) -> Self {
-        Self{
+    pub fn new(sec: usize, nsec: usize) -> Self {
+        Self {
             tv_sec: sec,
             tv_nsec: nsec,
         }
@@ -25,20 +25,20 @@ impl Timespec {
     }
 }
 
-pub struct Tms {    
-    pub tms_utime:isize,    //用户模式下花费的CPU时间
-    pub tms_stime:isize,    //内核模式下花费的CPU时间
-    pub tms_cutime:isize,   //子进程在用户模式下花费的CPU时间
-    pub tms_cstime:isize,   //子进程在内核模式下花费的CPU时间
+pub struct Tms {
+    pub tms_utime: isize,  //用户模式下花费的CPU时间
+    pub tms_stime: isize,  //内核模式下花费的CPU时间
+    pub tms_cutime: isize, //子进程在用户模式下花费的CPU时间
+    pub tms_cstime: isize, //子进程在内核模式下花费的CPU时间
 }
 
 impl Tms {
-    pub fn new(time_data:&TimeData) ->Self {
+    pub fn new(time_data: &TimeData) -> Self {
         Self {
-            tms_utime:time_data.utime,
-            tms_stime:time_data.stime,
-            tms_cutime:time_data.cutime,
-            tms_cstime:time_data.cstime,
+            tms_utime: time_data.utime,
+            tms_stime: time_data.stime,
+            tms_cutime: time_data.cutime,
+            tms_cstime: time_data.cstime,
         }
     }
     pub fn as_bytes(&self) -> &[u8] {
@@ -56,14 +56,14 @@ pub struct TimeData {
 }
 
 impl TimeData {
-    pub fn new() ->Self {
+    pub fn new() -> Self {
         let now = (get_time_ms()) as isize;
         Self {
-            utime:0,
-            stime:0,
-            cutime:0,
-            cstime:0,
-            lasttime:now,
+            utime: 0,
+            stime: 0,
+            cutime: 0,
+            cstime: 0,
+            lasttime: now,
         }
     }
     pub fn update_utime(&mut self) {

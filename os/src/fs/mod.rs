@@ -59,7 +59,7 @@ pub fn flush_preload() {
         ) as &'static mut [u8]
     });
     initproc.write(UserBuffer::new(v));
-    
+
     let onlinetests = open_file("onlinetests", OpenFlags::O_CREATE).unwrap();
     let mut v = Vec::new();
     v.push(unsafe {
@@ -76,4 +76,3 @@ pub fn flush_preload() {
     //     crate::mm::frame_dealloc(ppn);
     // }
 }
-

@@ -65,6 +65,34 @@ impl PageTableEntry {
     pub fn executable(&self) -> bool {
         (self.flags() & PTEFlags::X) != PTEFlags::empty()
     }
+    ///PTE cow
+    /// 因为flags只给了8位，改成16位的话又要改一堆接口，于是就不用flags了
+    pub fn is_cow(&self) -> bool {
+        self.bits & (1 << 9) != 0
+    }
+    pub fn set_cow(&mut self) {
+        (*self).bits = self.bits | (1 << 9);
+    }
+    pub fn reset_cow(&mut self) {
+        (*self).bits = self.bits & !(1 << 9);
+    }
+    pub fn reset_w(&mut self) {
+        (*self).bits = self.bits & !(1 << 2);
+    }
+    pub fn set_w(&mut self) {
+        (*self).bits = self.bits | (1 << 2);
+    }
+    pub fn set_bits(&mut self, ppn: PhysPageNum, flags: PTEFlags) {
+        self.bits = ppn.0 << 10 | flags.bits as usize;
+    }
+    // only X+W+R can be set
+    pub fn set_pte_flags(&mut self, flags: usize) {
+        self.bits = (self.bits & !(0b1110 as usize)) | (flags & (0b1110 as usize));
+    }
+    pub fn set_flags(&mut self, flags: PTEFlags) {
+        let new_flags: u8 = flags.bits().clone();
+        self.bits = (self.bits & 0xFFFF_FFFF_FFFF_FF00) | (new_flags as usize);
+    }
 }
 ///Record root ppn and has the same lifetime as 1 and 2 level `PageTableEntry`
 pub struct PageTable {
@@ -176,6 +204,21 @@ impl PageTable {
     /// Get root ppn
     pub fn token(&self) -> usize {
         8usize << 60 | self.root_ppn.0
+    }
+    pub fn set_cow(&mut self, vpn: VirtPageNum) {
+        self.find_pte_create(vpn).unwrap().set_cow();
+    }
+    pub fn reset_cow(&mut self, vpn: VirtPageNum) {
+        self.find_pte_create(vpn).unwrap().reset_cow();
+    }
+    pub fn set_w(&mut self, vpn: VirtPageNum) {
+        self.find_pte_create(vpn).unwrap().set_w();
+    }
+    pub fn reset_w(&mut self, vpn: VirtPageNum) {
+        self.find_pte_create(vpn).unwrap().reset_w();
+    }
+    pub fn set_flags(&mut self, vpn: VirtPageNum, flags: PTEFlags) {
+        self.find_pte_create(vpn).unwrap().set_flags(flags);
     }
 }
 /// Translate a pointer to a mutable u8 Vec through page table

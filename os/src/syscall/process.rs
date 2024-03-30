@@ -135,6 +135,7 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, _envp: *const u8) -> 
 /// 等待子进程状态发生变化,即子进程终止或被信号停止或被信号挂起
 pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
     // TODO(ZMY) 加入信号和进程组支持
+    debug!("sys_wait4 enter");
     assert!(options == 0, "not support options yet");
     loop {
         let task = current_task().unwrap();

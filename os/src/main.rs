@@ -132,7 +132,7 @@ pub fn rust_main(hartid: usize) -> ! {
         trap::enable_timer_interrupt();
         timer::set_next_trigger();
     } else {
-        loop{};
+        loop {}
         // barrier
         while !INIT_FINISHED.load(Ordering::SeqCst) {}
 

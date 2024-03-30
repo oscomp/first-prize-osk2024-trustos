@@ -21,11 +21,13 @@ pub fn main() -> i32 {
         assert!(pid > 0);
     }
     let mut exit_code: i32 = 0;
-    for _ in 0..MAX_CHILD {
+    for i in 0..MAX_CHILD {
+        println!("wait {}", i);
         if wait(&mut exit_code) <= 0 {
             panic!("wait stopped early");
         }
     }
+    println!("i got here");
     if wait(&mut exit_code) > 0 {
         panic!("wait got too many");
     }

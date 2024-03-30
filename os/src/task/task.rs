@@ -202,7 +202,7 @@ impl TaskControlBlock {
         let copy_user_stack = stack.is_none();
         // copy user space(include trap context)
         let mut memory_set =
-            MemorySet::from_existed_user(&parent_inner.memory_set, copy_user_stack);
+            MemorySet::from_existed_user(&mut parent_inner.memory_set, copy_user_stack);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
             .unwrap()

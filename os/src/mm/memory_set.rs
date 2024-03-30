@@ -240,6 +240,25 @@ impl MemorySet {
             false
         }
     }
+    pub fn cow_page_fault(&mut self, vpn: VirtPageNum) -> bool {
+        let area = self
+            .areas
+            .iter_mut()
+            .filter(|area| area.area_type == MapAreaType::Elf || area.area_type == MapAreaType::Brk)
+            .find(|area| {
+                let (start, end) = area.vpn_range.range();
+                start <= vpn && vpn < end
+            });
+
+        if area.is_some() && self.page_table.translate(vpn).unwrap().is_cow() {
+            let area_inner = area.unwrap();
+            let handler = area_inner.page_fault_handler.as_ref().unwrap().clone();
+            handler.handle_page_fault(vpn.into(), &mut self.page_table, Some(area_inner));
+            true
+        } else {
+            false
+        }
+    }
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
@@ -430,7 +449,7 @@ impl MemorySet {
         )
     }
     ///Clone a same `MemorySet`
-    pub fn from_existed_user(user_space: &MemorySet, copy_user_stack: bool) -> MemorySet {
+    pub fn from_existed_user(user_space: &mut MemorySet, copy_user_stack: bool) -> MemorySet {
         let mut memory_set = Self::new_from_kernel();
         // copy data sections/trap_context/user_stack
         for area in user_space.areas.iter() {
@@ -441,12 +460,36 @@ impl MemorySet {
             if !copy_user_stack && area.area_type == MapAreaType::Stack {
                 continue;
             }
-            let new_area = MapArea::from_another(area);
+            let mut new_area = MapArea::from_another(area);
             /// Mmap是lazy allocation
             if area.area_type == MapAreaType::Mmap {
                 memory_set.push_lazily(new_area);
                 continue;
             }
+            let mut page_table = &mut user_space.page_table;
+            ///ELF和Brk是cow
+            if area.area_type == MapAreaType::Elf || area.area_type == MapAreaType::Brk {
+                for vpn in area.vpn_range {
+                    let pte = page_table.translate(vpn).unwrap();
+                    let pte_flags = pte.flags() & !PTEFlags::W;
+                    let src_ppn = pte.ppn();
+                    // 清空可写位，设置COW位
+                    //下面两步不合起来是因为flags只有8位，全都用掉了
+                    //所以Cow位没有放到flags里面
+                    page_table.set_flags(vpn, pte_flags);
+                    page_table.set_cow(vpn);
+                    // 设置新的pagetable
+                    memory_set.page_table.map(vpn, src_ppn, pte_flags);
+                    memory_set.page_table.set_cow(vpn);
+                    // new_area
+                    //     .data_frames
+                    //     .insert(vpn, area.data_frames[&vpn].clone());
+                }
+                new_area.data_frames = area.data_frames.clone();
+                memory_set.push_lazily(new_area);
+                continue;
+            }
+
             memory_set.push(new_area, None);
 
             // copy data from another space

@@ -97,13 +97,18 @@ pub fn trap_handler() {
         }
         Trap::Exception(Exception::StorePageFault) | Trap::Exception(Exception::LoadPageFault) => {
             // page fault
-            let ok: bool;
+            let mut ok: bool = false;
             {
                 let task = current_task().unwrap();
                 let mut task_inner = task.inner_lock();
                 ok = task_inner
                     .memory_set
                     .mmap_page_fault(VirtAddr::from(stval).floor());
+                if scause.cause() == Trap::Exception(Exception::StorePageFault) {
+                    ok |= task_inner
+                        .memory_set
+                        .cow_page_fault(VirtAddr::from(stval).floor());
+                }
                 // drop task inner and task to avoid deadlock and exit exception
             }
             if (!ok) {
@@ -141,7 +146,7 @@ pub fn trap_handler() {
             exit_current_and_run_next(-3);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
-            // println!("Timer Interupt!");
+            debug!("Timer Interupt!");
             set_next_trigger();
             suspend_current_and_run_next();
         }

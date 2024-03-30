@@ -1,6 +1,6 @@
 use super::{
-    frame_alloc, FrameTracker, PTEFlags, PageFaultHandler, PageTable, PhysPageNum, StepByOne,
-    VPNRange, VirtAddr, VirtPageNum,
+    frame_alloc, CowPageFaultHandler, FrameTracker, PTEFlags, PageFaultHandler, PageTable,
+    PhysPageNum, StepByOne, VPNRange, VirtAddr, VirtPageNum,
 };
 use crate::{
     config::mm::{KERNEL_PGNUM_OFFSET, PAGE_SIZE},
@@ -41,7 +41,7 @@ impl MapArea {
             file: None,
             offset: 0,
             mmap_flags: MmapFlags::empty(),
-            page_fault_handler: None,
+            page_fault_handler: Some(Arc::new(CowPageFaultHandler {})),
         }
     }
     pub fn new_mmap(
