@@ -104,7 +104,6 @@ pub fn trap_handler() {
                 ok = task_inner
                     .memory_set
                     .mmap_page_fault(VirtAddr::from(stval).floor());
-                debug!("cow page fault at va {:#x}", stval);
                 if scause.cause() == Trap::Exception(Exception::StorePageFault) {
                     ok |= task_inner
                         .memory_set

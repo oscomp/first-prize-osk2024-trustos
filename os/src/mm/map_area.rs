@@ -1,6 +1,6 @@
 use super::{
-    frame_alloc, CowPageFaultHandler, FrameTracker, PTEFlags, PageFaultHandler, PageTable,
-    PhysPageNum, StepByOne, VPNRange, VirtAddr, VirtPageNum,
+    frame_alloc, FrameTracker, PTEFlags, PageTable, PhysPageNum, StepByOne, VPNRange, VirtAddr,
+    VirtPageNum,
 };
 use crate::{
     config::mm::{KERNEL_PGNUM_OFFSET, PAGE_SIZE},
@@ -19,7 +19,6 @@ pub struct MapArea {
     pub file: Option<Arc<RFile>>,
     pub offset: usize,
     pub mmap_flags: MmapFlags,
-    pub page_fault_handler: Option<Arc<dyn PageFaultHandler>>,
 }
 
 impl MapArea {
@@ -41,7 +40,6 @@ impl MapArea {
             file: None,
             offset: 0,
             mmap_flags: MmapFlags::empty(),
-            page_fault_handler: Some(Arc::new(CowPageFaultHandler {})),
         }
     }
     pub fn new_mmap(
@@ -53,7 +51,6 @@ impl MapArea {
         file: Arc<RFile>,
         offset: usize,
         mmap_flags: MmapFlags,
-        page_fault_handler: Arc<dyn PageFaultHandler>,
     ) -> Self {
         let start_vpn: VirtPageNum = start_va.floor();
         let end_vpn: VirtPageNum = end_va.ceil();
@@ -66,7 +63,6 @@ impl MapArea {
             file: Some(file),
             offset,
             mmap_flags,
-            page_fault_handler: Some(page_fault_handler),
         }
     }
     pub fn from_another(another: &MapArea) -> Self {
@@ -79,7 +75,6 @@ impl MapArea {
             file: another.file.clone(),
             offset: another.offset,
             mmap_flags: another.mmap_flags,
-            page_fault_handler: another.page_fault_handler.clone(),
         }
     }
     pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {

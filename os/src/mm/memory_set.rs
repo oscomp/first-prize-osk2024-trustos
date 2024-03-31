@@ -1,8 +1,8 @@
 //! Implementation of [`MapArea`] and [`MemorySet`].
 use super::{
-    frame_alloc, translated_byte_buffer, FrameTracker, KernelAddr, MapArea, MapAreaType,
-    MapPermission, MapType, MmapPageFaultHandler, PTEFlags, PageFaultHandler, PageTable,
-    PageTableEntry, PhysAddr, PhysPageNum, StepByOne, UserBuffer, VPNRange, VirtAddr, VirtPageNum,
+    cow_page_fault, frame_alloc, mmap_page_fault, translated_byte_buffer, FrameTracker, KernelAddr,
+    MapArea, MapAreaType, MapPermission, MapType, PTEFlags, PageTable, PageTableEntry, PhysAddr,
+    PhysPageNum, StepByOne, UserBuffer, VPNRange, VirtAddr, VirtPageNum,
 };
 use crate::{
     config::{
@@ -143,7 +143,6 @@ impl MemorySet {
                 file,
                 off,
                 flags,
-                Arc::new(MmapPageFaultHandler {}),
             ));
             addr
         } else {
@@ -167,7 +166,6 @@ impl MemorySet {
                 file,
                 off,
                 flags,
-                Arc::new(MmapPageFaultHandler {}),
             ));
             addr
         }
@@ -232,8 +230,7 @@ impl MemorySet {
 
         if area.is_some() {
             let area_inner = area.unwrap();
-            let handler = area_inner.page_fault_handler.as_ref().unwrap().clone();
-            handler.handle_page_fault(vpn.into(), &mut self.page_table, Some(area_inner));
+            mmap_page_fault(vpn.into(), &mut self.page_table, Some(area_inner));
             true
         } else {
             false
@@ -251,8 +248,7 @@ impl MemorySet {
 
         if area.is_some() && self.page_table.translate(vpn).unwrap().is_cow() {
             let area_inner = area.unwrap();
-            let handler = area_inner.page_fault_handler.as_ref().unwrap().clone();
-            handler.handle_page_fault(vpn.into(), &mut self.page_table, Some(area_inner));
+            cow_page_fault(vpn.into(), &mut self.page_table, Some(area_inner));
             true
         } else {
             false
