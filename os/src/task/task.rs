@@ -37,6 +37,7 @@ pub struct TaskControlBlockInner {
     pub children: Vec<Arc<TaskControlBlock>>,
     pub exit_code: i32,
     pub fd_table: Vec<Option<Arc<RFile>>>,
+    pub file: Option<Arc<RFile>>,
     pub current_path: String,
     pub time_data: TimeData,
     pub user_heappoint: usize,
@@ -120,6 +121,7 @@ impl TaskControlBlock {
                     // 2 -> stderr
                     Some(Arc::new(Stdout)),
                 ],
+                file: None,
                 current_path: alloc::string::String::from("/"),
                 time_data: TimeData::new(),
                 user_heappoint: user_heapbottom,
@@ -247,6 +249,7 @@ impl TaskControlBlock {
                 children: Vec::new(),
                 exit_code: 0,
                 fd_table: new_fd_table,
+                file: parent_inner.file.clone(),
                 current_path: parent_inner.current_path.clone(),
                 time_data: TimeData::new(),
                 user_heappoint: parent_inner.user_heappoint,
@@ -273,7 +276,7 @@ impl TaskControlBlock {
     ) -> Arc<TaskControlBlock> {
         todo!()
     }
-
+    ///修改数据段大小，懒分配
     pub fn growproc(&self, grow_size: isize) -> usize {
         if grow_size > 0 {
             let growed_addr: usize = self.inner.lock().user_heappoint + grow_size as usize;

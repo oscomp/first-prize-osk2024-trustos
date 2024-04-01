@@ -124,6 +124,7 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, _envp: *const u8) -> 
     let cwd = task.inner_lock().current_path.clone();
     if let Some(app_inode) = open(&cwd, path.as_str(), OpenFlags::O_RDONLY) {
         let all_data = app_inode.read_all();
+        task.inner_lock().file = Some(app_inode.clone());
         task.exec(all_data.as_slice(), &argv_vec);
         task.inner_lock().memory_set.activate();
         debug!("sys_exec end");

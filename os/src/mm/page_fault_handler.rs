@@ -13,7 +13,7 @@ use super::{
     memory_set, translated_byte_buffer, MapArea, MemorySet, PageTable, UserBuffer, VirtAddr,
 };
 
-///mmap出发的lazy alocation
+///mmap触发的lazy alocation，需要读
 pub fn mmap_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: Option<&mut MapArea>) {
     // 映射页面,拷贝数据
     let vma = vma.unwrap();
@@ -27,6 +27,12 @@ pub fn mmap_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: Option<&mu
         buffers: translated_byte_buffer(page_table.token(), va as *const u8, PAGE_SIZE),
     });
     file.set_offset(old_offset);
+}
+///堆触发的lazy alocation，必是写
+pub fn brk_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: Option<&mut MapArea>) {
+    // 仅映射页面
+    let vma = vma.unwrap();
+    vma.map_one(page_table, va.into());
 }
 
 ///copy on write

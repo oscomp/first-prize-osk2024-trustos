@@ -1,9 +1,10 @@
 //! Implementation of [`MapArea`] and [`MemorySet`].
 use super::{
-    cow_page_fault, frame_alloc, mmap_page_fault, translated_byte_buffer, FrameTracker, KernelAddr,
-    MapArea, MapAreaType, MapPermission, MapType, PTEFlags, PageTable, PageTableEntry, PhysAddr,
-    PhysPageNum, StepByOne, UserBuffer, VPNRange, VirtAddr, VirtPageNum,
+    brk_page_fault, cow_page_fault, frame_alloc, mmap_page_fault, translated_byte_buffer,
+    FrameTracker, KernelAddr, MapArea, MapAreaType, MapPermission, MapType, PTEFlags, PageTable,
+    PageTableEntry, PhysAddr, PhysPageNum, StepByOne, UserBuffer, VPNRange, VirtAddr, VirtPageNum,
 };
+use crate::fs::{open_file, OpenFlags};
 use crate::{
     config::{
         board::{MEMORY_END, MMIO},
@@ -15,12 +16,14 @@ use crate::{
     fs::RFile,
     mm::flush_tlb,
     syscall::MmapFlags,
+    task::current_task,
 };
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 use core::arch::asm;
 use lazy_static::*;
 use log::{debug, info};
 use riscv::register::satp;
+use riscv::register::scause::{Exception, Trap};
 use spin::Mutex;
 
 extern "C" {
@@ -40,6 +43,11 @@ lazy_static! {
     /// a memory set instance through lazy_static! managing kernel space
     pub static ref KERNEL_SPACE: Mutex<MemorySet> =
          Mutex::new(MemorySet::new_kernel()) ;
+}
+lazy_static! {
+    /// 全0页，bss段初始指向这里
+    pub static ref ZERO_PAGE: Arc<FrameTracker> =
+        frame_alloc().unwrap();
 }
 ///Get kernelspace root ppn
 pub fn kernel_token() -> usize {
@@ -218,7 +226,8 @@ impl MemorySet {
             flush_tlb();
         }
     }
-    pub fn mmap_page_fault(&mut self, vpn: VirtPageNum) -> bool {
+    pub fn lazy_page_fault(&mut self, vpn: VirtPageNum, scause: Trap) -> bool {
+        //mmap
         let area = self
             .areas
             .iter_mut()
@@ -227,16 +236,28 @@ impl MemorySet {
                 let (start, end) = area.vpn_range.range();
                 start <= vpn && vpn < end
             });
-
         if area.is_some() {
             let area_inner = area.unwrap();
             mmap_page_fault(vpn.into(), &mut self.page_table, Some(area_inner));
-            true
-        } else {
-            false
+            return true;
         }
+        //brk
+        let area = self
+            .areas
+            .iter_mut()
+            .filter(|area| area.area_type == MapAreaType::Brk)
+            .find(|area| {
+                let (start, end) = area.vpn_range.range();
+                start <= vpn && vpn < end
+            });
+        if area.is_some() {
+            let area_inner = area.unwrap();
+            brk_page_fault(vpn.into(), &mut self.page_table, Some(area_inner));
+            return true;
+        }
+        false
     }
-    pub fn cow_page_fault(&mut self, vpn: VirtPageNum) -> bool {
+    pub fn cow_page_fault(&mut self, vpn: VirtPageNum, scause: Trap) -> bool {
         let area = self
             .areas
             .iter_mut()
@@ -245,8 +266,8 @@ impl MemorySet {
                 let (start, end) = area.vpn_range.range();
                 start <= vpn && vpn < end
             });
-
-        if area.is_some() && self.page_table.translate(vpn).unwrap().is_cow() {
+        let pte = self.page_table.translate(vpn);
+        if area.is_some() && pte.is_some() && pte.unwrap().is_cow() {
             let area_inner = area.unwrap();
             cow_page_fault(vpn.into(), &mut self.page_table, Some(area_inner));
             true
@@ -268,6 +289,12 @@ impl MemorySet {
     /// 不映射MapArea里的虚拟页面
     fn push_lazily(&mut self, map_area: MapArea) {
         self.areas.push(map_area);
+    }
+    ///仅initproc会用，将懒分配的全部分配
+    fn unlazy(&mut self) {
+        for map_area in self.areas.iter_mut() {
+            map_area.map(&mut self.page_table);
+        }
     }
     /// Without kernel stacks.
     pub fn new_kernel() -> Self {
@@ -392,6 +419,7 @@ impl MemorySet {
                     map_area,
                     Some(&elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
                 );
+                //memory_set.push_lazily(map_area);
             }
         }
         //map user heap
@@ -400,16 +428,13 @@ impl MemorySet {
         //guard page
         user_heap_bottom += PAGE_SIZE;
         let user_heap_top: usize = user_heap_bottom + USER_HEAP_SIZE;
-        memory_set.push(
-            MapArea::new(
-                user_heap_bottom.into(),
-                user_heap_top.into(),
-                MapType::Framed,
-                MapPermission::R | MapPermission::W | MapPermission::U,
-                MapAreaType::Brk,
-            ),
-            None,
-        );
+        memory_set.push_lazily(MapArea::new(
+            user_heap_bottom.into(),
+            user_heap_top.into(),
+            MapType::Framed,
+            MapPermission::R | MapPermission::W | MapPermission::U,
+            MapAreaType::Brk,
+        ));
 
         // map user stack with U flags
         let user_stack_top = USER_TRAP_CONTEXT - PAGE_SIZE;
@@ -456,14 +481,14 @@ impl MemorySet {
                 continue;
             }
             let mut new_area = MapArea::from_another(area);
-            /// Mmap是lazy allocation
-            if area.area_type == MapAreaType::Mmap {
+            /// Mmap和brk是lazy allocation
+            if area.area_type == MapAreaType::Mmap || area.area_type == MapAreaType::Brk {
                 memory_set.push_lazily(new_area);
                 continue;
             }
             let mut page_table = &mut user_space.page_table;
-            ///ELF和Brk是cow
-            if area.area_type == MapAreaType::Elf || area.area_type == MapAreaType::Brk {
+            ///ELF是cow
+            if area.area_type == MapAreaType::Elf {
                 for vpn in area.vpn_range {
                     let pte = page_table.translate(vpn).unwrap();
                     let pte_flags = pte.flags() & !PTEFlags::W;
