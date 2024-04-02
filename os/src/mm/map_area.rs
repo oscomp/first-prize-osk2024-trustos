@@ -1,6 +1,6 @@
 use super::{
-    frame_alloc, FrameTracker, PTEFlags, PageTable, PhysPageNum, StepByOne, VPNRange, VirtAddr,
-    VirtPageNum,
+    frame_alloc, group, FrameTracker, PTEFlags, PageTable, PhysPageNum, StepByOne, VPNRange,
+    VirtAddr, VirtPageNum, GROUP_SHARE,
 };
 use crate::{
     config::mm::{KERNEL_PGNUM_OFFSET, PAGE_SIZE},
@@ -19,8 +19,13 @@ pub struct MapArea {
     pub file: Option<Arc<RFile>>,
     pub offset: usize,
     pub mmap_flags: MmapFlags,
+    pub groupid: usize,
 }
-
+impl Drop for MapArea {
+    fn drop(&mut self) {
+        GROUP_SHARE.lock().del_area(self.groupid);
+    }
+}
 impl MapArea {
     pub fn new(
         start_va: VirtAddr,
@@ -40,6 +45,7 @@ impl MapArea {
             file: None,
             offset: 0,
             mmap_flags: MmapFlags::empty(),
+            groupid: 0,
         }
     }
     pub fn new_mmap(
@@ -54,6 +60,8 @@ impl MapArea {
     ) -> Self {
         let start_vpn: VirtPageNum = start_va.floor();
         let end_vpn: VirtPageNum = end_va.ceil();
+        let groupid = GROUP_SHARE.lock().alloc_id();
+        GROUP_SHARE.lock().add_area(groupid);
         Self {
             vpn_range: VPNRange::new(start_vpn, end_vpn),
             data_frames: BTreeMap::new(),
@@ -63,6 +71,7 @@ impl MapArea {
             file: Some(file),
             offset,
             mmap_flags,
+            groupid,
         }
     }
     pub fn from_another(another: &MapArea) -> Self {
@@ -75,6 +84,7 @@ impl MapArea {
             file: another.file.clone(),
             offset: another.offset,
             mmap_flags: another.mmap_flags,
+            groupid: another.groupid,
         }
     }
     pub fn map_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
@@ -151,6 +161,9 @@ impl MapArea {
             v.push(self.data_frames.get(&vpn).unwrap().clone())
         }
         v
+    }
+    pub fn flags(&self) -> PTEFlags {
+        PTEFlags::from_bits(self.map_perm.bits).unwrap()
     }
 }
 

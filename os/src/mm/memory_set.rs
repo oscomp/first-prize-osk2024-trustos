@@ -1,8 +1,9 @@
 //! Implementation of [`MapArea`] and [`MemorySet`].
 use super::{
-    brk_page_fault, cow_page_fault, frame_alloc, mmap_page_fault, translated_byte_buffer,
-    FrameTracker, KernelAddr, MapArea, MapAreaType, MapPermission, MapType, PTEFlags, PageTable,
-    PageTableEntry, PhysAddr, PhysPageNum, StepByOne, UserBuffer, VPNRange, VirtAddr, VirtPageNum,
+    brk_page_fault, cow_page_fault, frame_alloc, mmap_read_page_fault, mmap_write_page_fault,
+    translated_byte_buffer, FrameTracker, KernelAddr, MapArea, MapAreaType, MapPermission, MapType,
+    PTEFlags, PageTable, PageTableEntry, PhysAddr, PhysPageNum, StepByOne, UserBuffer, VPNRange,
+    VirtAddr, VirtPageNum, GROUP_SHARE,
 };
 use crate::fs::{open_file, OpenFlags};
 use crate::{
@@ -238,7 +239,11 @@ impl MemorySet {
             });
         if area.is_some() {
             let area_inner = area.unwrap();
-            mmap_page_fault(vpn.into(), &mut self.page_table, Some(area_inner));
+            if scause == Trap::Exception(Exception::StorePageFault) {
+                mmap_read_page_fault(vpn.into(), &mut self.page_table, Some(area_inner));
+            } else {
+                mmap_write_page_fault(vpn.into(), &mut self.page_table, Some(area_inner));
+            }
             return true;
         }
         //brk
@@ -481,8 +486,34 @@ impl MemorySet {
                 continue;
             }
             let mut new_area = MapArea::from_another(area);
+            if area.area_type == MapAreaType::Mmap {
+                GROUP_SHARE.lock().add_area(new_area.groupid);
+            }
             /// Mmap和brk是lazy allocation
             if area.area_type == MapAreaType::Mmap || area.area_type == MapAreaType::Brk {
+                //已经分配且独占/被写过的部分按cow处理
+                //其余是读共享或未分配部分，直接clone即可
+                new_area.data_frames = area.data_frames.clone();
+                for (vpn, frame) in area.data_frames.iter() {
+                    let vpn = *vpn;
+                    let pte = user_space.page_table.translate(vpn).unwrap();
+                    let mut pte_flags = pte.flags();
+                    let src_ppn = pte.ppn();
+                    //说明有共享页，不需要修改为写时复制
+                    if Arc::strong_count(frame) > 2 {
+                        memory_set.page_table.map(vpn, frame.ppn, pte_flags);
+                        continue;
+                    }
+                    //清空可写位，设置COW位
+                    //下面两步不合起来是因为flags只有8位，全都用掉了
+                    //所以Cow位没有放到flags里面
+                    pte_flags &= !PTEFlags::W;
+                    user_space.page_table.set_flags(vpn, pte_flags);
+                    user_space.page_table.set_cow(vpn);
+                    // 设置新的pagetable
+                    memory_set.page_table.map(vpn, src_ppn, pte_flags);
+                    memory_set.page_table.set_cow(vpn);
+                }
                 memory_set.push_lazily(new_area);
                 continue;
             }

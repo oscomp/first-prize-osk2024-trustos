@@ -85,7 +85,7 @@ pub fn get_time() -> isize {
             2 * core::mem::size_of::<usize>(),
         ));
     }
-    return (time_sepc[0] * 1000 + time_sepc[1] / 1000) as isize;
+    return (time_sepc[0] * 1000 + time_sepc[1] / 100000) as isize;
 }
 pub fn getpid() -> isize {
     sys_getpid()
