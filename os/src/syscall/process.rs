@@ -103,7 +103,7 @@ pub fn sys_clone(
 pub fn sys_execve(path: *const u8, mut argv: *const usize, _envp: *const u8) -> isize {
     let token = current_user_token().unwrap();
     let path = translated_str(token, path);
-
+    println!("path:{}", path);
     //处理argv参数
     let mut argv_vec = alloc::vec::Vec::<alloc::string::String>::new();
     loop {
@@ -119,7 +119,7 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, _envp: *const u8) -> 
             argv = argv.add(1);
         }
     }
-
+    println!("num:{}", argv_vec.len());
     let task = current_task().unwrap();
     let cwd = task.inner_lock().current_path.clone();
     if let Some(app_inode) = open(&cwd, path.as_str(), OpenFlags::O_RDONLY) {

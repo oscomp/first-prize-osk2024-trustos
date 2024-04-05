@@ -28,7 +28,7 @@ const SYSCALL_CLONE: usize = 220;
 const SYSCALL_EXECVE: usize = 221;
 const SYSCALL_WAIT4: usize = 260;
 
-const SYSCALL_SHUTDOWN:usize=1000;
+const SYSCALL_SHUTDOWN: usize = 1000;
 
 fn syscall(id: usize, args: [isize; 6]) -> isize {
     let mut ret: isize;
@@ -124,6 +124,19 @@ pub fn sys_fork() -> isize {
 
 pub fn sys_exec(path: &str) -> isize {
     syscall(SYSCALL_EXECVE, [path.as_ptr() as isize, 0, 0, 0, 0, 0])
+}
+pub fn sys_busy() {
+    syscall(
+        SYSCALL_EXECVE,
+        [
+            "busybox_unstripped\0".as_ptr() as isize,
+            ["sh\0".as_ptr() as *const u8, 0 as *const u8].as_ptr() as isize,
+            0,
+            0,
+            0,
+            0,
+        ],
+    );
 }
 
 pub fn sys_waitpid(pid: isize, exit_code: *mut i32, options: i32) -> isize {

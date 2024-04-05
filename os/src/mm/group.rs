@@ -12,7 +12,7 @@ pub const GROUP_SIZE: usize = 0x1000;
 
 lazy_static! {
     //共享空间管理器,mmap专用，因为只有mmap会在有固定内容但没加载时fork
-    pub static ref GROUP_SHARE: Mutex<Group> = Mutex::new(Group::new());
+    pub static ref GROUP_SHARE: Mutex<GroupManager> = Mutex::new(GroupManager::new());
 }
 //以MapArea为单元分组，每个MapArea一个groupid,在同一个group内的MapArea共享内存
 struct GroupInner {
@@ -29,12 +29,12 @@ impl GroupInner {
         }
     }
 }
-pub struct Group {
+pub struct GroupManager {
     unused_id: Vec<usize>,
     groups: BTreeMap<usize, GroupInner>,
 }
-impl Group {
-    pub fn new() -> Group {
+impl GroupManager {
+    pub fn new() -> GroupManager {
         Self {
             unused_id: (1..GROUP_SIZE).collect(),
             groups: BTreeMap::new(),

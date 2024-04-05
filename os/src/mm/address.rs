@@ -1,6 +1,9 @@
 //! Implementation of physical and virtual address and page number.
 use super::PageTableEntry;
-use crate::config::mm::{KERNEL_ADDR_OFFSET, KERNEL_PGNUM_OFFSET, PAGE_SIZE, PAGE_SIZE_BITS};
+use crate::{
+    config::mm::{KERNEL_ADDR_OFFSET, KERNEL_PGNUM_OFFSET, PAGE_SIZE, PAGE_SIZE_BITS},
+    utils::backtrace,
+};
 use core::fmt::{self, Debug, Formatter};
 
 const PA_WIDTH_SV39: usize = 56;
@@ -81,6 +84,9 @@ impl From<usize> for VirtAddr {
     fn from(v: usize) -> Self {
         // Self(v & ((1 << VA_WIDTH_SV39) - 1))
         let tmp = (v as isize >> VA_WIDTH_SV39) as isize;
+        if tmp != 0 && tmp != -1 {
+            backtrace();
+        }
         assert!(tmp == 0 || tmp == -1, "invalid va: {:#x}", v);
         Self(v)
     }

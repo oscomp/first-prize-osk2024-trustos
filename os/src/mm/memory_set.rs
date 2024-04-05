@@ -263,6 +263,10 @@ impl MemorySet {
         false
     }
     pub fn cow_page_fault(&mut self, vpn: VirtPageNum, scause: Trap) -> bool {
+        if scause == Trap::Exception(Exception::LoadPageFault) {
+            return false;
+        }
+        //找到触发cow的段
         let area = self
             .areas
             .iter_mut()
@@ -454,7 +458,7 @@ impl MemorySet {
             ),
             None,
         );
-
+        println!("user_stack:{:#X}~{:#X}", user_stack_bottom, user_stack_top);
         // map TrapContext
         memory_set.push(
             MapArea::new(
@@ -466,6 +470,7 @@ impl MemorySet {
             ),
             None,
         );
+        println!("start:{:#X}", elf.header.pt2.entry_point() as usize);
         (
             memory_set,
             user_stack_top,

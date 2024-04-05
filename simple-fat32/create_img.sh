@@ -16,6 +16,7 @@ sudo rm ../simple-fat32/fs/rCoretests/usertests
 sudo rm ../simple-fat32/fs/rCoretests/initproc 
 sudo cp ../user/target/riscv64gc-unknown-none-elf/release/usertests ../simple-fat32/fs
 sudo cp -r ../testsuits-for-oskernel/riscv-syscalls-testing/user/build/riscv64/* ../simple-fat32/fs/ 
+sudo cp ../busybox_unstripped ../simple-fat32/fs/
 
 sudo umount ../simple-fat32/fs 
 sudo rmdir ../simple-fat32/fs

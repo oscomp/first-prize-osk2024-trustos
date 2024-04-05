@@ -142,6 +142,7 @@ impl TaskControlBlock {
     pub fn exec(&self, elf_data: &[u8], argv: &Vec<alloc::string::String>) {
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (mut memory_set, mut user_sp, user_hp, entry_point) = MemorySet::from_elf(elf_data);
+        println!("user_sp:{:#X}  argv:{:?}", user_sp, argv);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
             .unwrap()
@@ -150,11 +151,21 @@ impl TaskControlBlock {
         //放入argv参数数组入用户栈
         user_sp -= (argv.len() + 1) * core::mem::size_of::<usize>(); //这块空间供字符串指针使用
         let mut argv_ptr_addr = user_sp;
+        let mut argv_vec: Vec<_> = (0..=argv.len()) // 获取 参数字符串首地址数组 在用户栈中的可变引用
+            .map(|arg| {
+                translated_refmut(
+                    memory_set.token(),
+                    (argv_ptr_addr + arg * core::mem::size_of::<usize>()) as *mut usize,
+                )
+            })
+            .collect();
+        *argv_vec[argv.len()] = 0; // 标记参数尾
         for i in 0..argv.len() {
             user_sp -= argv[i].len() + 1; //这块空间供字符串（含结束标志）使用
                                           //存放字符串地址
-            *translated_refmut(memory_set.token(), argv_ptr_addr as *mut usize) = user_sp;
-            argv_ptr_addr += core::mem::size_of::<usize>();
+                                          //*translated_refmut(memory_set.token(), argv_ptr_addr as *mut usize) = user_sp;
+                                          //argv_ptr_addr += core::mem::size_of::<usize>();
+            *argv_vec[i] = user_sp;
             //存放字符串
             let mut string_addr = user_sp;
             for j in argv[i].as_bytes() {
@@ -163,7 +174,7 @@ impl TaskControlBlock {
             }
             *translated_refmut(memory_set.token(), string_addr as *mut u8) = 0;
         }
-        *translated_refmut(memory_set.token(), argv_ptr_addr as *mut usize) = 0; //存放字符串指针空间的结束标志
+        //*translated_refmut(memory_set.token(), argv_ptr_addr as *mut usize) = 0; //存放字符串指针空间的结束标志
 
         user_sp -= user_sp % core::mem::size_of::<usize>(); //以8字节对齐
 
@@ -195,6 +206,7 @@ impl TaskControlBlock {
         debug!("task.exec.tid={}", self.tid.0);
         inner.user_heappoint = user_hp;
         inner.user_heapbottom = user_hp;
+        println!("readl user_sp:{:#X}", user_sp);
         // **** release current PCB
     }
     ///

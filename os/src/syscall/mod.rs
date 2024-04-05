@@ -56,8 +56,10 @@ use process::*;
 
 use crate::console::print;
 use crate::sbi::shutdown;
+use log::debug;
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
+    debug!("syscall:{}", syscall_id);
     match syscall_id {
         SYSCALL_GETCWD => sys_getcwd(args[0] as *const u8, args[1] as usize),
         SYSCALL_DUP => sys_dup(args[0] as usize),
