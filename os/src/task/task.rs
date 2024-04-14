@@ -13,7 +13,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use core::cell::RefMut;
+use core::{cell::RefMut, ptr};
 use log::{debug, info};
 use spin::{Mutex, MutexGuard};
 
@@ -148,35 +148,54 @@ impl TaskControlBlock {
             .unwrap()
             .ppn();
 
-        //放入argv参数数组入用户栈
-        user_sp -= (argv.len() + 1) * core::mem::size_of::<usize>(); //这块空间供字符串指针使用
-        let mut argv_ptr_addr = user_sp;
-        let mut argv_vec: Vec<_> = (0..=argv.len()) // 获取 参数字符串首地址数组 在用户栈中的可变引用
-            .map(|arg| {
-                translated_refmut(
-                    memory_set.token(),
-                    (argv_ptr_addr + arg * core::mem::size_of::<usize>()) as *mut usize,
-                )
-            })
-            .collect();
-        *argv_vec[argv.len()] = 0; // 标记参数尾
-        for i in 0..argv.len() {
-            user_sp -= argv[i].len() + 1; //这块空间供字符串（含结束标志）使用
-                                          //存放字符串地址
-                                          //*translated_refmut(memory_set.token(), argv_ptr_addr as *mut usize) = user_sp;
-                                          //argv_ptr_addr += core::mem::size_of::<usize>();
-            *argv_vec[i] = user_sp;
-            //存放字符串
-            let mut string_addr = user_sp;
-            for j in argv[i].as_bytes() {
-                *translated_refmut(memory_set.token(), string_addr as *mut u8) = *j;
-                string_addr += 1;
+        //存放字符串首址的数组
+        let mut argv_ptr_vec = Vec::<usize>::new();
+        for (i, arg) in argv.iter().enumerate() {
+            // 计算字符串在栈上的地址
+            let string_start = user_sp - arg.len() - 1; // 减 1 是为了字符串末尾的 null 字符
+            user_sp = string_start; // 更新栈顶指针
+                                    // 将字符串本身压入栈中
+            argv_ptr_vec.push(string_start);
+            //println!("string_start:{:#X}", string_start);
+            for (j, byte) in arg.as_bytes().iter().enumerate() {
+                *translated_refmut(memory_set.token(), (user_sp + j) as *mut u8) = *byte;
             }
-            *translated_refmut(memory_set.token(), string_addr as *mut u8) = 0;
+            // 添加字符串末尾的 null 字符
+            *translated_refmut(memory_set.token(), (user_sp + arg.len()) as *mut u8) = 0;
         }
-        //*translated_refmut(memory_set.token(), argv_ptr_addr as *mut usize) = 0; //存放字符串指针空间的结束标志
-
         user_sp -= user_sp % core::mem::size_of::<usize>(); //以8字节对齐
+
+        /*//不需要！！！
+        //环境变量参数数组指针
+        user_sp -= core::mem::size_of::<usize>();
+        let mut envp_pointer = user_sp;
+        //argv参数数组指针
+        user_sp -= core::mem::size_of::<usize>();
+        let mut argv_pointer = user_sp;
+        */
+
+        //envp参数数组（开头为NULL，这里直接结束符）
+        user_sp -= core::mem::size_of::<usize>();
+        let mut envp_start = user_sp; //envp参数数组开始存放的位置（暂未实现所以直接放置NULL）
+        *translated_refmut(memory_set.token(), envp_start as *mut usize) = 0;
+        //argv需要先放参数结尾NULL
+        user_sp -= core::mem::size_of::<usize>();
+        let mut argv_start = user_sp; //argv参数数组开始存放的位置，第一次初始化
+        *translated_refmut(memory_set.token(), argv_start as *mut usize) = 0;
+        // 为 argv 字符串指针数组预留空间
+        user_sp -= argv.len() * core::mem::size_of::<usize>();
+        for &i in argv_ptr_vec.iter().rev() {
+            argv_start -= core::mem::size_of::<usize>();
+            *translated_refmut(memory_set.token(), argv_start as *mut usize) = i;
+            //println!("!argv_start:{:#X}", argv_start);
+        }
+        //argc整数值
+        user_sp -= core::mem::size_of::<usize>();
+        let mut argc_loc = user_sp; //argc值
+        *translated_refmut(memory_set.token(), argc_loc as *mut usize) = argv.len();
+        //以8字节对齐
+        user_sp -= user_sp % core::mem::size_of::<usize>();
+        //println!("user_sp:{:#X}", user_sp);
 
         // **** access current TCB exclusively
         let mut inner = self.inner_lock();
