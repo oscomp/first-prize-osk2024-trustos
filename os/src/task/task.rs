@@ -1,5 +1,8 @@
 //!Implementation of [`TaskControlBlock`]
-use super::{tid_alloc, KernelStack, TaskContext, TidHandle};
+use super::{
+    aux::{Aux, AuxType},
+    tid_alloc, KernelStack, TaskContext, TidHandle,
+};
 use crate::{
     config::mm::{USER_HEAP_SIZE, USER_TRAP_CONTEXT},
     fs::{File, RFile, Stdin, Stdout},
@@ -83,7 +86,8 @@ impl TaskControlBlock {
     /// 只有initproc会调用
     pub fn new(elf_data: &[u8]) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack
-        let (mut memory_set, user_sp, user_heapbottom, entry_point) = MemorySet::from_elf(elf_data);
+        let (mut memory_set, user_sp, user_heapbottom, entry_point, mut auxv) =
+            MemorySet::from_elf(elf_data);
         debug!("entry point: {:x}", entry_point);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
@@ -139,60 +143,98 @@ impl TaskControlBlock {
         debug!("create task {}", task_control_block.tid.0);
         task_control_block
     }
-    pub fn exec(&self, elf_data: &[u8], argv: &Vec<alloc::string::String>) {
+    pub fn exec(
+        &self,
+        elf_data: &[u8],
+        argv: &Vec<alloc::string::String>,
+        mut env: &mut Vec<alloc::string::String>,
+    ) {
+        //用户栈高地址到低地址：环境变量字符串/参数字符串/aux辅助向量/环境变量地址数组/参数地址数组/参数数量
         // memory_set with elf program headers/trampoline/trap context/user stack
-        let (mut memory_set, mut user_sp, user_hp, entry_point) = MemorySet::from_elf(elf_data);
+        let (mut memory_set, mut user_sp, user_hp, entry_point, mut auxv) =
+            MemorySet::from_elf(elf_data);
         println!("user_sp:{:#X}  argv:{:?}", user_sp, argv);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
             .unwrap()
             .ppn();
 
+        //一些初始的环境变量
+        env.push(String::from("SHELL=/user_shell"));
+        env.push(String::from("PWD=/"));
+        env.push(String::from("HOME=/"));
+        env.push(String::from("PATH=/"));
+
+        //环境变量内容入栈
+        let mut env_ptr_vec = Vec::new();
+        for (i, env) in env.iter().enumerate() {
+            user_sp -= env.len() + 1;
+            env_ptr_vec.push(user_sp);
+            println!("{:#X}:{}", user_sp, env);
+            for (j, c) in env.as_bytes().iter().enumerate() {
+                *translated_refmut(memory_set.token(), (user_sp + j) as *mut u8) = *c;
+            }
+            *translated_refmut(memory_set.token(), (user_sp + env.len()) as *mut u8) = 0;
+        }
+        user_sp -= user_sp % core::mem::size_of::<usize>();
+        env_ptr_vec.push(0);
+
         //存放字符串首址的数组
-        let mut argv_ptr_vec = Vec::<usize>::new();
+        let mut argv_ptr_vec = Vec::new();
         for (i, arg) in argv.iter().enumerate() {
             // 计算字符串在栈上的地址
-            let string_start = user_sp - arg.len() - 1; // 减 1 是为了字符串末尾的 null 字符
-            user_sp = string_start; // 更新栈顶指针
-                                    // 将字符串本身压入栈中
-            argv_ptr_vec.push(string_start);
-            //println!("string_start:{:#X}", string_start);
-            for (j, byte) in arg.as_bytes().iter().enumerate() {
-                *translated_refmut(memory_set.token(), (user_sp + j) as *mut u8) = *byte;
+            user_sp -= arg.len() + 1;
+            argv_ptr_vec.push(user_sp);
+            println!("{:#X}:{}", user_sp, arg);
+            for (j, c) in arg.as_bytes().iter().enumerate() {
+                *translated_refmut(memory_set.token(), (user_sp + j) as *mut u8) = *c;
             }
             // 添加字符串末尾的 null 字符
             *translated_refmut(memory_set.token(), (user_sp + arg.len()) as *mut u8) = 0;
         }
         user_sp -= user_sp % core::mem::size_of::<usize>(); //以8字节对齐
+        argv_ptr_vec.push(0);
 
-        /*//不需要！！！
-        //环境变量参数数组指针
-        user_sp -= core::mem::size_of::<usize>();
-        let mut envp_pointer = user_sp;
-        //argv参数数组指针
-        user_sp -= core::mem::size_of::<usize>();
-        let mut argv_pointer = user_sp;
-        */
-
-        //envp参数数组（开头为NULL，这里直接结束符）
-        user_sp -= core::mem::size_of::<usize>();
-        let mut envp_start = user_sp; //envp参数数组开始存放的位置（暂未实现所以直接放置NULL）
-        *translated_refmut(memory_set.token(), envp_start as *mut usize) = 0;
-        //argv需要先放参数结尾NULL
-        user_sp -= core::mem::size_of::<usize>();
-        let mut argv_start = user_sp; //argv参数数组开始存放的位置，第一次初始化
-        *translated_refmut(memory_set.token(), argv_start as *mut usize) = 0;
-        // 为 argv 字符串指针数组预留空间
-        user_sp -= argv.len() * core::mem::size_of::<usize>();
-        for &i in argv_ptr_vec.iter().rev() {
-            argv_start -= core::mem::size_of::<usize>();
-            *translated_refmut(memory_set.token(), argv_start as *mut usize) = i;
-            //println!("!argv_start:{:#X}", argv_start);
+        //需要随便放16个字节，不知道干嘛用的。
+        user_sp -= 16;
+        auxv.push(Aux::new(AuxType::RANDOM, user_sp));
+        for i in 0..0xf {
+            *translated_refmut(memory_set.token(), (user_sp + i) as *mut u8) = i as u8;
         }
-        //argc整数值
+        user_sp -= user_sp % 16;
+
+        //将auxv放入栈中
+        auxv.push(Aux::new(AuxType::EXECFN, argv_ptr_vec[0]));
+        auxv.push(Aux::new(AuxType::NULL, 0));
+        for aux in auxv.iter().rev() {
+            user_sp -= core::mem::size_of::<Aux>();
+            *translated_refmut(memory_set.token(), user_sp as *mut usize) = aux.aux_type as usize;
+            *translated_refmut(
+                memory_set.token(),
+                (user_sp + core::mem::size_of::<usize>()) as *mut usize,
+            ) = aux.value;
+        }
+
+        //将环境变量指针数组放入栈中
+        println!("env pointers:");
+        for p in env_ptr_vec.iter().rev() {
+            user_sp -= core::mem::size_of::<usize>();
+            *translated_refmut(memory_set.token(), user_sp as *mut usize) = *p;
+            println!("{:#X}:{:#X}", user_sp, *p);
+        }
+        println!("arg pointers:");
+
+        //将参数指针数组放入栈中
+        for p in argv_ptr_vec.iter().rev() {
+            user_sp -= core::mem::size_of::<usize>();
+            *translated_refmut(memory_set.token(), user_sp as *mut usize) = *p;
+            println!("{:#X}:{:#X} ", user_sp, *p);
+        }
+
+        //将argc放入栈中
         user_sp -= core::mem::size_of::<usize>();
-        let mut argc_loc = user_sp; //argc值
-        *translated_refmut(memory_set.token(), argc_loc as *mut usize) = argv.len();
+        *translated_refmut(memory_set.token(), user_sp as *mut usize) = argv.len();
+
         //以8字节对齐
         user_sp -= user_sp % core::mem::size_of::<usize>();
         //println!("user_sp:{:#X}", user_sp);
@@ -225,7 +267,7 @@ impl TaskControlBlock {
         debug!("task.exec.tid={}", self.tid.0);
         inner.user_heappoint = user_hp;
         inner.user_heapbottom = user_hp;
-        println!("readl user_sp:{:#X}", user_sp);
+        println!("final user_sp:{:#X}", user_sp);
         // **** release current PCB
     }
     ///

@@ -130,8 +130,13 @@ pub fn sys_busy() {
         SYSCALL_EXECVE,
         [
             "busybox_unstripped\0".as_ptr() as isize,
-            ["sh\0".as_ptr() as *const u8, 0 as *const u8].as_ptr() as isize,
-            0,
+            [
+                "busybox_unstripped\0".as_ptr() as *const u8,
+                "ls\0".as_ptr() as *const u8,
+                0 as *const u8,
+            ]
+            .as_ptr() as isize,
+            ["environment test\0".as_ptr() as *const u8, 0 as *const u8].as_ptr() as isize,
             0,
             0,
             0,

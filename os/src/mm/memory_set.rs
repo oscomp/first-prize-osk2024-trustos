@@ -17,7 +17,7 @@ use crate::{
     fs::RFile,
     mm::flush_tlb,
     syscall::MmapFlags,
-    task::current_task,
+    task::{current_task, Aux, AuxType},
 };
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 use core::arch::asm;
@@ -390,7 +390,8 @@ impl MemorySet {
     }
     /// Include sections in elf and trampoline and TrapContext and user stack,
     /// also returns user_sp and entry point.
-    pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize, usize) {
+    pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize, usize, Vec<Aux>) {
+        let mut auxv = Vec::new();
         let mut memory_set = Self::new_from_kernel();
         // debug!("from_elf new stap={:#x}", memory_set.page_table.token());
         // map program headers of elf, with U flag
@@ -399,6 +400,28 @@ impl MemorySet {
         let magic = elf_header.pt1.magic;
         assert_eq!(magic, [0x7f, 0x45, 0x4c, 0x46], "invalid elf!");
         let ph_count = elf_header.pt2.ph_count();
+
+        auxv.push(Aux::new(
+            AuxType::PHENT,
+            elf.header.pt2.ph_entry_size() as usize,
+        )); // ELF64 header 64bytes
+        auxv.push(Aux::new(AuxType::PHNUM, ph_count as usize));
+        auxv.push(Aux::new(AuxType::PAGESZ, PAGE_SIZE as usize));
+        auxv.push(Aux::new(AuxType::BASE, 0 as usize));
+        auxv.push(Aux::new(AuxType::FLAGS, 0 as usize));
+        auxv.push(Aux::new(
+            AuxType::ENTRY,
+            elf.header.pt2.entry_point() as usize,
+        ));
+        auxv.push(Aux::new(AuxType::UID, 0 as usize));
+        auxv.push(Aux::new(AuxType::EUID, 0 as usize));
+        auxv.push(Aux::new(AuxType::GID, 0 as usize));
+        auxv.push(Aux::new(AuxType::EGID, 0 as usize));
+        auxv.push(Aux::new(AuxType::PLATFORM, 0 as usize));
+        auxv.push(Aux::new(AuxType::HWCAP, 0 as usize));
+        auxv.push(Aux::new(AuxType::CLKTCK, 100 as usize));
+        auxv.push(Aux::new(AuxType::SECURE, 0 as usize));
+        auxv.push(Aux::new(AuxType::NOTELF, 0x112d as usize));
         let mut max_end_vpn = VirtPageNum(0);
         for i in 0..ph_count {
             let ph = elf.program_header(i).unwrap();
@@ -476,6 +499,7 @@ impl MemorySet {
             user_stack_top,
             user_heap_bottom,
             elf.header.pt2.entry_point() as usize,
+            auxv,
         )
     }
     ///Clone a same `MemorySet`

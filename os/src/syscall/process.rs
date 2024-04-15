@@ -100,7 +100,7 @@ pub fn sys_clone(
     }
 }
 
-pub fn sys_execve(path: *const u8, mut argv: *const usize, _envp: *const u8) -> isize {
+pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usize) -> isize {
     let token = current_user_token().unwrap();
     let path = translated_str(token, path);
     println!("path:{}", path);
@@ -119,13 +119,26 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, _envp: *const u8) -> 
             argv = argv.add(1);
         }
     }
-    println!("num:{}", argv_vec.len());
+    let mut env = alloc::vec::Vec::<alloc::string::String>::new();
+    loop {
+        if envp.is_null() {
+            break;
+        }
+        let envp_ptr = *translated_ref(token, envp);
+        if envp_ptr == 0 {
+            break;
+        }
+        env.push(translated_str(token, envp_ptr as *const u8));
+        unsafe {
+            envp = envp.add(1);
+        }
+    }
     let task = current_task().unwrap();
     let cwd = task.inner_lock().current_path.clone();
     if let Some(app_inode) = open(&cwd, path.as_str(), OpenFlags::O_RDONLY) {
         let all_data = app_inode.read_all();
         task.inner_lock().file = Some(app_inode.clone());
-        task.exec(all_data.as_slice(), &argv_vec);
+        task.exec(all_data.as_slice(), &argv_vec, &mut env);
         task.inner_lock().memory_set.activate();
         debug!("sys_exec end");
         0

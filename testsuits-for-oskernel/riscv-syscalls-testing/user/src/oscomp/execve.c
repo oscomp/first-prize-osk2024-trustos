@@ -10,8 +10,8 @@
  */
 void test_execve(void){
     TEST_START(__func__);
-    char *newargv[] = {"test_echo", NULL};
-    char *newenviron[] = {NULL};
+    char *newargv[] = {"test_echo", "ls",NULL};
+    char *newenviron[] = {"environment test",NULL};
     execve("test_echo", newargv, newenviron);
     printf("  execve error.\n");
     //TEST_END(__func__);

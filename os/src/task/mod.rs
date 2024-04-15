@@ -14,6 +14,7 @@
 //!
 //! Be careful when you see `__switch` ASM function in `switch.S`. Control flow around this function
 //! might not be what you expect.
+mod aux;
 mod context;
 mod manager;
 mod processor;
@@ -35,6 +36,7 @@ pub use manager::{add_task, fetch_task, lock_task_manager, TaskManager};
 use switch::__switch;
 use task::{TaskControlBlock, TaskStatus};
 
+pub use aux::*;
 pub use processor::{
     current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
     Processor, PROCESSORS,
