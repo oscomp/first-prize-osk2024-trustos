@@ -16,7 +16,7 @@ mod context;
 use crate::config::mm::TRAMPOLINE;
 use crate::mm::VirtAddr;
 use crate::sync::interrupt_on;
-use crate::syscall::syscall;
+use crate::syscall::{syscall, Syscall};
 use crate::task::{
     current_task, current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next,
 };
@@ -68,6 +68,8 @@ pub fn trap_handler() {
         .time_data
         .update_utime();
 
+    let strace_mask = current_task().unwrap().inner_lock().strace_mask;
+
     let hartid = hart_id();
     // debug!("trap handler");
     set_kernel_trap_entry();
@@ -94,6 +96,17 @@ pub fn trap_handler() {
             // cx is changed during sys_exec, so we have to call it again
             cx = current_trap_cx();
             cx.x[10] = result as usize;
+            if strace_mask != 0 && (strace_mask == usize::MAX || strace_mask == cx.x[17]) {
+                info!(
+                    "[strace] syscall {:?} -> {}",
+                    Syscall::from(cx.x[17]),
+                    cx.x[10]
+                );
+            } else {
+                if Syscall::try_from(cx.x[17]).is_err() {
+                    info!("[strace] unknown syscall id {} -> {}", cx.x[17], cx.x[10]);
+                }
+            }
         }
         Trap::Exception(Exception::StorePageFault) | Trap::Exception(Exception::LoadPageFault) => {
             // page fault

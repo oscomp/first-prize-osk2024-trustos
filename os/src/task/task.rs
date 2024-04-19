@@ -16,7 +16,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use core::{cell::RefMut, ptr};
+use core::{mem::size_of, ptr};
 use log::{debug, info};
 use spin::{Mutex, MutexGuard};
 
@@ -45,6 +45,7 @@ pub struct TaskControlBlockInner {
     pub time_data: TimeData,
     pub user_heappoint: usize,
     pub user_heapbottom: usize,
+    pub strace_mask: usize,
 }
 
 impl TaskControlBlockInner {
@@ -130,6 +131,7 @@ impl TaskControlBlock {
                 time_data: TimeData::new(),
                 user_heappoint: user_heapbottom,
                 user_heapbottom,
+                strace_mask: 0,
             }),
         };
         // prepare TrapContext in user space
@@ -148,7 +150,7 @@ impl TaskControlBlock {
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (mut memory_set, mut user_sp, user_hp, entry_point, mut auxv) =
             MemorySet::from_elf(elf_data);
-        println!("user_sp:{:#X}  argv:{:?}", user_sp, argv);
+        // println!("user_sp:{:#X}  argv:{:?}", user_sp, argv);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
             .unwrap()
@@ -165,7 +167,7 @@ impl TaskControlBlock {
         for (i, env) in env.iter().enumerate() {
             user_sp -= env.len() + 1;
             env_ptr_vec.push(user_sp);
-            println!("{:#X}:{}", user_sp, env);
+            // println!("{:#X}:{}", user_sp, env);
             for (j, c) in env.as_bytes().iter().enumerate() {
                 *translated_refmut(memory_set.token(), (user_sp + j) as *mut u8) = *c;
             }
@@ -180,7 +182,7 @@ impl TaskControlBlock {
             // 计算字符串在栈上的地址
             user_sp -= arg.len() + 1;
             argv_ptr_vec.push(user_sp);
-            println!("{:#X}:{}", user_sp, arg);
+            // println!("{:#X}:{}", user_sp, arg);
             for (j, c) in arg.as_bytes().iter().enumerate() {
                 *translated_refmut(memory_set.token(), (user_sp + j) as *mut u8) = *c;
             }
@@ -198,42 +200,42 @@ impl TaskControlBlock {
         }
         user_sp -= user_sp % 16;
 
-        println!("aux:");
+        // println!("aux:");
         //将auxv放入栈中
         auxv.push(Aux::new(AuxType::EXECFN, argv_ptr_vec[0]));
         auxv.push(Aux::new(AuxType::NULL, 0));
         for aux in auxv.iter().rev() {
-            println!("{:?}", aux);
-            user_sp -= core::mem::size_of::<Aux>();
+            // println!("{:?}", aux);
+            user_sp -= size_of::<Aux>();
             *translated_refmut(memory_set.token(), user_sp as *mut usize) = aux.aux_type as usize;
             *translated_refmut(
                 memory_set.token(),
-                (user_sp + core::mem::size_of::<usize>()) as *mut usize,
+                (user_sp + size_of::<usize>()) as *mut usize,
             ) = aux.value;
         }
 
         //将环境变量指针数组放入栈中
-        println!("env pointers:");
+        // println!("env pointers:");
         for p in env_ptr_vec.iter().rev() {
             user_sp -= core::mem::size_of::<usize>();
             *translated_refmut(memory_set.token(), user_sp as *mut usize) = *p;
-            println!("{:#X}:{:#X}", user_sp, *p);
+            // println!("{:#X}:{:#X}", user_sp, *p);
         }
-        println!("arg pointers:");
+        // println!("arg pointers:");
 
         //将参数指针数组放入栈中
         for p in argv_ptr_vec.iter().rev() {
-            user_sp -= core::mem::size_of::<usize>();
+            user_sp -= size_of::<usize>();
             *translated_refmut(memory_set.token(), user_sp as *mut usize) = *p;
-            println!("{:#X}:{:#X} ", user_sp, *p);
+            // println!("{:#X}:{:#X} ", user_sp, *p);
         }
 
         //将argc放入栈中
-        user_sp -= core::mem::size_of::<usize>();
+        user_sp -= size_of::<usize>();
         *translated_refmut(memory_set.token(), user_sp as *mut usize) = argv.len();
 
         //以8字节对齐
-        user_sp -= user_sp % core::mem::size_of::<usize>();
+        user_sp -= user_sp % size_of::<usize>();
         //println!("user_sp:{:#X}", user_sp);
 
         // **** access current TCB exclusively
@@ -264,7 +266,7 @@ impl TaskControlBlock {
         debug!("task.exec.tid={}", self.tid.0);
         inner.user_heappoint = user_hp;
         inner.user_heapbottom = user_hp;
-        println!("final user_sp:{:#X}", user_sp);
+        // println!("final user_sp:{:#X}", user_sp);
         // **** release current PCB
     }
     ///
@@ -324,6 +326,7 @@ impl TaskControlBlock {
                 time_data: TimeData::new(),
                 user_heappoint: parent_inner.user_heappoint,
                 user_heapbottom: parent_inner.user_heapbottom,
+                strace_mask: parent_inner.strace_mask,
             }),
         });
         // add child

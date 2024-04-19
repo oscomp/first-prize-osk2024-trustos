@@ -13,8 +13,9 @@ const DL: u8 = 0x7fu8;
 const BS: u8 = 0x08u8;
 
 use alloc::string::String;
+use alloc::vec::Vec;
 use user_lib::console::getchar;
-use user_lib::{exec, fork, waitpid};
+use user_lib::{exec, fork, strace, waitpid};
 
 #[no_mangle]
 pub fn main() -> i32 {
@@ -31,7 +32,14 @@ pub fn main() -> i32 {
                     let pid = fork();
                     if pid == 0 {
                         // child process
-                        if exec(line.as_str()) == -1 {
+                        let args: Vec<&str> = line.split_whitespace().collect();
+                        let mut exec_path = args[0];
+                        if args[0] == "strace" {
+                            strace(args[1].parse::<usize>().unwrap());
+                            exec_path = args[2];
+                        }
+
+                        if exec(exec_path) == -1 {
                             println!("Error when executing!");
                             return -4;
                         }

@@ -29,6 +29,7 @@ const SYSCALL_EXECVE: usize = 221;
 const SYSCALL_WAIT4: usize = 260;
 
 const SYSCALL_SHUTDOWN: usize = 1000;
+const SYSCALL_STRACE: usize = 2000;
 
 fn syscall(id: usize, args: [isize; 6]) -> isize {
     let mut ret: isize;
@@ -263,4 +264,8 @@ pub fn sys_nanosleep(req: &mut [u8], rem: &mut [u8]) -> isize {
             0,
         ],
     )
+}
+
+pub fn sys_strace(mask: usize) -> isize {
+    syscall(SYSCALL_STRACE, [mask as isize, 0, 0, 0, 0, 0])
 }

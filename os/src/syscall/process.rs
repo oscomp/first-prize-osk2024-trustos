@@ -28,7 +28,8 @@ pub fn sys_sched_yield() -> isize {
 pub fn sys_gettimeofday(ts: *const u8) -> isize {
     let token = current_user_token().unwrap();
     let mut ts = UserBuffer::new(translated_byte_buffer(token, ts, size_of::<Timespec>()));
-    let mut timespec = Timespec::new(get_time_ms() / 1000, (get_time_ms() % 1000) * 1000000);
+    let time = get_time_ms();
+    let mut timespec = Timespec::new(time / 1000, (time % 1000) * 1000000);
     ts.write(timespec.as_bytes());
     0
 }
@@ -53,6 +54,11 @@ pub fn sys_getppid() -> isize {
 
 pub fn sys_gettid() -> isize {
     current_task().unwrap().tid() as isize
+}
+
+pub fn sys_strace(mask: usize) -> isize {
+    current_task().unwrap().inner_lock().strace_mask = mask;
+    0
 }
 
 /// void (*fn)(void* arg) 参数通过栈传递,如果stack_ptr!=0, fn=0(stack),arg=8(stack)
@@ -97,7 +103,7 @@ pub fn sys_clone(
 pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usize) -> isize {
     let token = current_user_token().unwrap();
     let path = translated_str(token, path);
-    println!("path:{}", path);
+    // println!("path:{}", path);
     //处理argv参数
     let mut argv_vec = Vec::<String>::new();
     loop {
@@ -210,6 +216,8 @@ pub fn sys_nanosleep(req: *const u8, _rem: *const u8) -> isize {
         let now = get_time_ms();
         if now - begin >= waittime {
             break;
+        } else {
+            suspend_current_and_run_next();
         }
     }
     0

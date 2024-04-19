@@ -481,7 +481,7 @@ impl MemorySet {
             ),
             None,
         );
-        println!("user_stack:{:#X}~{:#X}", user_stack_bottom, user_stack_top);
+        // println!("user_stack:{:#X}~{:#X}", user_stack_bottom, user_stack_top);
         // map TrapContext
         memory_set.push(
             MapArea::new(
@@ -493,7 +493,7 @@ impl MemorySet {
             ),
             None,
         );
-        println!("start:{:#X}", elf.header.pt2.entry_point() as usize);
+        // println!("start:{:#X}", elf.header.pt2.entry_point() as usize);
         (
             memory_set,
             user_stack_top,

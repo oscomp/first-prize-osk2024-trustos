@@ -9,40 +9,47 @@
 //! For clarity, each single syscall is implemented as its own function, named
 //! `sys_` then the name of the syscall. You can find functions like this in
 //! submodules, and you should also implement syscalls this way.
-const SYSCALL_GETCWD: usize = 17;
-const SYSCALL_DUP: usize = 23;
-const SYSCALL_DUP3: usize = 24;
-const SYSCALL_MKDIRAT: usize = 34;
-const SYSCALL_UNLINKAT: usize = 35;
-const SYSCALL_LINKAT: usize = 37;
-const SYSCALL_UMOUNT2: usize = 39;
-const SYSCALL_MOUNT: usize = 40;
-const SYSCALL_CHDIR: usize = 49;
-const SYSCALL_OPENAT: usize = 56;
-const SYSCALL_CLOSE: usize = 57;
-const SYSCALL_PIPE2: usize = 59;
-const SYSCALL_GETDENTS64: usize = 61;
-const SYSCALL_READ: usize = 63;
-const SYSCALL_WRITE: usize = 64;
-const SYSCALL_FSTAT: usize = 80;
-const SYSCALL_EXIT: usize = 93;
-const SYSCALL_NANOSLEEP: usize = 101;
-const SYSCALL_SCHED_YIELD: usize = 124;
-const SYSCALL_TIMES: usize = 153;
-const SYSCALL_UNAME: usize = 160;
-const SYSCALL_GETTIMEOFDAY: usize = 169;
-const SYSCALL_GETPID: usize = 172;
-const SYSCALL_GETPPID: usize = 173;
-const SYSCALL_GETTID: usize = 178;
-const SYSCALL_BRK: usize = 214;
-const SYSCALL_MUNMAP: usize = 215;
-const SYSCALL_CLONE: usize = 220;
-const SYSCALL_MMAP: usize = 222;
-const SYSCALL_EXECVE: usize = 221;
-const SYSCALL_WAIT4: usize = 260;
-
-//非标准系统调用
-const SYSCALL_SHUTDOWN: usize = 1000;
+use num_enum::FromPrimitive;
+#[derive(Debug, PartialEq, FromPrimitive)]
+#[repr(usize)]
+pub enum Syscall {
+    Getcwd = 17,
+    Dup = 23,
+    Dup3 = 24,
+    Mkdirat = 34,
+    Unlinkat = 35,
+    Linkat = 37,
+    Umount2 = 39,
+    Mount = 40,
+    Chdir = 49,
+    Openat = 56,
+    Close = 57,
+    Pipe2 = 59,
+    Getdents64 = 61,
+    Read = 63,
+    Write = 64,
+    Fstat = 80,
+    Exit = 93,
+    Nanosleep = 101,
+    SchedYield = 124,
+    Times = 153,
+    Uname = 160,
+    Gettimeofday = 169,
+    Getpid = 172,
+    Getppid = 173,
+    Gettid = 178,
+    Brk = 214,
+    Munmap = 215,
+    Clone = 220,
+    Mmap = 222,
+    Execve = 221,
+    Wait4 = 260,
+    // 非标准系统调用
+    Shutdown = 1000,
+    Strace = 2000,
+    #[num_enum(default)]
+    Default = 0,
+}
 
 mod fs;
 mod memory;
@@ -60,65 +67,66 @@ use log::debug;
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
     debug!("syscall:{}", syscall_id);
+    let syscall_id: Syscall = Syscall::from(syscall_id);
     match syscall_id {
-        SYSCALL_GETCWD => sys_getcwd(args[0] as *const u8, args[1] as usize),
-        SYSCALL_DUP => sys_dup(args[0] as usize),
-        SYSCALL_DUP3 => sys_dup3(args[0] as usize, args[1] as usize),
-        SYSCALL_MKDIRAT => sys_mkdirat(args[0], args[1] as *const u8, args[2] as usize),
-        SYSCALL_UNLINKAT => sys_unlinkat(args[0], args[1] as *const u8, args[2] as u32),
-        SYSCALL_LINKAT => sys_linkat(
+        Syscall::Getcwd => sys_getcwd(args[0] as *const u8, args[1] as usize),
+        Syscall::Dup => sys_dup(args[0] as usize),
+        Syscall::Dup3 => sys_dup3(args[0] as usize, args[1] as usize),
+        Syscall::Mkdirat => sys_mkdirat(args[0], args[1] as *const u8, args[2] as usize),
+        Syscall::Unlinkat => sys_unlinkat(args[0], args[1] as *const u8, args[2] as u32),
+        Syscall::Linkat => sys_linkat(
             args[0],
             args[1] as *const u8,
             args[2],
             args[3] as *const u8,
             args[4] as u32,
         ),
-        SYSCALL_UMOUNT2 => sys_umount2(args[0] as *const u8, args[1] as u32),
-        SYSCALL_MOUNT => sys_mount(
+        Syscall::Umount2 => sys_umount2(args[0] as *const u8, args[1] as u32),
+        Syscall::Mount => sys_mount(
             args[0] as *const u8,
             args[1] as *const u8,
             args[2] as *const u8,
             args[3] as u32,
             args[4] as *const u8,
         ),
-        SYSCALL_CHDIR => sys_chdir(args[0] as *const u8),
-        SYSCALL_OPENAT => sys_openat(
+        Syscall::Chdir => sys_chdir(args[0] as *const u8),
+        Syscall::Openat => sys_openat(
             args[0],
             args[1] as *const u8,
             args[2] as u32,
             args[3] as usize,
         ),
-        SYSCALL_CLOSE => sys_close(args[0] as usize),
-        SYSCALL_PIPE2 => sys_pipe2(args[0] as *mut u32),
-        SYSCALL_GETDENTS64 => {
+        Syscall::Close => sys_close(args[0] as usize),
+        Syscall::Pipe2 => sys_pipe2(args[0] as *mut u32),
+        Syscall::Getdents64 => {
             sys_getdents64(args[0] as usize, args[1] as *const u8, args[2] as usize)
         }
-        SYSCALL_READ => sys_read(args[0] as usize, args[1] as *const u8, args[2] as usize),
-        SYSCALL_WRITE => sys_write(args[0] as usize, args[1] as *const u8, args[2] as usize),
-        SYSCALL_FSTAT => sys_fstat(args[0] as usize, args[1] as *const u8),
-        SYSCALL_EXIT => sys_exit(args[0] as i32),
-        SYSCALL_NANOSLEEP => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
-        SYSCALL_SCHED_YIELD => sys_sched_yield(),
-        SYSCALL_TIMES => sys_times(args[0] as *const u8),
-        SYSCALL_GETTIMEOFDAY => sys_gettimeofday(args[0] as *const u8),
-        SYSCALL_UNAME => sys_uname(args[0] as *mut u8),
-        SYSCALL_GETPID => sys_getpid(),
-        SYSCALL_GETPPID => sys_getppid(),
-        SYSCALL_GETTID => sys_gettid(),
-        SYSCALL_CLONE => sys_clone(
+        Syscall::Read => sys_read(args[0] as usize, args[1] as *const u8, args[2] as usize),
+        Syscall::Write => sys_write(args[0] as usize, args[1] as *const u8, args[2] as usize),
+        Syscall::Fstat => sys_fstat(args[0] as usize, args[1] as *const u8),
+        Syscall::Exit => sys_exit(args[0] as i32),
+        Syscall::Nanosleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
+        Syscall::SchedYield => sys_sched_yield(),
+        Syscall::Times => sys_times(args[0] as *const u8),
+        Syscall::Gettimeofday => sys_gettimeofday(args[0] as *const u8),
+        Syscall::Uname => sys_uname(args[0] as *mut u8),
+        Syscall::Getpid => sys_getpid(),
+        Syscall::Getppid => sys_getppid(),
+        Syscall::Gettid => sys_gettid(),
+        Syscall::Clone => sys_clone(
             args[0] as usize,
             args[1] as usize,
             args[2] as usize,
             args[3] as usize,
             args[4] as usize,
         ),
-        SYSCALL_BRK => sys_brk(args[0] as usize),
-        SYSCALL_EXECVE => sys_execve(
+        Syscall::Brk => sys_brk(args[0] as usize),
+        Syscall::Execve => sys_execve(
             args[0] as *const u8,
             args[1] as *const usize,
             args[2] as *const usize,
         ),
-        SYSCALL_MMAP => sys_mmap(
+        Syscall::Mmap => sys_mmap(
             args[0] as usize,
             args[1] as usize,
             args[2] as u32,
@@ -126,9 +134,10 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
             args[4] as usize,
             args[5] as usize,
         ),
-        SYSCALL_MUNMAP => sys_munmap(args[0] as usize, args[1] as usize),
-        SYSCALL_WAIT4 => sys_wait4(args[0] as isize, args[1] as *mut i32, args[2] as i32),
-        SYSCALL_SHUTDOWN => shutdown(false),
-        _ => panic!("Unsupported syscall_id: {}", syscall_id),
+        Syscall::Munmap => sys_munmap(args[0] as usize, args[1] as usize),
+        Syscall::Wait4 => sys_wait4(args[0] as isize, args[1] as *mut i32, args[2] as i32),
+        Syscall::Shutdown => shutdown(false),
+        Syscall::Strace => sys_strace(args[0] as usize),
+        _ => panic!("Unsupported syscall_id: {:?}", syscall_id),
     }
 }
