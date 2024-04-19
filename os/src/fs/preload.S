@@ -1,4 +1,4 @@
-# 将initproc和user_shell提前放到内存里
+# 将initproc和onlinetests提前放到内存里
     .section .data
     .global initproc_start
     .global initproc_end

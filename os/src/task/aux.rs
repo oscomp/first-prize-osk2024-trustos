@@ -1,8 +1,8 @@
 #[derive(Clone, Copy)]
 #[allow(non_camel_case_types, unused)]
 #[repr(usize)]
-
 //每个枚举量的含义可以在linux机子上查看/usr/include/elf.h里的注释
+#[derive(Debug)]
 pub enum AuxType {
     NULL = 0,
     IGNORE = 1,
@@ -49,6 +49,7 @@ pub enum AuxType {
     MINSIGSTKSZ = 51,
 }
 
+#[derive(Debug)]
 pub struct Aux {
     pub aux_type: AuxType,
     pub value: usize,

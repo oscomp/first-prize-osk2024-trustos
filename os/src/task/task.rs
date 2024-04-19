@@ -203,10 +203,12 @@ impl TaskControlBlock {
         }
         user_sp -= user_sp % 16;
 
+        println!("aux:");
         //将auxv放入栈中
         auxv.push(Aux::new(AuxType::EXECFN, argv_ptr_vec[0]));
         auxv.push(Aux::new(AuxType::NULL, 0));
         for aux in auxv.iter().rev() {
+            println!("{:?}", aux);
             user_sp -= core::mem::size_of::<Aux>();
             *translated_refmut(memory_set.token(), user_sp as *mut usize) = aux.aux_type as usize;
             *translated_refmut(

@@ -129,9 +129,9 @@ pub fn sys_busy() {
     syscall(
         SYSCALL_EXECVE,
         [
-            "busybox_unstripped\0".as_ptr() as isize,
+            "busybox\0".as_ptr() as isize,
             [
-                "busybox_unstripped\0".as_ptr() as *const u8,
+                "busybox\0".as_ptr() as *const u8,
                 "ls\0".as_ptr() as *const u8,
                 0 as *const u8,
             ]

@@ -137,9 +137,11 @@ pub fn trap_handler() {
             exit_current_and_run_next(-2);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
+            backtrace();
             println!(
-                "[kernel] [hart {}] IllegalInstruction in application, kernel killed it.",
-                hartid
+                "[kernel] [hart {}] IllegalInstruction at {:#x} in application, kernel killed it.",
+                hartid,
+                current_trap_cx().sepc,
             );
             // illegal instruction exit code
             exit_current_and_run_next(-3);
