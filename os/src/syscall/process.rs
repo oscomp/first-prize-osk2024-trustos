@@ -10,7 +10,9 @@ use crate::task::{
     suspend_current_and_run_next,
 };
 use crate::timer::{get_time_ms, Timespec, Tms};
+use alloc::string::String;
 use alloc::sync::Arc;
+use alloc::vec::Vec;
 use log::{debug, info};
 
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -25,11 +27,7 @@ pub fn sys_sched_yield() -> isize {
 
 pub fn sys_gettimeofday(ts: *const u8) -> isize {
     let token = current_user_token().unwrap();
-    let mut ts = UserBuffer::new(translated_byte_buffer(
-        token,
-        ts,
-        core::mem::size_of::<Timespec>(),
-    ));
+    let mut ts = UserBuffer::new(translated_byte_buffer(token, ts, size_of::<Timespec>()));
     let mut timespec = Timespec::new(get_time_ms() / 1000, (get_time_ms() % 1000) * 1000000);
     ts.write(timespec.as_bytes());
     0
@@ -39,11 +37,7 @@ pub fn sys_times(tms: *const u8) -> isize {
     let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
-    let mut tms = UserBuffer::new(translated_byte_buffer(
-        token,
-        tms,
-        core::mem::size_of::<Timespec>(),
-    ));
+    let mut tms = UserBuffer::new(translated_byte_buffer(token, tms, size_of::<Timespec>()));
     let mut times = Tms::new(&inner.time_data);
     tms.write(times.as_bytes());
     0
@@ -105,7 +99,7 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
     let path = translated_str(token, path);
     println!("path:{}", path);
     //处理argv参数
-    let mut argv_vec = alloc::vec::Vec::<alloc::string::String>::new();
+    let mut argv_vec = Vec::<String>::new();
     loop {
         if argv.is_null() {
             break;
@@ -119,7 +113,7 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
             argv = argv.add(1);
         }
     }
-    let mut env = alloc::vec::Vec::<alloc::string::String>::new();
+    let mut env = Vec::<String>::new();
     loop {
         if envp.is_null() {
             break;

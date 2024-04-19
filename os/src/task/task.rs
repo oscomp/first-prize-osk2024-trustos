@@ -126,7 +126,7 @@ impl TaskControlBlock {
                     Some(Arc::new(Stdout)),
                 ],
                 file: None,
-                current_path: alloc::string::String::from("/"),
+                current_path: String::from("/"),
                 time_data: TimeData::new(),
                 user_heappoint: user_heapbottom,
                 user_heapbottom,
@@ -143,12 +143,7 @@ impl TaskControlBlock {
         debug!("create task {}", task_control_block.tid.0);
         task_control_block
     }
-    pub fn exec(
-        &self,
-        elf_data: &[u8],
-        argv: &Vec<alloc::string::String>,
-        mut env: &mut Vec<alloc::string::String>,
-    ) {
+    pub fn exec(&self, elf_data: &[u8], argv: &Vec<String>, mut env: &mut Vec<String>) {
         //用户栈高地址到低地址：环境变量字符串/参数字符串/aux辅助向量/环境变量地址数组/参数地址数组/参数数量
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (mut memory_set, mut user_sp, user_hp, entry_point, mut auxv) =
