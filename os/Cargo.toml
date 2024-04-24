@@ -18,18 +18,20 @@ bitflags = "1.2.1"
 xmas-elf = "0.7.0"
 virtio-drivers = { git = "https://github.com/rcore-os/virtio-drivers", rev = "4ee80e5" }
 simple-fat32 = { path = "../simple-fat32" }
+fat32_fs = { path = "../fat32_fs" }
 log = "0.4"
 sbi-rt = { version = "0.0.2", features = ["legacy"] }
 spin = "0.9.8"
 num_enum = { version = "0.7.2", default-features = false }
 [features]
 board_qemu = []
-default = ["info"]
+default = ["info", "simple_fs"]
 error = []
 warn = []
 info = []
 debug = []
 trace = []
+simple_fs = []
 
 [profile.release]
 debug = true

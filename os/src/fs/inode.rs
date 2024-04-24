@@ -4,23 +4,28 @@ use crate::{drivers::BLOCK_DEVICE, mm::UserBuffer};
 use _core::str::FromStr;
 use alloc::{string::String, sync::Arc, vec::Vec};
 use bitflags::*;
+// #[cfg(not(feature = "simple_fs"))]
+// use fat32_fs::{create_rr}
+#[cfg(feature = "fat32_fs")]
+use fat32_fs::{FAT32Manager, VFile, ATTRIBUTE_ARCHIVE, ATTRIBUTE_DIRECTORY};
 use lazy_static::*;
 use log::info;
+#[cfg(feature = "simple_fs")]
 use simple_fat32::{create_root_vfile, FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
 use spin::Mutex;
-
+#[cfg(feature = "simple_fs")]
 /// 表示进程中一个被打开的常规文件或目录
 pub struct OSInode {
     readable: bool, // 该文件是否允许通过 sys_read 进行读
     writable: bool, // 该文件是否允许通过 sys_write 进行写
     inner: Mutex<OSInodeInner>,
 }
-
+// #[cfg(feature = "simple_fs")]
 pub struct OSInodeInner {
     offset: usize, // 偏移量
     inode: Arc<VFile>,
 }
-
+// #[cfg(feature = "simple_fs")]
 impl OSInode {
     pub fn new(readable: bool, writable: bool, inode: Arc<VFile>) -> Self {
         Self {
@@ -61,6 +66,7 @@ impl OSInode {
     }
 }
 
+#[cfg(feature = "simple_fs")]
 // 这里在实例化的时候进行文件系统的打开
 lazy_static! {
     pub static ref ROOT_INODE: Arc<VFile> = {
@@ -69,6 +75,15 @@ lazy_static! {
     };
 }
 
+#[cfg(feature = "fat32_fs")]
+lazy_static! {
+    pub static ref ROOT_INODE: Arc<VFile> = {
+        let fat32_manager = FAT32Manager::open(BLOCK_DEVICE.clone());
+        Arc::new(create_root_vfile(&fat32_manager)) // 返回根目录
+    };
+}
+
+// #[cfg(feature = "simple_fs")]
 pub fn list_all(head: String, node: Arc<VFile>) {
     let head = head + &"/";
     for app in node.ls().unwrap() {
@@ -90,7 +105,7 @@ pub fn list_all(head: String, node: Arc<VFile>) {
         }
     }
 }
-
+#[cfg(feature = "simple_fs")]
 pub fn list_apps() {
     println!("/**** APPS ****");
     list_all("".into(), ROOT_INODE.clone());

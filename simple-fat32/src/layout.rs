@@ -1,4 +1,6 @@
-use super::{clone_into_array, fat32_manager::FAT32Manager, get_block_cache, BlockDevice, BLOCK_SIZE};
+use super::{
+    clone_into_array, fat32_manager::FAT32Manager, get_block_cache, BlockDevice, BLOCK_SIZE,
+};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -36,12 +38,12 @@ pub struct FatBS {
     bpb_sec_per_clus: u8,   // 每簇的扇区数
     bpb_rsvd_sec_cnt: u16,  // 保留扇区的数目，通过它能获得第一个FAT表所在的扇区
     bpb_num_fats: u8,       // FAT数
-    bpb_root_ent_cnt: u16,  // 对于FAT12和FAT16此域包含根目录中目录的个数（每项长度为32字节），对于FAT32，此项必须为0。
-    bpb_tot_sec16: u16,     // 早期版本中16bit的总扇区，对于FAT32，此域必为0。
-    bpb_media: u8,          // 媒体描述符
-    bpb_fatsz16: u16,       // FAT12/FAT16一个FAT表所占的扇区数，对于FAT32来说此域必须为0
-    bpb_sec_per_trk: u16,   // 每磁道的扇区数，用于BIOS中断0x13
-    bpb_num_heads: u16,     // 磁头数，用于BIOS的0x13中断
+    bpb_root_ent_cnt: u16, // 对于FAT12和FAT16此域包含根目录中目录的个数（每项长度为32字节），对于FAT32，此项必须为0。
+    bpb_tot_sec16: u16,    // 早期版本中16bit的总扇区，对于FAT32，此域必为0。
+    bpb_media: u8,         // 媒体描述符
+    bpb_fatsz16: u16,      // FAT12/FAT16一个FAT表所占的扇区数，对于FAT32来说此域必须为0
+    bpb_sec_per_trk: u16,  // 每磁道的扇区数，用于BIOS中断0x13
+    bpb_num_heads: u16,    // 磁头数，用于BIOS的0x13中断
     bpb_hidd_sec: u32, // 在此FAT分区之前所隐藏的扇区数，必须使得调用BIOS的0x13中断可以得到此数值，对于那些没有分区的存储介质，此域必须为0
     bpb_tot_sec32: u32, // 该卷总扇区数（32bit），这里的扇区总数包括四个基本部分，此域可以为0，若此域为0，BPB_ToSec16必须为非0，对FAT32，此域必须是非0。
 }
@@ -67,18 +69,18 @@ impl FatBS {
 #[derive(Clone, Copy)]
 #[allow(unused)]
 pub struct FatExtBS {
-    bpb_fatsz32: u32,          // 一个FAT表所占的扇区数，此域为FAT32特有，同时BPB_FATSz16必须为0
-    bpb_ext_flags: u16,        // 扩展标志，此域FAT32特有
-    bpb_fs_ver: u16,           // 此域为FAT32特有， 高位为FAT32的主版本号，低位为次版本号
-    bpb_root_clus: u32,        // 根目录所在第一个簇的簇号，通常该数值为2，但不是必须为2。
-    bpb_fsinfo: u16,           // 保留区中FAT32卷FSINFO结构所在的扇区号，通常为1。
-    bpb_bk_boot_sec: u16,      // 如果不为0，表示在保留区中引导记录的备数据所占的扇区数，通常为6。
-    bpb_reserved: [u8; 12],    // 用于以后FAT扩展使用，对FAT32。此域用0填充
-    bs_drv_num: u8,            // 用于BIOS中断0x13得到磁盘驱动器参数
-    bs_reserved1: u8,          // 保留（供NT使用），格式化FAT卷时必须设为0
-    bs_boot_sig: u8,           // 扩展引导标记（0x29）用于指明此后的3个域可用
-    bs_vol_id: u32,            // 卷标序列号，此域以BS_VolLab一起可以用来检测磁盘是否正确
-    bs_vol_lab: [u8; 11],      // 磁盘卷标，此域必须与根目录中11字节长的卷标一致。
+    bpb_fatsz32: u32,   // 一个FAT表所占的扇区数，此域为FAT32特有，同时BPB_FATSz16必须为0
+    bpb_ext_flags: u16, // 扩展标志，此域FAT32特有
+    bpb_fs_ver: u16,    // 此域为FAT32特有， 高位为FAT32的主版本号，低位为次版本号
+    bpb_root_clus: u32, // 根目录所在第一个簇的簇号，通常该数值为2，但不是必须为2。
+    bpb_fsinfo: u16,    // 保留区中FAT32卷FSINFO结构所在的扇区号，通常为1。
+    bpb_bk_boot_sec: u16, // 如果不为0，表示在保留区中引导记录的备数据所占的扇区数，通常为6。
+    bpb_reserved: [u8; 12], // 用于以后FAT扩展使用，对FAT32。此域用0填充
+    bs_drv_num: u8,     // 用于BIOS中断0x13得到磁盘驱动器参数
+    bs_reserved1: u8,   // 保留（供NT使用），格式化FAT卷时必须设为0
+    bs_boot_sig: u8,    // 扩展引导标记（0x29）用于指明此后的3个域可用
+    bs_vol_id: u32,     // 卷标序列号，此域以BS_VolLab一起可以用来检测磁盘是否正确
+    bs_vol_lab: [u8; 11], // 磁盘卷标，此域必须与根目录中11字节长的卷标一致。
     bs_fil_sys_type: [u8; 64], // 以下的几种之一：“FAT12”，“FAT16”，“FAT32”。
 }
 
@@ -101,10 +103,10 @@ pub struct FSInfo {
     fsi_lead_sig: u32,        // Value 0x41615252
     fsi_reserved1: [u8; 480], // 保留
     fsi_struc_sig: u32,       // Value 0x61417272
-    fsi_free_count: u32,      // 包含卷上最近已知的空闲簇计数。如果值是0xFFFFFFFF，那么空闲计数是未知的，必须计算。
-    fsi_nxt_free: u32,        // 最后被分配的簇号，起始空闲簇号应该是下一个簇
-    fsi_reserved2: [u8; 12],  // 保留
-    fsi_trail_sig: u32,       // Trail signature (0xAA550000)
+    fsi_free_count: u32, // 包含卷上最近已知的空闲簇计数。如果值是0xFFFFFFFF，那么空闲计数是未知的，必须计算。
+    fsi_nxt_free: u32,   // 最后被分配的簇号，起始空闲簇号应该是下一个簇
+    fsi_reserved2: [u8; 12], // 保留
+    fsi_trail_sig: u32,  // Trail signature (0xAA550000)
 }
 
 impl FSInfo {
@@ -188,7 +190,7 @@ impl ShortDirEntry {
             true
         } else {
             false
-        } 
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -300,9 +302,13 @@ impl ShortDirEntry {
         let bytes_per_sector = manager_reader.bytes_per_sector() as usize;
         let bytes_per_cluster = manager_reader.bytes_per_cluster() as usize;
         let cluster_index = offset / bytes_per_cluster;
-        let current_cluster = fat_reader.get_cluster_at(self.first_cluster(), cluster_index as u32, Arc::clone(block_device));
-        let current_sector =
-            manager_reader.first_sector_of_cluster(current_cluster) + (offset - cluster_index * bytes_per_cluster) / bytes_per_sector;
+        let current_cluster = fat_reader.get_cluster_at(
+            self.first_cluster(),
+            cluster_index as u32,
+            Arc::clone(block_device),
+        );
+        let current_sector = manager_reader.first_sector_of_cluster(current_cluster)
+            + (offset - cluster_index * bytes_per_cluster) / bytes_per_sector;
         (current_cluster, current_sector, offset % bytes_per_sector)
     }
 
@@ -324,8 +330,9 @@ impl ShortDirEntry {
         // 计算上界
         let end: usize;
         if self.is_dir() {
-            let dir_file_size =
-                bytes_per_cluster * fat_reader.count_claster_num(self.first_cluster() as u32, block_device.clone()) as usize;
+            let dir_file_size = bytes_per_cluster
+                * fat_reader.count_claster_num(self.first_cluster() as u32, block_device.clone())
+                    as usize;
             end = (offset + buf.len()).min(dir_file_size);
             //println!("{}",end);
         } else {
@@ -338,8 +345,9 @@ impl ShortDirEntry {
         }
 
         // 2、计算开始读取的位置
-        let (mut current_cluster, mut current_sector, _) = self.get_pos(offset, manager, &manager_reader.get_fat(), block_device);
-        
+        let (mut current_cluster, mut current_sector, _) =
+            self.get_pos(offset, manager, &manager_reader.get_fat(), block_device);
+
         // 3、开始读取内容
         let mut read_size = 0usize;
         let mut current_off = offset;
@@ -355,7 +363,8 @@ impl ShortDirEntry {
             get_block_cache(current_sector, Arc::clone(block_device))
                 .read()
                 .read(0, |data_block: &DataBlock| {
-                    let src = &data_block[current_off % BLOCK_SIZE..current_off % BLOCK_SIZE + block_read_size];
+                    let src = &data_block
+                        [current_off % BLOCK_SIZE..current_off % BLOCK_SIZE + block_read_size];
                     dst.copy_from_slice(src);
                 });
 
@@ -368,7 +377,8 @@ impl ShortDirEntry {
             current_off = end_current_block;
             if current_off % bytes_per_cluster == 0 {
                 // 该簇读完，寻找下一个簇
-                current_cluster = fat_reader.get_next_cluster(current_cluster, Arc::clone(block_device));
+                current_cluster =
+                    fat_reader.get_next_cluster(current_cluster, Arc::clone(block_device));
                 if current_cluster >= END_CLUSTER {
                     break;
                 }
@@ -397,14 +407,16 @@ impl ShortDirEntry {
 
         let end: usize;
         if self.is_dir() {
-            let dir_file_size =
-                bytes_per_cluster * fat_reader.count_claster_num(self.first_cluster() as u32, block_device.clone()) as usize;
+            let dir_file_size = bytes_per_cluster
+                * fat_reader.count_claster_num(self.first_cluster() as u32, block_device.clone())
+                    as usize;
             end = offset + buf.len().min(dir_file_size); // DEBUG:约束上界
         } else {
             end = (offset + buf.len()).min(self.dir_file_size as usize);
         }
 
-        let (mut current_cluster, mut current_sector, _) = self.get_pos(offset, manager, &manager_reader.get_fat(), block_device);
+        let (mut current_cluster, mut current_sector, _) =
+            self.get_pos(offset, manager, &manager_reader.get_fat(), block_device);
         let mut write_size = 0usize;
         let mut current_off = offset;
         loop {
@@ -417,7 +429,8 @@ impl ShortDirEntry {
                 .write()
                 .modify(0, |data_block: &mut DataBlock| {
                     let src = &buf[write_size..write_size + block_write_size];
-                    let dst = &mut data_block[current_off % BLOCK_SIZE..current_off % BLOCK_SIZE + block_write_size];
+                    let dst = &mut data_block
+                        [current_off % BLOCK_SIZE..current_off % BLOCK_SIZE + block_write_size];
                     dst.copy_from_slice(src);
                 });
 
@@ -429,7 +442,8 @@ impl ShortDirEntry {
             // 更新索引参数
             current_off = end_current_block;
             if current_off % bytes_per_cluster == 0 {
-                current_cluster = fat_reader.get_next_cluster(current_cluster, Arc::clone(block_device));
+                current_cluster =
+                    fat_reader.get_next_cluster(current_cluster, Arc::clone(block_device));
                 if current_cluster >= END_CLUSTER {
                     panic!("END_CLUSTER");
                 }
@@ -476,14 +490,14 @@ pub struct LongDirEntry {
     // 如果是该文件的最后一个长文件名目录项，
     // 则将该目录项的序号与 0x40 进行“或（OR）运算”的结果写入该位置。
     // 长文件名要有\0
-    ldir_ord: u8,              // 长文件名目录项的序列号，一个文件的第一个目录项序列号为 1，然后依次递增
-    ldir_name1: [u8; 10],      // 5 characters
-    ldir_attr: u8,             // 长文件名目录项标志，取值 0x0F
-    ldir_type: u8,             // 如果为零，则表示目录项是长文件名的一部分
-    ldir_chksum: u8,           // 根据对应短文件名计算出的校验值，用于长文件名与短文件名的匹配
-    ldir_name2: [u8; 12],      // 6 characters
+    ldir_ord: u8, // 长文件名目录项的序列号，一个文件的第一个目录项序列号为 1，然后依次递增
+    ldir_name1: [u8; 10], // 5 characters
+    ldir_attr: u8, // 长文件名目录项标志，取值 0x0F
+    ldir_type: u8, // 如果为零，则表示目录项是长文件名的一部分
+    ldir_chksum: u8, // 根据对应短文件名计算出的校验值，用于长文件名与短文件名的匹配
+    ldir_name2: [u8; 12], // 6 characters
     ldir_fst_clus_lo: [u8; 2], // 文件起始簇号，目前置 0
-    ldir_name3: [u8; 4],       // 2 characters
+    ldir_name3: [u8; 4], // 2 characters
 }
 
 impl From<&[u8]> for LongDirEntry {
@@ -667,7 +681,10 @@ pub struct FAT {
 
 impl FAT {
     pub fn new(fat1_sector: u32, fat2_sector: u32) -> Self {
-        Self { fat1_sector, fat2_sector }
+        Self {
+            fat1_sector,
+            fat2_sector,
+        }
     }
 
     /// 计算簇号对应表项所在的扇区和偏移
@@ -682,7 +699,11 @@ impl FAT {
 
     /// 搜索下一个可用簇，仅在 FAT32Manager::alloc_cluster 中使用
     /// alloc_cluster 保证了可以找到空闲的簇
-    pub fn get_free_cluster(&self, current_cluster: u32, block_device: Arc<dyn BlockDevice>) -> u32 {
+    pub fn get_free_cluster(
+        &self,
+        current_cluster: u32,
+        block_device: Arc<dyn BlockDevice>,
+    ) -> u32 {
         // 跳过当前簇
         let mut curr_cluster = current_cluster + 1;
         // 寻找空闲的簇，因为簇号分配是离散的而不是连续的，因此不能保证最后一个被分配的簇的下一个簇就是空闲的
@@ -726,7 +747,12 @@ impl FAT {
     }
 
     /// 设置当前簇的下一个簇
-    pub fn set_next_cluster(&self, cluster: u32, next_cluster: u32, block_device: Arc<dyn BlockDevice>) {
+    pub fn set_next_cluster(
+        &self,
+        cluster: u32,
+        next_cluster: u32,
+        block_device: Arc<dyn BlockDevice>,
+    ) {
         // 同步修改两个FAT
         let (fat1_sec, fat2_sec, offset) = self.calculate_pos(cluster);
         get_block_cache(fat1_sec as usize, block_device.clone())
@@ -742,7 +768,12 @@ impl FAT {
     }
 
     /// 获取某个簇链的第i个簇(i为参数)
-    pub fn get_cluster_at(&self, start_cluster: u32, index: u32, block_device: Arc<dyn BlockDevice>) -> u32 {
+    pub fn get_cluster_at(
+        &self,
+        start_cluster: u32,
+        index: u32,
+        block_device: Arc<dyn BlockDevice>,
+    ) -> u32 {
         let mut cluster = start_cluster;
         for _ in 0..index {
             cluster = self.get_next_cluster(cluster, block_device.clone());
@@ -768,7 +799,11 @@ impl FAT {
     }
 
     /// 获得某个簇链从指定簇开始的所有簇
-    pub fn get_all_cluster_of(&self, start_cluster: u32, block_device: Arc<dyn BlockDevice>) -> Vec<u32> {
+    pub fn get_all_cluster_of(
+        &self,
+        start_cluster: u32,
+        block_device: Arc<dyn BlockDevice>,
+    ) -> Vec<u32> {
         let mut curr_cluster = start_cluster;
         let mut v_cluster: Vec<u32> = Vec::new();
         loop {

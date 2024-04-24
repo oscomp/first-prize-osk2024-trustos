@@ -10,7 +10,6 @@
 //
 use super::{Dirent, File, Kstat};
 use crate::mm::UserBuffer;
-use crate::sync::UPSafeCell;
 use alloc::{
     string::String,
     sync::{Arc, Weak},

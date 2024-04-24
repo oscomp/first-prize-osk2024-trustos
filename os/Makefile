@@ -6,7 +6,8 @@ MODE := release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 DISASM_TMP := target/$(TARGET)/$(MODE)/asm
-FS_IMG := ../simple-fat32/fat32.img
+FS:=simple-fat32
+FS_IMG := ../$(FS)/fat32.img
 APPS := ../user/src/bin/*
 
 # BOARD
@@ -53,7 +54,7 @@ $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
 
 copy_to_fs: 
-	@cd ../simple-fat32&&sh create_img.sh 
+	@cd ../$(FS)&&sh create_img.sh 
 
 $(APPS):
 
@@ -65,7 +66,7 @@ kernel:
 
 clean:
 	@cargo clean
-	@cd ../simple-fat32&&rm fat32.img
+	@cd ../$(FS)&&rm fat32.img
 	@cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean
 
 disasm: kernel
