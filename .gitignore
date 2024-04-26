@@ -2,6 +2,7 @@
 !.github/*
 !.vscode/settings.json
 .idea
+
 Cargo.lock
 target
 os/src/link_app.S
@@ -13,12 +14,8 @@ user/build
 user/target/*
 user/.idea/*
 user/Cargo.lock
-easy-fs/Cargo.lock
-easy-fs/target/*
-easy-fs-fuse/Cargo.lock
-easy-fs-fuse/target/*
-tools/
-pushall.sh
 simple-fat32/fat32.img
 simple-fat32/Cargo.lock
 simple-fat32/target/*
+
+fat32_fs/fat32.img

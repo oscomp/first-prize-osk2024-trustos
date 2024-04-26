@@ -43,7 +43,7 @@ build: env $(KERNEL_BIN)
 
 initproc:
 	@cd ../user && cargo clean && make build
-	@cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean && make all
+	# @cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean && make all
 
 env:
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
