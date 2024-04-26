@@ -23,15 +23,19 @@ log = "0.4"
 sbi-rt = { version = "0.0.2", features = ["legacy"] }
 spin = "0.9.8"
 num_enum = { version = "0.7.2", default-features = false }
+hashbrown = "0.12.0"
+
 [features]
 board_qemu = []
-default = ["info", "simple_fs"]
+# default = ["info", "simple_fs"]
+default = ["info", "fat32_fs"]
 error = []
 warn = []
 info = []
 debug = []
 trace = []
 simple_fs = []
+fat32_fs = []
 
 [profile.release]
 debug = true

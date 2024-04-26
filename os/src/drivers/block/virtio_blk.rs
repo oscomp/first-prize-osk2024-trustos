@@ -34,9 +34,9 @@ impl BlockDevice for VirtIOBlock {
             .expect("Error when writing VirtIOBlk");
     }
 
-    fn handle_irq(&self) {
-        todo!()
-    }
+    // fn handle_irq(&self) {
+    //     todo!()
+    // }
 }
 
 impl VirtIOBlock {

@@ -19,13 +19,13 @@ const TRAIL_SIGNATURE: u32 = 0xaa550000;
 pub const SHORT_NAME_LEN: usize = 8;
 pub const SHORT_EXT_LEN: usize = 3;
 pub const LONG_NAME_LEN: usize = 13;
-pub const ATTRIBUTE_READ_ONLY: u8 = 0x01;
-pub const ATTRIBUTE_HIDDEN: u8 = 0x02;
-pub const ATTRIBUTE_SYSTEM: u8 = 0x04;
-pub const ATTRIBUTE_VOLUME_ID: u8 = 0x08;
-pub const ATTRIBUTE_DIRECTORY: u8 = 0x10;
-pub const ATTRIBUTE_ARCHIVE: u8 = 0x20;
-pub const ATTRIBUTE_LFN: u8 = 0x0F;
+pub const ATTR_READ_ONLY: u8 = 0x01;
+pub const ATTR_HIDDEN: u8 = 0x02;
+pub const ATTR_SYSTEM: u8 = 0x04;
+pub const ATTR_VOLUME_ID: u8 = 0x08;
+pub const ATTR_DIRECTORY: u8 = 0x10;
+pub const ATTR_ARCHIVE: u8 = 0x20;
+pub const ATTR_LFN: u8 = 0x0F;
 pub const DIRENT_SZ: usize = 32;
 
 type DataBlock = [u8; BLOCK_SZ];
@@ -238,7 +238,7 @@ impl ShortDirEntry {
     }
 
     pub fn is_dir(&self) -> bool {
-        self.attribute == ATTRIBUTE_DIRECTORY
+        self.attribute == ATTR_DIRECTORY
     }
 
     pub fn is_valid(&self) -> bool {
@@ -254,11 +254,11 @@ impl ShortDirEntry {
     }
 
     pub fn is_long(&self) -> bool {
-        self.attribute == ATTRIBUTE_LFN
+        self.attribute == ATTR_LFN
     }
 
     pub fn is_short(&self) -> bool {
-        self.attribute != ATTRIBUTE_LFN
+        self.attribute != ATTR_LFN
     }
 
     pub fn attribute(&self) -> u8 {
@@ -846,7 +846,7 @@ impl LongDirEntry {
         *self = Self {
             order,
             name1,
-            attribute: ATTRIBUTE_LFN,
+            attribute: ATTR_LFN,
             _reserved_0: 0,
             checksum,
             name2,

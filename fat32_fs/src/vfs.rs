@@ -52,6 +52,10 @@ impl VFile {
         self.name.clone()
     }
 
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
     pub fn get_attribute(&self) -> u8 {
         self.attribute
     }
@@ -76,7 +80,7 @@ impl VFile {
     }
 
     pub fn is_dir(&self) -> bool {
-        self.attribute == ATTRIBUTE_DIRECTORY
+        self.attribute == ATTR_DIRECTORY
     }
 
     pub fn is_short(&self) -> bool {
@@ -168,7 +172,7 @@ impl VFile {
                 return None;
             }
             if long_ent.get_name_format() == name_vec[long_ent_count - 1]
-                && long_ent.attribute() == ATTRIBUTE_LFN
+                && long_ent.attribute() == ATTR_LFN
             {
                 let mut order = long_ent.order();
                 let checksum = long_ent.checksum();
@@ -198,7 +202,7 @@ impl VFile {
                         return None;
                     }
                     if long_ent.get_name_format() != name_vec[long_ent_count - 1 - i]
-                        || long_ent.attribute() != ATTRIBUTE_LFN
+                        || long_ent.attribute() != ATTR_LFN
                     {
                         is_match = false;
                         break;
@@ -498,9 +502,9 @@ impl VFile {
             self.fs.clone(),
             self.block_device.clone(),
         );
-        if attribute == ATTRIBUTE_DIRECTORY {
-            let mut self_dir = ShortDirEntry::new(".", "", ATTRIBUTE_DIRECTORY);
-            let mut parent_dir = ShortDirEntry::new("..", "", ATTRIBUTE_DIRECTORY);
+        if attribute == ATTR_DIRECTORY {
+            let mut self_dir = ShortDirEntry::new(".", "", ATTR_DIRECTORY);
+            let mut parent_dir = ShortDirEntry::new("..", "", ATTR_DIRECTORY);
             parent_dir.set_first_cluster(self.first_cluster());
             vfile.write_at_uncached(0, self_dir.as_bytes_mut()); // TODO：需要吗
             vfile.write_at_uncached(DIRENT_SZ, parent_dir.as_bytes_mut());
@@ -620,7 +624,7 @@ impl VFile {
                 is_long = false;
                 continue;
             }
-            if long_ent.attribute() != ATTRIBUTE_LFN {
+            if long_ent.attribute() != ATTR_LFN {
                 let short_ent: ShortDirEntry = unsafe { core::mem::transmute(long_ent) };
                 if !is_long {
                     name = short_ent.get_name_lowercase();

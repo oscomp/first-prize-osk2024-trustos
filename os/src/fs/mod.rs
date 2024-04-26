@@ -1,4 +1,5 @@
 mod dirent;
+mod fsidx;
 mod inode;
 mod mount;
 mod pipe;
@@ -7,6 +8,7 @@ mod stdio;
 
 use crate::mm::UserBuffer;
 use alloc::string::String;
+pub use fsidx::*;
 
 pub type RFile = dyn File + Send + Sync;
 
@@ -69,10 +71,19 @@ pub fn flush_preload() {
         ) as &'static mut [u8]
     });
     onlinetests.write(UserBuffer::new(v));
-    // for ppn in crate::mm::PPNRange::new(
-    //     crate::mm::PhysAddr::from(sbash as usize).floor(),
-    //     crate::mm::PhysAddr::from(ebash as usize).floor(),
-    // ) {
-    //     crate::mm::frame_dealloc(ppn);
-    // }
+}
+
+pub fn path2abs<'a>(cwdv: &mut Vec<&'a str>, pathv: &Vec<&'a str>) -> String {
+    for &path_element in pathv.iter() {
+        if path_element == "." {
+            continue;
+        } else if path_element == ".." {
+            cwdv.pop();
+        } else {
+            cwdv.push(path_element);
+        }
+    }
+    let mut abs_path = String::from("/");
+    abs_path.push_str(&cwdv.join("/"));
+    abs_path
 }

@@ -71,7 +71,7 @@ pub fn trap_handler() {
     let strace_mask = current_task().unwrap().inner_lock().strace_mask;
 
     let hartid = hart_id();
-    // debug!("trap handler");
+    // info!("trap handler");
     set_kernel_trap_entry();
     let scause = scause::read();
     let stval = stval::read();
@@ -80,7 +80,6 @@ pub fn trap_handler() {
             // jump to next instruction anyway
             let mut cx = current_trap_cx();
             cx.sepc += 4;
-            // debug!("run syscall {}", cx.x[17]);
             // get system call return value
             let result = syscall(
                 cx.x[17],

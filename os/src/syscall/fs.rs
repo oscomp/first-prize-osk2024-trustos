@@ -4,6 +4,7 @@ use crate::fs::{make_pipe, open, open_file, Dirent, Kstat, OpenFlags, MNT_TABLE}
 use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token};
 use alloc::string::String;
+use log::info;
 
 pub const AT_FDCWD: isize = -100;
 pub const FD_LIMIT: usize = 128;
@@ -129,6 +130,7 @@ pub fn sys_getcwd(buf: *const u8, size: usize) -> isize {
 }
 
 pub fn sys_dup(fd: usize) -> isize {
+    info!("dup");
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
 

@@ -2,7 +2,6 @@ use super::{
     chain::*, get_data_block_cache, get_info_block_cache, set_start_sector, BlockDevice, CacheMode,
     VFile, FAT,
 };
-use crate::println;
 use crate::{fat::FREE_CLUSTER, layout::*};
 use alloc::string::ToString;
 use alloc::vec::Vec;
@@ -50,7 +49,7 @@ impl FAT32Manager {
 
     pub fn open(block_device: Arc<dyn BlockDevice>) -> Arc<Self> {
         // 读入并设置起始扇区
-        println!("setting start sector...");
+        // println!("setting start sector...");
         let start_sector: u32 = get_info_block_cache(0, Arc::clone(&block_device), CacheMode::READ)
             .read()
             .read(0x1c6, |ssec_bytes: &[u8; 4]| {
@@ -61,24 +60,24 @@ impl FAT32Manager {
                 }
                 start_sector
             });
-        println!("start sector is {}", start_sector);
+        // println!("start sector is {}", start_sector);
         set_start_sector(start_sector as usize);
 
         // 读入BPB
-        println!("reading BPB...");
+        // println!("reading BPB...");
         let bpb = get_info_block_cache(0, Arc::clone(&block_device), CacheMode::READ)
             .read()
             .read(0, |&bpb: &FatBS| bpb);
-        println!("{:#?}", bpb);
+        // println!("{:#?}", bpb);
 
         // 读入EBR
-        println!("reading EBR...");
+        // println!("reading EBR...");
         let ebr = get_info_block_cache(0, Arc::clone(&block_device), CacheMode::READ)
             .read()
             .read(36, |&ebr: &FatExtBS| ebr);
 
         // 读入FSInfo
-        println!("reading FSInfo...");
+        // println!("reading FSInfo...");
         let fsinfo_inner = get_info_block_cache(
             ebr.fsinfo_sector() as usize,
             Arc::clone(&block_device),
@@ -98,9 +97,9 @@ impl FAT32Manager {
         let fat_size = ebr.fat_size();
         let first_fat2_sector = first_fat1_sector + fat_size;
         let fat = FAT::new(first_fat1_sector, first_fat2_sector, fat_size);
-        println!("fat_size: {}", fat_size);
-        println!("first_fat1_sector: {}", first_fat1_sector);
-        println!("first_fat2_sector: {}", first_fat2_sector);
+        // println!("fat_size: {}", fat_size);
+        // println!("first_fat1_sector: {}", first_fat1_sector);
+        // println!("first_fat2_sector: {}", first_fat2_sector);
 
         // Inner内容
         let sectors_per_cluster = bpb.sectors_per_cluster as u32;
@@ -113,10 +112,10 @@ impl FAT32Manager {
             sectors_per_cluster,
             root_sector,
         };
-        println!("{:#?}", inner);
+        // println!("{:#?}", inner);
 
         // 根目录
-        let mut root_dirent = ShortDirEntry::new("/", "", ATTRIBUTE_DIRECTORY);
+        let mut root_dirent = ShortDirEntry::new("/", "", ATTR_DIRECTORY);
         root_dirent.set_first_cluster(2);
 
         let fat32_manager = Self {
@@ -136,7 +135,7 @@ impl FAT32Manager {
             0,
             0,
             long_pos_vec,
-            ATTRIBUTE_DIRECTORY,
+            ATTR_DIRECTORY,
             Arc::clone(fs_manager),
             self.block_device.clone(),
         )
@@ -395,7 +394,7 @@ pub fn create_root_vfile(fs_manager: &Arc<FAT32Manager>) -> VFile {
         0,
         0,
         long_pos_vec,
-        ATTRIBUTE_DIRECTORY,
+        ATTR_DIRECTORY,
         Arc::clone(fs_manager),
         fs_manager.block_device.clone(),
     )

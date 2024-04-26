@@ -124,8 +124,15 @@ lazy_static! {
     ///Globle process that init user shell
     pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new({
         let inode = open_file("initproc", OpenFlags::O_RDONLY).unwrap();
+        #[cfg(feature="simple_fs")]
         let v = inode.read_all();
+        #[cfg(feature="simple_fs")]
         let mut res=TaskControlBlock::new(v.as_slice());
+
+        #[cfg(feature="fat32_fs")]
+        let elf_data = unsafe {inode.read_as_elf()};
+        #[cfg(feature="fat32_fs")]
+        let mut res=TaskControlBlock::new(elf_data);
         res.inner_lock().file=Some(inode.clone());
         res
     });
