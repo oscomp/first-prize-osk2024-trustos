@@ -67,8 +67,9 @@ kernel:
 
 clean:
 	@cargo clean
-	@cd ../$(FS)&&rm fat32.img
-	@cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean
+	@cd ../$(FS)&& rm fat32.img
+	@cd ../user && cargo clean
+	# @cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean
 
 disasm: kernel
 	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) | less
