@@ -204,15 +204,15 @@ impl TaskControlBlock {
         //将auxv放入栈中
         auxv.push(Aux::new(AuxType::EXECFN, argv_ptr_vec[0]));
         auxv.push(Aux::new(AuxType::NULL, 0));
-        for aux in auxv.iter().rev() {
-            // println!("{:?}", aux);
-            user_sp -= size_of::<Aux>();
-            *translated_refmut(memory_set.token(), user_sp as *mut usize) = aux.aux_type as usize;
-            *translated_refmut(
-                memory_set.token(),
-                (user_sp + size_of::<usize>()) as *mut usize,
-            ) = aux.value;
-        }
+        // for aux in auxv.iter().rev() {
+        //     // println!("{:?}", aux);
+        //     user_sp -= size_of::<Aux>();
+        //     *translated_refmut(memory_set.token(), user_sp as *mut usize) = aux.aux_type as usize;
+        //     *translated_refmut(
+        //         memory_set.token(),
+        //         (user_sp + size_of::<usize>()) as *mut usize,
+        //     ) = aux.value;
+        // }
 
         //将环境变量指针数组放入栈中
         // println!("env pointers:");
