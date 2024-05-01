@@ -21,14 +21,20 @@ use user_lib::{exec, fork, strace, waitpid};
 pub fn main() -> i32 {
     println!("Rust user shell");
     let mut line: String = String::new();
+    let mut old = String::new();
+    old += "\0";
     print!(">> ");
     loop {
         let c = getchar();
         match c {
             LF | CR => {
                 println!("");
-                if !line.is_empty() {
-                    line.push('\0');
+                if true {
+                    if line.is_empty() {
+                        line = old.clone();
+                    } else {
+                        line.push('\0');
+                    }
                     let pid = fork();
                     if pid == 0 {
                         // child process
@@ -50,6 +56,7 @@ pub fn main() -> i32 {
                         assert_eq!(pid, exit_pid);
                         println!("Shell: Process {} exited with code {}", pid, exit_code);
                     }
+                    old = line.clone();
                     line.clear();
                 }
                 print!(">> ");
