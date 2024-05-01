@@ -28,6 +28,9 @@ impl TaskManager {
     pub fn is_empty(&self) -> bool {
         self.ready_queue.is_empty()
     }
+    pub fn ready_procs_num(&self) -> usize {
+        self.ready_queue.len()
+    }
     pub fn find_pid_change_kindcpu(&self, pid: usize, kindcpu: isize) -> isize {
         for item in self.ready_queue.iter() {
             if item.pid() == pid {
@@ -61,6 +64,9 @@ pub fn fetch_task() -> Option<Arc<TaskControlBlock>> {
 ///Lock TaskManager
 pub fn lock_task_manager() -> MutexGuard<'static, TaskManager> {
     TASK_MANAGER.lock()
+}
+pub fn ready_procs_num() -> usize {
+    TASK_MANAGER.lock().ready_procs_num()
 }
 pub fn find_pid_change_kindcpu(pid: usize, kindcpu: isize) -> isize {
     TASK_MANAGER.lock().find_pid_change_kindcpu(pid, kindcpu)

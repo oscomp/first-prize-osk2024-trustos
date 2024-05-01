@@ -27,6 +27,7 @@ const SYSCALL_TIMES: usize = 153;
 const SYSCALL_GETTIMEOFDAY: usize = 169;
 const SYSCALL_GETPID: usize = 172;
 const SYSCALL_GETPPID: usize = 173;
+const SYSCALL_SYSINFO: usize = 179;
 const SYSCALL_CLONE: usize = 220;
 const SYSCALL_EXECVE: usize = 221;
 const SYSCALL_WAIT4: usize = 260;
@@ -292,4 +293,8 @@ pub fn sys_sched_setaffinity(pid: usize, mask: *const usize) -> isize {
         SYSCALL_SCHED_SETAFFINITY,
         [pid as isize, 0, mask as isize, 0, 0, 0],
     )
+}
+
+pub fn sys_sysinfo(info: &mut [u8]) -> isize {
+    syscall(SYSCALL_SYSINFO, [info.as_mut_ptr() as isize, 0, 0, 0, 0, 0])
 }

@@ -7,7 +7,7 @@ use crate::mm::{
     translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr,
 };
 use crate::syscall::CloneFlags;
-use crate::task::manager::{find_pid_change_kindcpu, find_pid_get_kindcpu};
+use crate::task::manager::{find_pid_change_kindcpu, find_pid_get_kindcpu, ready_procs_num};
 use crate::task::processor::get_proc_by_hartid;
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next,
@@ -315,4 +315,45 @@ pub fn sys_sched_getaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> isi
     }
     //匹配不到
     -1
+}
+
+pub struct Sysinfo {
+    pub uptime: usize,
+    pub totalram: usize,
+    pub procs: usize,
+}
+
+impl Sysinfo {
+    pub fn new(newuptime: usize, newtotalram: usize, newprocs: usize) -> Self {
+        Self {
+            uptime: newuptime,
+            totalram: newtotalram,
+            procs: newprocs,
+        }
+    }
+    pub fn as_bytes(&self) -> &[u8] {
+        let size = core::mem::size_of::<Self>();
+        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
+    }
+}
+
+pub fn sys_sysinfo(info: *const u8) -> isize {
+    let token = current_user_token().unwrap();
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let mut info = UserBuffer::new(translated_byte_buffer(token, info, size_of::<Sysinfo>()));
+    let nowcpu = hart_id();
+
+    let mut procs = 1; //目前算一个
+    for cpu in 0..HART_NUM {
+        if nowcpu != cpu {
+            if let Some(running_task) = get_proc_by_hartid(cpu).current.clone() {
+                procs += 1;
+            }
+        }
+    }
+    procs += ready_procs_num();
+    let ourinfo = Sysinfo::new(get_time_ms() / 1000, 1 << 56, procs);
+    info.write(ourinfo.as_bytes());
+    0
 }

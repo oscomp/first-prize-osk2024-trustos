@@ -41,6 +41,7 @@ pub enum Syscall {
     Getpid = 172,
     Getppid = 173,
     Gettid = 178,
+    Sysinfo = 179,
     Brk = 214,
     Munmap = 215,
     Clone = 220,
@@ -125,6 +126,7 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
         Syscall::Getpid => sys_getpid(),
         Syscall::Getppid => sys_getppid(),
         Syscall::Gettid => sys_gettid(),
+        Syscall::Sysinfo => sys_sysinfo(args[0] as *const u8),
         Syscall::Clone => sys_clone(
             args[0] as usize,
             args[1] as usize,

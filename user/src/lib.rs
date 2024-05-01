@@ -221,3 +221,28 @@ pub fn sched_getaffinity(pid: usize, mask: *mut usize) -> isize {
 pub fn sched_setaffinity(pid: usize, mask: *const usize) -> isize {
     sys_sched_setaffinity(pid, mask)
 }
+
+#[derive(Debug)]
+pub struct Sysinfo {
+    pub uptime: usize,
+    pub totalram: usize,
+    pub procs: usize,
+}
+
+impl Sysinfo {
+    pub fn new(newuptime: usize, newtotalram: usize, newprocs: usize) -> Self {
+        Self {
+            uptime: newuptime,
+            totalram: newtotalram,
+            procs: newprocs,
+        }
+    }
+    pub fn as_bytes_mut(&mut self) -> &mut [u8] {
+        let size = core::mem::size_of::<Self>();
+        unsafe { core::slice::from_raw_parts_mut(self as *mut _ as *mut u8, size) }
+    }
+}
+
+pub fn sysinfo(info: &mut Sysinfo) -> isize {
+    sys_sysinfo(info.as_bytes_mut())
+}
