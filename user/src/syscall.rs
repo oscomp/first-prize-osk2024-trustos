@@ -19,6 +19,9 @@ const SYSCALL_WRITE: usize = 64;
 const SYSCALL_FSTAT: usize = 80;
 const SYSCALL_EXIT: usize = 93;
 const SYSCALL_NANOSLEEP: usize = 101;
+const SYSCALL_CLOCK_GETTIME: usize = 113;
+const SYSCALL_SCHED_SETAFFINITY: usize = 122;
+const SYSCALL_SCHED_GETAFFINITY: usize = 123;
 const SYSCALL_SCHED_YIELD: usize = 124;
 const SYSCALL_TIMES: usize = 153;
 const SYSCALL_GETTIMEOFDAY: usize = 169;
@@ -268,4 +271,25 @@ pub fn sys_nanosleep(req: &mut [u8], rem: &mut [u8]) -> isize {
 
 pub fn sys_strace(mask: usize) -> isize {
     syscall(SYSCALL_STRACE, [mask as isize, 0, 0, 0, 0, 0])
+}
+
+pub fn sys_clock_gettime(clockid: usize, tp: &mut [u8]) -> isize {
+    syscall(
+        SYSCALL_CLOCK_GETTIME,
+        [clockid as isize, tp.as_mut_ptr() as isize, 0, 0, 0, 0],
+    )
+}
+
+pub fn sys_sched_getaffinity(pid: usize, mask: *mut usize) -> isize {
+    syscall(
+        SYSCALL_SCHED_GETAFFINITY,
+        [pid as isize, 0, mask as isize, 0, 0, 0],
+    )
+}
+
+pub fn sys_sched_setaffinity(pid: usize, mask: *const usize) -> isize {
+    syscall(
+        SYSCALL_SCHED_SETAFFINITY,
+        [pid as isize, 0, mask as isize, 0, 0, 0],
+    )
 }

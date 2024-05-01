@@ -1,15 +1,20 @@
 use core::mem::size_of;
 
+use crate::config::processor::HART_NUM;
+use crate::console::print;
 use crate::fs::{open, open_file, OpenFlags};
 use crate::mm::{
     translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr,
 };
 use crate::syscall::CloneFlags;
+use crate::task::manager::{find_pid_change_kindcpu, find_pid_get_kindcpu};
+use crate::task::processor::get_proc_by_hartid;
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next,
     suspend_current_and_run_next,
 };
 use crate::timer::{get_time_ms, Timespec, Tms};
+use crate::utils::hart_id;
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -22,25 +27,6 @@ pub fn sys_exit(exit_code: i32) -> ! {
 
 pub fn sys_sched_yield() -> isize {
     suspend_current_and_run_next();
-    0
-}
-
-pub fn sys_gettimeofday(ts: *const u8) -> isize {
-    let token = current_user_token().unwrap();
-    let mut ts = UserBuffer::new(translated_byte_buffer(token, ts, size_of::<Timespec>()));
-    let time = get_time_ms();
-    let mut timespec = Timespec::new(time / 1000, (time % 1000) * 1000000);
-    ts.write(timespec.as_bytes());
-    0
-}
-
-pub fn sys_times(tms: *const u8) -> isize {
-    let token = current_user_token().unwrap();
-    let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
-    let mut tms = UserBuffer::new(translated_byte_buffer(token, tms, size_of::<Timespec>()));
-    let mut times = Tms::new(&inner.time_data);
-    tms.write(times.as_bytes());
     0
 }
 
@@ -264,4 +250,69 @@ pub fn sys_brk(brk_addr: usize) -> isize {
     }
     let grow_size: isize = (brk_addr - former_addr) as isize;
     current_task().unwrap().growproc(grow_size) as isize
+}
+
+pub fn sys_sched_setaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> isize {
+    let token = current_user_token().unwrap();
+    let mask = *translated_ref(token, mask as *const usize);
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let nowcpu = hart_id();
+
+    //尝试匹配当前进程
+    if pid == 0 || task.pid() == pid {
+        inner.kind_cpu = mask as isize;
+        return 0;
+    }
+    //尝试匹配正在运行的进程
+    for cpu in 0..HART_NUM {
+        if nowcpu != cpu {
+            if let Some(running_task) = get_proc_by_hartid(cpu).current.clone() {
+                if running_task.pid() == pid {
+                    running_task.inner_lock().kind_cpu = mask as isize;
+                    return 0;
+                }
+            }
+        }
+    }
+
+    //尝试匹配任务管理器中的进程
+    if find_pid_change_kindcpu(pid, mask as isize) == 0 {
+        return 0;
+    }
+    //匹配不到
+    -1
+}
+
+pub fn sys_sched_getaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> isize {
+    let token = current_user_token().unwrap();
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let nowcpu = hart_id();
+
+    //尝试匹配当前进程
+    if pid == 0 || task.pid() == pid {
+        *translated_refmut(token, mask as *mut usize) = inner.kind_cpu as usize;
+        return 0;
+    }
+    //尝试匹配正在运行的进程
+    for cpu in 0..HART_NUM {
+        if nowcpu != cpu {
+            if let Some(running_task) = get_proc_by_hartid(cpu).current.clone() {
+                if running_task.pid() == pid {
+                    *translated_refmut(token, mask as *mut usize) =
+                        running_task.inner_lock().kind_cpu as usize;
+                    return 0;
+                }
+            }
+        }
+    }
+    //尝试匹配任务管理器中的进程
+    let find_from_manager = find_pid_get_kindcpu(pid);
+    if find_from_manager != -1 {
+        *translated_refmut(token, mask as *mut usize) = find_from_manager as usize;
+        return 0;
+    }
+    //匹配不到
+    -1
 }

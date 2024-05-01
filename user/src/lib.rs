@@ -114,9 +114,23 @@ pub fn waitpid(pid: usize, exit_code: &mut i32) -> isize {
     sys_waitpid(pid as isize, exit_code as *mut _, 0)
 }
 
+#[derive(Debug)]
 pub struct Timespec {
     pub tv_sec: usize,  //秒
     pub tv_nsec: usize, //纳秒
+}
+
+impl Timespec {
+    pub fn new(sec: usize, nsec: usize) -> Self {
+        Self {
+            tv_sec: sec,
+            tv_nsec: nsec,
+        }
+    }
+    pub fn as_bytes_mut(&mut self) -> &mut [u8] {
+        let size = core::mem::size_of::<Self>();
+        unsafe { core::slice::from_raw_parts_mut(self as *mut _ as *mut u8, size) }
+    }
 }
 
 pub fn sleep(period_ms: usize) {
@@ -186,4 +200,24 @@ pub fn getppid() -> isize {
 
 pub fn times(tms: &mut [u8]) -> isize {
     sys_times(tms)
+}
+
+bitflags! {
+    pub struct Clockid: u32 {
+        const CLOCK_REALTIME = 0;
+        const CLOCK_MONOTONIC = 1 << 0;
+        const CLOCK_PROCESS_CPUTIME_ID = 1 << 1;
+    }
+}
+
+pub fn clock_gettime(clockid: Clockid, tp: &mut Timespec) -> isize {
+    sys_clock_gettime(clockid.bits() as usize, tp.as_bytes_mut())
+}
+
+pub fn sched_getaffinity(pid: usize, mask: *mut usize) -> isize {
+    sys_sched_getaffinity(pid, mask)
+}
+
+pub fn sched_setaffinity(pid: usize, mask: *const usize) -> isize {
+    sys_sched_setaffinity(pid, mask)
 }

@@ -46,6 +46,7 @@ pub struct TaskControlBlockInner {
     pub user_heappoint: usize,
     pub user_heapbottom: usize,
     pub strace_mask: usize,
+    pub kind_cpu: isize, //亲和cpu，初始值为-2
 }
 
 impl TaskControlBlockInner {
@@ -132,6 +133,7 @@ impl TaskControlBlock {
                 user_heappoint: user_heapbottom,
                 user_heapbottom,
                 strace_mask: 0,
+                kind_cpu: -2,
             }),
         };
         // prepare TrapContext in user space
@@ -327,6 +329,7 @@ impl TaskControlBlock {
                 user_heappoint: parent_inner.user_heappoint,
                 user_heapbottom: parent_inner.user_heapbottom,
                 strace_mask: parent_inner.strace_mask,
+                kind_cpu: -2,
             }),
         });
         // add child

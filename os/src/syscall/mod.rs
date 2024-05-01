@@ -31,6 +31,9 @@ pub enum Syscall {
     Fstat = 80,
     Exit = 93,
     Nanosleep = 101,
+    ClockGettime = 113,
+    SchedSetaffinity = 122,
+    SchedGetaffinity = 123,
     SchedYield = 124,
     Times = 153,
     Uname = 160,
@@ -55,11 +58,13 @@ mod fs;
 mod memory;
 mod options;
 mod process;
+mod time;
 
 use fs::*;
 use memory::*;
 pub use options::*;
 use process::*;
+use time::*;
 
 use crate::console::print;
 use crate::sbi::shutdown;
@@ -106,6 +111,13 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
         Syscall::Fstat => sys_fstat(args[0] as usize, args[1] as *const u8),
         Syscall::Exit => sys_exit(args[0] as i32),
         Syscall::Nanosleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
+        Syscall::ClockGettime => sys_clock_gettime(args[0] as usize, args[1] as *const u8),
+        Syscall::SchedSetaffinity => {
+            sys_sched_setaffinity(args[0] as usize, args[1] as usize, args[2] as usize)
+        }
+        Syscall::SchedGetaffinity => {
+            sys_sched_getaffinity(args[0] as usize, args[1] as usize, args[2] as usize)
+        }
         Syscall::SchedYield => sys_sched_yield(),
         Syscall::Times => sys_times(args[0] as *const u8),
         Syscall::Gettimeofday => sys_gettimeofday(args[0] as *const u8),

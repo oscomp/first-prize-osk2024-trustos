@@ -16,8 +16,8 @@
 //! might not be what you expect.
 mod aux;
 mod context;
-mod manager;
-mod processor;
+pub mod manager;
+pub mod processor;
 mod switch;
 #[allow(clippy::module_inception)]
 #[allow(rustdoc::private_intra_doc_links)]

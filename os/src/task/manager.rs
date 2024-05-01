@@ -28,6 +28,23 @@ impl TaskManager {
     pub fn is_empty(&self) -> bool {
         self.ready_queue.is_empty()
     }
+    pub fn find_pid_change_kindcpu(&self, pid: usize, kindcpu: isize) -> isize {
+        for item in self.ready_queue.iter() {
+            if item.pid() == pid {
+                item.inner_lock().kind_cpu = kindcpu;
+                return 0;
+            }
+        }
+        -1
+    }
+    pub fn find_pid_get_kindcpu(&self, pid: usize) -> isize {
+        for item in self.ready_queue.iter() {
+            if item.pid() == pid {
+                return item.inner_lock().kind_cpu;
+            }
+        }
+        -1
+    }
 }
 
 lazy_static! {
@@ -44,4 +61,10 @@ pub fn fetch_task() -> Option<Arc<TaskControlBlock>> {
 ///Lock TaskManager
 pub fn lock_task_manager() -> MutexGuard<'static, TaskManager> {
     TASK_MANAGER.lock()
+}
+pub fn find_pid_change_kindcpu(pid: usize, kindcpu: isize) -> isize {
+    TASK_MANAGER.lock().find_pid_change_kindcpu(pid, kindcpu)
+}
+pub fn find_pid_get_kindcpu(pid: usize) -> isize {
+    TASK_MANAGER.lock().find_pid_get_kindcpu(pid)
 }

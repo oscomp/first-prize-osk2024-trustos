@@ -10,6 +10,7 @@ use crate::trap::TrapContext;
 use crate::utils::hart_id;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
+use alloc::vec::Vec;
 use lazy_static::*;
 use log::{debug, info};
 ///Processor management structure

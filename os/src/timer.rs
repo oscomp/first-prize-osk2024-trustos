@@ -100,3 +100,11 @@ pub fn get_time_ms() -> usize {
 pub fn set_next_trigger() {
     set_timer(get_time() + CLOCK_FREQ / TICKS_PER_SEC);
 }
+
+bitflags! {
+    pub struct Clockid: u32 {
+        const CLOCK_REALTIME = 0;
+        const CLOCK_MONOTONIC = 1 << 0;
+        const CLOCK_PROCESS_CPUTIME_ID = 1 << 1;
+    }
+}
