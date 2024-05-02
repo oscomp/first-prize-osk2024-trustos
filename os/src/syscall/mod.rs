@@ -30,6 +30,7 @@ pub enum Syscall {
     Write = 64,
     Fstat = 80,
     Exit = 93,
+    Settidaddress = 96,
     Nanosleep = 101,
     SchedYield = 124,
     Times = 153,
@@ -67,6 +68,7 @@ use log::debug;
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
     debug!("syscall:{}", syscall_id);
+    let id = syscall_id;
     let syscall_id: Syscall = Syscall::from(syscall_id);
     match syscall_id {
         Syscall::Getcwd => sys_getcwd(args[0] as *const u8, args[1] as usize),
@@ -105,6 +107,7 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
         Syscall::Write => sys_write(args[0] as usize, args[1] as *const u8, args[2] as usize),
         Syscall::Fstat => sys_fstat(args[0] as usize, args[1] as *const u8),
         Syscall::Exit => sys_exit(args[0] as i32),
+        Syscall::Settidaddress => sys_settidaddress(args[0] as usize),
         Syscall::Nanosleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
         Syscall::SchedYield => sys_sched_yield(),
         Syscall::Times => sys_times(args[0] as *const u8),
@@ -138,6 +141,6 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
         Syscall::Wait4 => sys_wait4(args[0] as isize, args[1] as *mut i32, args[2] as i32),
         Syscall::Shutdown => shutdown(false),
         Syscall::Strace => sys_strace(args[0] as usize),
-        _ => panic!("Unsupported syscall_id: {:?}", syscall_id),
+        _ => panic!("Unsupported syscall_id: {}", id),
     }
 }

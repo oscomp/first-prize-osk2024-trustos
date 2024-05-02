@@ -55,6 +55,10 @@ pub fn sys_getppid() -> isize {
 pub fn sys_gettid() -> isize {
     current_task().unwrap().tid() as isize
 }
+pub fn sys_settidaddress(tidptr: usize) -> isize {
+    current_task().unwrap().inner_lock().clear_child_tid = tidptr;
+    sys_gettid()
+}
 
 pub fn sys_strace(mask: usize) -> isize {
     current_task().unwrap().inner_lock().strace_mask = mask;
