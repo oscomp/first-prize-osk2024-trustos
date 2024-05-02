@@ -11,7 +11,7 @@ impl Write for Stdout {
         Ok(())
     }
 }
-
+#[allow(dead_code)]
 pub fn print(args: fmt::Arguments) {
     Stdout.write_fmt(args).unwrap();
 }

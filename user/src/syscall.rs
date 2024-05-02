@@ -126,24 +126,6 @@ pub fn sys_fork() -> isize {
 pub fn sys_exec(path: &str) -> isize {
     syscall(SYSCALL_EXECVE, [path.as_ptr() as isize, 0, 0, 0, 0, 0])
 }
-pub fn sys_busy() {
-    syscall(
-        SYSCALL_EXECVE,
-        [
-            "busybox\0".as_ptr() as isize,
-            [
-                "busybox\0".as_ptr() as *const u8,
-                "ls\0".as_ptr() as *const u8,
-                0 as *const u8,
-            ]
-            .as_ptr() as isize,
-            ["environment test\0".as_ptr() as *const u8, 0 as *const u8].as_ptr() as isize,
-            0,
-            0,
-            0,
-        ],
-    );
-}
 
 pub fn sys_waitpid(pid: isize, exit_code: *mut i32, options: i32) -> isize {
     syscall(

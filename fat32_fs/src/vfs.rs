@@ -1,5 +1,4 @@
 use super::{chain::*, fat32_manager::*, get_info_block_cache, layout::*, BlockDevice, CacheMode};
-use crate::println;
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -73,6 +72,9 @@ impl VFile {
                 short_ent.set_size(size);
             });
         }
+        // self.modify_short_dirent(|short_ent| {
+        //     short_ent.set_size(size);
+        // });
     }
 
     pub fn get_fs(&self) -> Arc<FAT32Manager> {
@@ -322,6 +324,7 @@ impl VFile {
             &self.chain,
         );
         if needed == 0 {
+            // println!("\n!need\n");
             self.set_size(new_size);
             return;
         }
@@ -348,7 +351,13 @@ impl VFile {
                 .alloc_cluster(needed, final_cluster, &self.chain)
                 .expect("SD Card has no space!");
         }
-        self.set_size(new_size);
+        // TODO(ZMY) 这样改真的对吗???
+        // 更新文件大小
+        self.modify_short_dirent(|short_entry: &mut ShortDirEntry| {
+            short_entry.set_size(new_size);
+        });
+        // println!("new size={}", new_size);
+        // self.set_size(new_size);
     }
 
     // 在当前目录下查找可用目录项，返回offset，簇不够时也会返回相应的offset用于创建新目录项
@@ -444,6 +453,7 @@ impl VFile {
     }
 
     pub fn write_at_uncached(&self, offset: usize, buf: &[u8]) -> usize {
+        // println!("write!");
         self.increase_size((offset + buf.len()) as u32);
         self.modify_short_dirent(|short_ent| {
             short_ent.write_at(
@@ -502,15 +512,20 @@ impl VFile {
             self.fs.clone(),
             self.block_device.clone(),
         );
+        // println!("here");
         if attribute == ATTR_DIRECTORY {
             let mut self_dir = ShortDirEntry::new(".", "", ATTR_DIRECTORY);
             let mut parent_dir = ShortDirEntry::new("..", "", ATTR_DIRECTORY);
+            // println!("a");
+            // vfile.write_at_uncached(0, self_dir.as_bytes_mut()); // TODO：需要吗
+            // println!("b");
             parent_dir.set_first_cluster(self.first_cluster());
-            vfile.write_at_uncached(0, self_dir.as_bytes_mut()); // TODO：需要吗
-            vfile.write_at_uncached(DIRENT_SZ, parent_dir.as_bytes_mut());
+            vfile.write_at_uncached(DIRENT_SZ, parent_dir.as_bytes());
+            // println!("bb");
             let first_cluster = vfile.read_short_dirent(|short_ent| short_ent.first_cluster());
             self_dir.set_first_cluster(first_cluster);
-            vfile.write_at_uncached(0, &self_dir.as_bytes_mut());
+            // println!("c");
+            vfile.write_at_uncached(0, self_dir.as_bytes());
         }
         // println!("file created");
         Some(Arc::new(vfile))
@@ -703,7 +718,7 @@ impl VFile {
 
     pub fn set_modification_time(&self, mtime: u64) {
         let (date, time) = unix2fat_time64(mtime);
-        println!("mtime:{}, date:{}, time:{}", mtime, date, time);
+        // println!("mtime:{}, date:{}, time:{}", mtime, date, time);
         self.modify_short_dirent(|short_ent| short_ent.set_modification_time(date, time));
     }
 

@@ -103,9 +103,7 @@ pub fn fork() -> isize {
 pub fn exec(path: &str) -> isize {
     sys_exec(path)
 }
-pub fn busy() {
-    sys_busy();
-}
+
 pub fn wait(exit_code: &mut i32) -> isize {
     sys_waitpid(-1, exit_code as *mut _, 0)
 }

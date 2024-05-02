@@ -150,6 +150,7 @@ impl TaskControlBlock {
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (mut memory_set, mut user_sp, user_hp, entry_point, mut auxv) =
             MemorySet::from_elf(elf_data);
+        // info!("a");
         // println!("user_sp:{:#X}  argv:{:?}", user_sp, argv);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
@@ -238,6 +239,8 @@ impl TaskControlBlock {
         user_sp -= user_sp % size_of::<usize>();
         //println!("user_sp:{:#X}", user_sp);
 
+        // info!("b");
+
         // **** access current TCB exclusively
         let mut inner = self.inner_lock();
 
@@ -266,6 +269,7 @@ impl TaskControlBlock {
         debug!("task.exec.tid={}", self.tid.0);
         inner.user_heappoint = user_hp;
         inner.user_heapbottom = user_hp;
+        // info!("execve ok!");
         // println!("final user_sp:{:#X}", user_sp);
         // **** release current PCB
     }

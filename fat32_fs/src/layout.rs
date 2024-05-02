@@ -343,6 +343,11 @@ impl ShortDirEntry {
     }
 
     pub fn set_size(&mut self, size: u32) {
+        // println!(
+        //     " entry {} new size_in_bytes={}",
+        //     self.get_name_lowercase(),
+        //     size
+        // );
         self.size_in_bytes = size;
     }
 
@@ -691,10 +696,18 @@ impl ShortDirEntry {
                     .write()
                     .cluster_count(self.first_cluster(), block_device, fat)
                     as usize;
+            // println!("size={},offset={},buf.len()={}", size, offset, buf.len());
             end = (offset + buf.len()).min(size);
         } else {
+            // println!(
+            //     "self.size_in_bytes={},offset={},buf.len()={}",
+            //     self.size_in_bytes as usize,
+            //     offset,
+            //     buf.len()
+            // );
             end = (offset + buf.len()).min(self.size_in_bytes as usize);
         }
+        // println!("cur_offset={},end={}", curr_offset, end);
         assert!(curr_offset <= end);
 
         // let (curr_cluster, curr_sector, _) = self.get_pos(offset, manager, fat, block_device);

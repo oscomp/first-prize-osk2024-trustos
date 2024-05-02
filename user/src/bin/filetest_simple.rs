@@ -19,8 +19,7 @@ pub fn main() -> i32 {
     assert!(fd > 0);
     let fd = fd as usize;
     let mut buffer = [0u8; 100];
-    #[allow(unused_variables)]
-    let read_len = read(fd, &mut buffer, 100) as usize;
+    let _ = read(fd, &mut buffer, 100) as usize;
     close(fd);
     println!("file_test passed!");
     0

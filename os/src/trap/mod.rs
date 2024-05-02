@@ -70,7 +70,7 @@ pub fn trap_handler() {
     let strace_mask = current_task().unwrap().inner_lock().strace_mask;
 
     let hartid = hart_id();
-    // info!("trap handler");
+
     set_kernel_trap_entry();
     let scause = scause::read();
     let stval = stval::read();
@@ -79,6 +79,7 @@ pub fn trap_handler() {
             // jump to next instruction anyway
             let mut cx = current_trap_cx();
             cx.sepc += 4;
+            let syscall_id = Syscall::from(cx.x[17]);
             // get system call return value
             let result = syscall(
                 cx.x[17],
@@ -91,17 +92,17 @@ pub fn trap_handler() {
                     cx.x[15] as isize,
                 ],
             );
+            // info!("syscall  end");
             // cx is changed during sys_exec, so we have to call it again
             cx = current_trap_cx();
             cx.x[10] = result as usize;
             if strace_mask != 0 && (strace_mask == usize::MAX || strace_mask == cx.x[17]) {
                 info!(
-                    "[strace] syscall {:?} -> {}",
-                    Syscall::from(cx.x[17]),
-                    cx.x[10]
+                    "[strace] syscall {} {:?} -> {}",
+                    cx.x[17], syscall_id, cx.x[10]
                 );
             } else {
-                if Syscall::try_from(cx.x[17]).is_err() {
+                if syscall_id == Syscall::Default {
                     info!("[strace] unknown syscall id {} -> {}", cx.x[17], cx.x[10]);
                 }
             }

@@ -35,7 +35,7 @@ pub trait File: Send + Sync {
 
 use alloc::{sync::Arc, vec, vec::Vec};
 pub use dirent::Dirent;
-pub use inode::{chdir, list_apps, open, open_file, OSInode, OpenFlags, ROOT_INODE};
+pub use inode::{chdir, is_abs_path, list_apps, open, open_file, OSInode, OpenFlags, ROOT_INODE};
 pub use mount::MNT_TABLE;
 pub use pipe::{make_pipe, Pipe};
 pub use stat::Kstat;
@@ -62,15 +62,15 @@ pub fn flush_preload() {
     });
     initproc.write(UserBuffer::new(v));
 
-    let onlinetests = open_file("onlinetests", OpenFlags::O_CREATE).unwrap();
-    let mut v = Vec::new();
-    v.push(unsafe {
-        core::slice::from_raw_parts_mut(
-            shell_start as *mut u8,
-            shell_end as usize - shell_start as usize,
-        ) as &'static mut [u8]
-    });
-    onlinetests.write(UserBuffer::new(v));
+    // let onlinetests = open_file("onlinetests", OpenFlags::O_CREATE).unwrap();
+    // let mut v = Vec::new();
+    // v.push(unsafe {
+    //     core::slice::from_raw_parts_mut(
+    //         shell_start as *mut u8,
+    //         shell_end as usize - shell_start as usize,
+    //     ) as &'static mut [u8]
+    // });
+    // onlinetests.write(UserBuffer::new(v));
 }
 
 pub fn path2abs<'a>(cwdv: &mut Vec<&'a str>, pathv: &Vec<&'a str>) -> String {

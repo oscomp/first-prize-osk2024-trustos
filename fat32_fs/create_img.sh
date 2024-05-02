@@ -14,8 +14,10 @@ sudo cp ../user/target/riscv64gc-unknown-none-elf/release/user_shell ../${DIR}/f
 sudo mkdir ../${DIR}/fs/rCoretests
 sudo rm ../user/target/riscv64gc-unknown-none-elf/release/*.*
 sudo cp ../user/target/riscv64gc-unknown-none-elf/release/* ../${DIR}/fs/rCoretests/ 
-sudo rm ../${DIR}/fs/rCoretests/usertests 
+sudo cp ../user/target/riscv64gc-unknown-none-elf/release/initproc ../${DIR}/fs/
+# sudo rm ../${DIR}/fs/rCoretests/usertests 
 sudo rm ../${DIR}/fs/rCoretests/initproc 
+
 sudo cp ../user/target/riscv64gc-unknown-none-elf/release/usertests ../${DIR}/fs
 sudo cp -r ../testsuits-for-oskernel/riscv-syscalls-testing/user/build/riscv64/* ../${DIR}/fs/ 
 # sudo cp ../busybox_unstripped ../${DIR}/fs/busybox

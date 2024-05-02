@@ -103,7 +103,6 @@ pub fn sys_clone(
 pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usize) -> isize {
     let token = current_user_token().unwrap();
     let path = translated_str(token, path);
-    // println!("path:{}", path);
     //处理argv参数
     let mut argv_vec = Vec::<String>::new();
     loop {
@@ -146,10 +145,11 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
         {
             let elf_data = unsafe { app_inode.read_as_elf() };
             task.inner_lock().file = Some(app_inode.clone());
+            // info!("before exec");
             task.exec(elf_data, &argv_vec, &mut env);
         }
         task.inner_lock().memory_set.activate();
-        debug!("sys_exec end");
+        // info!("sys_exec end");
         0
     } else {
         -1
