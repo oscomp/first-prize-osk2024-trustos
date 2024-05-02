@@ -87,7 +87,7 @@ pub struct OSInode {
 pub struct OSInodeInner {
     offset: usize, // 偏移量
 }
-
+#[cfg(feature = "fat32_fs")]
 impl OSInode {
     pub fn new(readable: bool, writable: bool, inode: Arc<VFile>) -> Self {
         Self {
@@ -260,16 +260,19 @@ pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode
     }
 }
 
+#[cfg(feature = "fat32_fs")]
 #[inline(always)]
 pub fn path2vec(path: &str) -> Vec<&str> {
     path.split('/').filter(|s| !s.is_empty()).collect()
 }
 
+#[cfg(feature = "fat32_fs")]
 #[inline(always)]
 pub fn is_abs_path(path: &str) -> bool {
     unsafe { *path.as_ptr() == '/' as u8 }
 }
 
+#[cfg(feature = "fat32_fs")]
 fn create_file(
     cwd: &str,
     path: &str,

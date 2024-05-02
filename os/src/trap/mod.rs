@@ -13,7 +13,6 @@
 //! to [`syscall()`].
 mod context;
 
-use crate::config::mm::TRAMPOLINE;
 use crate::mm::VirtAddr;
 use crate::sync::interrupt_on;
 use crate::syscall::{syscall, Syscall};

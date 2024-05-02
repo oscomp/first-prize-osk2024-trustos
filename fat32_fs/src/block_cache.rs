@@ -1,9 +1,8 @@
 use super::{BlockDevice, BLOCK_SZ};
 use alloc::collections::VecDeque;
 use alloc::sync::Arc;
-use spin::Lazy;
+use lazy_static::*;
 use spin::RwLock;
-
 pub struct BlockCache {
     cache: [u8; BLOCK_SZ],
     block_id: usize,
@@ -153,11 +152,15 @@ impl BlockCacheManager {
     }
 }
 
-pub static DATA_BLOCK_CACHE_MANAGER: Lazy<RwLock<BlockCacheManager>> =
-    Lazy::new(|| RwLock::new(BlockCacheManager::new()));
+lazy_static! {
+    pub static ref DATA_BLOCK_CACHE_MANAGER: RwLock<BlockCacheManager> =
+        RwLock::new(BlockCacheManager::new());
+}
 
-pub static INFO_BLOCK_CACHE_MANAGER: Lazy<RwLock<BlockCacheManager>> =
-    Lazy::new(|| RwLock::new(BlockCacheManager::new()));
+lazy_static! {
+    pub static ref INFO_BLOCK_CACHE_MANAGER: RwLock<BlockCacheManager> =
+        RwLock::new(BlockCacheManager::new());
+}
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum CacheMode {

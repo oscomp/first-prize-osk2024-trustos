@@ -24,6 +24,7 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
         let file = file.clone();
         // release current task TCB manually to avoid multi-borrow
         drop(inner);
+        drop(task);
         file.write(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize
     } else {
         -1
@@ -44,6 +45,7 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
         }
         // release current task TCB manually to avoid multi-borrow
         drop(inner);
+        drop(task);
         file.read(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize
     } else {
         -1
@@ -130,7 +132,6 @@ pub fn sys_getcwd(buf: *const u8, size: usize) -> isize {
 }
 
 pub fn sys_dup(fd: usize) -> isize {
-    info!("dup");
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
 
