@@ -138,7 +138,7 @@ impl MemorySet {
         len: usize,
         map_perm: MapPermission,
         flags: MmapFlags,
-        file: Arc<RFile>,
+        file: Option<Arc<RFile>>,
         off: usize,
     ) -> usize {
         // 映射到固定地址

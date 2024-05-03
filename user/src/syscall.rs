@@ -133,7 +133,7 @@ pub fn sys_busy() {
             "busybox\0".as_ptr() as isize,
             [
                 "busybox\0".as_ptr() as *const u8,
-                //"ls\0".as_ptr() as *const u8,
+                "sh\0".as_ptr() as *const u8,
                 0 as *const u8,
             ]
             .as_ptr() as isize,

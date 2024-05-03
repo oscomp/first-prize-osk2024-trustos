@@ -16,9 +16,9 @@ fn main() -> i32 {
     if fork() == 0 {
         // exec("/rCoretests/huge_write\0");
         // exec("/rCoretests/forktest\0");
-        exec("user_shell\0");
+        //exec("user_shell\0");
         //exec("busybox_unstripped\0");
-        //busy();
+        busy();
         // exec("onlinetests\0");
     } else {
         loop {

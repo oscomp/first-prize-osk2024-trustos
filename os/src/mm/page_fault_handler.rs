@@ -19,6 +19,9 @@ pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: Opti
     // 映射页面,拷贝数据
     let vma = vma.unwrap();
     vma.map_one(page_table, va.into());
+    if vma.file.is_none() {
+        return;
+    }
     let file = vma.file.clone().unwrap();
     let old_offset = file.offset();
     let start_addr: VirtAddr = vma.vpn_range.start().into();

@@ -54,7 +54,7 @@ impl MapArea {
         map_type: MapType,
         map_perm: MapPermission,
         area_type: MapAreaType,
-        file: Arc<RFile>,
+        file: Option<Arc<RFile>>,
         offset: usize,
         mmap_flags: MmapFlags,
     ) -> Self {
@@ -68,7 +68,7 @@ impl MapArea {
             map_type,
             map_perm,
             area_type,
-            file: Some(file),
+            file,
             offset,
             mmap_flags,
             groupid,

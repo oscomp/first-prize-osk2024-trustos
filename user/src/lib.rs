@@ -104,6 +104,7 @@ pub fn exec(path: &str) -> isize {
     sys_exec(path)
 }
 pub fn busy() {
+    strace(0);
     sys_busy();
 }
 pub fn wait(exit_code: &mut i32) -> isize {
