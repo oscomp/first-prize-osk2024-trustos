@@ -30,6 +30,8 @@ pub enum Syscall {
     Write = 64,
     Fstat = 80,
     Exit = 93,
+    Exitgroup = 94,
+    Settidaddress = 96,
     Nanosleep = 101,
     SchedYield = 124,
     Times = 153,
@@ -37,6 +39,10 @@ pub enum Syscall {
     Gettimeofday = 169,
     Getpid = 172,
     Getppid = 173,
+    Getuid = 174,
+    Geteuid = 175,
+    Getgid = 176,
+    Getegid = 177,
     Gettid = 178,
     Brk = 214,
     Munmap = 215,
@@ -66,6 +72,8 @@ use crate::sbi::shutdown;
 use log::{debug, info};
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
+    debug!("syscall:{}", syscall_id);
+    let id = syscall_id;
     let syscall_id: Syscall = Syscall::from(syscall_id);
     debug!("syscall:{:?}", syscall_id);
     match syscall_id {
@@ -104,7 +112,8 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
         Syscall::Read => sys_read(args[0] as usize, args[1] as *const u8, args[2] as usize),
         Syscall::Write => sys_write(args[0] as usize, args[1] as *const u8, args[2] as usize),
         Syscall::Fstat => sys_fstat(args[0] as usize, args[1] as *const u8),
-        Syscall::Exit => sys_exit(args[0] as i32),
+        Syscall::Exit | Syscall::Exitgroup => sys_exit(args[0] as i32),
+        Syscall::Settidaddress => sys_settidaddress(args[0] as usize),
         Syscall::Nanosleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
         Syscall::SchedYield => sys_sched_yield(),
         Syscall::Times => sys_times(args[0] as *const u8),
@@ -112,6 +121,10 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
         Syscall::Uname => sys_uname(args[0] as *mut u8),
         Syscall::Getpid => sys_getpid(),
         Syscall::Getppid => sys_getppid(),
+        Syscall::Getuid => sys_getuid(),
+        Syscall::Geteuid => sys_geteuid(),
+        Syscall::Getgid => sys_getgid(),
+        Syscall::Getegid => sys_getegid(),
         Syscall::Gettid => sys_gettid(),
         Syscall::Clone => sys_clone(
             args[0] as usize,
@@ -138,6 +151,6 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
         Syscall::Wait4 => sys_wait4(args[0] as isize, args[1] as *mut i32, args[2] as i32),
         Syscall::Shutdown => shutdown(false),
         Syscall::Strace => sys_strace(args[0] as usize),
-        _ => panic!("Unsupported syscall_id: {:?}", syscall_id),
+        _ => panic!("Unsupported syscall_id: {}", id),
     }
 }

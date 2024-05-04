@@ -46,6 +46,8 @@ pub struct TaskControlBlockInner {
     pub user_heappoint: usize,
     pub user_heapbottom: usize,
     pub strace_mask: usize,
+    pub set_child_tid: usize,
+    pub clear_child_tid: usize,
 }
 
 impl TaskControlBlockInner {
@@ -132,6 +134,8 @@ impl TaskControlBlock {
                 user_heappoint: user_heapbottom,
                 user_heapbottom,
                 strace_mask: 0,
+                set_child_tid: 0,
+                clear_child_tid: 0,
             }),
         };
         // prepare TrapContext in user space
@@ -331,6 +335,8 @@ impl TaskControlBlock {
                 user_heappoint: parent_inner.user_heappoint,
                 user_heapbottom: parent_inner.user_heapbottom,
                 strace_mask: parent_inner.strace_mask,
+                set_child_tid: 0,
+                clear_child_tid: 0,
             }),
         });
         // add child

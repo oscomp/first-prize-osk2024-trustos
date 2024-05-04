@@ -138,7 +138,7 @@ impl MemorySet {
         len: usize,
         map_perm: MapPermission,
         flags: MmapFlags,
-        file: Arc<RFile>,
+        file: Option<Arc<RFile>>,
         off: usize,
     ) -> usize {
         // 映射到固定地址
@@ -287,7 +287,15 @@ impl MemorySet {
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
-            map_area.copy_data(&mut self.page_table, data);
+            map_area.copy_data(&mut self.page_table, data, 0);
+        }
+        self.areas.push(map_area);
+    }
+    fn push_with_offset(&mut self, mut map_area: MapArea, offset: usize, data: Option<&[u8]>) {
+        // println!{"3"}
+        map_area.map(&mut self.page_table);
+        if let Some(data) = data {
+            map_area.copy_data(&mut self.page_table, data, offset);
         }
         self.areas.push(map_area);
     }
@@ -400,6 +408,7 @@ impl MemorySet {
         let magic = elf_header.pt1.magic;
         assert_eq!(magic, [0x7f, 0x45, 0x4c, 0x46], "invalid elf!");
         let ph_count = elf_header.pt2.ph_count();
+        let mut head_va = 0; // top va of ELF which points to ELF header
 
         auxv.push(Aux::new(
             AuxType::PHENT,
@@ -428,6 +437,7 @@ impl MemorySet {
             if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
                 let start_va: VirtAddr = (ph.virtual_addr() as usize).into();
                 let end_va: VirtAddr = ((ph.virtual_addr() + ph.mem_size()) as usize).into();
+                let offset = start_va.0 - start_va.floor().0 * PAGE_SIZE;
                 let mut map_perm = MapPermission::U;
                 let ph_flags = ph.flags();
                 if ph_flags.is_read() {
@@ -446,14 +456,25 @@ impl MemorySet {
                     map_perm,
                     MapAreaType::Elf,
                 );
+                if offset == 0 {
+                    head_va = start_va.into();
+                }
                 max_end_vpn = map_area.vpn_range.end();
-                memory_set.push(
+                memory_set.push_with_offset(
                     map_area,
+                    offset,
                     Some(&elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
                 );
                 //memory_set.push_lazily(map_area);
             }
         }
+
+        // Get ph_head addr for auxv
+        let ph_head_addr = head_va + elf.header.pt2.ph_offset() as usize;
+        auxv.push(Aux {
+            aux_type: AuxType::PHDR,
+            value: ph_head_addr as usize,
+        });
         //map user heap
         let max_end_va: VirtAddr = max_end_vpn.into();
         let mut user_heap_bottom: usize = max_end_va.into();

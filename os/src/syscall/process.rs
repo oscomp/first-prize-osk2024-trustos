@@ -52,8 +52,27 @@ pub fn sys_getppid() -> isize {
     current_task().unwrap().ppid() as isize
 }
 
+pub fn sys_getuid() -> isize {
+    0 // root user
+}
+
+pub fn sys_geteuid() -> isize {
+    0 // root user
+}
+
+pub fn sys_getgid() -> isize {
+    0 // root group
+}
+
+pub fn sys_getegid() -> isize {
+    0 // root group
+}
 pub fn sys_gettid() -> isize {
     current_task().unwrap().tid() as isize
+}
+pub fn sys_settidaddress(tidptr: usize) -> isize {
+    current_task().unwrap().inner_lock().clear_child_tid = tidptr;
+    sys_gettid()
 }
 
 pub fn sys_strace(mask: usize) -> isize {
