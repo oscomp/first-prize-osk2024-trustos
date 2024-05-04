@@ -13,7 +13,7 @@
 //! to [`syscall()`].
 mod context;
 
-use crate::mm::VirtAddr;
+use crate::mm::{VirtAddr, VirtPageNum};
 use crate::sync::interrupt_on;
 use crate::syscall::{syscall, Syscall};
 use crate::task::{
@@ -92,7 +92,6 @@ pub fn trap_handler() {
                     cx.x[15] as isize,
                 ],
             );
-            // info!("syscall  end");
             // cx is changed during sys_exec, so we have to call it again
             cx = current_trap_cx();
             cx.x[10] = result as usize;
@@ -214,11 +213,17 @@ pub fn trap_return_for_new_task_once() {
 pub fn trap_from_kernel() -> ! {
     use riscv::register::sepc;
     backtrace();
+    let stval = stval::read();
+    let sepc = sepc::read();
+    let stval_vpn = VirtPageNum::from(VirtAddr::from(stval));
+    let sepc_vpn = VirtPageNum::from(VirtAddr::from(sepc));
     panic!(
-        "stval = {:#x}, sepc = {:#x}\n
+        "stval = {:#x}(vpn {}), sepc = {:#x}(vpn{}),
         a trap {:?} from kernel!",
-        stval::read(),
-        sepc::read(),
+        stval,
+        stval_vpn.0,
+        sepc,
+        sepc_vpn.0,
         scause::read().cause()
     );
 }

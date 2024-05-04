@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     config::mm::{KERNEL_PGNUM_OFFSET, PAGE_SIZE},
-    fs::RFile,
+    fs::OSInode,
     syscall::MmapFlags,
 };
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
@@ -16,7 +16,7 @@ pub struct MapArea {
     pub map_type: MapType,
     pub map_perm: MapPermission,
     pub area_type: MapAreaType,
-    pub file: Option<Arc<RFile>>,
+    pub file: Option<Arc<OSInode>>,
     pub offset: usize,
     pub mmap_flags: MmapFlags,
     pub groupid: usize,
@@ -54,7 +54,7 @@ impl MapArea {
         map_type: MapType,
         map_perm: MapPermission,
         area_type: MapAreaType,
-        file: Option<Arc<RFile>>,
+        file: Option<Arc<OSInode>>,
         offset: usize,
         mmap_flags: MmapFlags,
     ) -> Self {

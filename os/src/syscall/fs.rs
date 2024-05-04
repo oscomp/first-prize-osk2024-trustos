@@ -1,11 +1,12 @@
 //! File and filesystem-related syscalls
 use crate::console::print;
 #[cfg(feature = "fat32_fs")]
-use crate::fs::is_abs_path;
-use crate::fs::{make_pipe, open, open_file, Dirent, Kstat, OpenFlags, MNT_TABLE};
+use crate::fs::{is_abs_path, remove_vfile_idx};
+use crate::fs::{make_pipe, open, open_file, Dirent, File, FileClass, Kstat, OpenFlags, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token};
 use alloc::string::String;
+use alloc::sync::Arc;
 use log::info;
 
 pub const AT_FDCWD: isize = -100;
@@ -16,18 +17,28 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let inner = task.inner_lock();
+    assert!(
+        token == inner.user_token(),
+        "token={:#x},user_token={:#x}",
+        token,
+        inner.user_token()
+    );
     if fd >= inner.fd_table.len() {
         return -1;
     }
     if let Some(file) = &inner.fd_table[fd] {
+        let file: Arc<dyn File + Send + Sync> = match file {
+            FileClass::File(f) => f.clone(),
+            FileClass::Abs(f) => f.clone(),
+        };
         if !file.writable() {
             return -1;
         }
         let file = file.clone();
         // release current task TCB manually to avoid multi-borrow
         drop(inner);
-        // drop(task);
-        info!("fd={}", fd);
+        drop(task);
+        // info!("fd={}", fd);
         file.write(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize
     } else {
         -1
@@ -42,13 +53,16 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
         return -1;
     }
     if let Some(file) = &inner.fd_table[fd] {
-        let file = file.clone();
+        let file: Arc<dyn File + Send + Sync> = match file {
+            FileClass::File(f) => f.clone(),
+            FileClass::Abs(f) => f.clone(),
+        };
         if !file.readable() {
             return -1;
         }
         // release current task TCB manually to avoid multi-borrow
         drop(inner);
-        // drop(task);
+        drop(task);
         file.read(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize
     } else {
         -1
@@ -72,7 +86,7 @@ pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> isize
     if fd == AT_FDCWD && !is_abs_path(&path) {
         ret = if let Some(inode) = open(&inner.current_path, path.as_str(), flags) {
             let new_fd = inner.alloc_fd();
-            inner.fd_table[new_fd] = Some(inode);
+            inner.fd_table[new_fd] = Some(FileClass::File(inode));
             new_fd as isize
         } else {
             -1
@@ -80,7 +94,7 @@ pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> isize
     } else {
         ret = if let Some(inode) = open_file(path.as_str(), flags) {
             let new_fd = inner.alloc_fd();
-            inner.fd_table[new_fd] = Some(inode);
+            inner.fd_table[new_fd] = Some(FileClass::File(inode));
             new_fd as isize
         } else {
             -1
@@ -104,7 +118,7 @@ pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> isize
         if let Some(inode) = open_file(path.as_str(), flags) {
             let mut inner = task.inner_lock();
             let fd_new = inner.alloc_fd();
-            inner.fd_table[fd_new] = Some(inode);
+            inner.fd_table[fd_new] = Some(FileClass::File(inode));
             fd_new as isize
         } else {
             -1
@@ -117,7 +131,7 @@ pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> isize
             if let Some(inode) = open(now_path.as_str(), path.as_str(), flags) {
                 let mut inner = task.inner_lock();
                 let fd_new = inner.alloc_fd();
-                inner.fd_table[fd_new] = Some(inode);
+                inner.fd_table[fd_new] = Some(FileClass::File(inode));
                 fd_new as isize
             } else {
                 -1
@@ -128,13 +142,13 @@ pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> isize
             if fd >= FD_LIMIT {
                 return -1;
             }
-            if let Some(file) = &inner.fd_table[fd] {
+            if let Some(FileClass::File(file)) = &inner.fd_table[fd] {
                 let filename: String = file.name().clone();
                 drop(inner);
                 if let Some(inode) = open(filename.as_str(), path.as_str(), flags) {
                     let mut inner = task.inner_lock();
                     let fd = inner.alloc_fd();
-                    inner.fd_table[fd] = Some(inode);
+                    inner.fd_table[fd] = Some(FileClass::File(inode));
                     fd as isize
                 } else {
                     -1
@@ -219,7 +233,7 @@ pub fn sys_chdir(path: *const u8) -> isize {
 
     let path = translated_str(token, path);
     if path.starts_with('/') {
-        // drop(inner);
+        drop(inner);
         if let Some(inode) = open_file(path.as_str(), OpenFlags::O_RDONLY) {
             let mut inner = task.inner_lock();
             inner.current_path = path.clone();
@@ -229,7 +243,7 @@ pub fn sys_chdir(path: *const u8) -> isize {
         }
     } else {
         let now_path: String = inner.current_path.clone();
-        // drop(inner);
+        drop(inner);
         if let Some(inode) = open(now_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
             let mut inner = task.inner_lock();
             if now_path == "/" {
@@ -315,7 +329,7 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: usize) -> isize {
                 return -1;
             }
 
-            if let Some(file) = &inner.fd_table[dirfd] {
+            if let Some(FileClass::File(file)) = &inner.fd_table[dirfd] {
                 let filename: String = file.name().clone();
                 drop(inner);
                 if let Some(_) = open(filename.as_str(), path.as_str(), OpenFlags::O_DIRECTROY) {
@@ -345,13 +359,18 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> isize {
         return -1;
     }
 
-    if let Some(file) = &inner.fd_table[fd] {
-        let file = file.clone();
+    if let Some(f) = &inner.fd_table[fd] {
+        let file;
+        if let FileClass::File(t) = f {
+            file = t.clone();
+        } else {
+            return -1;
+        }
         if !file.readable() {
             return -1;
         }
         // release current task TCB manually to avoid multi-borrow
-        // drop(inner);
+        drop(inner);
 
         let mut all_len: usize = 0;
         let mut dirent = Dirent::new();
@@ -381,7 +400,41 @@ pub fn sys_linkat(
 ) -> isize {
     todo!();
 }
+#[cfg(feature = "fat32_fs")]
+pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
+    use alloc::string::ToString;
 
+    let process = current_task().unwrap();
+    let token = current_user_token().unwrap();
+    let inner = process.inner_lock();
+    let path = translated_str(token, path);
+    let mut base_path = inner.current_path.as_str();
+    // 如果path是绝对路径，则dirfd被忽略
+    if is_abs_path(&path) {
+        base_path = "/";
+    } else if dirfd != AT_FDCWD {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table[dirfd as usize] {
+            if let Some(osfile) = osfile.find(path.as_str(), OpenFlags::empty()) {
+                osfile.remove();
+                return 0;
+            }
+        }
+        return -1;
+    }
+    if let Some(osfile) = open(base_path, path.as_str(), OpenFlags::empty()) {
+        let abs_path = if is_abs_path(&path) {
+            path
+        } else {
+            base_path.to_string() + &path
+        };
+        remove_vfile_idx(&abs_path);
+        osfile.remove();
+        return 0;
+    }
+    return -1;
+}
+
+#[cfg(feature = "simple_fs")]
 pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
     let token = current_user_token().unwrap();
     let task = current_task().unwrap();
@@ -390,7 +443,7 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
     let path = String::from(path.trim_end_matches('\n'));
 
     if path.starts_with('/') {
-        // drop(inner);
+        drop(inner);
         if let Some(inode) = open_file(path.as_str(), OpenFlags::O_RDONLY) {
             //断开链接(讨论flags)
             if flags == AT_REMOVEDIR {
@@ -410,7 +463,7 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
     } else {
         if dirfd == AT_FDCWD {
             let now_path: String = inner.current_path.clone();
-            // drop(inner);
+            drop(inner);
             if let Some(inode) = open(now_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
                 //断开链接(讨论flags)
                 if flags == AT_REMOVEDIR {
@@ -436,9 +489,9 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
                 return -1;
             }
 
-            if let Some(file) = &inner.fd_table[dirfd] {
+            if let Some(FileClass::File(file)) = &inner.fd_table[dirfd] {
                 let filename: String = file.name().clone();
-                // drop(inner);
+                drop(inner);
                 if let Some(inode) = open(filename.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
                     //断开链接(讨论flags)
                     if flags == AT_REMOVEDIR {
@@ -507,10 +560,10 @@ pub fn sys_fstat(fd: usize, kst: *const u8) -> isize {
         return -1;
     }
 
-    if let Some(file) = &inner.fd_table[fd] {
+    if let Some(FileClass::File(file)) = &inner.fd_table[fd] {
         let mut kstat = Kstat::new();
         let file = file.clone();
-        // drop(inner);
+        drop(inner);
         file.fstat(&mut kstat);
         kst.write(kstat.as_bytes());
         0
@@ -526,9 +579,9 @@ pub fn sys_pipe2(fd: *mut u32) -> isize {
 
     let read_fd = inner.alloc_fd();
     let (read_pipe, write_pipe) = make_pipe();
-    inner.fd_table[read_fd] = Some(read_pipe);
+    inner.fd_table[read_fd] = Some(FileClass::Abs(read_pipe));
     let write_fd = inner.alloc_fd();
-    inner.fd_table[write_fd] = Some(write_pipe);
+    inner.fd_table[write_fd] = Some(FileClass::Abs(write_pipe));
     *translated_refmut(token, fd) = read_fd as u32;
     *translated_refmut(token, unsafe { fd.add(1) }) = write_fd as u32;
     0

@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     config::mm::{USER_HEAP_SIZE, USER_TRAP_CONTEXT},
-    fs::{File, RFile, Stdin, Stdout},
+    fs::{File, FileClass, OSInode, Stdin, Stdout},
     mm::{translated_refmut, MapAreaType, MapPermission, MemorySet, PhysPageNum, VirtAddr},
     timer::TimeData,
     trap::{trap_handler, TrapContext},
@@ -29,6 +29,7 @@ pub struct TaskControlBlock {
     // mutable
     inner: Mutex<TaskControlBlockInner>,
 }
+type FdTable = Vec<Option<FileClass>>;
 
 pub struct TaskControlBlockInner {
     pub trap_cx_ppn: PhysPageNum,
@@ -39,8 +40,8 @@ pub struct TaskControlBlockInner {
     pub parent: Option<Weak<TaskControlBlock>>,
     pub children: Vec<Arc<TaskControlBlock>>,
     pub exit_code: i32,
-    pub fd_table: Vec<Option<Arc<RFile>>>,
-    pub file: Option<Arc<RFile>>,
+    pub fd_table: FdTable,
+    pub file: Option<Arc<OSInode>>,
     pub current_path: String,
     pub time_data: TimeData,
     pub user_heappoint: usize,
@@ -122,11 +123,11 @@ impl TaskControlBlock {
                 exit_code: 0,
                 fd_table: vec![
                     // 0 -> stdin
-                    Some(Arc::new(Stdin)),
+                    Some(FileClass::Abs(Arc::new(Stdin))),
                     // 1 -> stdout
-                    Some(Arc::new(Stdout)),
+                    Some(FileClass::Abs(Arc::new(Stdout))),
                     // 2 -> stderr
-                    Some(Arc::new(Stdout)),
+                    Some(FileClass::Abs(Arc::new(Stdout))),
                 ],
                 file: None,
                 current_path: String::from("/"),
@@ -150,11 +151,11 @@ impl TaskControlBlock {
         task_control_block
     }
     pub fn exec(&self, elf_data: &[u8], argv: &Vec<String>, mut env: &mut Vec<String>) {
+        // info!("exec");
         //用户栈高地址到低地址：环境变量字符串/参数字符串/aux辅助向量/环境变量地址数组/参数地址数组/参数数量
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (mut memory_set, mut user_sp, user_hp, entry_point, mut auxv) =
             MemorySet::from_elf(elf_data);
-        // info!("a");
         // println!("user_sp:{:#X}  argv:{:?}", user_sp, argv);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
@@ -301,7 +302,7 @@ impl TaskControlBlock {
             MapAreaType::Stack,
         );
         // copy fd table
-        let mut new_fd_table: Vec<Option<Arc<RFile>>> = Vec::new();
+        let mut new_fd_table: FdTable = Vec::new();
         for fd in parent_inner.fd_table.iter() {
             if let Some(file) = fd {
                 new_fd_table.push(Some(file.clone()));

@@ -38,8 +38,8 @@ use task::{TaskControlBlock, TaskStatus};
 
 pub use aux::*;
 pub use processor::{
-    current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
-    Processor, PROCESSORS,
+    current_task, current_trap_cx, current_user_token, run_tasks, schedule, set_user_token,
+    take_current_task, Processor, PROCESSORS,
 };
 pub use tid::{tid_alloc, KernelStack, TidAllocator, TidHandle};
 

@@ -7,7 +7,7 @@ use core::fmt::{self, Debug, Formatter};
 use lazy_static::*;
 use spin::Mutex;
 
-use super::{translated_byte_buffer, FrameTracker, MapArea, MapAreaType, MapType, VirtPageNum};
+use super::{FrameTracker, MapArea, MapAreaType, MapType, VirtPageNum};
 pub const GROUP_SIZE: usize = 0x1000;
 
 lazy_static! {

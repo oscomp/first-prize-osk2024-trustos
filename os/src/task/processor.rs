@@ -140,6 +140,9 @@ pub fn take_current_token() -> Option<usize> {
 pub fn current_trap_cx() -> &'static mut TrapContext {
     current_task().unwrap().inner_lock().trap_cx()
 }
+pub fn set_user_token(token: usize) {
+    get_proc_by_hartid(hart_id()).token = Some(token);
+}
 ///Return to idle control flow for new scheduling
 pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {
     let processor = get_proc_by_hartid(hart_id());

@@ -6,6 +6,7 @@ use log::{debug, info};
 
 use crate::{
     config::mm::{PAGE_SIZE, PAGE_SIZE_BITS},
+    fs::File,
     mm::flush_tlb,
 };
 
@@ -15,9 +16,8 @@ use super::{
 };
 
 ///mmap写触发的lazy alocation，直接新分配帧
-pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: Option<&mut MapArea>) {
+pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapArea) {
     // 映射页面,拷贝数据
-    let vma = vma.unwrap();
     vma.map_one(page_table, va.into());
     if vma.file.is_none() {
         return;
@@ -33,8 +33,7 @@ pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: Opti
     file.set_offset(old_offset);
 }
 ///mmap读触发的lazy alocation，查看是否有共享页可直接用，没有再直接分配
-pub fn mmap_read_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: Option<&mut MapArea>) {
-    let vma = vma.unwrap();
+pub fn mmap_read_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapArea) {
     let frame = GROUP_SHARE.lock().find(vma.groupid, va.into());
     if let Some(frame) = frame {
         //有现成的，直接clone
@@ -43,7 +42,7 @@ pub fn mmap_read_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: Optio
         page_table.map(va.into(), ppn, vma.flags());
     } else {
         //第一次读，分配页面
-        mmap_write_page_fault(va, page_table, Some(vma));
+        mmap_write_page_fault(va, page_table, vma);
         GROUP_SHARE.lock().add_frame(
             vma.groupid,
             va.into(),
@@ -52,16 +51,14 @@ pub fn mmap_read_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: Optio
     }
 }
 ///堆触发的lazy alocation，必是写
-pub fn brk_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: Option<&mut MapArea>) {
+pub fn brk_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapArea) {
     // 仅映射页面
-    let vma = vma.unwrap();
     vma.map_one(page_table, va.into());
 }
 
 ///copy on write
-pub fn cow_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: Option<&mut MapArea>) {
+pub fn cow_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapArea) {
     // 只有一个，不用复制
-    let vma = vma.unwrap();
     let frame = vma.data_frames.get(&va.into()).unwrap();
     debug!("handle va {:#x}, count={}", va.0, Arc::strong_count(frame));
     if Arc::strong_count(frame) == 1 {

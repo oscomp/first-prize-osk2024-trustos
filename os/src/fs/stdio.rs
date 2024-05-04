@@ -47,24 +47,6 @@ impl File for Stdin {
     fn write(&self, _user_buf: UserBuffer) -> usize {
         panic!("Cannot write to stdin!");
     }
-
-    #[allow(unused_variables)]
-    fn fstat(&self, kstat: &mut Kstat) {
-        panic!("Stdin not implement get_fstat");
-    }
-
-    #[allow(unused_variables)]
-    fn dirent(&self, dirent: &mut Dirent) -> isize {
-        panic!("Stdin not implement get_dirent");
-    }
-
-    fn name(&self) -> String {
-        panic!("Stdin not implement get_name");
-    }
-
-    fn set_offset(&self, offset: usize) {
-        panic!("Stdin not implement set_offset");
-    }
 }
 
 impl File for Stdout {
@@ -78,28 +60,10 @@ impl File for Stdout {
         panic!("Cannot read from stdout!");
     }
     fn write(&self, user_buf: UserBuffer) -> usize {
-        info!("write");
+        // info!("write");
         for buffer in user_buf.buffers.iter() {
             print!("{}", core::str::from_utf8(*buffer).unwrap());
         }
         user_buf.len()
-    }
-
-    #[allow(unused_variables)]
-    fn fstat(&self, kstat: &mut Kstat) {
-        panic!("Stdout not implement get_fstat");
-    }
-
-    #[allow(unused_variables)]
-    fn dirent(&self, dirent: &mut Dirent) -> isize {
-        panic!("Stdout not implement get_dirent");
-    }
-
-    fn name(&self) -> String {
-        panic!("Stdout not implement get_name");
-    }
-
-    fn set_offset(&self, offset: usize) {
-        panic!("Stdput not implement set_offset");
     }
 }

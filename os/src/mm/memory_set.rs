@@ -5,7 +5,7 @@ use super::{
     PTEFlags, PageTable, PageTableEntry, PhysAddr, PhysPageNum, StepByOne, UserBuffer, VPNRange,
     VirtAddr, VirtPageNum, GROUP_SHARE,
 };
-use crate::fs::{open_file, OpenFlags};
+use crate::fs::{open_file, File, OSInode, OpenFlags};
 use crate::{
     config::{
         board::{MEMORY_END, MMIO},
@@ -14,7 +14,6 @@ use crate::{
             USER_SPACE_SIZE, USER_STACK_SIZE, USER_TRAP_CONTEXT,
         },
     },
-    fs::RFile,
     mm::flush_tlb,
     syscall::MmapFlags,
     task::{current_task, Aux, AuxType},
@@ -138,7 +137,7 @@ impl MemorySet {
         len: usize,
         map_perm: MapPermission,
         flags: MmapFlags,
-        file: Option<Arc<RFile>>,
+        file: Option<Arc<OSInode>>,
         off: usize,
     ) -> usize {
         // 映射到固定地址
@@ -240,9 +239,9 @@ impl MemorySet {
         if area.is_some() {
             let area_inner = area.unwrap();
             if scause == Trap::Exception(Exception::StorePageFault) {
-                mmap_read_page_fault(vpn.into(), &mut self.page_table, Some(area_inner));
+                mmap_read_page_fault(vpn.into(), &mut self.page_table, area_inner);
             } else {
-                mmap_write_page_fault(vpn.into(), &mut self.page_table, Some(area_inner));
+                mmap_write_page_fault(vpn.into(), &mut self.page_table, area_inner);
             }
             return true;
         }
@@ -257,7 +256,7 @@ impl MemorySet {
             });
         if area.is_some() {
             let area_inner = area.unwrap();
-            brk_page_fault(vpn.into(), &mut self.page_table, Some(area_inner));
+            brk_page_fault(vpn.into(), &mut self.page_table, area_inner);
             return true;
         }
         false
@@ -278,7 +277,7 @@ impl MemorySet {
         let pte = self.page_table.translate(vpn);
         if area.is_some() && pte.is_some() && pte.unwrap().is_cow() {
             let area_inner = area.unwrap();
-            cow_page_fault(vpn.into(), &mut self.page_table, Some(area_inner));
+            cow_page_fault(vpn.into(), &mut self.page_table, area_inner);
             true
         } else {
             false
@@ -292,7 +291,6 @@ impl MemorySet {
         self.areas.push(map_area);
     }
     fn push_with_offset(&mut self, mut map_area: MapArea, offset: usize, data: Option<&[u8]>) {
-        // println!{"3"}
         map_area.map(&mut self.page_table);
         if let Some(data) = data {
             map_area.copy_data(&mut self.page_table, data, offset);
@@ -317,7 +315,6 @@ impl MemorySet {
     pub fn new_kernel() -> Self {
         let mut memory_set = Self::new_bare();
         println!("kernel satp: {:#x}", memory_set.page_table.token());
-        // map kernel sections
         println!(".text [{:#x}, {:#x})", stext as usize, etext as usize);
         println!(".rodata [{:#x}, {:#x})", srodata as usize, erodata as usize);
         println!(".data [{:#x}, {:#x})", sdata as usize, edata as usize);
@@ -325,6 +322,7 @@ impl MemorySet {
             ".bss [{:#x}, {:#x})",
             sbss_with_stack as usize, ebss as usize
         );
+        // map kernel sections
         println!("mapping .text section");
         memory_set.push(
             MapArea::new(

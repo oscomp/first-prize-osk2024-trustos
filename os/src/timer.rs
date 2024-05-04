@@ -7,6 +7,7 @@ use riscv::register::time;
 const TICKS_PER_SEC: usize = 100;
 const MSEC_PER_SEC: usize = 1000;
 
+#[derive(Debug, Clone, Copy)]
 pub struct Timespec {
     pub tv_sec: usize,  //秒
     pub tv_nsec: usize, //纳秒

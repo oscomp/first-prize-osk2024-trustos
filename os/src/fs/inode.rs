@@ -65,6 +65,39 @@ impl OSInode {
         let inner = self.inner.lock();
         inner.inode.remove()
     }
+
+    pub fn fstat(&self, kstat: &mut Kstat) {
+        let inner = self.inner.lock();
+        let vfile = inner.inode.clone();
+        // todo
+        let (st_size, st_blksize, st_blocks) = vfile.stat();
+        kstat.init(st_size, st_blksize, st_blocks);
+    }
+
+    pub fn dirent(&self, dirent: &mut Dirent) -> isize {
+        if !self.is_dir() {
+            return -1;
+        }
+        let mut inner = self.inner.lock();
+        let offset = inner.offset as u32;
+        if let Some((name, off, _)) = inner.inode.dirent_info(offset as usize) {
+            dirent.init(name.as_str());
+            inner.offset = off as usize;
+            let len = (name.len() + 8 * 4) as isize;
+            len
+        } else {
+            -1
+        }
+    }
+
+    pub fn set_offset(&self, offset: usize) {
+        let mut inner = self.inner.lock();
+        inner.offset = offset;
+    }
+
+    pub fn offset(&self) -> usize {
+        self.inner.lock().offset
+    }
 }
 
 #[cfg(feature = "simple_fs")]
@@ -128,7 +161,11 @@ impl OSInode {
         self.inode.get_name()
     }
 
-    pub fn delete(&self) -> usize {
+    pub fn delete(&self) {
+        self.inode.delete()
+    }
+
+    pub fn remove(&self) -> usize {
         self.inode.remove()
     }
 
@@ -138,6 +175,44 @@ impl OSInode {
 
     pub fn set_file_size(&self, size: u32) {
         self.inode.set_size(size);
+    }
+    pub fn find(&self, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
+        let pathv = path2vec(path);
+        let (readable, writable) = flags.read_write();
+        self.inode
+            .find_vfile_path(&pathv)
+            .map(|vfile| Arc::new(OSInode::new(readable, writable, vfile)))
+    }
+
+    pub fn fstat(&self, kstat: &mut Kstat) {
+        let inner = self.inner.lock();
+        let (st_size, _, _, _, _) = self.inode.stat();
+        kstat.init(st_size);
+    }
+
+    pub fn dirent(&self, dirent: &mut Dirent) -> isize {
+        if !self.is_dir() {
+            return -1;
+        }
+        let mut inner = self.inner.lock();
+        let offset = inner.offset as u32;
+        if let Some((name, off, _, _)) = self.inode.dirent_info(offset as usize) {
+            dirent.init(name.as_str());
+            inner.offset = off as usize;
+            let len = (name.len() + 8 * 4) as isize;
+            len
+        } else {
+            -1
+        }
+    }
+
+    pub fn set_offset(&self, offset: usize) {
+        let mut inner = self.inner.lock();
+        inner.offset = offset;
+    }
+
+    pub fn offset(&self) -> usize {
+        self.inner.lock().offset
     }
 }
 
@@ -436,31 +511,6 @@ pub fn chdir(work_path: &str, path: &str) -> Option<String> {
     }
 }
 
-#[cfg(feature = "fat32_fs")]
-pub fn chdir(work_path: &str, path: &str) -> Option<String> {
-    let current_inode = {
-        if path.chars().nth(0).unwrap() == '/' {
-            // 传入路径是绝对路径
-            ROOT_INODE.clone()
-        } else {
-            // 传入路径是相对路径
-            let current_work_pathv: Vec<&str> = work_path.split('/').collect();
-            ROOT_INODE.find_vfile_path(&current_work_pathv)?
-        }
-    };
-    let pathv: Vec<&str> = path.split('/').collect();
-    if let Some(_) = current_inode.find_vfile_path(&pathv) {
-        let new_current_path = String::from_str("/").unwrap() + &String::from_str(path).unwrap();
-        if current_inode.name() == "/" {
-            Some(new_current_path)
-        } else {
-            Some(String::from_str(current_inode.name()).unwrap() + &new_current_path)
-        }
-    } else {
-        None
-    }
-}
-
 #[cfg(feature = "simple_fs")]
 // 为 OSInode 实现 File Trait
 impl File for OSInode {
@@ -497,43 +547,6 @@ impl File for OSInode {
             total_write_size += write_size;
         }
         total_write_size
-    }
-
-    fn fstat(&self, kstat: &mut Kstat) {
-        let inner = self.inner.lock();
-        let vfile = inner.inode.clone();
-        // todo
-        let (st_size, st_blksize, st_blocks) = vfile.stat();
-        kstat.init(st_size, st_blksize, st_blocks);
-    }
-
-    fn dirent(&self, dirent: &mut Dirent) -> isize {
-        if !self.is_dir() {
-            return -1;
-        }
-        let mut inner = self.inner.lock();
-        let offset = inner.offset as u32;
-        if let Some((name, off, _)) = inner.inode.dirent_info(offset as usize) {
-            dirent.init(name.as_str());
-            inner.offset = off as usize;
-            let len = (name.len() + 8 * 4) as isize;
-            len
-        } else {
-            -1
-        }
-    }
-
-    fn name(&self) -> String {
-        self.name()
-    }
-
-    fn set_offset(&self, offset: usize) {
-        let mut inner = self.inner.lock();
-        inner.offset = offset;
-    }
-
-    fn offset(&self) -> usize {
-        self.inner.lock().offset
     }
 }
 
@@ -573,40 +586,5 @@ impl File for OSInode {
             total_write_size += write_size;
         }
         total_write_size
-    }
-
-    fn fstat(&self, kstat: &mut Kstat) {
-        let inner = self.inner.lock();
-        let (st_size, _, _, _, _) = self.inode.stat();
-        kstat.init(st_size);
-    }
-
-    fn dirent(&self, dirent: &mut Dirent) -> isize {
-        if !self.is_dir() {
-            return -1;
-        }
-        let mut inner = self.inner.lock();
-        let offset = inner.offset as u32;
-        if let Some((name, off, _, _)) = self.inode.dirent_info(offset as usize) {
-            dirent.init(name.as_str());
-            inner.offset = off as usize;
-            let len = (name.len() + 8 * 4) as isize;
-            len
-        } else {
-            -1
-        }
-    }
-
-    fn name(&self) -> String {
-        self.name()
-    }
-
-    fn set_offset(&self, offset: usize) {
-        let mut inner = self.inner.lock();
-        inner.offset = offset;
-    }
-
-    fn offset(&self) -> usize {
-        self.inner.lock().offset
     }
 }

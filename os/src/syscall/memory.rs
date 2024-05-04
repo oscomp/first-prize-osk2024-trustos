@@ -3,6 +3,7 @@
 use log::debug;
 
 use crate::{
+    fs::{File, FileClass},
     mm::{MapPermission, VirtAddr},
     task::current_task,
     utils::page_round_up,
@@ -30,7 +31,12 @@ pub fn sys_mmap(addr: usize, len: usize, prot: u32, flags: u32, fd: usize, off: 
             .mmap(addr, len, map_perm, flags, None, off) as isize;
     }
     // check fd and map_permission
-    let file = task_inner.fd_table[fd].as_ref().unwrap().clone();
+    let file;
+    if let Some(FileClass::File(f)) = &task_inner.fd_table[fd] {
+        file = f.clone();
+    } else {
+        unreachable!();
+    }
     // 读写权限
     if (map_perm.contains(MapPermission::R) && !file.readable()
         || flags.contains(MmapFlags::MAP_SHARED)

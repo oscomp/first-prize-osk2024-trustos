@@ -6,7 +6,7 @@ use crate::mm::{
 };
 use crate::syscall::CloneFlags;
 use crate::task::{
-    add_task, current_task, current_user_token, exit_current_and_run_next,
+    add_task, current_task, current_user_token, exit_current_and_run_next, set_user_token,
     suspend_current_and_run_next,
 };
 use crate::timer::{get_time_ms, Timespec, Tms};
@@ -30,7 +30,12 @@ pub fn sys_gettimeofday(ts: *const u8) -> isize {
     let mut ts = UserBuffer::new(translated_byte_buffer(token, ts, size_of::<Timespec>()));
     let time = get_time_ms();
     let mut timespec = Timespec::new(time / 1000, (time % 1000) * 1000000);
+    // println!("timespec={:?}", timespec);
     ts.write(timespec.as_bytes());
+    // let ts: *mut u64 = ts as *mut u64;
+    // let time = get_time_ms();
+    // *translated_refmut(token, ts) = (time / 1000) as u64;
+    // *translated_refmut(token, unsafe { ts.add(1) }) = ((time % 1000) * 1000000) as u64;
     0
 }
 
@@ -165,12 +170,10 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
             let elf_data = unsafe { app_inode.read_as_elf() };
             task.inner_lock().file = Some(app_inode.clone());
             task.exec(elf_data, &argv_vec, &mut env);
-            // let all_data = app_inode.read_all();
-            // task.inner_lock().file = Some(app_inode.clone());
-            // task.exec(all_data.as_slice(), &argv_vec, &mut env);
         }
-        task.inner_lock().memory_set.activate();
-        info!("activate");
+        let task_inner = task.inner_lock();
+        set_user_token(task_inner.memory_set.token());
+        task_inner.memory_set.activate();
         0
     } else {
         -1

@@ -82,9 +82,8 @@ pub fn strace(mask: usize) -> isize {
     let mask = if mask == 0 { usize::MAX } else { mask };
     sys_strace(mask)
 }
-
 /// 返回ms
-pub fn get_time() -> isize {
+pub fn get_time() -> usize {
     let mut time_sepc: [usize; 2] = [0, 0];
     unsafe {
         sys_gettimeofday(core::slice::from_raw_parts_mut(
@@ -92,7 +91,11 @@ pub fn get_time() -> isize {
             2 * core::mem::size_of::<usize>(),
         ));
     }
-    return (time_sepc[0] * 1000 + time_sepc[1] / 100000) as isize;
+    // println!(
+    //     "[User] Timespec tv_sec: {}, tv_nsec: {}",
+    //     time_sepc[0], time_sepc[1]
+    // );
+    return time_sepc[0] * 1000 + time_sepc[1] / 1000_000;
 }
 pub fn getpid() -> isize {
     sys_getpid()

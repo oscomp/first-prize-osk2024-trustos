@@ -12,6 +12,15 @@ pub use fsidx::*;
 
 pub type RFile = dyn File + Send + Sync;
 
+/// 枚举类型，分为普通文件和抽象文件
+/// 普通文件File，特点是支持更多类型的操作，包含seek, offset等
+/// 抽象文件Abs，抽象文件，只支持File trait的一些操作
+#[derive(Clone)]
+pub enum FileClass {
+    File(Arc<OSInode>),
+    Abs(Arc<RFile>),
+}
+
 pub trait File: Send + Sync {
     fn readable(&self) -> bool;
     fn writable(&self) -> bool;
@@ -20,24 +29,24 @@ pub trait File: Send + Sync {
     /// 将缓冲区中的数据写入文件，最多将缓冲区中的数据全部写入，并返回直接写入的字节数
     fn write(&self, buf: UserBuffer) -> usize;
 
-    fn fstat(&self, kstat: &mut Kstat);
+    // fn fstat(&self, kstat: &mut Kstat);
 
-    fn dirent(&self, dirent: &mut Dirent) -> isize;
+    // fn dirent(&self, dirent: &mut Dirent) -> isize;
 
-    fn name(&self) -> String;
+    // fn name(&self) -> String;
 
-    fn set_offset(&self, offset: usize);
-    /// 获取当前文件偏移,INODE需实现该函数
-    fn offset(&self) -> usize {
-        0
-    }
+    // fn set_offset(&self, offset: usize);
+    // 获取当前文件偏移,INODE需实现该函数
+    // fn offset(&self) -> usize {
+    //     0
+    // }
 }
 
 use alloc::{sync::Arc, vec, vec::Vec};
 pub use dirent::Dirent;
 #[cfg(feature = "fat32_fs")]
 pub use inode::is_abs_path;
-pub use inode::{chdir, list_apps, open, open_file, OSInode, OpenFlags, ROOT_INODE};
+pub use inode::{list_apps, open, open_file, OSInode, OpenFlags, ROOT_INODE};
 pub use mount::MNT_TABLE;
 pub use pipe::{make_pipe, Pipe};
 pub use stat::Kstat;
