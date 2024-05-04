@@ -35,7 +35,9 @@ pub trait File: Send + Sync {
 
 use alloc::{sync::Arc, vec, vec::Vec};
 pub use dirent::Dirent;
-pub use inode::{chdir, is_abs_path, list_apps, open, open_file, OSInode, OpenFlags, ROOT_INODE};
+#[cfg(feature = "fat32_fs")]
+pub use inode::is_abs_path;
+pub use inode::{chdir, list_apps, open, open_file, OSInode, OpenFlags, ROOT_INODE};
 pub use mount::MNT_TABLE;
 pub use pipe::{make_pipe, Pipe};
 pub use stat::Kstat;

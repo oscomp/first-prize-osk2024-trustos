@@ -145,11 +145,13 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
         {
             let elf_data = unsafe { app_inode.read_as_elf() };
             task.inner_lock().file = Some(app_inode.clone());
-            // info!("before exec");
             task.exec(elf_data, &argv_vec, &mut env);
+            // let all_data = app_inode.read_all();
+            // task.inner_lock().file = Some(app_inode.clone());
+            // task.exec(all_data.as_slice(), &argv_vec, &mut env);
         }
         task.inner_lock().memory_set.activate();
-        // info!("sys_exec end");
+        info!("activate");
         0
     } else {
         -1

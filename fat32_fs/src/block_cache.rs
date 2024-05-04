@@ -76,7 +76,7 @@ impl Drop for BlockCache {
     }
 }
 
-const BLOCK_CACHE_SIZE: usize = 10;
+const BLOCK_CACHE_SIZE: usize = 128;
 
 pub struct BlockCacheManager {
     start_sector: usize,

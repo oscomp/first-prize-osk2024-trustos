@@ -1,6 +1,8 @@
 //! File and filesystem-related syscalls
 use crate::console::print;
-use crate::fs::{is_abs_path, make_pipe, open, open_file, Dirent, Kstat, OpenFlags, MNT_TABLE};
+#[cfg(feature = "fat32_fs")]
+use crate::fs::is_abs_path;
+use crate::fs::{make_pipe, open, open_file, Dirent, Kstat, OpenFlags, MNT_TABLE};
 use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_task, current_user_token};
 use alloc::string::String;
@@ -24,7 +26,8 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
         let file = file.clone();
         // release current task TCB manually to avoid multi-borrow
         drop(inner);
-        drop(task);
+        // drop(task);
+        info!("fd={}", fd);
         file.write(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize
     } else {
         -1
@@ -45,12 +48,14 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
         }
         // release current task TCB manually to avoid multi-borrow
         drop(inner);
-        drop(task);
+        // drop(task);
         file.read(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize
     } else {
         -1
     }
 }
+
+#[cfg(feature = "fat32_fs")]
 pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> isize {
     if path as usize == 0 {
         return -1;
@@ -259,7 +264,7 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: usize) -> isize {
         ) {
             -1
         } else {
-            // info!("create dir");
+            // info!("create dir,path = {}", path.as_str());
             if let Some(_) = open(
                 cwd.as_str(),
                 path.as_str(),

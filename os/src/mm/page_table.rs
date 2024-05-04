@@ -8,6 +8,7 @@ use super::{
 };
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use bitflags::*;
+use log::info;
 
 use core::arch::asm;
 pub fn flush_tlb() {
@@ -229,6 +230,7 @@ impl PageTable {
 }
 /// Translate a pointer to a mutable u8 Vec through page table
 pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]> {
+    info!("trans");
     let page_table = PageTable::from_token(token);
     let mut start = ptr as usize;
     let end = start + len;
@@ -252,7 +254,10 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
             v.push(&mut ppn.bytes_array_mut()[start_va.page_offset()..end_va.page_offset()]);
         }
         start = end_va.into();
+        print!("{}", core::str::from_utf8(v.last().unwrap()).unwrap());
     }
+    // info!("tbb.size={},arg_len={}", v.len(), len);
+    // println!("{:?}", &v);
     v
 }
 
