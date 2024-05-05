@@ -1,15 +1,14 @@
 //!Implementation of [`Processor`] and Intersection of control flow
 use core::arch::asm;
 
-use super::{__switch, add_task};
-use super::{fetch_task, TaskStatus};
-use super::{TaskContext, TaskControlBlock};
-use crate::config::processor::HART_NUM;
-use crate::mm::{activate_kernel_space, VirtAddr};
-use crate::trap::TrapContext;
-use crate::utils::hart_id;
-use alloc::boxed::Box;
-use alloc::sync::Arc;
+use super::{__switch, add_task, fetch_task, TaskContext, TaskControlBlock, TaskStatus};
+use crate::{
+    config::processor::HART_NUM,
+    mm::{activate_kernel_space, VirtAddr},
+    trap::TrapContext,
+    utils::hart_id,
+};
+use alloc::{boxed::Box, sync::Arc};
 use lazy_static::*;
 use log::{debug, info};
 ///Processor management structure

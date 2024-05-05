@@ -1,5 +1,7 @@
-use alloc::string::{String, ToString};
-use alloc::sync::Arc;
+use alloc::{
+    string::{String, ToString},
+    sync::Arc,
+};
 use fat32_fs::VFile;
 use hashbrown::HashMap;
 use lazy_static::*;

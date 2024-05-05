@@ -1,6 +1,8 @@
 //! Implementation of [`PageTableEntry`] and [`PageTable`].
-use crate::config::mm::{KERNEL_ADDR_OFFSET, KERNEL_PGNUM_OFFSET};
-use crate::mm::KernelAddr;
+use crate::{
+    config::mm::{KERNEL_ADDR_OFFSET, KERNEL_PGNUM_OFFSET},
+    mm::KernelAddr,
+};
 
 use super::{
     frame_alloc, FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum,

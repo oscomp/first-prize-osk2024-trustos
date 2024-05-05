@@ -6,9 +6,7 @@
 /// ```
 //
 use super::{Dirent, File, Kstat};
-use crate::mm::UserBuffer;
-use crate::sbi::console_getchar;
-use crate::task::suspend_current_and_run_next;
+use crate::{mm::UserBuffer, sbi::console_getchar, task::suspend_current_and_run_next};
 use alloc::string::String;
 use log::info;
 

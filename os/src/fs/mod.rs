@@ -28,25 +28,11 @@ pub trait File: Send + Sync {
     fn read(&self, buf: UserBuffer) -> usize;
     /// 将缓冲区中的数据写入文件，最多将缓冲区中的数据全部写入，并返回直接写入的字节数
     fn write(&self, buf: UserBuffer) -> usize;
-
-    // fn fstat(&self, kstat: &mut Kstat);
-
-    // fn dirent(&self, dirent: &mut Dirent) -> isize;
-
-    // fn name(&self) -> String;
-
-    // fn set_offset(&self, offset: usize);
-    // 获取当前文件偏移,INODE需实现该函数
-    // fn offset(&self) -> usize {
-    //     0
-    // }
 }
 
 use alloc::{sync::Arc, vec, vec::Vec};
 pub use dirent::Dirent;
-#[cfg(feature = "fat32_fs")]
-pub use inode::is_abs_path;
-pub use inode::{list_apps, open, open_file, OSInode, OpenFlags, ROOT_INODE};
+pub use inode::{is_abs_path, list_apps, open, open_file, OSInode, OpenFlags, ROOT_INODE};
 pub use mount::MNT_TABLE;
 pub use pipe::{make_pipe, Pipe};
 pub use stat::Kstat;

@@ -1,126 +1,22 @@
-#[cfg(feature = "fat32_fs")]
-use super::{find_vfile_idx, insert_vfile_idx, remove_vfile_idx};
-///hhh
-use super::{Dirent, File, Kstat};
+use super::{find_vfile_idx, insert_vfile_idx, remove_vfile_idx, Dirent, File, Kstat};
 use crate::{drivers::BLOCK_DEVICE, mm::UserBuffer};
 use _core::str::FromStr;
 use alloc::{string::String, sync::Arc, vec::Vec};
 use bitflags::*;
-#[cfg(feature = "fat32_fs")]
 use fat32_fs::{create_root_vfile, FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
 use lazy_static::*;
 use log::info;
-#[cfg(feature = "simple_fs")]
-use simple_fat32::{create_root_vfile, FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
 use spin::Mutex;
 
-#[cfg(feature = "simple_fs")]
-/// 表示进程中一个被打开的常规文件或目录
-pub struct OSInode {
-    readable: bool, // 该文件是否允许通过 sys_read 进行读
-    writable: bool, // 该文件是否允许通过 sys_write 进行写
-    inner: Mutex<OSInodeInner>,
-}
-#[cfg(feature = "simple_fs")]
-pub struct OSInodeInner {
-    offset: usize, // 偏移量
-    inode: Arc<VFile>,
-}
-#[cfg(feature = "simple_fs")]
-impl OSInode {
-    pub fn new(readable: bool, writable: bool, inode: Arc<VFile>) -> Self {
-        Self {
-            readable,
-            writable,
-            inner: Mutex::new(OSInodeInner { offset: 0, inode }),
-        }
-    }
-    pub fn read_all(&self) -> Vec<u8> {
-        let mut inner = self.inner.lock();
-        let mut buffer = [0u8; 512];
-        let mut v: Vec<u8> = Vec::new();
-        loop {
-            let len = inner.inode.read_at(inner.offset, &mut buffer);
-            if len == 0 {
-                break;
-            }
-            inner.offset += len;
-            v.extend_from_slice(&buffer[..len]);
-        }
-        v
-    }
-
-    pub fn is_dir(&self) -> bool {
-        let inner = self.inner.lock();
-        inner.inode.is_dir()
-    }
-
-    pub fn name(&self) -> String {
-        let mut name = String::new();
-        name.push_str(self.inner.lock().inode.name());
-        name
-    }
-
-    pub fn delete(&self) -> usize {
-        let inner = self.inner.lock();
-        inner.inode.remove()
-    }
-
-    pub fn fstat(&self, kstat: &mut Kstat) {
-        let inner = self.inner.lock();
-        let vfile = inner.inode.clone();
-        // todo
-        let (st_size, st_blksize, st_blocks) = vfile.stat();
-        kstat.init(st_size, st_blksize, st_blocks);
-    }
-
-    pub fn dirent(&self, dirent: &mut Dirent) -> isize {
-        if !self.is_dir() {
-            return -1;
-        }
-        let mut inner = self.inner.lock();
-        let offset = inner.offset as u32;
-        if let Some((name, off, _)) = inner.inode.dirent_info(offset as usize) {
-            dirent.init(name.as_str());
-            inner.offset = off as usize;
-            let len = (name.len() + 8 * 4) as isize;
-            len
-        } else {
-            -1
-        }
-    }
-
-    pub fn set_offset(&self, offset: usize) {
-        let mut inner = self.inner.lock();
-        inner.offset = offset;
-    }
-
-    pub fn offset(&self) -> usize {
-        self.inner.lock().offset
-    }
-}
-
-#[cfg(feature = "simple_fs")]
-// 这里在实例化的时候进行文件系统的打开
-lazy_static! {
-    pub static ref ROOT_INODE: Arc<VFile> = {
-        let fat32_manager = FAT32Manager::open(BLOCK_DEVICE.clone());
-        Arc::new(create_root_vfile(&fat32_manager)) // 返回根目录
-    };
-}
-
-#[cfg(feature = "fat32_fs")]
 pub struct OSInode {
     readable: bool, // 该文件是否允许通过 sys_read 进行读
     writable: bool, // 该文件是否允许通过 sys_write 进行写
     inode: Arc<VFile>,
     inner: Mutex<OSInodeInner>,
 }
-#[cfg(feature = "fat32_fs")]
 pub struct OSInodeInner {
     offset: usize, // 偏移量
 }
-#[cfg(feature = "fat32_fs")]
 impl OSInode {
     pub fn new(readable: bool, writable: bool, inode: Arc<VFile>) -> Self {
         Self {
@@ -216,7 +112,6 @@ impl OSInode {
     }
 }
 
-#[cfg(feature = "fat32_fs")]
 lazy_static! {
     pub static ref ROOT_INODE: Arc<VFile> = {
         let fat32_manager = FAT32Manager::open(BLOCK_DEVICE.clone());
@@ -224,37 +119,6 @@ lazy_static! {
     };
 }
 
-#[cfg(feature = "simple_fs")]
-pub fn list_all(head: String, node: Arc<VFile>) {
-    let head = head + &"/";
-    for app in node.ls().unwrap() {
-        if (app.0 == "." || app.0 == "..") {
-            //跳过这俩
-            continue;
-        } else if app.1 & ATTR_DIRECTORY == 0 {
-            // 如果不是目录
-            println!("{}{}", head, app.0);
-        } else {
-            // 如果是目录
-            let mut v = open_file(&app.0, OpenFlags::O_RDONLY)
-                .unwrap()
-                .inner
-                .lock()
-                .inode
-                .clone();
-            list_all(head.clone() + &app.0, v.clone());
-        }
-    }
-}
-
-#[cfg(feature = "simple_fs")]
-pub fn list_apps() {
-    println!("/**** APPS ****");
-    list_all("".into(), ROOT_INODE.clone());
-    println!("**************/");
-}
-
-#[cfg(feature = "fat32_fs")]
 pub fn list_apps() {
     println!("/**** APPS ****");
     for (app, _) in ROOT_INODE.ls().unwrap() {
@@ -290,64 +154,17 @@ impl OpenFlags {
 pub fn open_file(path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     open(&"/", path, flags)
 }
-#[cfg(feature = "simple_fs")]
-pub fn open(work_path: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
-    let cur_inode = {
-        if work_path == "/" {
-            ROOT_INODE.clone()
-        } else {
-            let wpath: Vec<&str> = work_path.split('/').collect();
-            ROOT_INODE.find_vfile_bypath(wpath).unwrap()
-        }
-    };
-    let mut pathv: Vec<&str> = path.split('/').collect();
-    let (readable, writable) = flags.read_write();
 
-    if flags.contains(OpenFlags::O_CREATE) || flags.contains(OpenFlags::O_DIRECTROY) {
-        if let Some(inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
-            // 如果文件已存在则清空
-            inode.clear();
-            Some(Arc::new(OSInode::new(readable, writable, inode)))
-        } else {
-            // 设置创建类型
-            let mut create_type = 0;
-            if flags.contains(OpenFlags::O_CREATE) {
-                create_type = ATTR_ARCHIVE;
-            } else if flags.contains(OpenFlags::O_DIRECTROY) {
-                create_type = ATTR_DIRECTORY;
-            }
-            let name = pathv.pop().unwrap();
-            if let Some(temp_inode) = cur_inode.find_vfile_bypath(pathv.clone()) {
-                temp_inode
-                    .create(name, create_type)
-                    .map(|inode| Arc::new(OSInode::new(readable, writable, inode)))
-            } else {
-                None
-            }
-        }
-    } else {
-        cur_inode.find_vfile_bypath(pathv).map(|inode| {
-            if flags.contains(OpenFlags::O_TRUNC) {
-                inode.clear();
-            }
-            Arc::new(OSInode::new(readable, writable, inode))
-        })
-    }
-}
-
-#[cfg(feature = "fat32_fs")]
 #[inline(always)]
 pub fn path2vec(path: &str) -> Vec<&str> {
     path.split('/').filter(|s| !s.is_empty()).collect()
 }
 
-#[cfg(feature = "fat32_fs")]
 #[inline(always)]
 pub fn is_abs_path(path: &str) -> bool {
     unsafe { *path.as_ptr() == '/' as u8 }
 }
 
-#[cfg(feature = "fat32_fs")]
 fn create_file(
     cwd: &str,
     path: &str,
@@ -397,7 +214,6 @@ fn create_file(
     }
 }
 
-#[cfg(feature = "fat32_fs")]
 pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     use crate::fs::path2abs;
     use alloc::string::ToString;
@@ -486,71 +302,6 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     None
 }
 
-#[cfg(feature = "simple_fs")]
-pub fn chdir(work_path: &str, path: &str) -> Option<String> {
-    let current_inode = {
-        if path.chars().nth(0).unwrap() == '/' {
-            // 传入路径是绝对路径
-            ROOT_INODE.clone()
-        } else {
-            // 传入路径是相对路径
-            let current_work_pathv: Vec<&str> = work_path.split('/').collect();
-            ROOT_INODE.find_vfile_bypath(current_work_pathv).unwrap()
-        }
-    };
-    let pathv: Vec<&str> = path.split('/').collect();
-    if let Some(_) = current_inode.find_vfile_bypath(pathv) {
-        let new_current_path = String::from_str("/").unwrap() + &String::from_str(path).unwrap();
-        if current_inode.name() == "/" {
-            Some(new_current_path)
-        } else {
-            Some(String::from_str(current_inode.name()).unwrap() + &new_current_path)
-        }
-    } else {
-        None
-    }
-}
-
-#[cfg(feature = "simple_fs")]
-// 为 OSInode 实现 File Trait
-impl File for OSInode {
-    fn readable(&self) -> bool {
-        self.readable
-    }
-
-    fn writable(&self) -> bool {
-        self.writable
-    }
-
-    fn read(&self, mut buf: UserBuffer) -> usize {
-        let mut inner = self.inner.lock();
-        let mut total_read_size = 0usize;
-        // 这边要使用 iter_mut()，因为要将数据写入
-        for slice in buf.buffers.iter_mut() {
-            let read_size = inner.inode.read_at(inner.offset, *slice);
-            if read_size == 0 {
-                break;
-            }
-            inner.offset += read_size;
-            total_read_size += read_size;
-        }
-        total_read_size
-    }
-
-    fn write(&self, buf: UserBuffer) -> usize {
-        let mut inner = self.inner.lock();
-        let mut total_write_size = 0usize;
-        for slice in buf.buffers.iter() {
-            let write_size = inner.inode.write_at(inner.offset, *slice);
-            assert_eq!(write_size, slice.len());
-            inner.offset += write_size;
-            total_write_size += write_size;
-        }
-        total_write_size
-    }
-}
-
-#[cfg(feature = "fat32_fs")]
 // 为 OSInode 实现 File Trait
 impl File for OSInode {
     fn readable(&self) -> bool {

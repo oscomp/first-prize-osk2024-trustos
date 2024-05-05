@@ -67,8 +67,7 @@ use memory::*;
 pub use options::*;
 use process::*;
 
-use crate::console::print;
-use crate::sbi::shutdown;
+use crate::{console::print, sbi::shutdown};
 use log::{debug, info};
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {

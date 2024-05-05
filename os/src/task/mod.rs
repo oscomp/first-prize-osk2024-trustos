@@ -24,11 +24,11 @@ mod switch;
 mod task;
 mod tid;
 
-use crate::fs::{open_file, OpenFlags};
-use crate::mm::activate_kernel_space;
-use crate::sbi::shutdown;
-use alloc::boxed::Box;
-use alloc::sync::Arc;
+use crate::{
+    fs::{open_file, OpenFlags},
+    sbi::shutdown,
+};
+use alloc::{boxed::Box, sync::Arc};
 pub use context::TaskContext;
 use lazy_static::*;
 use log::{debug, info};
@@ -38,15 +38,13 @@ use task::{TaskControlBlock, TaskStatus};
 
 pub use aux::*;
 pub use processor::{
-    current_task, current_trap_cx, current_user_token, run_tasks, schedule, set_user_token,
-    take_current_task, Processor, PROCESSORS,
+    current_task, current_trap_cx, current_user_token, get_proc_by_hartid, run_tasks, schedule,
+    set_user_token, take_current_task, take_current_token, Processor, PROCESSORS,
 };
 pub use tid::{tid_alloc, KernelStack, TidAllocator, TidHandle};
 
-use self::processor::{get_proc_by_hartid, take_current_token};
 /// Suspend the current 'Running' task and run the next task in task list.
 pub fn suspend_current_and_run_next() {
-    // There must be
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
     let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
@@ -120,18 +118,6 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     schedule(&mut _unused as *mut _);
 }
 
-#[cfg(feature = "simple_fs")]
-lazy_static! {
-    ///Globle process that init user shell
-    pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new({
-        let inode = open_file("initproc", OpenFlags::O_RDONLY).unwrap();
-        let v = inode.read_all();
-        let mut res=TaskControlBlock::new(v.as_slice());
-        res.inner_lock().file=Some(inode.clone());
-        res
-    });
-}
-#[cfg(feature = "fat32_fs")]
 lazy_static! {
     ///Globle process that init user shell
     pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new({

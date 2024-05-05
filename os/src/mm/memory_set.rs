@@ -5,7 +5,6 @@ use super::{
     PTEFlags, PageTable, PageTableEntry, PhysAddr, PhysPageNum, StepByOne, UserBuffer, VPNRange,
     VirtAddr, VirtPageNum, GROUP_SHARE,
 };
-use crate::fs::{open_file, File, OSInode, OpenFlags};
 use crate::{
     config::{
         board::{MEMORY_END, MMIO},
@@ -14,6 +13,7 @@ use crate::{
             USER_SPACE_SIZE, USER_STACK_SIZE, USER_TRAP_CONTEXT,
         },
     },
+    fs::{open_file, File, OSInode, OpenFlags},
     mm::flush_tlb,
     syscall::MmapFlags,
     task::{current_task, Aux, AuxType},
@@ -22,8 +22,10 @@ use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 use core::arch::asm;
 use lazy_static::*;
 use log::{debug, info};
-use riscv::register::satp;
-use riscv::register::scause::{Exception, Trap};
+use riscv::register::{
+    satp,
+    scause::{Exception, Trap},
+};
 use spin::Mutex;
 
 extern "C" {

@@ -1,12 +1,17 @@
 //! File and filesystem-related syscalls
-use crate::console::print;
-#[cfg(feature = "fat32_fs")]
-use crate::fs::{is_abs_path, remove_vfile_idx};
-use crate::fs::{make_pipe, open, open_file, Dirent, File, FileClass, Kstat, OpenFlags, MNT_TABLE};
-use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
-use crate::task::{current_task, current_user_token};
-use alloc::string::String;
-use alloc::sync::Arc;
+use crate::{
+    console::print,
+    fs::{
+        is_abs_path, make_pipe, open, open_file, remove_vfile_idx, Dirent, File, FileClass, Kstat,
+        OpenFlags, MNT_TABLE,
+    },
+    mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer},
+    task::{current_task, current_user_token},
+};
+use alloc::{
+    string::{String, ToString},
+    sync::Arc,
+};
 use log::info;
 
 pub const AT_FDCWD: isize = -100;
@@ -74,7 +79,6 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
     }
 }
 
-#[cfg(feature = "fat32_fs")]
 pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> isize {
     if path as usize == 0 {
         return -1;
@@ -114,63 +118,6 @@ pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> isize
     }
 
     ret
-}
-
-#[cfg(feature = "simple_fs")]
-pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> isize {
-    let token = current_user_token().unwrap();
-    let task = current_task().unwrap();
-    let path = translated_str(token, path);
-    let path = String::from(path.trim_end_matches('\n'));
-    let mut inner = task.inner_lock();
-    let flags = OpenFlags::from_bits(flags).unwrap();
-    //若为绝对路径
-    if path.starts_with('/') {
-        drop(inner);
-        if let Some(inode) = open_file(path.as_str(), flags) {
-            let mut inner = task.inner_lock();
-            let fd_new = inner.alloc_fd();
-            inner.fd_table[fd_new] = Some(FileClass::File(inode));
-            fd_new as isize
-        } else {
-            -1
-        }
-    } else {
-        //若fd为当前目录
-        if fd == AT_FDCWD {
-            let now_path: String = inner.current_path.clone();
-            drop(inner);
-            if let Some(inode) = open(now_path.as_str(), path.as_str(), flags) {
-                let mut inner = task.inner_lock();
-                let fd_new = inner.alloc_fd();
-                inner.fd_table[fd_new] = Some(FileClass::File(inode));
-                fd_new as isize
-            } else {
-                -1
-            }
-        } else {
-            //其他情况
-            let fd = fd as usize;
-            if fd >= FD_LIMIT {
-                return -1;
-            }
-            if let Some(FileClass::File(file)) = &inner.fd_table[fd] {
-                let filename: String = file.name().clone();
-                drop(inner);
-                if let Some(inode) = open(filename.as_str(), path.as_str(), flags) {
-                    let mut inner = task.inner_lock();
-                    let fd = inner.alloc_fd();
-                    inner.fd_table[fd] = Some(FileClass::File(inode));
-                    fd as isize
-                } else {
-                    -1
-                }
-            } else {
-                // fd 对应文件为空
-                -1
-            }
-        }
-    }
 }
 
 pub fn sys_close(fd: usize) -> isize {
@@ -283,7 +230,6 @@ pub fn sys_chdir(path: *const u8) -> isize {
     }
 }
 
-#[cfg(feature = "fat32_fs")]
 pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: usize) -> isize {
     let process = current_task().unwrap();
     let token = current_user_token().unwrap();
@@ -316,57 +262,6 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: usize) -> isize {
     };
 
     ret
-}
-
-#[cfg(feature = "simple_fs")]
-pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: usize) -> isize {
-    let token = current_user_token().unwrap();
-    let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
-    let path = translated_str(token, path);
-    //若为绝对路径
-    if path.starts_with('/') {
-        drop(inner);
-        if let Some(_) = open_file(path.as_str(), OpenFlags::O_DIRECTROY) {
-            0
-        } else {
-            -1
-        }
-    } else {
-        //若fd为当前目录
-        if dirfd == AT_FDCWD {
-            let now_path: String = inner.current_path.clone();
-            drop(inner);
-            if let Some(_) = open(now_path.as_str(), path.as_str(), OpenFlags::O_DIRECTROY) {
-                0
-            } else {
-                -1
-            }
-        } else {
-            //其他情况
-            let dirfd = dirfd as usize;
-
-            if dirfd >= inner.fd_table.len() {
-                return -1;
-            }
-            if inner.fd_table[dirfd].is_none() {
-                return -1;
-            }
-
-            if let Some(FileClass::File(file)) = &inner.fd_table[dirfd] {
-                let filename: String = file.name().clone();
-                drop(inner);
-                if let Some(_) = open(filename.as_str(), path.as_str(), OpenFlags::O_DIRECTROY) {
-                    0
-                } else {
-                    -1
-                }
-            } else {
-                // fd 对应文件为空
-                -1
-            }
-        }
-    }
 }
 
 pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> isize {
@@ -430,10 +325,7 @@ pub fn sys_linkat(
 ) -> isize {
     todo!();
 }
-#[cfg(feature = "fat32_fs")]
 pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
-    use alloc::string::ToString;
-
     let process = current_task().unwrap();
     let token = current_user_token().unwrap();
     let inner = process.inner_lock();
@@ -468,87 +360,6 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
         return 0;
     }
     return -1;
-}
-
-#[cfg(feature = "simple_fs")]
-pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
-    let token = current_user_token().unwrap();
-    let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
-    let path = translated_str(token, path);
-    let path = String::from(path.trim_end_matches('\n'));
-
-    if path.starts_with('/') {
-        drop(inner);
-        if let Some(inode) = open_file(path.as_str(), OpenFlags::O_RDONLY) {
-            //断开链接(讨论flags)
-            if flags == AT_REMOVEDIR {
-                inode.delete();
-                return 0;
-            } else {
-                if inode.is_dir() {
-                    return -1;
-                } else {
-                    inode.delete();
-                    return 0;
-                }
-            }
-        } else {
-            -1
-        }
-    } else {
-        if dirfd == AT_FDCWD {
-            let now_path: String = inner.current_path.clone();
-            drop(inner);
-            if let Some(inode) = open(now_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
-                //断开链接(讨论flags)
-                if flags == AT_REMOVEDIR {
-                    inode.delete();
-                    return 0;
-                } else {
-                    if inode.is_dir() {
-                        return -1;
-                    } else {
-                        inode.delete();
-                        return 0;
-                    }
-                }
-            } else {
-                -1
-            }
-        } else {
-            let dirfd = dirfd as usize;
-            if dirfd >= inner.fd_table.len() {
-                return -1;
-            }
-            if inner.fd_table[dirfd].is_none() {
-                return -1;
-            }
-
-            if let Some(FileClass::File(file)) = &inner.fd_table[dirfd] {
-                let filename: String = file.name().clone();
-                drop(inner);
-                if let Some(inode) = open(filename.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
-                    //断开链接(讨论flags)
-                    if flags == AT_REMOVEDIR {
-                        inode.delete();
-                        return 0;
-                    } else {
-                        if inode.is_dir() {
-                            return -1;
-                        } else {
-                            inode.delete();
-                            return 0;
-                        }
-                    }
-                } else {
-                    -1
-                }
-            } else {
-                -1
-            }
-        }
-    }
 }
 
 pub fn sys_umount2(special: *const u8, flags: u32) -> isize {

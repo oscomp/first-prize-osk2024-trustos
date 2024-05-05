@@ -45,14 +45,6 @@ impl Kstat {
             __unused: [0; 2],
         }
     }
-    #[cfg(feature = "simple_fs")]
-    pub fn init(&mut self, st_size: i64, st_blksize: i64, st_blocks: u64) {
-        self.st_nlink = 1;
-        self.st_size = st_size;
-        self.st_blksize = st_blksize;
-        self.st_blocks = st_blocks;
-    }
-    #[cfg(feature = "fat32_fs")]
     pub fn init(&mut self, st_size: i64) {
         self.st_size = st_size;
     }

@@ -1,18 +1,18 @@
+use crate::{
+    fs::{open, open_file, OpenFlags},
+    mm::{
+        translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer,
+        VirtAddr,
+    },
+    syscall::CloneFlags,
+    task::{
+        add_task, current_task, current_user_token, exit_current_and_run_next, set_user_token,
+        suspend_current_and_run_next,
+    },
+    timer::{get_time_ms, Timespec, Tms},
+};
+use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
-
-use crate::fs::{open, open_file, OpenFlags};
-use crate::mm::{
-    translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr,
-};
-use crate::syscall::CloneFlags;
-use crate::task::{
-    add_task, current_task, current_user_token, exit_current_and_run_next, set_user_token,
-    suspend_current_and_run_next,
-};
-use crate::timer::{get_time_ms, Timespec, Tms};
-use alloc::string::String;
-use alloc::sync::Arc;
-use alloc::vec::Vec;
 use log::{debug, info};
 
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -155,19 +155,11 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
     let mut task_inner = task.inner_lock();
     let cwd = task_inner.current_path.clone();
     if let Some(app_inode) = open(&cwd, path.as_str(), OpenFlags::O_RDONLY) {
-        #[cfg(feature = "simple_fs")]
-        {
-            let all_data = app_inode.read_all();
-            task.inner_lock().file = Some(app_inode.clone());
-            task.exec(all_data.as_slice(), &argv_vec, &mut env);
-        }
-        #[cfg(feature = "fat32_fs")]
-        {
-            let elf_data = unsafe { app_inode.read_as_elf() };
-            task_inner.file = Some(app_inode.clone());
-            drop(task_inner);
-            task.exec(elf_data, &argv_vec, &mut env);
-        }
+        let elf_data = unsafe { app_inode.read_as_elf() };
+        task_inner.file = Some(app_inode.clone());
+        drop(task_inner);
+
+        task.exec(elf_data, &argv_vec, &mut env);
         let task_inner = task.inner_lock();
         set_user_token(task_inner.memory_set.token());
         task_inner.memory_set.activate();

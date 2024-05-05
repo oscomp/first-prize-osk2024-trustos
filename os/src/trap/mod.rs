@@ -13,14 +13,15 @@
 //! to [`syscall()`].
 mod context;
 
-use crate::mm::{VirtAddr, VirtPageNum};
-use crate::sync::interrupt_on;
-use crate::syscall::{syscall, Syscall};
-use crate::task::{
-    current_task, current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next,
+use crate::{
+    mm::{VirtAddr, VirtPageNum},
+    syscall::{syscall, Syscall},
+    task::{
+        current_task, current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next,
+    },
+    timer::set_next_trigger,
+    utils::{backtrace, hart_id},
 };
-use crate::timer::set_next_trigger;
-use crate::utils::{backtrace, hart_id};
 use core::arch::{asm, global_asm};
 use log::{debug, info};
 use riscv::register::{
