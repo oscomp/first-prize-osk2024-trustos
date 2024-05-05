@@ -157,7 +157,8 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
         }
     }
     let task = current_task().unwrap();
-    let cwd = task.inner_lock().current_path.clone();
+    let mut task_inner = task.inner_lock();
+    let cwd = task_inner.current_path.clone();
     if let Some(app_inode) = open(&cwd, path.as_str(), OpenFlags::O_RDONLY) {
         #[cfg(feature = "simple_fs")]
         {
@@ -168,7 +169,8 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
         #[cfg(feature = "fat32_fs")]
         {
             let elf_data = unsafe { app_inode.read_as_elf() };
-            task.inner_lock().file = Some(app_inode.clone());
+            task_inner.file = Some(app_inode.clone());
+            drop(task_inner);
             task.exec(elf_data, &argv_vec, &mut env);
         }
         let task_inner = task.inner_lock();

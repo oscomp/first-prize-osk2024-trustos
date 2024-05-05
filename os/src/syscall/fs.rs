@@ -49,6 +49,12 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
     let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let inner = task.inner_lock();
+    assert!(
+        token == inner.user_token(),
+        "token={:#x},user_token={:#x}",
+        token,
+        inner.user_token()
+    );
     if fd >= inner.fd_table.len() {
         return -1;
     }
@@ -79,6 +85,13 @@ pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> isize
 
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
+
+    assert!(
+        token == inner.user_token(),
+        "token={:#x},user_token={:#x}",
+        token,
+        inner.user_token()
+    );
 
     let flags = OpenFlags::from_bits(flags).unwrap();
     let ret;
@@ -178,6 +191,12 @@ pub fn sys_getcwd(buf: *const u8, size: usize) -> isize {
     let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
+    assert!(
+        token == inner.user_token(),
+        "token={:#x},user_token={:#x}",
+        token,
+        inner.user_token()
+    );
 
     let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, size));
     buffer.write(inner.current_path.as_bytes());
@@ -230,6 +249,13 @@ pub fn sys_chdir(path: *const u8) -> isize {
     let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
+
+    assert!(
+        token == inner.user_token(),
+        "token={:#x},user_token={:#x}",
+        token,
+        inner.user_token()
+    );
 
     let path = translated_str(token, path);
     if path.starts_with('/') {
@@ -349,6 +375,12 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> isize {
     let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
+    assert!(
+        token == inner.user_token(),
+        "token={:#x},user_token={:#x}",
+        token,
+        inner.user_token()
+    );
 
     let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, len));
 
@@ -407,6 +439,12 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
     let process = current_task().unwrap();
     let token = current_user_token().unwrap();
     let inner = process.inner_lock();
+    assert!(
+        token == inner.user_token(),
+        "token={:#x},user_token={:#x}",
+        token,
+        inner.user_token()
+    );
     let path = translated_str(token, path);
     let mut base_path = inner.current_path.as_str();
     // 如果path是绝对路径，则dirfd被忽略
@@ -547,6 +585,13 @@ pub fn sys_fstat(fd: usize, kst: *const u8) -> isize {
     let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
+
+    assert!(
+        token == inner.user_token(),
+        "token={:#x},user_token={:#x}",
+        token,
+        inner.user_token()
+    );
     let mut kst = UserBuffer::new(translated_byte_buffer(
         token,
         kst,
@@ -576,6 +621,13 @@ pub fn sys_pipe2(fd: *mut u32) -> isize {
     let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
+
+    assert!(
+        token == inner.user_token(),
+        "token={:#x},user_token={:#x}",
+        token,
+        inner.user_token()
+    );
 
     let read_fd = inner.alloc_fd();
     let (read_pipe, write_pipe) = make_pipe();
