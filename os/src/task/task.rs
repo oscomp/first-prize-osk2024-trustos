@@ -151,7 +151,6 @@ impl TaskControlBlock {
         task_control_block
     }
     pub fn exec(&self, elf_data: &[u8], argv: &Vec<String>, mut env: &mut Vec<String>) {
-        // info!("exec");
         //用户栈高地址到低地址：环境变量字符串/参数字符串/aux辅助向量/环境变量地址数组/参数地址数组/参数数量
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (mut memory_set, mut user_sp, user_hp, entry_point, mut auxv) =
@@ -244,8 +243,6 @@ impl TaskControlBlock {
         user_sp -= user_sp % size_of::<usize>();
         //println!("user_sp:{:#X}", user_sp);
 
-        // info!("b");
-
         // **** access current TCB exclusively
         let mut inner = self.inner_lock();
 
@@ -274,7 +271,6 @@ impl TaskControlBlock {
         debug!("task.exec.tid={}", self.tid.0);
         inner.user_heappoint = user_hp;
         inner.user_heapbottom = user_hp;
-        // info!("execve ok!");
         // println!("final user_sp:{:#X}", user_sp);
         // **** release current PCB
     }

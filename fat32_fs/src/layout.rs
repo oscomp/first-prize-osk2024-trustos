@@ -238,7 +238,6 @@ impl ShortDirEntry {
     }
 
     pub fn is_dir(&self) -> bool {
-        // println!("ShortEntry: self.attr={}", self.attribute);
         self.attribute == ATTR_DIRECTORY
     }
 
@@ -344,11 +343,6 @@ impl ShortDirEntry {
     }
 
     pub fn set_size(&mut self, size: u32) {
-        // println!(
-        //     " entry {} new size_in_bytes={}",
-        //     self.get_name_lowercase(),
-        //     size
-        // );
         self.size_in_bytes = size;
     }
 
@@ -691,28 +685,18 @@ impl ShortDirEntry {
         let end: usize;
         // 边界检查
         if self.is_dir() {
-            // println!("dir");
             // let size = bytes_per_cluster * fat_reader.cluster_count(self.first_cluster(), block_device) as usize;
             let size = bytes_per_cluster
                 * chain
                     .write()
                     .cluster_count(self.first_cluster(), block_device, fat)
                     as usize;
-            // println!("size={},offset={},buf.len()={}", size, offset, buf.len());
             end = (offset + buf.len()).min(size);
             assert!(curr_offset <= end, "offset={},end={}", curr_offset, end);
         } else {
             end = (offset + buf.len()).min(self.size_in_bytes as usize);
-            // println!(
-            //     "self.size_in_bytes={},offset={},buf.len()={},end={}",
-            //     self.size_in_bytes as usize,
-            //     offset,
-            //     buf.len(),
-            //     end
-            // );
             assert!(curr_offset <= end, "offset={},end={}", curr_offset, end);
         }
-        // println!("cur_offset={},end={}", curr_offset, end);
         // assert!(curr_offset <= end);
 
         // let (curr_cluster, curr_sector, _) = self.get_pos(offset, manager, fat, block_device);

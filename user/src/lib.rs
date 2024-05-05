@@ -91,10 +91,6 @@ pub fn get_time() -> usize {
             2 * core::mem::size_of::<usize>(),
         ));
     }
-    // println!(
-    //     "[User] Timespec tv_sec: {}, tv_nsec: {}",
-    //     time_sepc[0], time_sepc[1]
-    // );
     return time_sepc[0] * 1000 + time_sepc[1] / 1000_000;
 }
 pub fn getpid() -> isize {

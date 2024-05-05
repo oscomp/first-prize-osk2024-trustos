@@ -112,18 +112,6 @@ impl VFile {
             .read(self.short_offset, f)
         }
     }
-    // TODO(Debug Only)
-    pub fn read_given_short_dirent<V>(
-        &self,
-        short_sector: usize,
-        short_offset: usize,
-        f: impl FnOnce(&ShortDirEntry) -> V,
-    ) -> V {
-        // println!("in read,short_sector={}", self.short_sector);
-        get_info_block_cache(short_sector, self.block_device.clone(), CacheMode::READ)
-            .read()
-            .read(short_offset, f)
-    }
 
     pub fn modify_short_dirent<V>(&self, f: impl FnOnce(&mut ShortDirEntry) -> V) -> V {
         if self.short_sector == 0 {
@@ -324,7 +312,6 @@ impl VFile {
         if new_size <= old_size {
             return;
         }
-        // println!("inc!");
         let first_cluster = self.first_cluster();
         // let needed = self.fs.cluster_count_needed(old_size, new_size, self.is_dir(), first_cluster);
         let needed = self.fs.cluster_count_needed(
@@ -335,7 +322,6 @@ impl VFile {
             &self.chain,
         );
         if needed == 0 {
-            // println!("do not need");
             self.set_size(new_size);
             return;
         }
@@ -362,12 +348,6 @@ impl VFile {
                 .alloc_cluster(needed, final_cluster, &self.chain)
                 .expect("SD Card has no space!");
         }
-        // TODO(ZMY) 这样改真的对吗???
-        // 更新文件大小
-        // self.modify_short_dirent(|short_entry: &mut ShortDirEntry| {
-        //     short_entry.set_size(new_size);
-        // });
-        // println!("new size={}", new_size);
         self.set_size(new_size);
     }
 
@@ -480,14 +460,12 @@ impl VFile {
 
     // 在当前目录下创建文件
     pub fn create(&self, name: &str, attribute: u8) -> Option<Arc<VFile>> {
-        // println!("creating file {},attr = {}", name, attribute);
         assert!(self.is_dir());
         let mut dirent_offset = self.find_free_dirent();
         let (name_, ext_) = name.rsplit_once(".").unwrap_or((name, ""));
         let short_ent = ShortDirEntry::new(name_, ext_, attribute);
         let mut long_pos_vec = Vec::new();
         if name_.len() > 8 || ext_.len() > 3 {
-            // println!("long!");
             let checksum = short_ent.checksum();
             let mut name_vec = self.fs.long_name_split(name, true);
             let long_ent_count = name_vec.len();
@@ -508,18 +486,12 @@ impl VFile {
             }
         }
         // 写短文件名目录项
-        // println!("this");
         assert_eq!(
             self.write_at_uncached(dirent_offset, short_ent.as_bytes()),
             DIRENT_SZ
         );
         let (short_sector, short_offset) = self.get_pos(dirent_offset);
-        // self.read_given_short_dirent(short_sector, short_offset, |entry| {
-        //     println!("after write,entry.is_dir={}", entry.is_dir());
-        // });
-        // println!("in create,short_sector={}", short_sector);
         // 如果是目录类型，需要创建.和..
-        // let vfile = self.find_vfile_name(name)?;
         let vfile = VFile::new(
             String::from(name),
             short_sector,
@@ -531,36 +503,15 @@ impl VFile {
         );
 
         if attribute == ATTR_DIRECTORY {
-            assert!(short_ent.is_dir());
-            // println!("here");
-            // vfile.read_short_dirent(|entry| {
-            //     println!(
-            //         "entry.size={},entry.is_dir={}",
-            //         entry.get_size(),
-            //         entry.is_dir()
-            //     );
-            // });
             let mut self_dir = ShortDirEntry::new(".", "", ATTR_DIRECTORY);
             let mut parent_dir = ShortDirEntry::new("..", "", ATTR_DIRECTORY);
-            // println!("a");
             // vfile.write_at_uncached(0, self_dir.as_bytes_mut()); // TODO：需要吗
             self_dir.set_first_cluster(self.first_cluster());
             vfile.write_at_uncached(0, self_dir.as_bytes());
-            // println!("b");
             // let first_cluster = vfile.read_short_dirent(|short_ent| short_ent.first_cluster());
-            // println!(
-            //     "self.first={},first={}",
-            //     self.first_cluster(),
-            //     first_cluster
-            // );
             parent_dir.set_first_cluster(self.first_cluster());
             vfile.write_at_uncached(DIRENT_SZ, parent_dir.as_bytes());
-            // println!("bb");
-            // let first_cluster = vfile.read_short_dirent(|short_ent| short_ent.first_cluster());
-            // self_dir.set_first_cluster(first_cluster);
-            // vfile.write_at_uncached(0, self_dir.as_bytes());
         }
-        // println!("file created");
         Some(Arc::new(vfile))
     }
 

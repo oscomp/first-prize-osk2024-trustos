@@ -185,7 +185,6 @@ impl PageTable {
             vpn,
             vpn.0 << 12
         );
-        // println!("map vpn {} to ppn {}", vpn.0, ppn.0);
         *pte = PageTableEntry::new(ppn, flags | PTEFlags::V);
     }
     /// Delete a mapping form `vpn`
@@ -231,26 +230,22 @@ impl PageTable {
 }
 /// Translate a pointer to a mutable u8 Vec through page table
 pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]> {
-    // info!("trans,token={:#x}", token);
     let page_table = PageTable::from_token(token);
     let mut start = ptr as usize;
     let end = start + len;
     let mut v = Vec::new();
-    // let mut t: usize = 0;
     while start < end {
-        // println!("loop {}", t);
         let start_va = VirtAddr::from(start);
         let mut vpn = start_va.floor();
         match page_table.translate(vpn) {
             None => {
-                println!("[kernel] mm: 0x{:x} not mapped", start);
+                panic!("[kernel] mm: 0x{:x} not mapped", start);
             }
             Some(ref pte) => {
                 assert!(pte.is_valid(), "vpn {} to ppn {}", vpn.0, pte.ppn().0);
             }
         }
         let ppn = page_table.translate(vpn).unwrap().ppn();
-        // println!("vpn {} to ppn {}", vpn.0, ppn.0);
         vpn.step();
         let mut end_va: VirtAddr = vpn.into();
         end_va = end_va.min(VirtAddr::from(end));
@@ -260,11 +255,7 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
             v.push(&mut ppn.bytes_array_mut()[start_va.page_offset()..end_va.page_offset()]);
         }
         start = end_va.into();
-        // print!("{}", core::str::from_utf8(v.last().unwrap()).unwrap());
     }
-    // info!("tbb.size={},arg_len={}", v.len(), len);
-    // println!("{:?}", &v);
-    // info!("trans end");
     v
 }
 

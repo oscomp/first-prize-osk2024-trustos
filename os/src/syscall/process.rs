@@ -30,12 +30,7 @@ pub fn sys_gettimeofday(ts: *const u8) -> isize {
     let mut ts = UserBuffer::new(translated_byte_buffer(token, ts, size_of::<Timespec>()));
     let time = get_time_ms();
     let mut timespec = Timespec::new(time / 1000, (time % 1000) * 1000000);
-    // println!("timespec={:?}", timespec);
     ts.write(timespec.as_bytes());
-    // let ts: *mut u64 = ts as *mut u64;
-    // let time = get_time_ms();
-    // *translated_refmut(token, ts) = (time / 1000) as u64;
-    // *translated_refmut(token, unsafe { ts.add(1) }) = ((time % 1000) * 1000000) as u64;
     0
 }
 

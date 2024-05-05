@@ -38,7 +38,6 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
         // release current task TCB manually to avoid multi-borrow
         drop(inner);
         drop(task);
-        // info!("fd={}", fd);
         file.write(UserBuffer::new(translated_byte_buffer(token, buf, len))) as isize
     } else {
         -1
@@ -304,7 +303,6 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: usize) -> isize {
         ) {
             -1
         } else {
-            // info!("create dir,path = {}", path.as_str());
             if let Some(_) = open(
                 cwd.as_str(),
                 path.as_str(),
