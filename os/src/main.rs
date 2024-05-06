@@ -45,6 +45,7 @@ pub mod lang_items;
 pub mod logger;
 pub mod mm;
 pub mod sbi;
+pub mod signal;
 pub mod sync;
 pub mod syscall;
 pub mod task;
