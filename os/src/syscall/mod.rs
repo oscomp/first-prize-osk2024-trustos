@@ -34,6 +34,9 @@ pub enum Syscall {
     Settidaddress = 96,
     Nanosleep = 101,
     SchedYield = 124,
+    SigKill = 129,
+    Sigaction = 134,
+    SigReturn = 139,
     Times = 153,
     Uname = 160,
     Gettimeofday = 169,
@@ -61,17 +64,19 @@ mod fs;
 mod memory;
 mod options;
 mod process;
+mod signal;
 
 use fs::*;
 use memory::*;
 pub use options::*;
 use process::*;
+use signal::*;
 
-use crate::{console::print, sbi::shutdown};
+use crate::{console::print, sbi::shutdown, signal::SigAction};
 use log::{debug, info};
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
-    debug!("syscall:{}", syscall_id);
+    // debug!("syscall:{}", syscall_id);
     let id = syscall_id;
     let syscall_id: Syscall = Syscall::from(syscall_id);
     debug!("syscall:{:?}", syscall_id);
@@ -115,6 +120,13 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
         Syscall::Settidaddress => sys_settidaddress(args[0] as usize),
         Syscall::Nanosleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
         Syscall::SchedYield => sys_sched_yield(),
+        Syscall::SigKill => sys_kill(args[0] as usize, args[0] as usize),
+        Syscall::Sigaction => sys_rt_sigaction(
+            args[0] as usize,
+            args[1] as *const SigAction,
+            args[2] as *mut SigAction,
+        ),
+        Syscall::SigReturn => sys_rt_sigreturn(),
         Syscall::Times => sys_times(args[0] as *const u8),
         Syscall::Gettimeofday => sys_gettimeofday(args[0] as *const u8),
         Syscall::Uname => sys_uname(args[0] as *mut u8),

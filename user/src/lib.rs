@@ -2,7 +2,7 @@
 #![feature(linkage)]
 #![feature(panic_info_message)]
 #![feature(alloc_error_handler)]
-
+#![allow(dead_code)]
 #[macro_use]
 pub mod console;
 mod lang_items;
@@ -182,4 +182,44 @@ pub fn getppid() -> isize {
 
 pub fn times(tms: &mut [u8]) -> isize {
     sys_times(tms)
+}
+
+const SA_NOCLDSTOP: usize = 1; /* Don't send SIGCHLD when children stop.  */
+const SA_NOCLDWAIT: usize = 2; /* Don't create zombie on child death.  */
+const SA_SIGINFO: usize = 4; /* Invoke signal-catching function with
+                             :usize             three arguments instead of one.  */
+const SA_ONSTACK: usize = 0x08000000; /* Use signal stack by using `sa_restorer'. */
+const SA_RESTART: usize = 0x10000000; /* Restart syscall on signal return.  */
+const SA_NODEFER: usize = 0x40000000; /* Don't automatically block the signal when
+                                      :usize                 its handler is being executed.  */
+const SA_RESETHAND: usize = 0x80000000; /* Reset to SIG_DFL on entry to handler.  */
+
+pub struct SigAction {
+    pub sa_handler: usize,
+    pub sa_flags: usize,
+    pub sa_mask: usize,
+    pub sa_restore: usize,
+}
+
+impl SigAction {
+    pub fn new(sa_handler: usize, sa_flags: usize, sa_mask: usize, sa_restore: usize) -> Self {
+        Self {
+            sa_handler,
+            sa_flags,
+            sa_mask,
+            sa_restore,
+        }
+    }
+}
+
+pub fn sigaction(signum: usize, act: &SigAction, oldact: &mut SigAction) -> isize {
+    sys_sigaction(signum, act as *const _ as usize, oldact as *mut _ as usize)
+}
+
+pub fn sigreturn() -> isize {
+    sys_sigreturn()
+}
+
+pub fn kill(pid: usize, signum: usize) -> isize {
+    sys_kill(pid, signum)
 }

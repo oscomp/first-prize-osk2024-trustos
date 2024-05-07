@@ -32,9 +32,9 @@ use alloc::{boxed::Box, sync::Arc};
 pub use context::TaskContext;
 use lazy_static::*;
 use log::{debug, info};
-pub use manager::{add_task, fetch_task, lock_task_manager, TaskManager};
+pub use manager::*;
 use switch::__switch;
-use task::{TaskControlBlock, TaskStatus};
+pub use task::{TaskControlBlock, TaskStatus};
 
 pub use aux::*;
 pub use processor::{
@@ -109,6 +109,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     inner.children.clear();
     // deallocate user space
     inner.memory_set.recycle_data_pages();
+    TASK_MONITOR.lock().remove(task.tid());
     drop(inner);
     // **** release current PCB
     // drop task manually to maintain rc correctly
@@ -131,6 +132,7 @@ lazy_static! {
 ///Add init process to the manager
 pub fn add_initproc() {
     add_task(INITPROC.clone());
+    TASK_MONITOR.lock().add(0, &INITPROC);
 }
 ///Init PROCESSORS
 pub fn init() {

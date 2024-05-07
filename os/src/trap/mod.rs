@@ -15,6 +15,7 @@ mod context;
 
 use crate::{
     mm::{VirtAddr, VirtPageNum},
+    signal::check_signal_for_current_task,
     syscall::{syscall, Syscall},
     task::{
         current_task, current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next,
@@ -171,6 +172,8 @@ pub fn trap_handler() {
             );
         }
     }
+
+    check_signal_for_current_task();
 
     //记录内核空间花费CPU时间，同时准备用户空间花费CPU时间
     current_task()

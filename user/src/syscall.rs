@@ -20,6 +20,9 @@ const SYSCALL_FSTAT: usize = 80;
 const SYSCALL_EXIT: usize = 93;
 const SYSCALL_NANOSLEEP: usize = 101;
 const SYSCALL_SCHED_YIELD: usize = 124;
+const SYSCALL_KILL: usize = 129;
+const SYSCALL_SIGACTION: usize = 134;
+const SYSCALL_SIGRETURN: usize = 139;
 const SYSCALL_TIMES: usize = 153;
 const SYSCALL_GETTIMEOFDAY: usize = 169;
 const SYSCALL_GETPID: usize = 172;
@@ -250,4 +253,19 @@ pub fn sys_nanosleep(req: &mut [u8], rem: &mut [u8]) -> isize {
 
 pub fn sys_strace(mask: usize) -> isize {
     syscall(SYSCALL_STRACE, [mask as isize, 0, 0, 0, 0, 0])
+}
+
+pub fn sys_sigaction(signum: usize, act: usize, oldact: usize) -> isize {
+    syscall(
+        SYSCALL_SIGACTION,
+        [signum as isize, act as isize, oldact as isize, 0, 0, 0],
+    )
+}
+
+pub fn sys_sigreturn() -> isize {
+    syscall(SYSCALL_SIGRETURN, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn sys_kill(pid: usize, signum: usize) -> isize {
+    syscall(SYSCALL_KILL, [pid as isize, signum as isize, 0, 0, 0, 0])
 }

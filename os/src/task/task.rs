@@ -7,6 +7,8 @@ use crate::{
     config::mm::{USER_HEAP_SIZE, USER_TRAP_CONTEXT},
     fs::{File, FileClass, OSInode, Stdin, Stdout},
     mm::{translated_refmut, MapAreaType, MapPermission, MemorySet, PhysPageNum, VirtAddr},
+    signal::SigPending,
+    task::TASK_MONITOR,
     timer::TimeData,
     trap::{trap_handler, TrapContext},
 };
@@ -26,6 +28,7 @@ pub struct TaskControlBlock {
     ppid: usize,
     pid: usize,
     pub kernel_stack: KernelStack,
+    // pub sig_user_addr: usize,
     // mutable
     inner: Mutex<TaskControlBlockInner>,
 }
@@ -49,6 +52,7 @@ pub struct TaskControlBlockInner {
     pub strace_mask: usize,
     pub set_child_tid: usize,
     pub clear_child_tid: usize,
+    pub sig_pending: SigPending,
 }
 
 impl TaskControlBlockInner {
@@ -112,6 +116,7 @@ impl TaskControlBlock {
             pid: 0,
             ppid: 0,
             kernel_stack,
+            // sig_user_addr: 0,
             inner: Mutex::new(TaskControlBlockInner {
                 trap_cx_ppn,
                 user_stack_top: user_sp,
@@ -137,6 +142,7 @@ impl TaskControlBlock {
                 strace_mask: 0,
                 set_child_tid: 0,
                 clear_child_tid: 0,
+                sig_pending: SigPending::new(),
             }),
         };
         // prepare TrapContext in user space
@@ -311,6 +317,7 @@ impl TaskControlBlock {
         } else {
             parent_inner.user_stack_top
         };
+        // map sig_trampoline
         let task_control_block = Arc::new(TaskControlBlock {
             tid: tid_handle,
             pid,
@@ -334,6 +341,7 @@ impl TaskControlBlock {
                 strace_mask: parent_inner.strace_mask,
                 set_child_tid: 0,
                 clear_child_tid: 0,
+                sig_pending: SigPending::from_another(&parent_inner.sig_pending),
             }),
         });
         // add child
@@ -345,6 +353,9 @@ impl TaskControlBlock {
         if !copy_user_stack {
             trap_cx.set_sp(user_stack_top);
         }
+        TASK_MONITOR
+            .lock()
+            .add(task_control_block.tid(), &task_control_block);
         // return
         task_control_block
         // **** release child PCB

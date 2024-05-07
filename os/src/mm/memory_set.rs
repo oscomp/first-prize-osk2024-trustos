@@ -38,7 +38,7 @@ extern "C" {
     fn sbss_with_stack();
     fn ebss();
     fn ekernel();
-    // fn strampoline();
+    fn sigreturn_trampoline();
 }
 
 lazy_static! {
@@ -324,14 +324,41 @@ impl MemorySet {
             ".bss [{:#x}, {:#x})",
             sbss_with_stack as usize, ebss as usize
         );
+        println!(
+            "sigreturn_trampoline start: [{:#x}, {:#x}",
+            sigreturn_trampoline as usize,
+            sigreturn_trampoline as usize + PAGE_SIZE
+        );
         // map kernel sections
         println!("mapping .text section");
+        let s_sig_trap = sigreturn_trampoline as usize;
+        let e_sig_trap = sigreturn_trampoline as usize + PAGE_SIZE;
         memory_set.push(
             MapArea::new(
                 (stext as usize).into(),
+                (s_sig_trap).into(),
+                MapType::Direct,
+                MapPermission::R | MapPermission::X,
+                MapAreaType::Elf,
+            ),
+            None,
+        );
+        memory_set.push(
+            MapArea::new(
+                (e_sig_trap).into(),
                 (etext as usize).into(),
                 MapType::Direct,
                 MapPermission::R | MapPermission::X,
+                MapAreaType::Elf,
+            ),
+            None,
+        );
+        memory_set.push(
+            MapArea::new(
+                (s_sig_trap).into(),
+                (e_sig_trap).into(),
+                MapType::Direct,
+                MapPermission::R | MapPermission::X | MapPermission::U,
                 MapAreaType::Elf,
             ),
             None,
