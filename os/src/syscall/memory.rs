@@ -3,8 +3,9 @@
 use log::debug;
 
 use crate::{
-    fs::{File, FileClass},
-    mm::{MapPermission, VirtAddr},
+    config::mm::PAGE_SIZE,
+    fs::{flush_preload, File, FileClass},
+    mm::{flush_tlb, MapPermission, VirtAddr},
     task::current_task,
     utils::page_round_up,
 };
@@ -55,5 +56,26 @@ pub fn sys_munmap(addr: usize, len: usize) -> isize {
     let mut task_inner = task.inner_lock();
     let len = page_round_up(len);
     task_inner.memory_set.munmap(addr, len);
+    0
+}
+
+pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> isize {
+    println!("此调用尚未验证正确性，验证后会删除此条输出！");
+    if (addr % PAGE_SIZE != 0) || (len % PAGE_SIZE != 0) {
+        println!("sys_mprotect: not align");
+        return -1;
+    }
+    let map_perm: MapPermission = MmapProt::from_bits(prot).unwrap().into();
+    let task = current_task().unwrap();
+    let memory_set = &mut task.inner_lock().memory_set;
+    let start_vpn = addr / PAGE_SIZE;
+    let end_vpn = (addr + len) / PAGE_SIZE;
+    let page_num = len / PAGE_SIZE;
+    //修改各段的mappermission
+    let pte_flags = memory_set.mprotect(start_vpn.into(), end_vpn.into(), map_perm);
+    for i in 0..page_num {
+        memory_set.page_table.set_flags(start_vpn.into(), pte_flags);
+    }
+    flush_tlb();
     0
 }

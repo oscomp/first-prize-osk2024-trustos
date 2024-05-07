@@ -52,6 +52,7 @@ pub enum Syscall {
     Clone = 220,
     Mmap = 222,
     Execve = 221,
+    Mprotect = 226,
     Wait4 = 260,
     // 非标准系统调用
     Shutdown = 1000,
@@ -159,6 +160,7 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
             args[5] as usize,
         ),
         Syscall::Munmap => sys_munmap(args[0] as usize, args[1] as usize),
+        Syscall::Mprotect => sys_mprotect(args[0] as usize, args[1] as usize, args[2] as u32),
         Syscall::Wait4 => sys_wait4(args[0] as isize, args[1] as *mut i32, args[2] as i32),
         Syscall::Shutdown => shutdown(false),
         Syscall::Strace => sys_strace(args[0] as usize),

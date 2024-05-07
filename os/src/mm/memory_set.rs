@@ -285,6 +285,98 @@ impl MemorySet {
             false
         }
     }
+    pub fn mprotect(
+        &mut self,
+        start_vpn: VirtPageNum,
+        end_vpn: VirtPageNum,
+        map_perm: MapPermission,
+    ) -> PTEFlags {
+        let mut flags = PTEFlags::empty();
+        //因修改而新增的Area
+        let mut new_areas = Vec::new();
+        for area in self.areas.iter_mut() {
+            let (start, end) = area.vpn_range.range();
+            //无需修改
+            if end <= start_vpn || start >= end_vpn {
+                continue;
+            }
+            //整个area修改
+            if start >= start_vpn && end <= end_vpn {
+                area.map_perm = map_perm;
+                flags = area.flags();
+                continue;
+            }
+            //修改area后半部分
+            if start < start_vpn && end < end_vpn {
+                let mut new_area = MapArea::from_another(area);
+                new_area.map_perm = map_perm;
+                flags = new_area.flags();
+                new_area.vpn_range = VPNRange::new(start_vpn, end);
+                area.vpn_range = VPNRange::new(start, start_vpn);
+                loop {
+                    let mut page = area.data_frames.pop_last().unwrap();
+                    if page.0 < start_vpn {
+                        area.data_frames.insert(page.0, page.1);
+                        break;
+                    }
+                    new_area.data_frames.insert(page.0, page.1);
+                }
+                new_areas.push(new_area);
+                continue;
+            }
+            //修改area前半部分
+            if start > start_vpn && end > end_vpn {
+                let mut new_area = MapArea::from_another(area);
+                new_area.map_perm = map_perm;
+                flags = new_area.flags();
+                new_area.vpn_range = VPNRange::new(start, end_vpn);
+                area.vpn_range = VPNRange::new(end_vpn, end);
+                loop {
+                    let mut page = area.data_frames.pop_first().unwrap();
+                    if page.0 >= end_vpn {
+                        area.data_frames.insert(page.0, page.1);
+                        break;
+                    }
+                    new_area.data_frames.insert(page.0, page.1);
+                }
+                new_areas.push(new_area);
+                continue;
+            }
+            //修改area中间部分
+            if start < start_vpn && end > end_vpn {
+                let mut front_area = MapArea::from_another(area);
+                let mut back_area = MapArea::from_another(area);
+                front_area.vpn_range = VPNRange::new(start, start_vpn);
+                back_area.vpn_range = VPNRange::new(end_vpn, end);
+                area.vpn_range = VPNRange::new(start_vpn, end_vpn);
+                area.map_perm = map_perm;
+                flags = area.flags();
+                loop {
+                    let mut page = area.data_frames.pop_first().unwrap();
+                    if page.0 >= start_vpn {
+                        area.data_frames.insert(page.0, page.1);
+                        break;
+                    }
+                    front_area.data_frames.insert(page.0, page.1);
+                }
+                loop {
+                    let mut page = area.data_frames.pop_last().unwrap();
+                    if page.0 < end_vpn {
+                        area.data_frames.insert(page.0, page.1);
+                        break;
+                    }
+                    back_area.data_frames.insert(page.0, page.1);
+                }
+                new_areas.push(front_area);
+                new_areas.push(back_area);
+                continue;
+            }
+        }
+        for area in new_areas {
+            self.areas.push(area);
+        }
+        flags
+    }
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);
         if let Some(data) = data {

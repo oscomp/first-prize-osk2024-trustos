@@ -130,6 +130,20 @@ pub fn sys_exec(path: &str) -> isize {
     syscall(SYSCALL_EXECVE, [path.as_ptr() as isize, 0, 0, 0, 0, 0])
 }
 
+pub fn sys_busyboxsh() -> isize {
+    syscall(
+        SYSCALL_EXECVE,
+        [
+            "busybox\0".as_ptr() as isize,
+            ["busybox\0".as_ptr() as isize, "sh\0".as_ptr() as isize, 0].as_ptr() as isize,
+            0,
+            0,
+            0,
+            0,
+        ],
+    )
+}
+
 pub fn sys_waitpid(pid: isize, exit_code: *mut i32, options: i32) -> isize {
     syscall(
         SYSCALL_WAIT4,
