@@ -6,7 +6,7 @@ use crate::{
         OpenFlags, MNT_TABLE,
     },
     mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer},
-    task::{current_task, current_user_token},
+    task::{current_task, current_token},
 };
 use alloc::{
     string::{String, ToString},
@@ -19,15 +19,10 @@ pub const FD_LIMIT: usize = 128;
 pub const AT_REMOVEDIR: u32 = 0x200;
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
-    let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    assert!(
-        token == inner.user_token(),
-        "token={:#x},user_token={:#x}",
-        token,
-        inner.user_token()
-    );
+    let token = inner.user_token();
+
     if fd >= inner.fd_table.len() {
         return -1;
     }
@@ -50,15 +45,10 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
 }
 
 pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
-    let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    assert!(
-        token == inner.user_token(),
-        "token={:#x},user_token={:#x}",
-        token,
-        inner.user_token()
-    );
+    let token = inner.user_token();
+
     if fd >= inner.fd_table.len() {
         return -1;
     }
@@ -83,18 +73,11 @@ pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> isize
     if path as usize == 0 {
         return -1;
     }
-    let token = current_user_token().unwrap();
+    let token = current_token();
     let mut path = translated_str(token, path);
 
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
-
-    assert!(
-        token == inner.user_token(),
-        "token={:#x},user_token={:#x}",
-        token,
-        inner.user_token()
-    );
 
     let flags = OpenFlags::from_bits(flags).unwrap();
     let ret;
@@ -134,15 +117,9 @@ pub fn sys_close(fd: usize) -> isize {
 }
 
 pub fn sys_getcwd(buf: *const u8, size: usize) -> isize {
-    let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
-    assert!(
-        token == inner.user_token(),
-        "token={:#x},user_token={:#x}",
-        token,
-        inner.user_token()
-    );
+    let token = inner.user_token();
 
     let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, size));
     buffer.write(inner.current_path.as_bytes());
@@ -192,16 +169,9 @@ pub fn sys_dup3(old: usize, new: usize) -> isize {
 }
 
 pub fn sys_chdir(path: *const u8) -> isize {
-    let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
-
-    assert!(
-        token == inner.user_token(),
-        "token={:#x},user_token={:#x}",
-        token,
-        inner.user_token()
-    );
+    let token = inner.user_token();
 
     let path = translated_str(token, path);
     if path.starts_with('/') {
@@ -231,12 +201,12 @@ pub fn sys_chdir(path: *const u8) -> isize {
 }
 
 pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: usize) -> isize {
-    let process = current_task().unwrap();
-    let token = current_user_token().unwrap();
+    let task = current_task().unwrap();
+    let token = current_token();
     let path = translated_str(token, path);
 
     let cwd = if dirfd == AT_FDCWD && !is_abs_path(&path) {
-        process.inner_lock().current_path.clone()
+        task.inner_lock().current_path.clone()
     } else {
         String::from("/")
     };
@@ -265,15 +235,9 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: usize) -> isize {
 }
 
 pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> isize {
-    let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
-    assert!(
-        token == inner.user_token(),
-        "token={:#x},user_token={:#x}",
-        token,
-        inner.user_token()
-    );
+    let token = inner.user_token();
 
     let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, len));
 
@@ -326,15 +290,10 @@ pub fn sys_linkat(
     todo!();
 }
 pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
-    let process = current_task().unwrap();
-    let token = current_user_token().unwrap();
-    let inner = process.inner_lock();
-    assert!(
-        token == inner.user_token(),
-        "token={:#x},user_token={:#x}",
-        token,
-        inner.user_token()
-    );
+    let task = current_task().unwrap();
+    let inner = task.inner_lock();
+    let token = inner.user_token();
+
     let path = translated_str(token, path);
     let mut base_path = inner.current_path.as_str();
     // 如果path是绝对路径，则dirfd被忽略
@@ -363,7 +322,7 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
 }
 
 pub fn sys_umount2(special: *const u8, flags: u32) -> isize {
-    let token = current_user_token().unwrap();
+    let token = current_token();
     let special = translated_str(token, special);
 
     MNT_TABLE.lock().umount(special, flags)
@@ -376,7 +335,7 @@ pub fn sys_mount(
     flags: u32,
     data: *const u8,
 ) -> isize {
-    let token = current_user_token().unwrap();
+    let token = current_token();
     let special = translated_str(token, special);
     let dir = translated_str(token, dir);
     let ftype = translated_str(token, ftype);
@@ -391,16 +350,10 @@ pub fn sys_mount(
 }
 
 pub fn sys_fstat(fd: usize, kst: *const u8) -> isize {
-    let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
+    let token = inner.user_token();
 
-    assert!(
-        token == inner.user_token(),
-        "token={:#x},user_token={:#x}",
-        token,
-        inner.user_token()
-    );
     let mut kst = UserBuffer::new(translated_byte_buffer(
         token,
         kst,
@@ -427,9 +380,9 @@ pub fn sys_fstat(fd: usize, kst: *const u8) -> isize {
 }
 
 pub fn sys_pipe2(fd: *mut u32) -> isize {
-    let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
+    let token = inner.user_token();
 
     assert!(
         token == inner.user_token(),

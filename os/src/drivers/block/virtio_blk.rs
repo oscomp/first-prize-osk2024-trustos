@@ -5,7 +5,7 @@ use crate::{
         frame_alloc, frame_dealloc, kernel_token, FrameTracker, KernelAddr, PageTable, PhysAddr,
         PhysPageNum, StepByOne, VirtAddr,
     },
-    task::{current_task, current_user_token},
+    task::{current_task, current_token},
 };
 use alloc::{sync::Arc, vec::Vec};
 use lazy_static::*;
@@ -85,11 +85,7 @@ impl Hal for VirtioHal {
     }
 
     fn virt_to_phys(vaddr: usize) -> usize {
-        let token = if current_user_token().is_some() {
-            current_user_token().unwrap()
-        } else {
-            kernel_token()
-        };
+        let token = current_token();
         PageTable::from_token(token)
             .translate_va(VirtAddr::from(vaddr))
             .unwrap()

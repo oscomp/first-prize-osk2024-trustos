@@ -6,7 +6,7 @@ use crate::{
     },
     syscall::CloneFlags,
     task::{
-        add_task, current_task, current_user_token, exit_current_and_run_next, set_user_token,
+        add_task, current_task, current_token, exit_current_and_run_next, set_current_token,
         suspend_current_and_run_next,
     },
     timer::{get_time_ms, Timespec, Tms},
@@ -26,7 +26,7 @@ pub fn sys_sched_yield() -> isize {
 }
 
 pub fn sys_gettimeofday(ts: *const u8) -> isize {
-    let token = current_user_token().unwrap();
+    let token = current_token();
     let mut ts = UserBuffer::new(translated_byte_buffer(token, ts, size_of::<Timespec>()));
     let time = get_time_ms();
     let mut timespec = Timespec::new(time / 1000, (time % 1000) * 1000000);
@@ -35,9 +35,9 @@ pub fn sys_gettimeofday(ts: *const u8) -> isize {
 }
 
 pub fn sys_times(tms: *const u8) -> isize {
-    let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
+    let token = inner.user_token();
     let mut tms = UserBuffer::new(translated_byte_buffer(token, tms, size_of::<Timespec>()));
     let mut times = Tms::new(&inner.time_data);
     tms.write(times.as_bytes());
@@ -120,7 +120,7 @@ pub fn sys_clone(
 }
 
 pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usize) -> isize {
-    let token = current_user_token().unwrap();
+    let token = current_token();
     let path = translated_str(token, path);
     //处理argv参数
     let mut argv_vec = Vec::<String>::new();
@@ -161,7 +161,7 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
 
         task.exec(elf_data, &argv_vec, &mut env);
         let task_inner = task.inner_lock();
-        set_user_token(task_inner.memory_set.token());
+        set_current_token(task_inner.memory_set.token());
         task_inner.memory_set.activate();
         0
     } else {
@@ -228,7 +228,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
 }
 
 pub fn sys_nanosleep(req: *const u8, _rem: *const u8) -> isize {
-    let token = current_user_token().unwrap();
+    let token = current_token();
     let req = translated_ref(token, req as *const Timespec);
 
     let begin = get_time_ms();
@@ -267,7 +267,7 @@ pub fn sys_uname(buf: *mut u8) -> isize {
         machine: str2u8("RISC-V64"),
         domainname: str2u8("TrustOS"),
     };
-    let token = current_user_token().unwrap();
+    let token = current_token();
     let mut buf_vec = translated_byte_buffer(token, buf, size_of::<Utsname>());
     let mut userbuf = UserBuffer::new(buf_vec);
     userbuf.write(unsafe {

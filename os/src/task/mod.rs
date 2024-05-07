@@ -26,6 +26,7 @@ mod tid;
 
 use crate::{
     fs::{open_file, OpenFlags},
+    mm::kernel_token,
     sbi::shutdown,
 };
 use alloc::{boxed::Box, sync::Arc};
@@ -38,8 +39,8 @@ pub use task::{TaskControlBlock, TaskStatus};
 
 pub use aux::*;
 pub use processor::{
-    current_task, current_trap_cx, current_user_token, get_proc_by_hartid, run_tasks, schedule,
-    set_user_token, take_current_task, take_current_token, Processor, PROCESSORS,
+    current_task, current_token, current_trap_cx, get_proc_by_hartid, run_tasks, schedule,
+    set_current_token, take_current_task, Processor, PROCESSORS,
 };
 pub use tid::{tid_alloc, KernelStack, TidAllocator, TidHandle};
 
@@ -65,7 +66,8 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     let mut initproc_inner = INITPROC.inner_lock();
     // take from Processor
     let task = take_current_task().unwrap();
-    let _ = take_current_token();
+    // let _ = take_current_token();
+    set_current_token(kernel_token());
     debug!(
         "[sys_exit] process {} ,thread {} exit! exit_code={}",
         task.pid(),
@@ -140,6 +142,7 @@ pub fn init() {
         for (id, p) in PROCESSORS.iter_mut().enumerate() {
             p.idle_task_cx = Some(Box::new(TaskContext::zero_init()));
             p.hartid = id;
+            p.token = kernel_token();
         }
     }
 }
