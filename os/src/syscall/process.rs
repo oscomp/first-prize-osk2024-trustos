@@ -6,7 +6,7 @@ use crate::{
     },
     syscall::CloneFlags,
     task::{
-        add_task, current_task, current_token, exit_current_and_run_next, set_current_token,
+        add_task, current_task, current_token, exit_current_and_run_next,
         suspend_current_and_run_next,
     },
     timer::{get_time_ms, Timespec, Tms},
@@ -120,7 +120,10 @@ pub fn sys_clone(
 }
 
 pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usize) -> isize {
-    let token = current_token();
+    let task = current_task().unwrap();
+    let mut task_inner = task.inner_lock();
+
+    let token = task_inner.user_token();
     let path = translated_str(token, path);
     //处理argv参数
     let mut argv_vec = Vec::<String>::new();
@@ -151,8 +154,7 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
             envp = envp.add(1);
         }
     }
-    let task = current_task().unwrap();
-    let mut task_inner = task.inner_lock();
+
     let cwd = task_inner.current_path.clone();
     if let Some(app_inode) = open(&cwd, path.as_str(), OpenFlags::O_RDONLY) {
         let elf_data = unsafe { app_inode.read_as_elf() };
@@ -161,7 +163,6 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
 
         task.exec(elf_data, &argv_vec, &mut env);
         let task_inner = task.inner_lock();
-        set_current_token(task_inner.memory_set.token());
         task_inner.memory_set.activate();
         0
     } else {

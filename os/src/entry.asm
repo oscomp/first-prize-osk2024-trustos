@@ -21,7 +21,6 @@ _start:
     sfence.vma
 
     call trampoline
-    # call rust_main
 
     .section .bss.stack
     .globl boot_stack_lower_bound

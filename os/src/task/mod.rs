@@ -40,7 +40,7 @@ pub use task::{TaskControlBlock, TaskStatus};
 pub use aux::*;
 pub use processor::{
     current_task, current_token, current_trap_cx, get_proc_by_hartid, run_tasks, schedule,
-    set_current_token, take_current_task, Processor, PROCESSORS,
+    take_current_task, Processor, PROCESSORS,
 };
 pub use tid::{tid_alloc, KernelStack, TidAllocator, TidHandle};
 
@@ -67,7 +67,6 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     // take from Processor
     let task = take_current_task().unwrap();
     // let _ = take_current_token();
-    set_current_token(kernel_token());
     debug!(
         "[sys_exit] process {} ,thread {} exit! exit_code={}",
         task.pid(),
@@ -141,8 +140,6 @@ pub fn init() {
     unsafe {
         for (id, p) in PROCESSORS.iter_mut().enumerate() {
             p.idle_task_cx = Some(Box::new(TaskContext::zero_init()));
-            p.hartid = id;
-            p.token = kernel_token();
         }
     }
 }
