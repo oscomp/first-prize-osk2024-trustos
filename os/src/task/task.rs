@@ -28,7 +28,6 @@ pub struct TaskControlBlock {
     ppid: usize,
     pid: usize,
     pub kernel_stack: KernelStack,
-    // pub sig_user_addr: usize,
     // mutable
     inner: Mutex<TaskControlBlockInner>,
 }

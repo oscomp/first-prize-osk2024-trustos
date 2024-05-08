@@ -15,10 +15,8 @@ use log::{debug, info};
 pub struct Processor {
     ///The task currently executing on the current processor
     pub current: Option<Arc<TaskControlBlock>>,
-    pub token: usize,
     ///The basic control flow of each core, helping to select and switch process
     pub idle_task_cx: Option<Box<TaskContext>>,
-    pub hartid: usize,
 }
 
 impl Processor {
@@ -26,17 +24,12 @@ impl Processor {
     pub const fn new() -> Self {
         Self {
             current: None,
-            token: 0,
             idle_task_cx: None,
-            hartid: 0,
         }
     }
     ///Get mutable reference to `idle_task_cx`
     fn get_idle_task_cx_ptr(&mut self) -> *mut TaskContext {
         self.idle_task_cx.as_mut().unwrap().as_mut() as *mut _
-    }
-    pub fn set_hartid(&mut self, hartid: usize) {
-        self.hartid = hartid;
     }
     ///Get current task in moving semanteme
     pub fn take_current(&mut self) -> Option<Arc<TaskControlBlock>> {
@@ -45,10 +38,6 @@ impl Processor {
     ///Get current task in cloning semanteme
     pub fn current(&self) -> Option<Arc<TaskControlBlock>> {
         self.current.as_ref().map(Arc::clone)
-    }
-
-    pub fn token(&self) -> usize {
-        self.token
     }
 }
 
@@ -79,7 +68,6 @@ pub fn run_tasks() {
                 let next_task_cx_ptr = &next_task_inner.task_cx as *const TaskContext;
                 next_task_inner.task_status = TaskStatus::Running;
                 next_task_inner.memory_set.activate();
-                processor.token = next_task_inner.user_token();
                 drop(next_task_inner);
                 drop(cur_task_inner);
                 processor.current = Some(next_task);
@@ -90,7 +78,6 @@ pub fn run_tasks() {
             } else {
                 cur_task_inner.task_status = TaskStatus::Running;
                 let cur_task_cx_ptr = &cur_task_inner.task_cx as *const TaskContext;
-                processor.token = cur_task_inner.user_token();
                 drop(cur_task_inner);
                 processor.current = Some(cur_task);
                 unsafe {
@@ -105,7 +92,6 @@ pub fn run_tasks() {
                 let next_task_cx_ptr = &task_inner.task_cx as *const TaskContext;
                 task_inner.task_status = TaskStatus::Running;
                 task_inner.memory_set.activate();
-                processor.token = task_inner.user_token();
                 drop(task_inner);
                 processor.current = Some(task);
                 unsafe {
@@ -126,15 +112,13 @@ pub fn current_task() -> Option<Arc<TaskControlBlock>> {
 }
 ///Get token of the address space of current task
 pub fn current_token() -> usize {
-    get_proc_by_hartid(hart_id()).token()
+    // get_proc_by_hartid(hart_id()).token()
+    riscv::register::satp::read().bits()
 }
 
 ///Get the mutable reference to trap context of current task
 pub fn current_trap_cx() -> &'static mut TrapContext {
     current_task().unwrap().inner_lock().trap_cx()
-}
-pub fn set_current_token(token: usize) {
-    get_proc_by_hartid(hart_id()).token = token;
 }
 ///Return to idle control flow for new scheduling
 pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {

@@ -73,11 +73,11 @@ pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> isize
     if path as usize == 0 {
         return -1;
     }
-    let token = current_token();
-    let mut path = translated_str(token, path);
 
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
+    let token = inner.user_token();
+    let mut path = translated_str(token, path);
 
     let flags = OpenFlags::from_bits(flags).unwrap();
     let ret;
@@ -202,14 +202,16 @@ pub fn sys_chdir(path: *const u8) -> isize {
 
 pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: usize) -> isize {
     let task = current_task().unwrap();
-    let token = current_token();
+    let task_inner = task.inner_lock();
+    let token = task_inner.user_token();
     let path = translated_str(token, path);
 
     let cwd = if dirfd == AT_FDCWD && !is_abs_path(&path) {
-        task.inner_lock().current_path.clone()
+        task_inner.current_path.clone()
     } else {
         String::from("/")
     };
+    drop(task_inner);
 
     let ret = {
         if let Some(_) = open(
