@@ -21,6 +21,7 @@ simple-fat32 = { path = "../simple-fat32" }
 log = "0.4"
 sbi-rt = { version = "0.0.2", features = ["legacy"] }
 spin = "0.9.8"
+hashbrown = "0.12.0"
 num_enum = { version = "0.7.2", default-features = false }
 [features]
 board_qemu = []

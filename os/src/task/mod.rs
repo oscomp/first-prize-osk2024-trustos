@@ -27,6 +27,7 @@ mod tid;
 use crate::fs::{open_file, OpenFlags};
 use crate::mm::activate_kernel_space;
 use crate::sbi::shutdown;
+use crate::task::manager::remove_from_pid2task;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 pub use context::TaskContext;
@@ -43,6 +44,7 @@ pub use processor::{
 };
 pub use tid::{tid_alloc, KernelStack, TidAllocator, TidHandle};
 
+use self::manager::insert_into_pid2task;
 use self::processor::{get_proc_by_hartid, take_current_token};
 /// Suspend the current 'Running' task and run the next task in task list.
 pub fn suspend_current_and_run_next() {
@@ -111,6 +113,9 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     inner.children.clear();
     // deallocate user space
     inner.memory_set.recycle_data_pages();
+
+    remove_from_pid2task(task.pid());
+
     drop(inner);
     // **** release current PCB
     // drop task manually to maintain rc correctly
@@ -133,6 +138,7 @@ lazy_static! {
 ///Add init process to the manager
 pub fn add_initproc() {
     add_task(INITPROC.clone());
+    insert_into_pid2task(0, INITPROC.clone());
 }
 ///Init PROCESSORS
 pub fn init() {

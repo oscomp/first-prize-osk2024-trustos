@@ -2,8 +2,9 @@
 use super::TaskControlBlock;
 use alloc::collections::VecDeque;
 use alloc::sync::Arc;
+use hashbrown::HashMap;
 use lazy_static::*;
-use spin::{Mutex, MutexGuard};
+use spin::{Mutex, MutexGuard, RwLock};
 ///A array of `TaskControlBlock` that is thread-safe
 pub struct TaskManager {
     ready_queue: VecDeque<Arc<TaskControlBlock>>,
@@ -31,23 +32,6 @@ impl TaskManager {
     pub fn ready_procs_num(&self) -> usize {
         self.ready_queue.len()
     }
-    pub fn find_pid_change_kindcpu(&self, pid: usize, kindcpu: isize) -> isize {
-        for item in self.ready_queue.iter() {
-            if item.pid() == pid {
-                item.inner_lock().kind_cpu = kindcpu;
-                return 0;
-            }
-        }
-        -1
-    }
-    pub fn find_pid_get_kindcpu(&self, pid: usize) -> isize {
-        for item in self.ready_queue.iter() {
-            if item.pid() == pid {
-                return item.inner_lock().kind_cpu;
-            }
-        }
-        -1
-    }
 }
 
 lazy_static! {
@@ -68,9 +52,29 @@ pub fn lock_task_manager() -> MutexGuard<'static, TaskManager> {
 pub fn ready_procs_num() -> usize {
     TASK_MANAGER.lock().ready_procs_num()
 }
-pub fn find_pid_change_kindcpu(pid: usize, kindcpu: isize) -> isize {
-    TASK_MANAGER.lock().find_pid_change_kindcpu(pid, kindcpu)
+
+lazy_static! {
+    pub static ref PID2TCB: RwLock<HashMap<usize, Arc<TaskControlBlock>>> =
+        RwLock::new(HashMap::new());
 }
-pub fn find_pid_get_kindcpu(pid: usize) -> isize {
-    TASK_MANAGER.lock().find_pid_get_kindcpu(pid)
+
+pub fn pid2task(pid: usize) -> Option<Arc<TaskControlBlock>> {
+    let map = PID2TCB.read();
+    map.get(&pid).map(Arc::clone)
+}
+
+pub fn insert_into_pid2task(pid: usize, task: Arc<TaskControlBlock>) {
+    PID2TCB.write().insert(pid, task);
+}
+
+pub fn remove_from_pid2task(pid: usize) {
+    let mut map = PID2TCB.write();
+    if map.remove(&pid).is_none() {
+        panic!("cannot find pid {} in PID2TCB!", pid);
+    }
+}
+
+pub fn task_num() -> usize {
+    let map = PID2TCB.read();
+    map.len()
 }

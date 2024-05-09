@@ -7,7 +7,7 @@ use crate::mm::{
     translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr,
 };
 use crate::syscall::CloneFlags;
-use crate::task::manager::{find_pid_change_kindcpu, find_pid_get_kindcpu, ready_procs_num};
+use crate::task::manager::{pid2task, ready_procs_num, task_num};
 use crate::task::processor::get_proc_by_hartid;
 use crate::task::{
     add_task, current_task, current_user_token, exit_current_and_run_next,
@@ -257,27 +257,15 @@ pub fn sys_sched_setaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> isi
     let mask = *translated_ref(token, mask as *const usize);
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
-    let nowcpu = hart_id();
 
     //尝试匹配当前进程
     if pid == 0 || task.pid() == pid {
         inner.kind_cpu = mask as isize;
         return 0;
     }
-    //尝试匹配正在运行的进程
-    for cpu in 0..HART_NUM {
-        if nowcpu != cpu {
-            if let Some(running_task) = get_proc_by_hartid(cpu).current.clone() {
-                if running_task.pid() == pid {
-                    running_task.inner_lock().kind_cpu = mask as isize;
-                    return 0;
-                }
-            }
-        }
-    }
-
-    //尝试匹配任务管理器中的进程
-    if find_pid_change_kindcpu(pid, mask as isize) == 0 {
+    //尝试匹配其其他进程
+    if let Some(found_task) = pid2task(pid) {
+        found_task.inner_lock().kind_cpu = mask as isize;
         return 0;
     }
     //匹配不到
@@ -288,29 +276,15 @@ pub fn sys_sched_getaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> isi
     let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
-    let nowcpu = hart_id();
 
     //尝试匹配当前进程
     if pid == 0 || task.pid() == pid {
         *translated_refmut(token, mask as *mut usize) = inner.kind_cpu as usize;
         return 0;
     }
-    //尝试匹配正在运行的进程
-    for cpu in 0..HART_NUM {
-        if nowcpu != cpu {
-            if let Some(running_task) = get_proc_by_hartid(cpu).current.clone() {
-                if running_task.pid() == pid {
-                    *translated_refmut(token, mask as *mut usize) =
-                        running_task.inner_lock().kind_cpu as usize;
-                    return 0;
-                }
-            }
-        }
-    }
-    //尝试匹配任务管理器中的进程
-    let find_from_manager = find_pid_get_kindcpu(pid);
-    if find_from_manager != -1 {
-        *translated_refmut(token, mask as *mut usize) = find_from_manager as usize;
+    //尝试匹配其其他进程
+    if let Some(found_task) = pid2task(pid) {
+        *translated_refmut(token, mask as *mut usize) = found_task.inner_lock().kind_cpu as usize;
         return 0;
     }
     //匹配不到
@@ -342,18 +316,8 @@ pub fn sys_sysinfo(info: *const u8) -> isize {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     let mut info = UserBuffer::new(translated_byte_buffer(token, info, size_of::<Sysinfo>()));
-    let nowcpu = hart_id();
 
-    let mut procs = 1; //目前算一个
-    for cpu in 0..HART_NUM {
-        if nowcpu != cpu {
-            if let Some(running_task) = get_proc_by_hartid(cpu).current.clone() {
-                procs += 1;
-            }
-        }
-    }
-    procs += ready_procs_num();
-    let ourinfo = Sysinfo::new(get_time_ms() / 1000, 1 << 56, procs);
+    let ourinfo = Sysinfo::new(get_time_ms() / 1000, 1 << 56, task_num());
     info.write(ourinfo.as_bytes());
     0
 }

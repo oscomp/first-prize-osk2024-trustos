@@ -1,6 +1,7 @@
 //!Implementation of [`TaskControlBlock`]
 use super::{
     aux::{Aux, AuxType},
+    manager::insert_into_pid2task,
     tid_alloc, KernelStack, TaskContext, TidHandle,
 };
 use crate::{
@@ -332,6 +333,9 @@ impl TaskControlBlock {
                 kind_cpu: -2,
             }),
         });
+
+        insert_into_pid2task(pid, task_control_block.clone());
+
         // add child
         parent_inner.children.push(task_control_block.clone());
         // modify kernel_sp in trap_cx
