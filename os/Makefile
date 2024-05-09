@@ -6,7 +6,9 @@ MODE := release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 DISASM_TMP := target/$(TARGET)/$(MODE)/asm
-FS_IMG := ../simple-fat32/fat32.img
+# FS := simple-fat32
+FS := fat32_fs
+FS_IMG := ../$(FS)/fat32.img
 APPS := ../user/src/bin/*
 
 # BOARD
@@ -41,7 +43,7 @@ build: env $(KERNEL_BIN)
 
 initproc:
 	@cd ../user && cargo clean && make build
-	@cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean && make all
+	# @cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean && make all
 
 env:
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
@@ -53,7 +55,7 @@ $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
 
 copy_to_fs: 
-	@cd ../simple-fat32&&sh create_img.sh 
+	@cd ../$(FS)&&sh create_img.sh 
 
 $(APPS):
 
@@ -65,8 +67,9 @@ kernel:
 
 clean:
 	@cargo clean
-	@cd ../simple-fat32&&rm fat32.img
-	@cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean
+	@cd ../$(FS)&& rm fat32.img
+	@cd ../user && cargo clean
+	# @cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean
 
 disasm: kernel
 	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) | less
@@ -92,7 +95,7 @@ run-inner: build copy_to_fs
 	@qemu-system-riscv64 $(QEMU_ARGS)
 ssrun: 
 	@qemu-system-riscv64 $(QEMU_ARGS)
-debug: build copy_to_fs
+debug: initproc build copy_to_fs
 	@tmux new-session -d \
 		"qemu-system-riscv64 $(QEMU_ARGS) -s -S" && \
 		tmux split-window -h "riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'" && \

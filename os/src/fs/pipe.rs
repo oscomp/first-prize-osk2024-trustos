@@ -10,7 +10,6 @@
 //
 use super::{Dirent, File, Kstat};
 use crate::mm::UserBuffer;
-use crate::sync::UPSafeCell;
 use alloc::{
     string::String,
     sync::{Arc, Weak},
@@ -212,23 +211,5 @@ impl File for Pipe {
                 }
             }
         }
-    }
-
-    #[allow(unused_variables)]
-    fn fstat(&self, kstat: &mut Kstat) {
-        panic!("pipe not implement get_fstat");
-    }
-
-    #[allow(unused_variables)]
-    fn dirent(&self, dirent: &mut Dirent) -> isize {
-        panic!("pipe not implement get_dirent");
-    }
-
-    fn name(&self) -> String {
-        panic!("pipe not implement get_name");
-    }
-
-    fn set_offset(&self, offset: usize) {
-        panic!("pipe not implement set_offset");
     }
 }

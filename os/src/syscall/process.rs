@@ -1,23 +1,24 @@
+use crate::{
+    fs::{open, open_file, OpenFlags},
+    mm::{
+        translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer,
+        VirtAddr,
+    },
+    syscall::CloneFlags,
+    task::{
+        add_task, current_task, current_token, exit_current_and_run_next,
+        suspend_current_and_run_next,
+    },
+    timer::{get_time_ms, Timespec, Tms},
+};
+use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
 
 use crate::config::processor::HART_NUM;
 use crate::console::print;
-use crate::fs::{open, open_file, OpenFlags};
-use crate::mm::{
-    translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr,
-};
-use crate::syscall::CloneFlags;
 use crate::task::manager::{pid2task, ready_procs_num, task_num};
 use crate::task::processor::get_proc_by_hartid;
-use crate::task::{
-    add_task, current_task, current_user_token, exit_current_and_run_next,
-    suspend_current_and_run_next,
-};
-use crate::timer::{get_time_ms, Timespec, Tms};
 use crate::utils::hart_id;
-use alloc::string::String;
-use alloc::sync::Arc;
-use alloc::vec::Vec;
 use log::{debug, info};
 
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -38,8 +39,27 @@ pub fn sys_getppid() -> isize {
     current_task().unwrap().ppid() as isize
 }
 
+pub fn sys_getuid() -> isize {
+    0 // root user
+}
+
+pub fn sys_geteuid() -> isize {
+    0 // root user
+}
+
+pub fn sys_getgid() -> isize {
+    0 // root group
+}
+
+pub fn sys_getegid() -> isize {
+    0 // root group
+}
 pub fn sys_gettid() -> isize {
     current_task().unwrap().tid() as isize
+}
+pub fn sys_settidaddress(tidptr: usize) -> isize {
+    current_task().unwrap().inner_lock().clear_child_tid = tidptr;
+    sys_gettid()
 }
 
 pub fn sys_strace(mask: usize) -> isize {
@@ -87,9 +107,11 @@ pub fn sys_clone(
 }
 
 pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usize) -> isize {
-    let token = current_user_token().unwrap();
+    let task = current_task().unwrap();
+    let mut task_inner = task.inner_lock();
+
+    let token = task_inner.user_token();
     let path = translated_str(token, path);
-    // println!("path:{}", path);
     //处理argv参数
     let mut argv_vec = Vec::<String>::new();
     loop {
@@ -119,14 +141,16 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
             envp = envp.add(1);
         }
     }
-    let task = current_task().unwrap();
-    let cwd = task.inner_lock().current_path.clone();
+
+    let cwd = task_inner.current_path.clone();
     if let Some(app_inode) = open(&cwd, path.as_str(), OpenFlags::O_RDONLY) {
-        let all_data = app_inode.read_all();
-        task.inner_lock().file = Some(app_inode.clone());
-        task.exec(all_data.as_slice(), &argv_vec, &mut env);
-        task.inner_lock().memory_set.activate();
-        debug!("sys_exec end");
+        let elf_data = unsafe { app_inode.read_as_elf() };
+        task_inner.file = Some(app_inode.clone());
+        drop(task_inner);
+
+        task.exec(elf_data, &argv_vec, &mut env);
+        let task_inner = task.inner_lock();
+        task_inner.memory_set.activate();
         0
     } else {
         -1
@@ -192,7 +216,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
 }
 
 pub fn sys_nanosleep(req: *const u8, _rem: *const u8) -> isize {
-    let token = current_user_token().unwrap();
+    let token = current_token();
     let req = translated_ref(token, req as *const Timespec);
 
     let begin = get_time_ms();
@@ -231,7 +255,7 @@ pub fn sys_uname(buf: *mut u8) -> isize {
         machine: str2u8("RISC-V64"),
         domainname: str2u8("TrustOS"),
     };
-    let token = current_user_token().unwrap();
+    let token = current_token();
     let mut buf_vec = translated_byte_buffer(token, buf, size_of::<Utsname>());
     let mut userbuf = UserBuffer::new(buf_vec);
     userbuf.write(unsafe {
@@ -253,10 +277,10 @@ pub fn sys_brk(brk_addr: usize) -> isize {
 }
 
 pub fn sys_sched_setaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> isize {
-    let token = current_user_token().unwrap();
-    let mask = *translated_ref(token, mask as *const usize);
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
+    let token = inner.user_token();
+    let mask = *translated_ref(token, mask as *const usize);
 
     //尝试匹配当前进程
     if pid == 0 || task.pid() == pid {
@@ -273,9 +297,9 @@ pub fn sys_sched_setaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> isi
 }
 
 pub fn sys_sched_getaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> isize {
-    let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
+    let token = inner.user_token();
 
     //尝试匹配当前进程
     if pid == 0 || task.pid() == pid {
@@ -312,9 +336,9 @@ impl Sysinfo {
 }
 
 pub fn sys_sysinfo(info: *const u8) -> isize {
-    let token = current_user_token().unwrap();
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
+    let token = inner.user_token();
     let mut info = UserBuffer::new(translated_byte_buffer(token, info, size_of::<Sysinfo>()));
 
     let ourinfo = Sysinfo::new(get_time_ms() / 1000, 1 << 56, task_num());

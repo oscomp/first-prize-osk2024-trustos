@@ -1,6 +1,8 @@
 //! Implementation of [`PageTableEntry`] and [`PageTable`].
-use crate::config::mm::{KERNEL_ADDR_OFFSET, KERNEL_PGNUM_OFFSET};
-use crate::mm::KernelAddr;
+use crate::{
+    config::mm::{KERNEL_ADDR_OFFSET, KERNEL_PGNUM_OFFSET},
+    mm::KernelAddr,
+};
 
 use super::{
     frame_alloc, FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum,
@@ -8,6 +10,7 @@ use super::{
 };
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use bitflags::*;
+use log::info;
 
 use core::arch::asm;
 pub fn flush_tlb() {
@@ -238,9 +241,11 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
         let mut vpn = start_va.floor();
         match page_table.translate(vpn) {
             None => {
-                println!("[kernel] mm: 0x{:x} not mapped", start);
+                panic!("[kernel] mm: 0x{:x} not mapped", start);
             }
-            _ => {}
+            Some(ref pte) => {
+                assert!(pte.is_valid(), "vpn {} to ppn {}", vpn.0, pte.ppn().0);
+            }
         }
         let ppn = page_table.translate(vpn).unwrap().ppn();
         vpn.step();

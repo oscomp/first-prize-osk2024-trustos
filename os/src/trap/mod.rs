@@ -13,15 +13,16 @@
 //! to [`syscall()`].
 mod context;
 
-use crate::config::mm::TRAMPOLINE;
-use crate::mm::VirtAddr;
-use crate::sync::interrupt_on;
-use crate::syscall::{syscall, Syscall};
-use crate::task::{
-    current_task, current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next,
+use crate::{
+    mm::{VirtAddr, VirtPageNum},
+    signal::check_signal_for_current_task,
+    syscall::{syscall, Syscall},
+    task::{
+        current_task, current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next,
+    },
+    timer::set_next_trigger,
+    utils::{backtrace, hart_id},
 };
-use crate::timer::set_next_trigger;
-use crate::utils::{backtrace, hart_id};
 use core::arch::{asm, global_asm};
 use log::{debug, info};
 use riscv::register::{
@@ -71,7 +72,7 @@ pub fn trap_handler() {
     let strace_mask = current_task().unwrap().inner_lock().strace_mask;
 
     let hartid = hart_id();
-    // debug!("trap handler");
+
     set_kernel_trap_entry();
     let scause = scause::read();
     let stval = stval::read();
@@ -80,7 +81,7 @@ pub fn trap_handler() {
             // jump to next instruction anyway
             let mut cx = current_trap_cx();
             cx.sepc += 4;
-            // debug!("run syscall {}", cx.x[17]);
+            let syscall_id = Syscall::from(cx.x[17]);
             // get system call return value
             let result = syscall(
                 cx.x[17],
@@ -98,12 +99,11 @@ pub fn trap_handler() {
             cx.x[10] = result as usize;
             if strace_mask != 0 && (strace_mask == usize::MAX || strace_mask == cx.x[17]) {
                 info!(
-                    "[strace] syscall {:?} -> {}",
-                    Syscall::from(cx.x[17]),
-                    cx.x[10]
+                    "[strace] syscall {} {:?} -> {}",
+                    cx.x[17], syscall_id, cx.x[10]
                 );
             } else {
-                if Syscall::try_from(cx.x[17]).is_err() {
+                if syscall_id == Syscall::Default {
                     info!("[strace] unknown syscall id {} -> {}", cx.x[17], cx.x[10]);
                 }
             }
@@ -173,6 +173,8 @@ pub fn trap_handler() {
         }
     }
 
+    check_signal_for_current_task();
+
     //记录内核空间花费CPU时间，同时准备用户空间花费CPU时间
     current_task()
         .unwrap()
@@ -215,11 +217,17 @@ pub fn trap_return_for_new_task_once() {
 pub fn trap_from_kernel() -> ! {
     use riscv::register::sepc;
     backtrace();
+    let stval = stval::read();
+    let sepc = sepc::read();
+    let stval_vpn = VirtPageNum::from(VirtAddr::from(stval));
+    let sepc_vpn = VirtPageNum::from(VirtAddr::from(sepc));
     panic!(
-        "stval = {:#x}, sepc = {:#x}\n
+        "stval = {:#x}(vpn {}), sepc = {:#x}(vpn{}),
         a trap {:?} from kernel!",
-        stval::read(),
-        sepc::read(),
+        stval,
+        stval_vpn.0,
+        sepc,
+        sepc_vpn.0,
         scause::read().cause()
     );
 }

@@ -27,7 +27,7 @@ impl Kstat {
             st_dev: 0,
             st_ino: 0,
             st_mode: 0,
-            st_nlink: 0,
+            st_nlink: 1,
             st_uid: 0,
             st_gid: 0,
             st_rdev: 0,
@@ -45,12 +45,8 @@ impl Kstat {
             __unused: [0; 2],
         }
     }
-
-    pub fn init(&mut self, st_size: i64, st_blksize: i64, st_blocks: u64) {
-        self.st_nlink = 1;
+    pub fn init(&mut self, st_size: i64) {
         self.st_size = st_size;
-        self.st_blksize = st_blksize;
-        self.st_blocks = st_blocks;
     }
 
     pub fn as_bytes(&self) -> &[u8] {

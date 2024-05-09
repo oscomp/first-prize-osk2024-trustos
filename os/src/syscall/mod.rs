@@ -30,16 +30,25 @@ pub enum Syscall {
     Write = 64,
     Fstat = 80,
     Exit = 93,
+    Exitgroup = 94,
+    Settidaddress = 96,
     Nanosleep = 101,
     ClockGettime = 113,
     SchedSetaffinity = 122,
     SchedGetaffinity = 123,
     SchedYield = 124,
+    SigKill = 129,
+    Sigaction = 134,
+    SigReturn = 139,
     Times = 153,
     Uname = 160,
     Gettimeofday = 169,
     Getpid = 172,
     Getppid = 173,
+    Getuid = 174,
+    Geteuid = 175,
+    Getgid = 176,
+    Getegid = 177,
     Gettid = 178,
     Sysinfo = 179,
     Brk = 214,
@@ -47,6 +56,7 @@ pub enum Syscall {
     Clone = 220,
     Mmap = 222,
     Execve = 221,
+    Mprotect = 226,
     Wait4 = 260,
     // 非标准系统调用
     Shutdown = 1000,
@@ -59,21 +69,24 @@ mod fs;
 mod memory;
 mod options;
 mod process;
+mod signal;
 mod time;
 
 use fs::*;
 use memory::*;
 pub use options::*;
 use process::*;
+use signal::*;
 use time::*;
 
-use crate::console::print;
-use crate::sbi::shutdown;
-use log::debug;
+use crate::{console::print, sbi::shutdown, signal::SigAction};
+use log::{debug, info};
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
-    debug!("syscall:{}", syscall_id);
+    // debug!("syscall:{}", syscall_id);
+    let id = syscall_id;
     let syscall_id: Syscall = Syscall::from(syscall_id);
+    debug!("syscall:{:?}", syscall_id);
     match syscall_id {
         Syscall::Getcwd => sys_getcwd(args[0] as *const u8, args[1] as usize),
         Syscall::Dup => sys_dup(args[0] as usize),
@@ -110,7 +123,8 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
         Syscall::Read => sys_read(args[0] as usize, args[1] as *const u8, args[2] as usize),
         Syscall::Write => sys_write(args[0] as usize, args[1] as *const u8, args[2] as usize),
         Syscall::Fstat => sys_fstat(args[0] as usize, args[1] as *const u8),
-        Syscall::Exit => sys_exit(args[0] as i32),
+        Syscall::Exit | Syscall::Exitgroup => sys_exit(args[0] as i32),
+        Syscall::Settidaddress => sys_settidaddress(args[0] as usize),
         Syscall::Nanosleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
         Syscall::ClockGettime => sys_clock_gettime(args[0] as usize, args[1] as *const u8),
         Syscall::SchedSetaffinity => {
@@ -120,11 +134,22 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
             sys_sched_getaffinity(args[0] as usize, args[1] as usize, args[2] as usize)
         }
         Syscall::SchedYield => sys_sched_yield(),
+        Syscall::SigKill => sys_kill(args[0] as usize, args[0] as usize),
+        Syscall::Sigaction => sys_rt_sigaction(
+            args[0] as usize,
+            args[1] as *const SigAction,
+            args[2] as *mut SigAction,
+        ),
+        Syscall::SigReturn => sys_rt_sigreturn(),
         Syscall::Times => sys_times(args[0] as *const u8),
         Syscall::Gettimeofday => sys_gettimeofday(args[0] as *const u8),
         Syscall::Uname => sys_uname(args[0] as *mut u8),
         Syscall::Getpid => sys_getpid(),
         Syscall::Getppid => sys_getppid(),
+        Syscall::Getuid => sys_getuid(),
+        Syscall::Geteuid => sys_geteuid(),
+        Syscall::Getgid => sys_getgid(),
+        Syscall::Getegid => sys_getegid(),
         Syscall::Gettid => sys_gettid(),
         Syscall::Sysinfo => sys_sysinfo(args[0] as *const u8),
         Syscall::Clone => sys_clone(
@@ -149,9 +174,10 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
             args[5] as usize,
         ),
         Syscall::Munmap => sys_munmap(args[0] as usize, args[1] as usize),
+        Syscall::Mprotect => sys_mprotect(args[0] as usize, args[1] as usize, args[2] as u32),
         Syscall::Wait4 => sys_wait4(args[0] as isize, args[1] as *mut i32, args[2] as i32),
         Syscall::Shutdown => shutdown(false),
         Syscall::Strace => sys_strace(args[0] as usize),
-        _ => panic!("Unsupported syscall_id: {:?}", syscall_id),
+        _ => panic!("Unsupported syscall_id: {}", id),
     }
 }

@@ -2,7 +2,7 @@
 use riscv::register::sstatus::{self, Sstatus, SPP};
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 ///trap context structure containing sstatus, sepc and registers
 pub struct TrapContext {
     /// user trap to kernel need to save those regs

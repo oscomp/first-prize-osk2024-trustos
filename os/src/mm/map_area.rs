@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     config::mm::{KERNEL_PGNUM_OFFSET, PAGE_SIZE},
-    fs::RFile,
+    fs::OSInode,
     syscall::MmapFlags,
 };
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
@@ -16,7 +16,7 @@ pub struct MapArea {
     pub map_type: MapType,
     pub map_perm: MapPermission,
     pub area_type: MapAreaType,
-    pub file: Option<Arc<RFile>>,
+    pub file: Option<Arc<OSInode>>,
     pub offset: usize,
     pub mmap_flags: MmapFlags,
     pub groupid: usize,
@@ -54,7 +54,7 @@ impl MapArea {
         map_type: MapType,
         map_perm: MapPermission,
         area_type: MapAreaType,
-        file: Arc<RFile>,
+        file: Option<Arc<OSInode>>,
         offset: usize,
         mmap_flags: MmapFlags,
     ) -> Self {
@@ -68,7 +68,7 @@ impl MapArea {
             map_type,
             map_perm,
             area_type,
-            file: Some(file),
+            file,
             offset,
             mmap_flags,
             groupid,
@@ -135,20 +135,24 @@ impl MapArea {
     }
     /// data: start-aligned but maybe with shorter length
     /// assume that all frames were cleared before
-    pub fn copy_data(&mut self, page_table: &mut PageTable, data: &[u8]) {
+    pub fn copy_data(&mut self, page_table: &mut PageTable, data: &[u8], offset: usize) {
         assert_eq!(self.map_type, MapType::Framed);
         let mut start: usize = 0;
+        let mut page_offset: usize = offset;
         let mut current_vpn = self.vpn_range.start();
         let len = data.len();
         loop {
-            let src = &data[start..len.min(start + PAGE_SIZE)];
+            let src = &data[start..len.min(start + PAGE_SIZE - page_offset)];
             let dst = &mut page_table
                 .translate(current_vpn)
                 .unwrap()
                 .ppn()
-                .bytes_array_mut()[..src.len()];
+                .bytes_array_mut()[page_offset..(page_offset + src.len())];
             dst.copy_from_slice(src);
-            start += PAGE_SIZE;
+
+            start += PAGE_SIZE - page_offset;
+
+            page_offset = 0;
             if start >= len {
                 break;
             }

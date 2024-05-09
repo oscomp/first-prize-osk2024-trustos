@@ -1,7 +1,7 @@
 //!Implementation of [`TaskManager`]
-use super::TaskControlBlock;
-use alloc::collections::VecDeque;
-use alloc::sync::Arc;
+use super::{tid, TaskControlBlock};
+use alloc::collections::{BTreeMap, VecDeque};
+use alloc::sync::{Arc, Weak};
 use hashbrown::HashMap;
 use lazy_static::*;
 use spin::{Mutex, MutexGuard, RwLock};
@@ -77,4 +77,32 @@ pub fn remove_from_pid2task(pid: usize) {
 pub fn task_num() -> usize {
     let map = PID2TCB.read();
     map.len()
+}
+
+pub struct TaskMonitor {
+    tid_to_task: BTreeMap<usize, Weak<TaskControlBlock>>,
+}
+
+impl TaskMonitor {
+    pub fn new() -> Self {
+        Self {
+            tid_to_task: BTreeMap::new(),
+        }
+    }
+    pub fn add(&mut self, tid: usize, task: &Arc<TaskControlBlock>) {
+        self.tid_to_task.insert(tid, Arc::downgrade(task));
+    }
+    pub fn remove(&mut self, tid: usize) {
+        self.tid_to_task.remove(&tid);
+    }
+    pub fn get(&self, tid: usize) -> Option<Arc<TaskControlBlock>> {
+        match self.tid_to_task.get(&tid) {
+            Some(task) => task.upgrade(),
+            None => None,
+        }
+    }
+}
+
+lazy_static! {
+    pub static ref TASK_MONITOR: Mutex<TaskMonitor> = Mutex::new(TaskMonitor::new());
 }

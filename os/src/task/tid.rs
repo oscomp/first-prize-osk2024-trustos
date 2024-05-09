@@ -1,6 +1,8 @@
 //!Implementation of [`PidAllocator`]
-use crate::config::mm::{KERNEL_STACK_SIZE, PAGE_SIZE, TRAMPOLINE};
-use crate::mm::{MapPermission, VirtAddr};
+use crate::{
+    config::mm::{KERNEL_STACK_SIZE, PAGE_SIZE, TRAMPOLINE},
+    mm::{MapPermission, VirtAddr},
+};
 use alloc::vec::Vec;
 use lazy_static::*;
 use log::debug;

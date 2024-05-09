@@ -21,7 +21,6 @@ _start:
     sfence.vma
 
     call trampoline
-    # call rust_main
 
     .section .bss.stack
     .globl boot_stack_lower_bound
@@ -43,3 +42,10 @@ boot_pagetable:
     .zero 8 * 255
     .quad (0x80000 << 10) | 0xcf # VRWXAD
     .zero 8 * 253
+
+    .section .text.trampoline
+    .align 12
+    .global sigreturn_trampoline
+sigreturn_trampoline:
+    li	a7,139
+    ecall

@@ -24,31 +24,28 @@ mod switch;
 mod task;
 mod tid;
 
-use crate::fs::{open_file, OpenFlags};
-use crate::mm::activate_kernel_space;
-use crate::sbi::shutdown;
-use crate::task::manager::remove_from_pid2task;
-use alloc::boxed::Box;
-use alloc::sync::Arc;
+use crate::{
+    fs::{open_file, OpenFlags},
+    mm::kernel_token,
+    sbi::shutdown,
+};
+use alloc::{boxed::Box, sync::Arc};
 pub use context::TaskContext;
 use lazy_static::*;
 use log::{debug, info};
-pub use manager::{add_task, fetch_task, lock_task_manager, TaskManager};
+pub use manager::*;
 use switch::__switch;
-use task::{TaskControlBlock, TaskStatus};
+pub use task::{TaskControlBlock, TaskStatus};
 
 pub use aux::*;
 pub use processor::{
-    current_task, current_trap_cx, current_user_token, run_tasks, schedule, take_current_task,
-    Processor, PROCESSORS,
+    current_task, current_token, current_trap_cx, get_proc_by_hartid, run_tasks, schedule,
+    take_current_task, Processor, PROCESSORS,
 };
 pub use tid::{tid_alloc, KernelStack, TidAllocator, TidHandle};
 
-use self::manager::insert_into_pid2task;
-use self::processor::{get_proc_by_hartid, take_current_token};
 /// Suspend the current 'Running' task and run the next task in task list.
 pub fn suspend_current_and_run_next() {
-    // There must be
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
     let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
@@ -69,7 +66,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     let mut initproc_inner = INITPROC.inner_lock();
     // take from Processor
     let task = take_current_task().unwrap();
-    let _ = take_current_token();
+    // let _ = take_current_token();
     debug!(
         "[sys_exit] process {} ,thread {} exit! exit_code={}",
         task.pid(),
@@ -116,6 +113,8 @@ pub fn exit_current_and_run_next(exit_code: i32) {
 
     remove_from_pid2task(task.pid());
 
+    TASK_MONITOR.lock().remove(task.tid());
+
     drop(inner);
     // **** release current PCB
     // drop task manually to maintain rc correctly
@@ -129,8 +128,8 @@ lazy_static! {
     ///Globle process that init user shell
     pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new({
         let inode = open_file("initproc", OpenFlags::O_RDONLY).unwrap();
-        let v = inode.read_all();
-        let mut res=TaskControlBlock::new(v.as_slice());
+        let elf_data = unsafe {inode.read_as_elf()};
+        let mut res=TaskControlBlock::new(elf_data);
         res.inner_lock().file=Some(inode.clone());
         res
     });
@@ -138,14 +137,16 @@ lazy_static! {
 ///Add init process to the manager
 pub fn add_initproc() {
     add_task(INITPROC.clone());
+
     insert_into_pid2task(0, INITPROC.clone());
+
+    TASK_MONITOR.lock().add(0, &INITPROC);
 }
 ///Init PROCESSORS
 pub fn init() {
     unsafe {
         for (id, p) in PROCESSORS.iter_mut().enumerate() {
             p.idle_task_cx = Some(Box::new(TaskContext::zero_init()));
-            p.hartid = id;
         }
     }
 }

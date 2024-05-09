@@ -4,7 +4,7 @@
 #[macro_use]
 extern crate user_lib;
 
-use user_lib::{exit, fork, sleep, wait};
+use user_lib::{exit, fork, wait};
 
 const MAX_CHILD: usize = 30;
 
@@ -20,7 +20,6 @@ pub fn main() -> i32 {
         }
         assert!(pid > 0);
     }
-    sleep(1000);
     let mut exit_code: i32 = 0;
     for i in 0..MAX_CHILD {
         println!("wait {}", i);

@@ -6,8 +6,10 @@ use super::{
 };
 use crate::{
     config::mm::{USER_HEAP_SIZE, USER_TRAP_CONTEXT},
-    fs::{File, RFile, Stdin, Stdout},
+    fs::{File, FileClass, OSInode, Stdin, Stdout},
     mm::{translated_refmut, MapAreaType, MapPermission, MemorySet, PhysPageNum, VirtAddr},
+    signal::SigPending,
+    task::TASK_MONITOR,
     timer::TimeData,
     trap::{trap_handler, TrapContext},
 };
@@ -30,6 +32,7 @@ pub struct TaskControlBlock {
     // mutable
     inner: Mutex<TaskControlBlockInner>,
 }
+type FdTable = Vec<Option<FileClass>>;
 
 pub struct TaskControlBlockInner {
     pub trap_cx_ppn: PhysPageNum,
@@ -40,14 +43,17 @@ pub struct TaskControlBlockInner {
     pub parent: Option<Weak<TaskControlBlock>>,
     pub children: Vec<Arc<TaskControlBlock>>,
     pub exit_code: i32,
-    pub fd_table: Vec<Option<Arc<RFile>>>,
-    pub file: Option<Arc<RFile>>,
+    pub fd_table: FdTable,
+    pub file: Option<Arc<OSInode>>,
     pub current_path: String,
     pub time_data: TimeData,
     pub user_heappoint: usize,
     pub user_heapbottom: usize,
     pub strace_mask: usize,
     pub kind_cpu: isize, //亲和cpu，初始值为-2
+    pub set_child_tid: usize,
+    pub clear_child_tid: usize,
+    pub sig_pending: SigPending,
 }
 
 impl TaskControlBlockInner {
@@ -111,6 +117,7 @@ impl TaskControlBlock {
             pid: 0,
             ppid: 0,
             kernel_stack,
+            // sig_user_addr: 0,
             inner: Mutex::new(TaskControlBlockInner {
                 trap_cx_ppn,
                 user_stack_top: user_sp,
@@ -122,11 +129,11 @@ impl TaskControlBlock {
                 exit_code: 0,
                 fd_table: vec![
                     // 0 -> stdin
-                    Some(Arc::new(Stdin)),
+                    Some(FileClass::Abs(Arc::new(Stdin))),
                     // 1 -> stdout
-                    Some(Arc::new(Stdout)),
+                    Some(FileClass::Abs(Arc::new(Stdout))),
                     // 2 -> stderr
-                    Some(Arc::new(Stdout)),
+                    Some(FileClass::Abs(Arc::new(Stdout))),
                 ],
                 file: None,
                 current_path: String::from("/"),
@@ -135,6 +142,9 @@ impl TaskControlBlock {
                 user_heapbottom,
                 strace_mask: 0,
                 kind_cpu: -2,
+                set_child_tid: 0,
+                clear_child_tid: 0,
+                sig_pending: SigPending::new(),
             }),
         };
         // prepare TrapContext in user space
@@ -296,7 +306,7 @@ impl TaskControlBlock {
             MapAreaType::Stack,
         );
         // copy fd table
-        let mut new_fd_table: Vec<Option<Arc<RFile>>> = Vec::new();
+        let mut new_fd_table: FdTable = Vec::new();
         for fd in parent_inner.fd_table.iter() {
             if let Some(file) = fd {
                 new_fd_table.push(Some(file.clone()));
@@ -309,6 +319,7 @@ impl TaskControlBlock {
         } else {
             parent_inner.user_stack_top
         };
+        // map sig_trampoline
         let task_control_block = Arc::new(TaskControlBlock {
             tid: tid_handle,
             pid,
@@ -331,6 +342,9 @@ impl TaskControlBlock {
                 user_heapbottom: parent_inner.user_heapbottom,
                 strace_mask: parent_inner.strace_mask,
                 kind_cpu: -2,
+                set_child_tid: 0,
+                clear_child_tid: 0,
+                sig_pending: SigPending::from_another(&parent_inner.sig_pending),
             }),
         });
 
@@ -345,6 +359,9 @@ impl TaskControlBlock {
         if !copy_user_stack {
             trap_cx.set_sp(user_stack_top);
         }
+        TASK_MONITOR
+            .lock()
+            .add(task_control_block.tid(), &task_control_block);
         // return
         task_control_block
         // **** release child PCB

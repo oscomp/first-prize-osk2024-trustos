@@ -23,6 +23,9 @@ const SYSCALL_CLOCK_GETTIME: usize = 113;
 const SYSCALL_SCHED_SETAFFINITY: usize = 122;
 const SYSCALL_SCHED_GETAFFINITY: usize = 123;
 const SYSCALL_SCHED_YIELD: usize = 124;
+const SYSCALL_KILL: usize = 129;
+const SYSCALL_SIGACTION: usize = 134;
+const SYSCALL_SIGRETURN: usize = 139;
 const SYSCALL_TIMES: usize = 153;
 const SYSCALL_GETTIMEOFDAY: usize = 169;
 const SYSCALL_GETPID: usize = 172;
@@ -130,23 +133,19 @@ pub fn sys_fork() -> isize {
 pub fn sys_exec(path: &str) -> isize {
     syscall(SYSCALL_EXECVE, [path.as_ptr() as isize, 0, 0, 0, 0, 0])
 }
-pub fn sys_busy() {
+
+pub fn sys_busyboxsh() -> isize {
     syscall(
         SYSCALL_EXECVE,
         [
             "busybox\0".as_ptr() as isize,
-            [
-                "busybox\0".as_ptr() as *const u8,
-                "ls\0".as_ptr() as *const u8,
-                0 as *const u8,
-            ]
-            .as_ptr() as isize,
-            ["environment test\0".as_ptr() as *const u8, 0 as *const u8].as_ptr() as isize,
+            ["busybox\0".as_ptr() as isize, "sh\0".as_ptr() as isize, 0].as_ptr() as isize,
+            0,
             0,
             0,
             0,
         ],
-    );
+    )
 }
 
 pub fn sys_waitpid(pid: isize, exit_code: *mut i32, options: i32) -> isize {
@@ -297,4 +296,19 @@ pub fn sys_sched_setaffinity(pid: usize, mask: *const usize) -> isize {
 
 pub fn sys_sysinfo(info: &mut [u8]) -> isize {
     syscall(SYSCALL_SYSINFO, [info.as_mut_ptr() as isize, 0, 0, 0, 0, 0])
+}
+
+pub fn sys_sigaction(signum: usize, act: usize, oldact: usize) -> isize {
+    syscall(
+        SYSCALL_SIGACTION,
+        [signum as isize, act as isize, oldact as isize, 0, 0, 0],
+    )
+}
+
+pub fn sys_sigreturn() -> isize {
+    syscall(SYSCALL_SIGRETURN, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn sys_kill(pid: usize, signum: usize) -> isize {
+    syscall(SYSCALL_KILL, [pid as isize, signum as isize, 0, 0, 0, 0])
 }

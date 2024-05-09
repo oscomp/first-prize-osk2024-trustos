@@ -1,10 +1,12 @@
 use super::BlockDevice;
-use crate::config::mm::KERNEL_ADDR_OFFSET;
-use crate::mm::{
-    frame_alloc, frame_dealloc, kernel_token, FrameTracker, KernelAddr, PageTable, PhysAddr,
-    PhysPageNum, StepByOne, VirtAddr,
+use crate::{
+    config::mm::KERNEL_ADDR_OFFSET,
+    mm::{
+        frame_alloc, frame_dealloc, kernel_token, FrameTracker, KernelAddr, PageTable, PhysAddr,
+        PhysPageNum, StepByOne, VirtAddr,
+    },
+    task::{current_task, current_token},
 };
-use crate::task::{current_task, current_user_token};
 use alloc::{sync::Arc, vec::Vec};
 use lazy_static::*;
 use log::{debug, info};
@@ -34,9 +36,9 @@ impl BlockDevice for VirtIOBlock {
             .expect("Error when writing VirtIOBlk");
     }
 
-    fn handle_irq(&self) {
-        todo!()
-    }
+    // fn handle_irq(&self) {
+    //     todo!()
+    // }
 }
 
 impl VirtIOBlock {
@@ -83,12 +85,7 @@ impl Hal for VirtioHal {
     }
 
     fn virt_to_phys(vaddr: usize) -> usize {
-        let token = if current_user_token().is_some() {
-            current_user_token().unwrap()
-        } else {
-            kernel_token()
-        };
-        PageTable::from_token(token)
+        PageTable::from_token(current_token())
             .translate_va(VirtAddr::from(vaddr))
             .unwrap()
             .0
