@@ -28,6 +28,7 @@ pub enum Syscall {
     Getdents64 = 61,
     Read = 63,
     Write = 64,
+    Fstatat = 79,
     Fstat = 80,
     Exit = 93,
     Exitgroup = 94,
@@ -122,6 +123,12 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
         }
         Syscall::Read => sys_read(args[0] as usize, args[1] as *const u8, args[2] as usize),
         Syscall::Write => sys_write(args[0] as usize, args[1] as *const u8, args[2] as usize),
+        Syscall::Fstatat => sys_fstatat(
+            args[0],
+            args[1] as *const u8,
+            args[2] as *const u8,
+            args[3] as usize,
+        ),
         Syscall::Fstat => sys_fstat(args[0] as usize, args[1] as *const u8),
         Syscall::Exit | Syscall::Exitgroup => sys_exit(args[0] as i32),
         Syscall::Settidaddress => sys_settidaddress(args[0] as usize),

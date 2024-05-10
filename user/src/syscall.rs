@@ -16,6 +16,7 @@ const SYSCALL_PIPE2: usize = 59;
 const SYSCALL_GETDENTS64: usize = 61;
 const SYSCALL_READ: usize = 63;
 const SYSCALL_WRITE: usize = 64;
+const SYSCALL_FSTATAT: usize = 79;
 const SYSCALL_FSTAT: usize = 80;
 const SYSCALL_EXIT: usize = 93;
 const SYSCALL_NANOSLEEP: usize = 101;
@@ -311,4 +312,18 @@ pub fn sys_sigreturn() -> isize {
 
 pub fn sys_kill(pid: usize, signum: usize) -> isize {
     syscall(SYSCALL_KILL, [pid as isize, signum as isize, 0, 0, 0, 0])
+}
+
+pub fn sys_fstatat(dirfd: isize, path: &str, kst: &mut [u8], flags: usize) -> isize {
+    syscall(
+        SYSCALL_FSTATAT,
+        [
+            dirfd,
+            path.as_ptr() as isize,
+            kst.as_mut_ptr() as isize,
+            flags as isize,
+            0,
+            0,
+        ],
+    )
 }

@@ -402,3 +402,44 @@ pub fn sys_pipe2(fd: *mut u32) -> isize {
     *translated_refmut(token, unsafe { fd.add(1) }) = write_fd as u32;
     0
 }
+
+pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize) -> isize {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+    let mut path = translated_str(token, path);
+    let mut kst = UserBuffer::new(translated_byte_buffer(
+        token,
+        kst,
+        core::mem::size_of::<Kstat>(),
+    ));
+
+    let mut base_path = inner.current_path.as_str();
+    // 如果path是绝对路径，则dirfd被忽略
+    if is_abs_path(&path) {
+        base_path = "/";
+    } else if dirfd != AT_FDCWD {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table[dirfd as usize] {
+            if let Some(osfile) = osfile.find(path.as_str(), OpenFlags::O_RDONLY) {
+                let mut kstat = Kstat::new();
+                let file = osfile.clone();
+                drop(inner);
+                file.fstat(&mut kstat);
+                kst.write(kstat.as_bytes());
+                return 0;
+            }
+        } else {
+            return -1;
+        }
+    }
+    if let Some(osfile) = open(base_path, path.as_str(), OpenFlags::O_RDONLY) {
+        let mut kstat = Kstat::new();
+        let file = osfile.clone();
+        drop(inner);
+        file.fstat(&mut kstat);
+        kst.write(kstat.as_bytes());
+        return 0;
+    } else {
+        -1
+    }
+}
