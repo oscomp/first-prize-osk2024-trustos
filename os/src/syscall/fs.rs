@@ -323,7 +323,7 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> SyscallRet {
         osfile.remove();
         return Ok(0);
     }
-    Err(SysErrNo::ENOENT)
+    Ok(0)
 }
 
 pub fn sys_umount2(special: *const u8, flags: u32) -> SyscallRet {

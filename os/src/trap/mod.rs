@@ -91,7 +91,7 @@ pub fn trap_handler() {
             cx = current_trap_cx();
             cx.x[10] = match result {
                 Ok(res) => res,
-                Err(errno) => (-(errno as isize)) as usize,
+                Err(errno) => (-1isize) as usize,
             };
             // handle error
             match result {
