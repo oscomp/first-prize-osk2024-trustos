@@ -3,7 +3,7 @@ use crate::mm::{
 };
 use crate::task::{current_task, current_token};
 use crate::timer::{get_time_ms, Clockid, Timespec, Tms};
-use crate::utils::SyscallRet;
+use crate::utils::{SysErrNo, SyscallRet};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -63,8 +63,8 @@ pub fn sys_clock_gettime(clockid: usize, tp: *const u8) -> SyscallRet {
             let time = get_time_ms();
             let mut timespec = Timespec::new(time / 1000, (time % 1000) * 1000000);
             tp.write(timespec.as_bytes());
-            0
+            Ok(0)
         }
-        _ => -1,
+        _ => return Err(SysErrNo::EINVAL),
     }
 }
