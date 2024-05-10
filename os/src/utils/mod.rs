@@ -1,7 +1,8 @@
+mod error;
 mod hart;
-
 use core::arch::asm;
 
+pub use error::*;
 pub use hart::hart_id;
 use log::warn;
 

@@ -7,17 +7,24 @@ use crate::{
     fs::{flush_preload, File, FileClass},
     mm::{flush_tlb, MapPermission, VirtAddr},
     task::current_task,
-    utils::page_round_up,
+    utils::{page_round_up, SysErrNo, SyscallRet},
 };
 
 use super::{MmapFlags, MmapProt};
 
-pub fn sys_mmap(addr: usize, len: usize, prot: u32, flags: u32, fd: usize, off: usize) -> isize {
+pub fn sys_mmap(
+    addr: usize,
+    len: usize,
+    prot: u32,
+    flags: u32,
+    fd: usize,
+    off: usize,
+) -> SyscallRet {
     let map_perm: MapPermission = MmapProt::from_bits(prot).unwrap().into();
     let flags = MmapFlags::from_bits(flags).unwrap();
     // 地址合法性
     if flags.contains(MmapFlags::MAP_FIXED) && addr == 0 {
-        return -1;
+        return Err(SysErrNo::EINVAL);
     }
     debug!(
         "[sys_mmap]: start...  addr {:#x}, len {:#x}, fd {}, offset {:#x}, flags {:?}, prot {:?}",
@@ -27,9 +34,10 @@ pub fn sys_mmap(addr: usize, len: usize, prot: u32, flags: u32, fd: usize, off: 
     let mut task_inner = task.inner_lock();
     let len = page_round_up(len);
     if fd == usize::MAX {
-        return task_inner
+        let rv = task_inner
             .memory_set
-            .mmap(addr, len, map_perm, flags, None, off) as isize;
+            .mmap(addr, len, map_perm, flags, None, off);
+        return Ok(rv);
     }
     // check fd and map_permission
     let file;
@@ -44,26 +52,27 @@ pub fn sys_mmap(addr: usize, len: usize, prot: u32, flags: u32, fd: usize, off: 
             && map_perm.contains(MapPermission::W)
             && !file.writable())
     {
-        return -1;
+        return Err(SysErrNo::EINVAL);
     }
-    task_inner
+    let rv = task_inner
         .memory_set
-        .mmap(addr, len, map_perm, flags, Some(file), off) as isize
+        .mmap(addr, len, map_perm, flags, Some(file), off);
+    Ok(rv)
 }
 
-pub fn sys_munmap(addr: usize, len: usize) -> isize {
+pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
     let len = page_round_up(len);
     task_inner.memory_set.munmap(addr, len);
-    0
+    Ok(0)
 }
 
-pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> isize {
+pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> SyscallRet {
     println!("此调用尚未验证正确性，验证后会删除此条输出！");
     if (addr % PAGE_SIZE != 0) || (len % PAGE_SIZE != 0) {
         println!("sys_mprotect: not align");
-        return -1;
+        return Err(SysErrNo::EINVAL);
     }
     let map_perm: MapPermission = MmapProt::from_bits(prot).unwrap().into();
     let task = current_task().unwrap();
@@ -78,5 +87,5 @@ pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> isize {
         memory_set.page_table.set_flags(start_vpn.into(), pte_flags);
     }
     flush_tlb();
-    0
+    Ok(0)
 }

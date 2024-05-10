@@ -4,11 +4,16 @@ use crate::{
     mm::{translated_ref, translated_refmut},
     signal::{add_signal, restore_frame, KSigAction, SigAction, SigSet, SIG_MAX_NUM},
     task::{current_task, TASK_MONITOR},
+    utils::{SysErrNo, SyscallRet},
 };
 
-pub fn sys_rt_sigaction(signo: usize, act: *const SigAction, old_act: *mut SigAction) -> isize {
+pub fn sys_rt_sigaction(
+    signo: usize,
+    act: *const SigAction,
+    old_act: *mut SigAction,
+) -> SyscallRet {
     if signo > SIG_MAX_NUM {
-        return -1;
+        return Err(SysErrNo::EINVAL);
     }
     debug!("[sys_rt_sigaction] start");
     let task = current_task().unwrap();
@@ -30,19 +35,19 @@ pub fn sys_rt_sigaction(signo: usize, act: *const SigAction, old_act: *mut SigAc
         };
         task_inner.sig_pending.actions[signo] = new_sig;
     }
-    0
+    Ok(0)
 }
 
-pub fn sys_rt_sigreturn() -> isize {
+pub fn sys_rt_sigreturn() -> SyscallRet {
     restore_frame();
-    0
+    Ok(0)
 }
 
 // pid == 0 then sig is sent to every process in the process group of current process
 /// pid == -1 then sig is sent to every process which current process has permission ( except init proc )
 /// pid > 0 then sig is sent to the process with the ID specified by pid
 /// pid < -1 the sig is sent to every process in process group whose ID is -pid
-pub fn sys_kill(pid: usize, signo: usize) -> isize {
+pub fn sys_kill(pid: usize, signo: usize) -> SyscallRet {
     match pid {
         _ if pid > 0 => {
             // 目前没有线程组,发送给单进程
@@ -54,5 +59,5 @@ pub fn sys_kill(pid: usize, signo: usize) -> isize {
             unimplemented!()
         }
     }
-    0
+    Ok(0)
 }

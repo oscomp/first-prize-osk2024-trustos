@@ -10,6 +10,7 @@ use crate::{
         suspend_current_and_run_next,
     },
     timer::{get_time_ms, Timespec, Tms},
+    utils::{SysErrNo, SyscallRet},
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
@@ -26,45 +27,45 @@ pub fn sys_exit(exit_code: i32) -> ! {
     panic!("Unreachable in sys_exit!");
 }
 
-pub fn sys_sched_yield() -> isize {
+pub fn sys_sched_yield() -> SyscallRet {
     suspend_current_and_run_next();
-    0
+    Ok(0)
 }
 
-pub fn sys_getpid() -> isize {
-    current_task().unwrap().pid() as isize
+pub fn sys_getpid() -> SyscallRet {
+    Ok(current_task().unwrap().pid())
 }
 
-pub fn sys_getppid() -> isize {
-    current_task().unwrap().ppid() as isize
+pub fn sys_getppid() -> SyscallRet {
+    Ok(current_task().unwrap().ppid())
 }
 
-pub fn sys_getuid() -> isize {
-    0 // root user
+pub fn sys_getuid() -> SyscallRet {
+    Ok(0) // root user
 }
 
-pub fn sys_geteuid() -> isize {
-    0 // root user
+pub fn sys_geteuid() -> SyscallRet {
+    Ok(0) // root user
 }
 
-pub fn sys_getgid() -> isize {
-    0 // root group
+pub fn sys_getgid() -> SyscallRet {
+    Ok(0) // root group
 }
 
-pub fn sys_getegid() -> isize {
-    0 // root group
+pub fn sys_getegid() -> SyscallRet {
+    Ok(0) // root group
 }
-pub fn sys_gettid() -> isize {
-    current_task().unwrap().tid() as isize
+pub fn sys_gettid() -> SyscallRet {
+    Ok(current_task().unwrap().tid())
 }
-pub fn sys_settidaddress(tidptr: usize) -> isize {
+pub fn sys_settidaddress(tidptr: usize) -> SyscallRet {
     current_task().unwrap().inner_lock().clear_child_tid = tidptr;
     sys_gettid()
 }
 
-pub fn sys_strace(mask: usize) -> isize {
+pub fn sys_strace(mask: usize) -> SyscallRet {
     current_task().unwrap().inner_lock().strace_mask = mask;
-    0
+    Ok(0)
 }
 
 /// void (*fn)(void* arg) 参数通过栈传递,如果stack_ptr!=0, fn=0(stack),arg=8(stack)
@@ -74,7 +75,7 @@ pub fn sys_clone(
     parent_tid_ptr: usize,
     tls_ptr: usize,
     chilren_tid_ptr: usize,
-) -> isize {
+) -> SyscallRet {
     let flags = CloneFlags::from_bits(flags as u32).unwrap();
     debug!("[sys_clone] flags {:?}", flags);
 
@@ -100,13 +101,13 @@ pub fn sys_clone(
         trap_cx.x[10] = 0;
         // add new task to scheduler
         add_task(new_task);
-        new_pid as isize
+        Ok(new_pid)
     } else {
         unimplemented!();
     }
 }
 
-pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usize) -> isize {
+pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
 
@@ -151,13 +152,13 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
         task.exec(elf_data, &argv_vec, &mut env);
         let task_inner = task.inner_lock();
         task_inner.memory_set.activate();
-        0
+        Ok(0)
     } else {
-        -1
+        Err(SysErrNo::ENOENT)
     }
 }
 /// 等待子进程状态发生变化,即子进程终止或被信号停止或被信号挂起
-pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
+pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
     // TODO(ZMY) 加入信号和进程组支持
     debug!("sys_wait4 enter");
     assert!(options == 0, "not support options yet");
@@ -172,7 +173,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
             .any(|p| pid == -1 || pid as usize == p.pid())
         {
             debug!("[sys_wait4] no child process");
-            return -1;
+            return Err(SysErrNo::ECHILD);
             // ---- release current PCB
         }
         let pair = inner.children.iter().enumerate().find(|(_, p)| {
@@ -206,7 +207,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
                 );
                 *translated_refmut(inner.memory_set.token(), wstatus) = exit_code << 8;
             }
-            return found_pid as isize;
+            return Ok(found_pid);
         } else {
             drop(inner);
             drop(task);
@@ -215,7 +216,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> isize {
     }
 }
 
-pub fn sys_nanosleep(req: *const u8, _rem: *const u8) -> isize {
+pub fn sys_nanosleep(req: *const u8, _rem: *const u8) -> SyscallRet {
     let token = current_token();
     let req = translated_ref(token, req as *const Timespec);
 
@@ -230,7 +231,7 @@ pub fn sys_nanosleep(req: *const u8, _rem: *const u8) -> isize {
             suspend_current_and_run_next();
         }
     }
-    0
+    Ok(0)
 }
 
 pub struct Utsname {
@@ -241,7 +242,7 @@ pub struct Utsname {
     machine: [u8; 65],
     domainname: [u8; 65],
 }
-pub fn sys_uname(buf: *mut u8) -> isize {
+pub fn sys_uname(buf: *mut u8) -> SyscallRet {
     fn str2u8(s: &str) -> [u8; 65] {
         let mut b = [0; 65];
         b[0..s.len()].copy_from_slice(s.as_bytes());
@@ -264,19 +265,19 @@ pub fn sys_uname(buf: *mut u8) -> isize {
             size_of::<Utsname>(),
         )
     });
-    0
+    Ok(0)
 }
 
-pub fn sys_brk(brk_addr: usize) -> isize {
+pub fn sys_brk(brk_addr: usize) -> SyscallRet {
     let former_addr = current_task().unwrap().growproc(0);
     if brk_addr == 0 {
-        return former_addr as isize;
+        return Ok(former_addr);
     }
     let grow_size: isize = (brk_addr - former_addr) as isize;
-    current_task().unwrap().growproc(grow_size) as isize
+    Ok(current_task().unwrap().growproc(grow_size))
 }
 
-pub fn sys_sched_setaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> isize {
+pub fn sys_sched_setaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     let token = inner.user_token();
@@ -285,18 +286,18 @@ pub fn sys_sched_setaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> isi
     //尝试匹配当前进程
     if pid == 0 || task.pid() == pid {
         inner.kind_cpu = mask as isize;
-        return 0;
+        return Ok(0);
     }
     //尝试匹配其其他进程
     if let Some(found_task) = pid2task(pid) {
         found_task.inner_lock().kind_cpu = mask as isize;
-        return 0;
+        return Ok(0);
     }
     //匹配不到
-    -1
+    Err(SysErrNo::EINVAL)
 }
 
-pub fn sys_sched_getaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> isize {
+pub fn sys_sched_getaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     let token = inner.user_token();
@@ -304,15 +305,15 @@ pub fn sys_sched_getaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> isi
     //尝试匹配当前进程
     if pid == 0 || task.pid() == pid {
         *translated_refmut(token, mask as *mut usize) = inner.kind_cpu as usize;
-        return 0;
+        return Ok(0);
     }
     //尝试匹配其其他进程
     if let Some(found_task) = pid2task(pid) {
         *translated_refmut(token, mask as *mut usize) = found_task.inner_lock().kind_cpu as usize;
-        return 0;
+        return Ok(0);
     }
     //匹配不到
-    -1
+    Err(SysErrNo::EINVAL)
 }
 
 pub struct Sysinfo {
@@ -335,7 +336,7 @@ impl Sysinfo {
     }
 }
 
-pub fn sys_sysinfo(info: *const u8) -> isize {
+pub fn sys_sysinfo(info: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     let token = inner.user_token();
@@ -343,5 +344,5 @@ pub fn sys_sysinfo(info: *const u8) -> isize {
 
     let ourinfo = Sysinfo::new(get_time_ms() / 1000, 1 << 56, task_num());
     info.write(ourinfo.as_bytes());
-    0
+    Ok(0)
 }
