@@ -375,21 +375,22 @@ impl TaskControlBlock {
     }
     ///修改数据段大小，懒分配
     pub fn growproc(&self, grow_size: isize) -> usize {
+        let mut inner = self.inner_lock();
         if grow_size > 0 {
-            let growed_addr: usize = self.inner.lock().user_heappoint + grow_size as usize;
-            let limit = self.inner.lock().user_heapbottom + USER_HEAP_SIZE;
+            let growed_addr: usize = inner.user_heappoint + grow_size as usize;
+            let limit = inner.user_heapbottom + USER_HEAP_SIZE;
             if growed_addr > limit {
                 panic!("heap overflow at {:#X}!", growed_addr);
             }
-            self.inner.lock().user_heappoint = growed_addr;
+            inner.user_heappoint = growed_addr;
         } else {
-            let shrinked_addr: usize = self.inner.lock().user_heappoint + grow_size as usize;
-            if shrinked_addr < self.inner.lock().user_heapbottom {
+            let shrinked_addr: usize = inner.user_heappoint + grow_size as usize;
+            if shrinked_addr < inner.user_heapbottom {
                 panic!("heap downflow at {:#X}!", shrinked_addr);
             }
-            self.inner.lock().user_heappoint = shrinked_addr;
+            inner.user_heappoint = shrinked_addr;
         }
-        return self.inner.lock().user_heappoint;
+        inner.user_heappoint
     }
 }
 

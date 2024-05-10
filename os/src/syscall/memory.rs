@@ -67,7 +67,8 @@ pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> isize {
     }
     let map_perm: MapPermission = MmapProt::from_bits(prot).unwrap().into();
     let task = current_task().unwrap();
-    let memory_set = &mut task.inner_lock().memory_set;
+    let mut inner = task.inner_lock();
+    let memory_set = &mut inner.memory_set;
     let start_vpn = addr / PAGE_SIZE;
     let end_vpn = (addr + len) / PAGE_SIZE;
     let page_num = len / PAGE_SIZE;
