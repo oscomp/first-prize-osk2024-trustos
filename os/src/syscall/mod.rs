@@ -80,24 +80,24 @@ use process::*;
 use signal::*;
 use time::*;
 
-use crate::{console::print, sbi::shutdown, signal::SigAction};
+use crate::{console::print, sbi::shutdown, signal::SigAction, utils::SyscallRet};
 use log::{debug, info};
 /// handle syscall exception with `syscall_id` and other arguments
-pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
+pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
     // debug!("syscall:{}", syscall_id);
     let id = syscall_id;
     let syscall_id: Syscall = Syscall::from(syscall_id);
     debug!("syscall:{:?}", syscall_id);
     match syscall_id {
-        Syscall::Getcwd => sys_getcwd(args[0] as *const u8, args[1] as usize),
-        Syscall::Dup => sys_dup(args[0] as usize),
-        Syscall::Dup3 => sys_dup3(args[0] as usize, args[1] as usize),
-        Syscall::Mkdirat => sys_mkdirat(args[0], args[1] as *const u8, args[2] as usize),
-        Syscall::Unlinkat => sys_unlinkat(args[0], args[1] as *const u8, args[2] as u32),
+        Syscall::Getcwd => sys_getcwd(args[0] as *const u8, args[1]),
+        Syscall::Dup => sys_dup(args[0]),
+        Syscall::Dup3 => sys_dup3(args[0], args[1]),
+        Syscall::Mkdirat => sys_mkdirat(args[0] as isize, args[1] as *const u8, args[2]),
+        Syscall::Unlinkat => sys_unlinkat(args[0] as isize, args[1] as *const u8, args[2] as u32),
         Syscall::Linkat => sys_linkat(
-            args[0],
+            args[0] as isize,
             args[1] as *const u8,
-            args[2],
+            args[2] as isize,
             args[3] as *const u8,
             args[4] as u32,
         ),
@@ -111,12 +111,12 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
         ),
         Syscall::Chdir => sys_chdir(args[0] as *const u8),
         Syscall::Openat => sys_openat(
-            args[0],
+            args[0] as isize,
             args[1] as *const u8,
             args[2] as u32,
-            args[3] as usize,
+            args[3],
         ),
-        Syscall::Close => sys_close(args[0] as usize),
+        Syscall::Close => sys_close(args[0]),
         Syscall::Pipe2 => sys_pipe2(args[0] as *mut u32),
         Syscall::Getdents64 => {
             sys_getdents64(args[0] as usize, args[1] as *const u8, args[2] as usize)
@@ -124,26 +124,22 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
         Syscall::Read => sys_read(args[0] as usize, args[1] as *const u8, args[2] as usize),
         Syscall::Write => sys_write(args[0] as usize, args[1] as *const u8, args[2] as usize),
         Syscall::Fstatat => sys_fstatat(
-            args[0],
+            args[0] as isize,
             args[1] as *const u8,
             args[2] as *const u8,
             args[3] as usize,
         ),
         Syscall::Fstat => sys_fstat(args[0] as usize, args[1] as *const u8),
         Syscall::Exit | Syscall::Exitgroup => sys_exit(args[0] as i32),
-        Syscall::Settidaddress => sys_settidaddress(args[0] as usize),
+        Syscall::Settidaddress => sys_settidaddress(args[0]),
         Syscall::Nanosleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
-        Syscall::ClockGettime => sys_clock_gettime(args[0] as usize, args[1] as *const u8),
-        Syscall::SchedSetaffinity => {
-            sys_sched_setaffinity(args[0] as usize, args[1] as usize, args[2] as usize)
-        }
-        Syscall::SchedGetaffinity => {
-            sys_sched_getaffinity(args[0] as usize, args[1] as usize, args[2] as usize)
-        }
+        Syscall::ClockGettime => sys_clock_gettime(args[0], args[1] as *const u8),
+        Syscall::SchedSetaffinity => sys_sched_setaffinity(args[0], args[1], args[2]),
+        Syscall::SchedGetaffinity => sys_sched_getaffinity(args[0], args[1], args[2]),
         Syscall::SchedYield => sys_sched_yield(),
-        Syscall::SigKill => sys_kill(args[0] as usize, args[0] as usize),
+        Syscall::SigKill => sys_kill(args[0], args[0]),
         Syscall::Sigaction => sys_rt_sigaction(
-            args[0] as usize,
+            args[0],
             args[1] as *const SigAction,
             args[2] as *mut SigAction,
         ),
@@ -159,32 +155,26 @@ pub fn syscall(syscall_id: usize, args: [isize; 6]) -> isize {
         Syscall::Getegid => sys_getegid(),
         Syscall::Gettid => sys_gettid(),
         Syscall::Sysinfo => sys_sysinfo(args[0] as *const u8),
-        Syscall::Clone => sys_clone(
-            args[0] as usize,
-            args[1] as usize,
-            args[2] as usize,
-            args[3] as usize,
-            args[4] as usize,
-        ),
-        Syscall::Brk => sys_brk(args[0] as usize),
+        Syscall::Clone => sys_clone(args[0], args[1], args[2], args[3], args[4]),
+        Syscall::Brk => sys_brk(args[0]),
         Syscall::Execve => sys_execve(
             args[0] as *const u8,
             args[1] as *const usize,
             args[2] as *const usize,
         ),
         Syscall::Mmap => sys_mmap(
-            args[0] as usize,
-            args[1] as usize,
+            args[0],
+            args[1],
             args[2] as u32,
             args[3] as u32,
-            args[4] as usize,
-            args[5] as usize,
+            args[4],
+            args[5],
         ),
-        Syscall::Munmap => sys_munmap(args[0] as usize, args[1] as usize),
-        Syscall::Mprotect => sys_mprotect(args[0] as usize, args[1] as usize, args[2] as u32),
+        Syscall::Munmap => sys_munmap(args[0], args[1]),
+        Syscall::Mprotect => sys_mprotect(args[0], args[1], args[2] as u32),
         Syscall::Wait4 => sys_wait4(args[0] as isize, args[1] as *mut i32, args[2] as i32),
         Syscall::Shutdown => shutdown(false),
-        Syscall::Strace => sys_strace(args[0] as usize),
+        Syscall::Strace => sys_strace(args[0]),
         _ => panic!("Unsupported syscall_id: {}", id),
     }
 }

@@ -7,6 +7,7 @@ use crate::{
     },
     mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer},
     task::{current_task, current_token},
+    utils::{SysErrNo, SyscallRet},
 };
 use alloc::{
     string::{String, ToString},
@@ -18,7 +19,7 @@ pub const AT_FDCWD: isize = -100;
 pub const FD_LIMIT: usize = 128;
 pub const AT_REMOVEDIR: u32 = 0x200;
 
-pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
+pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
@@ -44,7 +45,7 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     }
 }
 
-pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
+pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
@@ -69,7 +70,7 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
     }
 }
 
-pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> isize {
+pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> SyscallRet {
     if path as usize == 0 {
         return -1;
     }
@@ -103,20 +104,20 @@ pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> isize
     ret
 }
 
-pub fn sys_close(fd: usize) -> isize {
+pub fn sys_close(fd: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     if fd >= inner.fd_table.len() {
-        return -1;
+        return Err(SysErrNo::EINVAL);
     }
     if inner.fd_table[fd].is_none() {
-        return -1;
+        return Err(SysErrNo::ENOENT);
     }
     inner.fd_table[fd].take();
-    0
+    Ok(0)
 }
 
-pub fn sys_getcwd(buf: *const u8, size: usize) -> isize {
+pub fn sys_getcwd(buf: *const u8, size: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     let token = inner.user_token();
@@ -126,7 +127,7 @@ pub fn sys_getcwd(buf: *const u8, size: usize) -> isize {
     buf as isize
 }
 
-pub fn sys_dup(fd: usize) -> isize {
+pub fn sys_dup(fd: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
 
@@ -143,7 +144,7 @@ pub fn sys_dup(fd: usize) -> isize {
     fd_new as isize
 }
 
-pub fn sys_dup3(old: usize, new: usize) -> isize {
+pub fn sys_dup3(old: usize, new: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
 
@@ -168,7 +169,7 @@ pub fn sys_dup3(old: usize, new: usize) -> isize {
     new as isize
 }
 
-pub fn sys_chdir(path: *const u8) -> isize {
+pub fn sys_chdir(path: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     let token = inner.user_token();
@@ -200,7 +201,7 @@ pub fn sys_chdir(path: *const u8) -> isize {
     }
 }
 
-pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: usize) -> isize {
+pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
@@ -236,7 +237,7 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: usize) -> isize {
     ret
 }
 
-pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> isize {
+pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     let token = inner.user_token();
@@ -288,10 +289,10 @@ pub fn sys_linkat(
     newfd: isize,
     newpath: *const u8,
     _flags: u32,
-) -> isize {
+) -> SyscallRet {
     todo!();
 }
-pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
+pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
@@ -323,7 +324,7 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> isize {
     return -1;
 }
 
-pub fn sys_umount2(special: *const u8, flags: u32) -> isize {
+pub fn sys_umount2(special: *const u8, flags: u32) -> SyscallRet {
     let token = current_token();
     let special = translated_str(token, special);
 
@@ -336,7 +337,7 @@ pub fn sys_mount(
     ftype: *const u8,
     flags: u32,
     data: *const u8,
-) -> isize {
+) -> SyscallRet {
     let token = current_token();
     let special = translated_str(token, special);
     let dir = translated_str(token, dir);
@@ -351,7 +352,7 @@ pub fn sys_mount(
     }
 }
 
-pub fn sys_fstat(fd: usize, kst: *const u8) -> isize {
+pub fn sys_fstat(fd: usize, kst: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     let token = inner.user_token();
@@ -381,17 +382,10 @@ pub fn sys_fstat(fd: usize, kst: *const u8) -> isize {
     }
 }
 
-pub fn sys_pipe2(fd: *mut u32) -> isize {
+pub fn sys_pipe2(fd: *mut u32) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     let token = inner.user_token();
-
-    assert!(
-        token == inner.user_token(),
-        "token={:#x},user_token={:#x}",
-        token,
-        inner.user_token()
-    );
 
     let read_fd = inner.alloc_fd();
     let (read_pipe, write_pipe) = make_pipe();
@@ -400,10 +394,10 @@ pub fn sys_pipe2(fd: *mut u32) -> isize {
     inner.fd_table[write_fd] = Some(FileClass::Abs(write_pipe));
     *translated_refmut(token, fd) = read_fd as u32;
     *translated_refmut(token, unsafe { fd.add(1) }) = write_fd as u32;
-    0
+    Ok(0)
 }
 
-pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize) -> isize {
+pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     let token = inner.user_token();

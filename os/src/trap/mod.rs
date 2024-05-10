@@ -24,7 +24,7 @@ use crate::{
     utils::{backtrace, hart_id},
 };
 use core::arch::{asm, global_asm};
-use log::{debug, info};
+use log::{debug, info, warn};
 use riscv::register::{
     mtvec::TrapMode,
     scause::{self, Exception, Interrupt, Trap},
@@ -85,18 +85,20 @@ pub fn trap_handler() {
             // get system call return value
             let result = syscall(
                 cx.x[17],
-                [
-                    cx.x[10] as isize,
-                    cx.x[11] as isize,
-                    cx.x[12] as isize,
-                    cx.x[13] as isize,
-                    cx.x[14] as isize,
-                    cx.x[15] as isize,
-                ],
+                [cx.x[10], cx.x[11], cx.x[12], cx.x[13], cx.x[14], cx.x[15]],
             );
             // cx is changed during sys_exec, so we have to call it again
             cx = current_trap_cx();
-            cx.x[10] = result as usize;
+            cx.x[10] = match result {
+                Ok(res) => res,
+                Err(errno) => (-(errno as isize)) as usize,
+            };
+            // handle error
+            match result {
+                Ok(ret) => debug!("[syscall ret] {:?} ret = {}", syscall_id, ret),
+                Err(errno) => warn!("[syscall ret] {:?} ret = {}", syscall_id, errno.str()),
+            }
+            // strace
             if strace_mask != 0 && (strace_mask == usize::MAX || strace_mask == cx.x[17]) {
                 info!(
                     "[strace] syscall {} {:?} -> {}",
