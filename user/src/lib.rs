@@ -411,3 +411,16 @@ impl Statfs {
 pub fn statfs(statfs: &mut Statfs) -> isize {
     sys_statfs(statfs.as_bytes_mut())
 }
+
+bitflags! {
+    pub struct FaccessatMode: u32 {
+        const F_OK = 0;
+        const X_OK = 1<<0;
+        const W_OK = 1<<1;
+        const R_OK = 1<<2;
+    }
+}
+
+pub fn faccessat(dirfd: isize, path: &str, mode: FaccessatMode, flags: usize) -> isize {
+    sys_faccessat(dirfd, path, mode.bits, flags)
+}

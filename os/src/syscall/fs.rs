@@ -439,7 +439,6 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
     if let Some(osfile) = open(base_path, path.as_str(), OpenFlags::O_RDONLY) {
         let mut kstat = Kstat::new();
         let file = osfile.clone();
-        drop(inner);
         file.fstat(&mut kstat);
         kst.write(kstat.as_bytes());
         return Ok(0);
@@ -457,4 +456,82 @@ pub fn sys_statfs(_path: *const u8, statfs: *const u8) -> SyscallRet {
     let ourstatfs = Statfs::new();
     statfs.write(ourstatfs.as_bytes());
     Ok(0)
+}
+
+bitflags! {
+    pub struct FaccessatMode: u32 {
+        const F_OK = 0;
+        const X_OK = 1<<0;
+        const W_OK = 1<<1;
+        const R_OK = 1<<2;
+    }
+}
+
+pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) -> SyscallRet {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+    let mut path = translated_str(token, path);
+    let mode = FaccessatMode::from_bits(mode).unwrap();
+
+    let mut base_path = inner.current_path.as_str();
+    // 如果path是绝对路径，则dirfd被忽略
+    if is_abs_path(&path) {
+        base_path = "/";
+    } else if dirfd != AT_FDCWD {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table[dirfd as usize] {
+            if let Some(osfile) = osfile.find(path.as_str(), OpenFlags::O_RDWR) {
+                if mode.contains(FaccessatMode::X_OK) {
+                    println!("This file can be searched!");
+                }
+                if mode.contains(FaccessatMode::W_OK) {
+                    if osfile.writable() {
+                        println!("This file can be written!");
+                    } else {
+                        println!("This file can not be written!");
+                    }
+                }
+                if mode.contains(FaccessatMode::R_OK) {
+                    if osfile.readable() {
+                        println!("This file can be read!");
+                    } else {
+                        println!("This file can not be read!");
+                    }
+                }
+                return Ok(0);
+            }
+        } else {
+            if mode.contains(FaccessatMode::F_OK) {
+                println!("This file doesn't exist!");
+                return Ok(0);
+            }
+            return Err(SysErrNo::EBADF);
+        }
+    }
+    if let Some(osfile) = open(base_path, path.as_str(), OpenFlags::O_RDWR) {
+        if mode.contains(FaccessatMode::X_OK) {
+            println!("This file can be searched!");
+        }
+        if mode.contains(FaccessatMode::W_OK) {
+            if osfile.writable() {
+                println!("This file can be written!");
+            } else {
+                println!("This file can not be written!");
+            }
+        }
+        if mode.contains(FaccessatMode::R_OK) {
+            if osfile.readable() {
+                println!("This file can be read!");
+            } else {
+                println!("This file can not be read!");
+            }
+        }
+        return Ok(0);
+    } else {
+        if mode.contains(FaccessatMode::F_OK) {
+            println!("This file doesn't exist!");
+            return Ok(0);
+        }
+        Err(SysErrNo::ENOENT)
+    }
 }

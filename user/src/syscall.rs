@@ -10,6 +10,7 @@ const SYSCALL_LINKAT: usize = 37;
 const SYSCALL_UMOUNT2: usize = 39;
 const SYSCALL_MOUNT: usize = 40;
 const SYSCALL_STATFS: usize = 43;
+const SYSCALL_FACCESSAT: usize = 48;
 const SYSCALL_CHDIR: usize = 49;
 const SYSCALL_OPENAT: usize = 56;
 const SYSCALL_CLOSE: usize = 57;
@@ -333,5 +334,19 @@ pub fn sys_statfs(statfs: &mut [u8]) -> isize {
     syscall(
         SYSCALL_STATFS,
         [0, statfs.as_mut_ptr() as isize, 0, 0, 0, 0],
+    )
+}
+
+pub fn sys_faccessat(dirfd: isize, path: &str, mode: u32, flags: usize) -> isize {
+    syscall(
+        SYSCALL_FACCESSAT,
+        [
+            dirfd,
+            path.as_ptr() as isize,
+            mode as isize,
+            flags as isize,
+            0,
+            0,
+        ],
     )
 }
