@@ -343,3 +343,71 @@ impl Kstat {
 pub fn fstatat(dirfd: isize, path: &str, kst: &mut Kstat, flags: usize) -> isize {
     sys_fstatat(dirfd, path, kst.as_bytes_mut(), flags)
 }
+
+const FAT_SUPER_MAGIC: i64 = 0x4006;
+
+#[derive(Debug)]
+pub struct Statfs {
+    f_type: i64,       // Type of filesystem
+    f_bsize: i64,      // Optimal transfer block size
+    f_blocks: i64,     // Total data blocks in filesystem
+    f_bfree: i64,      // Free blocks in filesystem
+    f_bavail: i64,     // Free blocks available to unprivileged user
+    f_files: i64,      // Total inodes in filesystem
+    f_ffree: i64,      // Free inodes in filesystem
+    f_fsid: i64,       // Filesystem ID
+    f_name_len: i64,   // Maximum length of filenames
+    f_frsize: i64,     // Fragment size
+    f_flags: i64,      // Mount flags of filesystem
+    f_spare: [i64; 4], // Padding bytes
+}
+
+impl Statfs {
+    pub fn new() -> Self {
+        Self {
+            f_type: FAT_SUPER_MAGIC,
+            f_bsize: 512,
+            f_blocks: 1048576,
+            f_bfree: 1048576,
+            f_bavail: 0,
+            f_files: 131072,
+            f_ffree: 131072,
+            f_fsid: 0,
+            f_name_len: 255,
+            f_frsize: 0,
+            f_flags: 0,
+            f_spare: [0; 4],
+        }
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            f_type: 0,
+            f_bsize: 0,
+            f_blocks: 0,
+            f_bfree: 0,
+            f_bavail: 0,
+            f_files: 0,
+            f_ffree: 0,
+            f_fsid: 0,
+            f_name_len: 0,
+            f_frsize: 0,
+            f_flags: 0,
+            f_spare: [0; 4],
+        }
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        let size = core::mem::size_of::<Self>();
+        unsafe { core::slice::from_raw_parts(self as *const _ as *const u8, size) }
+    }
+
+    pub fn as_bytes_mut(&mut self) -> &mut [u8] {
+        let size = core::mem::size_of::<Self>();
+        unsafe { core::slice::from_raw_parts_mut(self as *mut _ as *mut u8, size) }
+    }
+}
+
+pub fn statfs(statfs: &mut Statfs) -> isize {
+    sys_statfs(statfs.as_bytes_mut())
+}

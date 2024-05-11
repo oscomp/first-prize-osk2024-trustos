@@ -35,7 +35,7 @@ pub use dirent::Dirent;
 pub use inode::{is_abs_path, list_apps, open, open_file, OSInode, OpenFlags, ROOT_INODE};
 pub use mount::MNT_TABLE;
 pub use pipe::{make_pipe, Pipe};
-pub use stat::Kstat;
+pub use stat::{Kstat, Statfs};
 pub use stdio::{Stdin, Stdout};
 core::arch::global_asm!(include_str!("preload.S"));
 

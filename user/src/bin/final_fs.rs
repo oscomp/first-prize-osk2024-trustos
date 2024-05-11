@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use user_lib::{fstatat, mkdir, Kstat};
+use user_lib::{fstatat, mkdir, statfs, Kstat, Statfs};
 
 #[macro_use]
 extern crate user_lib;
@@ -15,8 +15,17 @@ fn test_fstatat() {
     println!("-----------------end fstatat-----------------");
 }
 
+fn test_statfs() {
+    println!("-----------------test statfs-----------------");
+    let mut stat = Statfs::empty();
+    let result = statfs(&mut stat);
+    println!("result is {} and ourstatfs is {:?}", result, stat);
+    println!("-----------------end statfs-----------------");
+}
+
 #[no_mangle]
 pub fn main() -> i32 {
     test_fstatat();
+    test_statfs();
     0
 }

@@ -3,7 +3,7 @@ use crate::{
     console::print,
     fs::{
         is_abs_path, make_pipe, open, open_file, remove_vfile_idx, Dirent, File, FileClass, Kstat,
-        OpenFlags, MNT_TABLE,
+        OpenFlags, Statfs, MNT_TABLE,
     },
     mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer},
     task::{current_task, current_token},
@@ -13,6 +13,7 @@ use alloc::{
     string::{String, ToString},
     sync::Arc,
 };
+use core::mem::size_of;
 use log::info;
 
 pub const AT_FDCWD: isize = -100;
@@ -268,7 +269,7 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
 
         let mut all_len: usize = 0;
         let mut dirent = Dirent::new();
-        let dirent_size = core::mem::size_of::<Dirent>();
+        let dirent_size = size_of::<Dirent>();
         loop {
             if len < dirent_size + all_len {
                 return Ok(all_len);
@@ -374,11 +375,7 @@ pub fn sys_fstat(fd: usize, kst: *const u8) -> SyscallRet {
     let mut inner = task.inner_lock();
     let token = inner.user_token();
 
-    let mut kst = UserBuffer::new(translated_byte_buffer(
-        token,
-        kst,
-        core::mem::size_of::<Kstat>(),
-    ));
+    let mut kst = UserBuffer::new(translated_byte_buffer(token, kst, size_of::<Kstat>()));
 
     if fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
@@ -419,11 +416,7 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
     let mut inner = task.inner_lock();
     let token = inner.user_token();
     let mut path = translated_str(token, path);
-    let mut kst = UserBuffer::new(translated_byte_buffer(
-        token,
-        kst,
-        core::mem::size_of::<Kstat>(),
-    ));
+    let mut kst = UserBuffer::new(translated_byte_buffer(token, kst, size_of::<Kstat>()));
 
     let mut base_path = inner.current_path.as_str();
     // 如果path是绝对路径，则dirfd被忽略
@@ -453,4 +446,15 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
     } else {
         Err(SysErrNo::ENOENT)
     }
+}
+
+pub fn sys_statfs(_path: *const u8, statfs: *const u8) -> SyscallRet {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+    let mut statfs = UserBuffer::new(translated_byte_buffer(token, statfs, size_of::<Statfs>()));
+
+    let ourstatfs = Statfs::new();
+    statfs.write(ourstatfs.as_bytes());
+    Ok(0)
 }

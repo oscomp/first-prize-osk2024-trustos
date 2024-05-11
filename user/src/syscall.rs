@@ -9,6 +9,7 @@ const SYSCALL_UNLINKAT: usize = 35;
 const SYSCALL_LINKAT: usize = 37;
 const SYSCALL_UMOUNT2: usize = 39;
 const SYSCALL_MOUNT: usize = 40;
+const SYSCALL_STATFS: usize = 43;
 const SYSCALL_CHDIR: usize = 49;
 const SYSCALL_OPENAT: usize = 56;
 const SYSCALL_CLOSE: usize = 57;
@@ -325,5 +326,12 @@ pub fn sys_fstatat(dirfd: isize, path: &str, kst: &mut [u8], flags: usize) -> is
             0,
             0,
         ],
+    )
+}
+
+pub fn sys_statfs(statfs: &mut [u8]) -> isize {
+    syscall(
+        SYSCALL_STATFS,
+        [0, statfs.as_mut_ptr() as isize, 0, 0, 0, 0],
     )
 }
