@@ -5,8 +5,9 @@ use crate::{
         is_abs_path, make_pipe, open, open_file, remove_vfile_idx, Dirent, File, FileClass, Kstat,
         OpenFlags, Statfs, MNT_TABLE,
     },
-    mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer},
+    mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer},
     task::{current_task, current_token},
+    timer::{get_time_ms, Timespec},
     utils::{SysErrNo, SyscallRet},
 };
 use alloc::{
@@ -387,7 +388,6 @@ pub fn sys_fstat(fd: usize, kst: *const u8) -> SyscallRet {
     if let Some(FileClass::File(file)) = &inner.fd_table[fd] {
         let mut kstat = Kstat::new();
         let file = file.clone();
-        drop(inner);
         file.fstat(&mut kstat);
         kst.write(kstat.as_bytes());
         Ok(0)
@@ -427,7 +427,6 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
             if let Some(osfile) = osfile.find(path.as_str(), OpenFlags::O_RDONLY) {
                 let mut kstat = Kstat::new();
                 let file = osfile.clone();
-                drop(inner);
                 file.fstat(&mut kstat);
                 kst.write(kstat.as_bytes());
                 return Ok(0);
@@ -532,6 +531,106 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
             println!("This file doesn't exist!");
             return Ok(0);
         }
+        Err(SysErrNo::ENOENT)
+    }
+}
+
+const UTIME_NOW: usize = (1 << 30) - 1;
+const UTIME_OMIT: usize = (1 << 30) - 2;
+
+pub fn sys_utimensat(dirfd: isize, path: *const u8, times: *const u8, _flags: usize) -> SyscallRet {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+    let mut path = translated_str(token, path);
+
+    let nowtime = (get_time_ms() / 1000) as u64;
+
+    let mut base_path = inner.current_path.as_str();
+    // 如果path是绝对路径，则dirfd被忽略
+    if is_abs_path(&path) {
+        base_path = "/";
+    } else if dirfd != AT_FDCWD {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table[dirfd as usize] {
+            if let Some(osfile) = osfile.find(path.as_str(), OpenFlags::O_RDONLY) {
+                if times as usize == 0 {
+                    osfile.set_accessed_time(nowtime);
+                    osfile.set_modification_time(nowtime);
+                } else {
+                    let atime = translated_ref(token, times as *const Timespec);
+                    let mtime = translated_ref(token, unsafe { times.add(1) as *const Timespec });
+                    match atime.tv_nsec {
+                        UTIME_NOW => osfile.set_accessed_time(nowtime),
+                        UTIME_OMIT => (),
+                        _ => osfile.set_accessed_time(atime.tv_sec as u64),
+                    };
+                    match mtime.tv_nsec {
+                        UTIME_NOW => osfile.set_modification_time(nowtime),
+                        UTIME_OMIT => (),
+                        _ => osfile.set_modification_time(mtime.tv_sec as u64),
+                    };
+                }
+                return Ok(0);
+            }
+        } else {
+            return Err(SysErrNo::EBADF);
+        }
+    }
+    if let Some(osfile) = open(base_path, path.as_str(), OpenFlags::O_RDONLY) {
+        if times as usize == 0 {
+            osfile.set_accessed_time(nowtime);
+            osfile.set_modification_time(nowtime);
+        } else {
+            let atime = translated_ref(token, times as *const Timespec);
+            let mtime = translated_ref(token, unsafe { times.add(1) as *const Timespec });
+            match atime.tv_nsec {
+                UTIME_NOW => osfile.set_accessed_time(nowtime),
+                UTIME_OMIT => (),
+                _ => osfile.set_accessed_time(atime.tv_sec as u64),
+            };
+            match mtime.tv_nsec {
+                UTIME_NOW => osfile.set_modification_time(nowtime),
+                UTIME_OMIT => (),
+                _ => osfile.set_modification_time(mtime.tv_sec as u64),
+            };
+        }
+        return Ok(0);
+    } else {
+        Err(SysErrNo::ENOENT)
+    }
+}
+
+const SEEK_SET: usize = 0;
+const SEEK_CUR: usize = 1;
+const SEEK_END: usize = 2;
+
+pub fn sys_lseek(fd: usize, offset: isize, whence: usize) -> SyscallRet {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+
+    if fd >= inner.fd_table.len() {
+        return Err(SysErrNo::EINVAL);
+    }
+    if inner.fd_table[fd].is_none() {
+        return Err(SysErrNo::EBADF);
+    }
+
+    if let Some(FileClass::File(file)) = &inner.fd_table[fd] {
+        let offset = match whence {
+            SEEK_SET => offset,
+            SEEK_CUR => file.offset() as isize + offset,
+            SEEK_END => file.file_size() as isize + offset,
+            _ => {
+                return Err(SysErrNo::EINVAL);
+            }
+        };
+        if offset < 0 {
+            return Err(SysErrNo::EINVAL);
+        }
+        file.set_offset(offset as usize);
+        Ok(0)
+    } else {
         Err(SysErrNo::ENOENT)
     }
 }

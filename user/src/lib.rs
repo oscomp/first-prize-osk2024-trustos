@@ -424,3 +424,6 @@ bitflags! {
 pub fn faccessat(dirfd: isize, path: &str, mode: FaccessatMode, flags: usize) -> isize {
     sys_faccessat(dirfd, path, mode.bits, flags)
 }
+pub fn lseek(fd: usize, offset: isize, whence: usize) -> isize {
+    sys_lseek(fd, offset, whence)
+}

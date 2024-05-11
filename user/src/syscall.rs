@@ -16,10 +16,12 @@ const SYSCALL_OPENAT: usize = 56;
 const SYSCALL_CLOSE: usize = 57;
 const SYSCALL_PIPE2: usize = 59;
 const SYSCALL_GETDENTS64: usize = 61;
+const SYSCALL_LSEEK: usize = 62;
 const SYSCALL_READ: usize = 63;
 const SYSCALL_WRITE: usize = 64;
 const SYSCALL_FSTATAT: usize = 79;
 const SYSCALL_FSTAT: usize = 80;
+const SYSCALL_UTIMENSAT: usize = 88;
 const SYSCALL_EXIT: usize = 93;
 const SYSCALL_NANOSLEEP: usize = 101;
 const SYSCALL_CLOCK_GETTIME: usize = 113;
@@ -348,5 +350,26 @@ pub fn sys_faccessat(dirfd: isize, path: &str, mode: u32, flags: usize) -> isize
             0,
             0,
         ],
+    )
+}
+
+pub fn sys_utimensat(dirfd: isize, path: &str, times: &[u8], flags: usize) -> isize {
+    syscall(
+        SYSCALL_UTIMENSAT,
+        [
+            dirfd,
+            path.as_ptr() as isize,
+            times.as_ptr() as isize,
+            flags as isize,
+            0,
+            0,
+        ],
+    )
+}
+
+pub fn sys_lseek(fd: usize, offset: isize, whence: usize) -> isize {
+    syscall(
+        SYSCALL_LSEEK,
+        [fd as isize, offset as isize, whence as isize, 0, 0, 0],
     )
 }

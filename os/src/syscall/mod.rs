@@ -28,10 +28,12 @@ pub enum Syscall {
     Close = 57,
     Pipe2 = 59,
     Getdents64 = 61,
+    Lseek = 62,
     Read = 63,
     Write = 64,
     Fstatat = 79,
     Fstat = 80,
+    Utimensat = 88,
     Exit = 93,
     Exitgroup = 94,
     Settidaddress = 96,
@@ -130,6 +132,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Getdents64 => {
             sys_getdents64(args[0] as usize, args[1] as *const u8, args[2] as usize)
         }
+        Syscall::Lseek => sys_lseek(args[0] as usize, args[1] as isize, args[2] as usize),
         Syscall::Read => sys_read(args[0] as usize, args[1] as *const u8, args[2] as usize),
         Syscall::Write => sys_write(args[0] as usize, args[1] as *const u8, args[2] as usize),
         Syscall::Fstatat => sys_fstatat(
@@ -139,6 +142,12 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[3] as usize,
         ),
         Syscall::Fstat => sys_fstat(args[0] as usize, args[1] as *const u8),
+        Syscall::Utimensat => sys_utimensat(
+            args[0] as isize,
+            args[1] as *const u8,
+            args[2] as *const u8,
+            args[3] as usize,
+        ),
         Syscall::Exit | Syscall::Exitgroup => sys_exit(args[0] as i32),
         Syscall::Settidaddress => sys_settidaddress(args[0]),
         Syscall::Nanosleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),

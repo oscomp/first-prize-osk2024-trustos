@@ -1,7 +1,9 @@
 #![no_std]
 #![no_main]
 
-use user_lib::{faccessat, fstatat, mkdir, statfs, FaccessatMode, Kstat, Statfs};
+use user_lib::{
+    faccessat, fstatat, lseek, mkdir, openat, statfs, FaccessatMode, Kstat, OpenFlags, Statfs,
+};
 
 #[macro_use]
 extern crate user_lib;
@@ -36,10 +38,22 @@ fn test_faccessat() {
     println!("-----------------end faccessat-----------------");
 }
 
+fn test_lseek() {
+    println!("-----------------test lseek-----------------");
+    mkdir(-100, "test_lseek\0", 0666);
+    let fd = openat(-100, "test_lseek\0", OpenFlags::O_RDWR, 0);
+    let result1 = lseek(fd as usize, -100, 2);
+    let result2 = lseek(fd as usize, 100, 1);
+    println!("result1 is {} which should be -1", result1);
+    println!("result2 is {} which should be 0", result2);
+    println!("-----------------end lseek-----------------");
+}
+
 #[no_mangle]
 pub fn main() -> i32 {
     test_fstatat();
     test_statfs();
     test_faccessat();
+    test_lseek();
     0
 }

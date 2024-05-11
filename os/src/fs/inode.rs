@@ -110,6 +110,18 @@ impl OSInode {
     pub fn offset(&self) -> usize {
         self.inner.lock().offset
     }
+    pub fn set_accessed_time(&self, atime: u64) {
+        self.inode.set_accessed_time(atime);
+    }
+    pub fn set_modification_time(&self, mtime: u64) {
+        self.inode.set_modification_time(mtime);
+    }
+    pub fn accessed_time(&self) -> u64 {
+        self.inode.accessed_time()
+    }
+    pub fn modification_time(&self) -> u64 {
+        self.inode.modification_time()
+    }
 }
 
 lazy_static! {
