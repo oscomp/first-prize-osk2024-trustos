@@ -21,6 +21,17 @@ pub const AT_FDCWD: isize = -100;
 pub const FD_LIMIT: usize = 128;
 pub const AT_REMOVEDIR: u32 = 0x200;
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct Iovec {
+    /// user space buf starting address
+    pub iov_base: usize,
+    /// number of bytes to transfer
+    pub iov_len: usize,
+}
+unsafe impl Send for Iovec {}
+unsafe impl Sync for Iovec {}
+
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -44,7 +55,7 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
         let ret = file.write(UserBuffer::new(translated_byte_buffer(token, buf, len)));
         Ok(ret)
     } else {
-        Err(SysErrNo::EINVAL)
+        Err(SysErrNo::EBADF)
     }
 }
 
@@ -70,7 +81,88 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
         let ret = file.read(UserBuffer::new(translated_byte_buffer(token, buf, len)));
         Ok(ret)
     } else {
-        Err(SysErrNo::EINVAL)
+        Err(SysErrNo::EBADF)
+    }
+}
+pub fn sys_writev(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
+    let task = current_task().unwrap();
+    let inner = task.inner_lock();
+    let token = inner.user_token();
+
+    if fd >= inner.fd_table.len() {
+        return Err(SysErrNo::EINVAL);
+    }
+    if let Some(file) = &inner.fd_table[fd] {
+        let file = match file {
+            FileClass::File(f) => f.clone(),
+            FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
+        };
+        if !file.writable() {
+            return Err(SysErrNo::EACCES);
+        }
+        // release current task TCB manually to avoid multi-borrow
+        drop(inner);
+        drop(task);
+        let mut ret: usize = 0;
+        let iovec_size = core::mem::size_of::<Iovec>();
+
+        for i in 0..iovcnt {
+            // current iovec pointer
+            let current = unsafe { iov.add(iovec_size * i) };
+            let iovinfo = *translated_refmut(token, current as *mut Iovec);
+            let buf = UserBuffer::new(translated_byte_buffer(
+                token,
+                iovinfo.iov_base as *mut u8,
+                iovinfo.iov_len,
+            ));
+            file.set_offset(ret);
+            let write_ret = file.write(buf);
+            ret += write_ret as usize;
+        }
+        Ok(ret)
+    } else {
+        Err(SysErrNo::EBADF)
+    }
+}
+
+pub fn sys_readv(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
+    let task = current_task().unwrap();
+    let inner = task.inner_lock();
+    let token = inner.user_token();
+
+    if fd >= inner.fd_table.len() {
+        return Err(SysErrNo::EINVAL);
+    }
+    if let Some(file) = &inner.fd_table[fd] {
+        let file = match file {
+            FileClass::File(f) => f.clone(),
+            FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
+        };
+        if !file.readable() {
+            return Err(SysErrNo::EACCES);
+        }
+        // release current task TCB manually to avoid multi-borrow
+        drop(inner);
+        drop(task);
+        let mut ret: usize = 0;
+        let iovec_size = core::mem::size_of::<Iovec>();
+
+        for i in 0..iovcnt {
+            // current iovec pointer
+            let current = unsafe { iov.add(iovec_size * i) };
+            let iovinfo = *translated_refmut(token, current as *mut Iovec);
+            let buf = UserBuffer::new(translated_byte_buffer(
+                token,
+                iovinfo.iov_base as *mut u8,
+                iovinfo.iov_len,
+            ));
+            file.set_offset(ret);
+            let write_ret = file.read(buf);
+            ret += write_ret as usize;
+        }
+        Ok(ret)
+    } else {
+        Err(SysErrNo::EBADF)
     }
 }
 
