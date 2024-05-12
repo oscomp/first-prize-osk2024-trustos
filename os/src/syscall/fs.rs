@@ -42,7 +42,7 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
         let ret = file.write(UserBuffer::new(translated_byte_buffer(token, buf, len)));
         Ok(ret)
     } else {
-        Err(SysErrNo::ENOENT)
+        Err(SysErrNo::EINVAL)
     }
 }
 
@@ -68,7 +68,7 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
         let ret = file.read(UserBuffer::new(translated_byte_buffer(token, buf, len)));
         Ok(ret)
     } else {
-        Err(SysErrNo::EBADF)
+        Err(SysErrNo::EINVAL)
     }
 }
 
@@ -113,7 +113,7 @@ pub fn sys_close(fd: usize) -> SyscallRet {
         return Err(SysErrNo::EINVAL);
     }
     if inner.fd_table[fd].is_none() {
-        return Err(SysErrNo::EBADF);
+        return Err(SysErrNo::EINVAL);
     }
     inner.fd_table[fd].take();
     Ok(0)
@@ -137,7 +137,7 @@ pub fn sys_dup(fd: usize) -> SyscallRet {
         return Err(SysErrNo::EINVAL);
     }
     if inner.fd_table[fd].is_none() {
-        return Err(SysErrNo::EBADF);
+        return Err(SysErrNo::EINVAL);
     }
 
     let inode = inner.fd_table[fd].as_ref().unwrap().clone();
@@ -154,10 +154,10 @@ pub fn sys_dup3(old: usize, new: usize) -> SyscallRet {
         return Err(SysErrNo::EINVAL);
     }
     if inner.fd_table[old].is_none() {
-        return Err(SysErrNo::EBADF);
+        return Err(SysErrNo::EINVAL);
     }
     if new >= FD_LIMIT {
-        return Err(SysErrNo::EINVAL);
+        return Err(SysErrNo::EBADF);
     }
 
     if (new >= inner.fd_table.len()) {
@@ -250,7 +250,7 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
         return Err(SysErrNo::EINVAL);
     }
     if inner.fd_table[fd].is_none() {
-        return Err(SysErrNo::EBADF);
+        return Err(SysErrNo::EINVAL);
     }
 
     if let Some(f) = &inner.fd_table[fd] {
@@ -281,7 +281,7 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
             all_len += dirent_size;
         }
     } else {
-        Err(SysErrNo::EBADF)
+        Err(SysErrNo::EINVAL)
     }
 }
 
@@ -311,7 +311,7 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> SyscallRet {
                 return Ok(0);
             }
         }
-        return Err(SysErrNo::EBADF);
+        return Err(SysErrNo::EINVAL);
     }
     if let Some(osfile) = open(base_path, path.as_str(), OpenFlags::empty()) {
         let abs_path = if is_abs_path(&path) {
@@ -384,7 +384,7 @@ pub fn sys_fstat(fd: usize, kst: *const u8) -> SyscallRet {
         return Err(SysErrNo::EINVAL);
     }
     if inner.fd_table[fd].is_none() {
-        return Err(SysErrNo::EBADF);
+        return Err(SysErrNo::EINVAL);
     }
 
     if let Some(FileClass::File(file)) = &inner.fd_table[fd] {
@@ -440,7 +440,7 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
                 return Ok(0);
             }
         } else {
-            return Err(SysErrNo::EBADF);
+            return Err(SysErrNo::EINVAL);
         }
     }
     if let Some(osfile) = open(base_path, path.as_str(), OpenFlags::O_RDONLY) {
