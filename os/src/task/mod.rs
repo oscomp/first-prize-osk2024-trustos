@@ -130,7 +130,6 @@ lazy_static! {
         let inode = open_file("initproc", OpenFlags::O_RDONLY).unwrap();
         let elf_data = unsafe {inode.read_as_elf()};
         let mut res=TaskControlBlock::new(elf_data);
-        res.inner_lock().file=Some(inode.clone());
         res
     });
 }
