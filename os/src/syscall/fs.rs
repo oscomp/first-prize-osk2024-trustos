@@ -504,7 +504,7 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
                 println!("This file doesn't exist!");
                 return Ok(0);
             }
-            Err(SysErrNo::EINVAL);
+            return Err(SysErrNo::EINVAL);
         }
     }
     if let Some(osfile) = open(base_path, path.as_str(), OpenFlags::O_RDWR) {
