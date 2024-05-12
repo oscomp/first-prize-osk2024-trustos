@@ -32,16 +32,15 @@ pub fn sys_mmap(
     );
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
+    let mut memory_set = task_inner.memory_set.inner_lock();
     let len = page_round_up(len);
     if fd == usize::MAX {
-        let rv = task_inner
-            .memory_set
-            .mmap(addr, len, map_perm, flags, None, off);
+        let rv = memory_set.mmap(addr, len, map_perm, flags, None, off);
         return Ok(rv);
     }
     // check fd and map_permission
     let file;
-    if let Some(FileClass::File(f)) = &task_inner.fd_table[fd] {
+    if let Some(FileClass::File(f)) = &task_inner.fd_table.get(fd) {
         file = f.clone();
     } else {
         unreachable!();
@@ -54,9 +53,7 @@ pub fn sys_mmap(
     {
         return Err(SysErrNo::EINVAL);
     }
-    let rv = task_inner
-        .memory_set
-        .mmap(addr, len, map_perm, flags, Some(file), off);
+    let rv = memory_set.mmap(addr, len, map_perm, flags, Some(file), off);
     Ok(rv)
 }
 
@@ -64,7 +61,7 @@ pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
     let len = page_round_up(len);
-    task_inner.memory_set.munmap(addr, len);
+    task_inner.memory_set.inner_lock().munmap(addr, len);
     Ok(0)
 }
 
@@ -84,7 +81,10 @@ pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> SyscallRet {
     //修改各段的mappermission
     let pte_flags = memory_set.mprotect(start_vpn.into(), end_vpn.into(), map_perm);
     for i in 0..page_num {
-        memory_set.page_table.set_flags(start_vpn.into(), pte_flags);
+        memory_set
+            .inner_lock()
+            .page_table
+            .set_flags(start_vpn.into(), pte_flags);
     }
     flush_tlb();
     Ok(0)

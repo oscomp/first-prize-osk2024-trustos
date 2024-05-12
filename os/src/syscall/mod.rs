@@ -179,8 +179,6 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Settidaddress => sys_settidaddress(args[0]),
         Syscall::Nanosleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
         Syscall::ClockGettime => sys_clock_gettime(args[0], args[1] as *const u8),
-        Syscall::SchedSetaffinity => sys_sched_setaffinity(args[0], args[1], args[2]),
-        Syscall::SchedGetaffinity => sys_sched_getaffinity(args[0], args[1], args[2]),
         Syscall::SchedYield => sys_sched_yield(),
         Syscall::SigKill => sys_kill(args[0], args[0]),
         Syscall::Sigaction => sys_rt_sigaction(

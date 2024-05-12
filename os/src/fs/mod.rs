@@ -8,9 +8,78 @@ mod stdio;
 
 use crate::mm::UserBuffer;
 use alloc::string::String;
+use fat32_fs::FSInfoInner;
 pub use fsidx::*;
 
 pub type RFile = dyn File + Send + Sync;
+pub type FdTableInner = Vec<Option<FileClass>>;
+
+pub struct FdTable {
+    inner: Mutex<FdTableInner>,
+}
+
+impl FdTable {
+    pub fn new(fd_table: FdTableInner) -> Self {
+        Self {
+            inner: Mutex::new(fd_table),
+        }
+    }
+    pub fn alloc_fd(&self) -> usize {
+        let mut fd_table = self.inner.lock();
+        if let Some(fd) = (0..fd_table.len()).find(|fd| fd_table[*fd].is_none()) {
+            fd
+        } else {
+            fd_table.push(None);
+            fd_table.len() - 1
+        }
+    }
+    pub fn inner_lock(&self) -> MutexGuard<FdTableInner> {
+        self.inner.lock()
+    }
+    pub fn len(&self) -> usize {
+        self.inner.lock().len()
+    }
+    pub fn push(&self, value: Option<FileClass>) {
+        self.inner.lock().push(value);
+    }
+    pub fn get(&self, fd: usize) -> Option<FileClass> {
+        let inner = self.inner.lock();
+        inner[fd].clone()
+    }
+    pub fn set(&self, fd: usize, value: Option<FileClass>) {
+        let mut inner = self.inner.lock();
+        inner[fd] = value
+    }
+    pub fn take(&self, fd: usize) -> Option<FileClass> {
+        let mut inner = self.inner.lock();
+        inner[fd].take()
+    }
+}
+
+pub struct FsInfoInner {
+    pub cwd: String,
+}
+
+pub struct FsInfo {
+    inner: Mutex<FsInfoInner>,
+}
+
+impl FsInfo {
+    pub fn new(cwd: String) -> Self {
+        Self {
+            inner: Mutex::new(FsInfoInner { cwd }),
+        }
+    }
+    pub fn get_cwd(&self) -> String {
+        self.inner.lock().cwd.clone()
+    }
+    pub fn set_cwd(&self, cwd: String) {
+        self.inner.lock().cwd = cwd;
+    }
+    pub fn inner_lock(&self) -> MutexGuard<FsInfoInner> {
+        self.inner.lock()
+    }
+}
 
 /// 枚举类型，分为普通文件和抽象文件
 /// 普通文件File，特点是支持更多类型的操作，包含seek, offset等
@@ -35,6 +104,7 @@ pub use dirent::Dirent;
 pub use inode::{is_abs_path, list_apps, open, open_file, OSInode, OpenFlags, ROOT_INODE};
 pub use mount::MNT_TABLE;
 pub use pipe::{make_pipe, Pipe};
+use spin::{Mutex, MutexGuard};
 pub use stat::{Kstat, Statfs};
 pub use stdio::{Stdin, Stdout};
 core::arch::global_asm!(include_str!("preload.S"));

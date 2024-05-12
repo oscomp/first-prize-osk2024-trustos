@@ -26,7 +26,7 @@ use riscv::register::{
     satp,
     scause::{Exception, Trap},
 };
-use spin::Mutex;
+use spin::{Mutex, MutexGuard};
 
 extern "C" {
     fn stext();
@@ -43,8 +43,8 @@ extern "C" {
 
 lazy_static! {
     /// a memory set instance through lazy_static! managing kernel space
-    pub static ref KERNEL_SPACE: Mutex<MemorySet> =
-         Mutex::new(MemorySet::new_kernel()) ;
+    pub static ref KERNEL_SPACE: Mutex<MemorySetInner> =
+         Mutex::new(MemorySetInner::new_kernel()) ;
 }
 lazy_static! {
     /// 全0页，bss段初始指向这里
@@ -55,14 +55,131 @@ lazy_static! {
 pub fn kernel_token() -> usize {
     KERNEL_SPACE.lock().token()
 }
+
+pub struct MemorySet {
+    inner: Mutex<MemorySetInner>,
+}
+
+impl MemorySet {
+    pub fn new(memory_set: MemorySetInner) -> Self {
+        Self {
+            inner: Mutex::new(memory_set),
+        }
+    }
+    pub fn inner_lock(&self) -> MutexGuard<MemorySetInner> {
+        self.inner.lock()
+    }
+    // 对MemorySetInner封装
+    #[inline(always)]
+    pub fn token(&self) -> usize {
+        self.inner.lock().token()
+    }
+    #[inline(always)]
+    pub fn insert_framed_area(
+        &mut self,
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+        permission: MapPermission,
+        area_type: MapAreaType,
+    ) {
+        self.inner
+            .lock()
+            .insert_framed_area(start_va, end_va, permission, area_type)
+    }
+    #[inline(always)]
+    pub fn insert_given_framed_area(
+        &mut self,
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+        permission: MapPermission,
+        area_type: MapAreaType,
+        frames: Vec<Arc<FrameTracker>>,
+    ) {
+        self.inner
+            .lock()
+            .insert_given_framed_area(start_va, end_va, permission, area_type, frames)
+    }
+    #[inline(always)]
+    pub fn kernel_stack_frame(&self) -> Vec<Arc<FrameTracker>> {
+        self.inner.lock().kernel_stack_frame()
+    }
+    #[inline(always)]
+    pub fn remove_area_with_start_vpn(&self, start_vpn: VirtPageNum) {
+        self.inner.lock().remove_area_with_start_vpn(start_vpn)
+    }
+    #[inline(always)]
+    pub fn mmap(
+        &mut self,
+        addr: usize,
+        len: usize,
+        map_perm: MapPermission,
+        flags: MmapFlags,
+        file: Option<Arc<OSInode>>,
+        off: usize,
+    ) -> usize {
+        self.inner
+            .lock()
+            .mmap(addr, len, map_perm, flags, file, off)
+    }
+    #[inline(always)]
+    pub fn munmap(&self, addr: usize, len: usize) {
+        self.inner.lock().munmap(addr, len)
+    }
+    #[inline(always)]
+    pub fn lazy_page_fault(&self, vpn: VirtPageNum, scause: Trap) -> bool {
+        self.inner.lock().lazy_page_fault(vpn, scause)
+    }
+    #[inline(always)]
+    pub fn cow_page_fault(&self, vpn: VirtPageNum, scause: Trap) -> bool {
+        self.inner.lock().cow_page_fault(vpn, scause)
+    }
+    #[inline(always)]
+    pub fn mprotect(
+        &self,
+        start_vpn: VirtPageNum,
+        end_vpn: VirtPageNum,
+        map_perm: MapPermission,
+    ) -> PTEFlags {
+        self.inner.lock().mprotect(start_vpn, end_vpn, map_perm)
+    }
+    #[inline(always)]
+    fn push(&self, mut map_area: MapArea, data: Option<&[u8]>) {
+        self.inner.lock().push(map_area, data)
+    }
+    #[inline(always)]
+    fn push_with_offset(&self, mut map_area: MapArea, offset: usize, data: Option<&[u8]>) {
+        self.inner.lock().push_with_offset(map_area, offset, data)
+    }
+    #[inline(always)]
+    fn push_with_given_frames(&self, mut map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
+        self.inner.lock().push_with_given_frames(map_area, frames)
+    }
+    #[inline(always)]
+    fn push_lazily(&self, map_area: MapArea) {
+        self.inner.lock().push_lazily(map_area)
+    }
+    #[inline(always)]
+    pub fn activate(&self) {
+        self.inner.lock().activate();
+    }
+    #[inline(always)]
+    pub fn recycle_data_pages(&self) {
+        self.inner.lock().recycle_data_pages();
+    }
+    #[inline(always)]
+    pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
+        self.inner.lock().translate(vpn)
+    }
+}
+
 /// memory set structure, controls virtual-memory space
 /// 地址空间
-pub struct MemorySet {
+pub struct MemorySetInner {
     pub page_table: PageTable,
     areas: Vec<MapArea>,
 }
 
-impl MemorySet {
+impl MemorySetInner {
     ///Create an empty `MemorySet`
     pub fn new_bare() -> Self {
         Self {
@@ -643,10 +760,10 @@ impl MemorySet {
         )
     }
     ///Clone a same `MemorySet`
-    pub fn from_existed_user(user_space: &mut MemorySet, copy_user_stack: bool) -> MemorySet {
+    pub fn from_existed_user(user_space: &Arc<MemorySet>, copy_user_stack: bool) -> MemorySetInner {
         let mut memory_set = Self::new_from_kernel();
         // copy data sections/trap_context/user_stack
-        for area in user_space.areas.iter() {
+        for area in user_space.inner_lock().areas.iter() {
             // don't copy kernel stack
             if area.area_type == MapAreaType::Stack && !area.map_perm.contains(MapPermission::U) {
                 continue;
@@ -665,7 +782,7 @@ impl MemorySet {
                 new_area.data_frames = area.data_frames.clone();
                 for (vpn, frame) in area.data_frames.iter() {
                     let vpn = *vpn;
-                    let pte = user_space.page_table.translate(vpn).unwrap();
+                    let pte = user_space.inner_lock().page_table.translate(vpn).unwrap();
                     let mut pte_flags = pte.flags();
                     let src_ppn = pte.ppn();
                     //说明有共享页，不需要修改为写时复制
@@ -677,8 +794,8 @@ impl MemorySet {
                     //下面两步不合起来是因为flags只有8位，全都用掉了
                     //所以Cow位没有放到flags里面
                     pte_flags &= !PTEFlags::W;
-                    user_space.page_table.set_flags(vpn, pte_flags);
-                    user_space.page_table.set_cow(vpn);
+                    user_space.inner_lock().page_table.set_flags(vpn, pte_flags);
+                    user_space.inner_lock().page_table.set_cow(vpn);
                     // 设置新的pagetable
                     memory_set.page_table.map(vpn, src_ppn, pte_flags);
                     memory_set.page_table.set_cow(vpn);
@@ -686,18 +803,18 @@ impl MemorySet {
                 memory_set.push_lazily(new_area);
                 continue;
             }
-            let mut page_table = &mut user_space.page_table;
+            // let mut page_table = &mut user_space.page_table;
             ///ELF是cow
             if area.area_type == MapAreaType::Elf {
                 for vpn in area.vpn_range {
-                    let pte = page_table.translate(vpn).unwrap();
+                    let pte = user_space.inner_lock().page_table.translate(vpn).unwrap();
                     let pte_flags = pte.flags() & !PTEFlags::W;
                     let src_ppn = pte.ppn();
                     //清空可写位，设置COW位
                     //下面两步不合起来是因为flags只有8位，全都用掉了
                     //所以Cow位没有放到flags里面
-                    page_table.set_flags(vpn, pte_flags);
-                    page_table.set_cow(vpn);
+                    user_space.inner_lock().page_table.set_flags(vpn, pte_flags);
+                    user_space.inner_lock().page_table.set_cow(vpn);
                     // 设置新的pagetable
                     memory_set.page_table.map(vpn, src_ppn, pte_flags);
                     memory_set.page_table.set_cow(vpn);

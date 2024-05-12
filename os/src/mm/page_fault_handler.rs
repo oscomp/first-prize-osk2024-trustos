@@ -11,7 +11,7 @@ use crate::{
 };
 
 use super::{
-    memory_set, translated_byte_buffer, MapArea, MemorySet, PTEFlags, PageTable, UserBuffer,
+    memory_set, translated_byte_buffer, MapArea, MemorySetInner, PTEFlags, PageTable, UserBuffer,
     VirtAddr, GROUP_SHARE,
 };
 

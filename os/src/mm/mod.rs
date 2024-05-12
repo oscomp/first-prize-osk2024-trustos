@@ -18,7 +18,7 @@ pub use address::{KernelAddr, PhysAddr, PhysPageNum, StepByOne, VPNRange, VirtAd
 pub use frame_allocator::{frame_alloc, frame_dealloc, FrameTracker};
 pub use group::*;
 pub use map_area::{MapArea, MapAreaType, MapPermission, MapType};
-pub use memory_set::{kernel_token, remap_test, MemorySet, KERNEL_SPACE};
+pub use memory_set::{kernel_token, remap_test, MemorySet, MemorySetInner, KERNEL_SPACE};
 pub use page_fault_handler::*;
 pub use page_table::{
     flush_tlb, translated_byte_buffer, translated_ref, translated_refmut, translated_str, PTEFlags,

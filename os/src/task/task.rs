@@ -6,8 +6,11 @@ use super::{
 };
 use crate::{
     config::mm::{USER_HEAP_SIZE, USER_TRAP_CONTEXT},
-    fs::{File, FileClass, OSInode, Stdin, Stdout},
-    mm::{translated_refmut, MapAreaType, MapPermission, MemorySet, PhysPageNum, VirtAddr},
+    fs::{FdTable, FdTableInner, File, FileClass, FsInfo, OSInode, Stdin, Stdout},
+    mm::{
+        translated_refmut, MapAreaType, MapPermission, MemorySet, MemorySetInner, PhysPageNum,
+        VirtAddr,
+    },
     signal::SigPending,
     task::TASK_MONITOR,
     timer::TimeData,
@@ -32,24 +35,22 @@ pub struct TaskControlBlock {
     // mutable
     inner: Mutex<TaskControlBlockInner>,
 }
-type FdTable = Vec<Option<FileClass>>;
 
 pub struct TaskControlBlockInner {
     pub trap_cx_ppn: PhysPageNum,
     pub user_stack_top: usize, // exclusive
     pub task_cx: TaskContext,
     pub task_status: TaskStatus,
-    pub memory_set: MemorySet,
+    pub memory_set: Arc<MemorySet>,
     pub parent: Option<Weak<TaskControlBlock>>,
     pub children: Vec<Arc<TaskControlBlock>>,
     pub exit_code: i32,
-    pub fd_table: FdTable,
-    pub current_path: String,
+    pub fd_table: Arc<FdTable>,
+    pub fs_info: Arc<FsInfo>,
     pub time_data: TimeData,
     pub user_heappoint: usize,
     pub user_heapbottom: usize,
     pub strace_mask: usize,
-    pub kind_cpu: isize, //亲和cpu，初始值为-2
     pub set_child_tid: usize,
     pub clear_child_tid: usize,
     pub sig_pending: SigPending,
@@ -68,14 +69,9 @@ impl TaskControlBlockInner {
     pub fn is_zombie(&self) -> bool {
         self.status() == TaskStatus::Zombie
     }
-    pub fn alloc_fd(&mut self) -> usize {
-        if let Some(fd) = (0..self.fd_table.len()).find(|fd| self.fd_table[*fd].is_none()) {
-            fd
-        } else {
-            self.fd_table.push(None);
-            self.fd_table.len() - 1
-        }
-    }
+    // pub fn alloc_fd(&mut self) -> usize {
+    //     self.fd_table.alloc_fd()
+    // }
 }
 
 impl TaskControlBlock {
@@ -95,7 +91,7 @@ impl TaskControlBlock {
     pub fn new(elf_data: &[u8]) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (mut memory_set, user_sp, user_heapbottom, entry_point, mut auxv) =
-            MemorySet::from_elf(elf_data);
+            MemorySetInner::from_elf(elf_data);
         debug!("entry point: {:x}", entry_point);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
@@ -122,24 +118,23 @@ impl TaskControlBlock {
                 user_stack_top: user_sp,
                 task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                 task_status: TaskStatus::Ready,
-                memory_set,
+                memory_set: Arc::new(MemorySet::new(memory_set)),
                 parent: None,
                 children: Vec::new(),
                 exit_code: 0,
-                fd_table: vec![
+                fd_table: Arc::new(FdTable::new(vec![
                     // 0 -> stdin
                     Some(FileClass::Abs(Arc::new(Stdin))),
                     // 1 -> stdout
                     Some(FileClass::Abs(Arc::new(Stdout))),
                     // 2 -> stderr
                     Some(FileClass::Abs(Arc::new(Stdout))),
-                ],
-                current_path: String::from("/"),
+                ])),
+                fs_info: Arc::new(FsInfo::new(String::from("/"))),
                 time_data: TimeData::new(),
                 user_heappoint: user_heapbottom,
                 user_heapbottom,
                 strace_mask: 0,
-                kind_cpu: -2,
                 set_child_tid: 0,
                 clear_child_tid: 0,
                 sig_pending: SigPending::new(),
@@ -160,7 +155,7 @@ impl TaskControlBlock {
         //用户栈高地址到低地址：环境变量字符串/参数字符串/aux辅助向量/环境变量地址数组/参数地址数组/参数数量
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (mut memory_set, mut user_sp, user_hp, entry_point, mut auxv) =
-            MemorySet::from_elf(elf_data);
+            MemorySetInner::from_elf(elf_data);
         // println!("user_sp:{:#X}  argv:{:?}", user_sp, argv);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
@@ -264,7 +259,7 @@ impl TaskControlBlock {
             inner.memory_set.kernel_stack_frame(),
         );
         // substitute memory_set
-        inner.memory_set = memory_set;
+        inner.memory_set = Arc::new(MemorySet::new(memory_set));
         // update trap_cx ppn
         inner.trap_cx_ppn = trap_cx_ppn;
         let trap_cx = TrapContext::app_init_context(
@@ -287,7 +282,7 @@ impl TaskControlBlock {
         let copy_user_stack = stack.is_none();
         // copy user space(include trap context)
         let mut memory_set =
-            MemorySet::from_existed_user(&mut parent_inner.memory_set, copy_user_stack);
+            MemorySetInner::from_existed_user(&parent_inner.memory_set, copy_user_stack);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
             .unwrap()
@@ -304,8 +299,8 @@ impl TaskControlBlock {
             MapAreaType::Stack,
         );
         // copy fd table
-        let mut new_fd_table: FdTable = Vec::new();
-        for fd in parent_inner.fd_table.iter() {
+        let mut new_fd_table: FdTableInner = Vec::new();
+        for fd in parent_inner.fd_table.inner_lock().iter() {
             if let Some(file) = fd {
                 new_fd_table.push(Some(file.clone()));
             } else {
@@ -328,17 +323,16 @@ impl TaskControlBlock {
                 user_stack_top,
                 task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                 task_status: TaskStatus::Ready,
-                memory_set,
+                memory_set: Arc::new(MemorySet::new(memory_set)),
                 parent: Some(Arc::downgrade(self)),
                 children: Vec::new(),
                 exit_code: 0,
-                fd_table: new_fd_table,
-                current_path: parent_inner.current_path.clone(),
+                fd_table: Arc::new(FdTable::new(new_fd_table)),
+                fs_info: parent_inner.fs_info.clone(),
                 time_data: TimeData::new(),
                 user_heappoint: parent_inner.user_heappoint,
                 user_heapbottom: parent_inner.user_heapbottom,
                 strace_mask: parent_inner.strace_mask,
-                kind_cpu: -2,
                 set_child_tid: 0,
                 clear_child_tid: 0,
                 sig_pending: SigPending::from_another(&parent_inner.sig_pending),

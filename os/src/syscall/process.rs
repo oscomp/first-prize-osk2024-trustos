@@ -143,8 +143,13 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
         }
     }
 
-    let cwd = task_inner.current_path.clone();
-    if let Some(app_inode) = open(&cwd, path.as_str(), OpenFlags::O_RDONLY) {
+    let fs_info = task_inner.fs_info.clone();
+    let fs_info_inner = fs_info.inner_lock();
+    if let Some(app_inode) = open(
+        fs_info_inner.cwd.as_str(),
+        path.as_str(),
+        OpenFlags::O_RDONLY,
+    ) {
         let elf_data = unsafe { app_inode.read_as_elf() };
         drop(task_inner);
 
@@ -276,44 +281,44 @@ pub fn sys_brk(brk_addr: usize) -> SyscallRet {
     Ok(current_task().unwrap().growproc(grow_size))
 }
 
-pub fn sys_sched_setaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> SyscallRet {
-    let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
-    let token = inner.user_token();
-    let mask = *translated_ref(token, mask as *const usize);
+// pub fn sys_sched_setaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> SyscallRet {
+//     let task = current_task().unwrap();
+//     let mut inner = task.inner_lock();
+//     let token = inner.user_token();
+//     let mask = *translated_ref(token, mask as *const usize);
 
-    //尝试匹配当前进程
-    if pid == 0 || task.pid() == pid {
-        inner.kind_cpu = mask as isize;
-        return Ok(0);
-    }
-    //尝试匹配其其他进程
-    if let Some(found_task) = pid2task(pid) {
-        found_task.inner_lock().kind_cpu = mask as isize;
-        return Ok(0);
-    }
-    //匹配不到
-    Err(SysErrNo::EINVAL)
-}
+//     //尝试匹配当前进程
+//     if pid == 0 || task.pid() == pid {
+//         inner.kind_cpu = mask as isize;
+//         return Ok(0);
+//     }
+//     //尝试匹配其其他进程
+//     if let Some(found_task) = pid2task(pid) {
+//         found_task.inner_lock().kind_cpu = mask as isize;
+//         return Ok(0);
+//     }
+//     //匹配不到
+//     Err(SysErrNo::EINVAL)
+// }
 
-pub fn sys_sched_getaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> SyscallRet {
-    let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
-    let token = inner.user_token();
+// pub fn sys_sched_getaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> SyscallRet {
+//     let task = current_task().unwrap();
+//     let mut inner = task.inner_lock();
+//     let token = inner.user_token();
 
-    //尝试匹配当前进程
-    if pid == 0 || task.pid() == pid {
-        *translated_refmut(token, mask as *mut usize) = inner.kind_cpu as usize;
-        return Ok(0);
-    }
-    //尝试匹配其其他进程
-    if let Some(found_task) = pid2task(pid) {
-        *translated_refmut(token, mask as *mut usize) = found_task.inner_lock().kind_cpu as usize;
-        return Ok(0);
-    }
-    //匹配不到
-    Err(SysErrNo::EINVAL)
-}
+//     //尝试匹配当前进程
+//     if pid == 0 || task.pid() == pid {
+//         *translated_refmut(token, mask as *mut usize) = inner.kind_cpu as usize;
+//         return Ok(0);
+//     }
+//     //尝试匹配其其他进程
+//     if let Some(found_task) = pid2task(pid) {
+//         *translated_refmut(token, mask as *mut usize) = found_task.inner_lock().kind_cpu as usize;
+//         return Ok(0);
+//     }
+//     //匹配不到
+//     Err(SysErrNo::EINVAL)
+// }
 
 pub struct Sysinfo {
     pub uptime: usize,
