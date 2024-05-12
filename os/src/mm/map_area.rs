@@ -8,6 +8,7 @@ use crate::{
     syscall::MmapFlags,
 };
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
+
 /// map area structure, controls a contiguous piece of virtual memory
 /// 逻辑段
 pub struct MapArea {
@@ -16,8 +17,7 @@ pub struct MapArea {
     pub map_type: MapType,
     pub map_perm: MapPermission,
     pub area_type: MapAreaType,
-    pub file: Option<Arc<OSInode>>,
-    pub offset: usize,
+    pub mmap_file: MmapFile,
     pub mmap_flags: MmapFlags,
     pub groupid: usize,
 }
@@ -42,8 +42,7 @@ impl MapArea {
             map_type,
             map_perm,
             area_type,
-            file: None,
-            offset: 0,
+            mmap_file: MmapFile::empty(),
             mmap_flags: MmapFlags::empty(),
             groupid: 0,
         }
@@ -68,8 +67,7 @@ impl MapArea {
             map_type,
             map_perm,
             area_type,
-            file,
-            offset,
+            mmap_file: MmapFile::new(file, offset),
             mmap_flags,
             groupid,
         }
@@ -81,8 +79,7 @@ impl MapArea {
             map_type: another.map_type,
             map_perm: another.map_perm,
             area_type: another.area_type,
-            file: another.file.clone(),
-            offset: another.offset,
+            mmap_file: another.mmap_file.clone(),
             mmap_flags: another.mmap_flags,
             groupid: another.groupid,
         }
@@ -211,4 +208,23 @@ pub enum MapAreaType {
     Physical,
     /// MMIO(for kernel)
     MMIO,
+}
+
+#[derive(Clone)]
+pub struct MmapFile {
+    pub file: Option<Arc<OSInode>>,
+    pub offset: usize,
+}
+
+impl MmapFile {
+    pub fn empty() -> Self {
+        Self {
+            file: None,
+            offset: 0,
+        }
+    }
+
+    pub fn new(file: Option<Arc<OSInode>>, offset: usize) -> Self {
+        Self { file, offset }
+    }
 }

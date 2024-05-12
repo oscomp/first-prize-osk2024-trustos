@@ -205,7 +205,7 @@ impl MemorySet {
                     .filter(|vpn| area_inner.data_frames.contains_key(&vpn))
                     .count()
                     * PAGE_SIZE;
-                let file = area_inner.file.clone().unwrap();
+                let file = area_inner.mmap_file.file.clone().unwrap();
                 file.write(UserBuffer {
                     buffers: translated_byte_buffer(
                         self.page_table.token(),
@@ -751,7 +751,7 @@ impl MemorySet {
                         .filter(|vpn| area.data_frames.contains_key(&vpn))
                         .count()
                         * PAGE_SIZE;
-                    let file = area.file.clone().unwrap();
+                    let file = area.mmap_file.file.clone().unwrap();
                     file.write(UserBuffer {
                         buffers: translated_byte_buffer(
                             self.page_table.token(),
