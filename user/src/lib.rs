@@ -431,3 +431,7 @@ pub fn lseek(fd: usize, offset: isize, whence: usize) -> isize {
 pub fn fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
     sys_fcntl(fd, cmd, arg)
 }
+
+pub fn sendfile(outfd: usize, infd: usize, offset_ptr: *const usize, count: usize) -> isize {
+    sys_sendfile(outfd, infd, offset_ptr, count)
+}

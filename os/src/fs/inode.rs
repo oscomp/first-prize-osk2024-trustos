@@ -11,21 +11,23 @@ use spin::{Mutex, MutexGuard};
 pub struct OSInode {
     readable: bool, // 该文件是否允许通过 sys_read 进行读
     writable: bool, // 该文件是否允许通过 sys_write 进行写
-    openflags: Mutex<OpenFlags>,
     inode: Arc<VFile>,
     inner: Mutex<OSInodeInner>,
 }
 pub struct OSInodeInner {
     offset: usize, // 偏移量
+    openflags: OpenFlags,
 }
 impl OSInode {
     pub fn new(readable: bool, writable: bool, inode: Arc<VFile>) -> Self {
         Self {
             readable,
             writable,
-            openflags: Mutex::new(OpenFlags::empty()),
             inode,
-            inner: Mutex::new(OSInodeInner { offset: 0 }),
+            inner: Mutex::new(OSInodeInner {
+                offset: 0,
+                openflags: OpenFlags::empty(),
+            }),
         }
     }
     #[deprecated]
@@ -125,17 +127,17 @@ impl OSInode {
         self.inode.modification_time()
     }
 
-    pub fn get_openflags(&self) -> MutexGuard<OpenFlags> {
-        self.openflags.lock()
+    pub fn get_openflags(&self) -> OpenFlags {
+        self.inner.lock().openflags
     }
     pub fn set_openflags(&self, flags: OpenFlags) {
-        *self.openflags.lock() = flags;
+        self.inner.lock().openflags = flags;
     }
     pub fn set_cloexec(&self) {
-        *self.openflags.lock() |= OpenFlags::O_CLOEXEC;
+        self.inner.lock().openflags |= OpenFlags::O_CLOEXEC;
     }
     pub fn unset_cloexec(&self) {
-        *self.openflags.lock() &= !OpenFlags::O_CLOEXEC;
+        self.inner.lock().openflags &= !OpenFlags::O_CLOEXEC;
     }
 }
 

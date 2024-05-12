@@ -2,8 +2,8 @@
 #![no_main]
 
 use user_lib::{
-    faccessat, fcntl, fstatat, lseek, mkdir, openat, statfs, FaccessatMode, Kstat, OpenFlags,
-    Statfs,
+    faccessat, fcntl, fstatat, lseek, mkdir, openat, read, sendfile, statfs, write, FaccessatMode,
+    Kstat, OpenFlags, Statfs,
 };
 
 #[macro_use]
@@ -77,6 +77,47 @@ fn test_fcntl() {
     println!("");
 }
 
+fn test_sendfile() {
+    println!("-----------------test sendfile-----------------");
+    let infd = openat(
+        -100,
+        "test_infd\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0,
+    );
+    let outfd = openat(
+        -100,
+        "test_outfd\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0,
+    );
+    let inbuf: [u8; 10] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    let writeresult = write(infd as usize, &inbuf, 10);
+    println!(
+        "have written {} bytes [1,2,3,4,5,6,7,8,9,10]\nnow lseek to the beginning of the infil",
+        writeresult
+    );
+    let offset: usize = 5;
+    println!("now we need the last 5 number");
+    let result = sendfile(outfd as usize, infd as usize, &offset as *const usize, 5);
+    println!("sendfile over, now lseek to the beginning of the outfile");
+    lseek(outfd as usize, 0, 0);
+    println!("lseek over, now let's read");
+    let mut outbuf: [u8; 5] = [0; 5];
+    let readresult = read(outfd as usize, &mut outbuf, 5);
+    println!(
+        "read {} bytes , now print send bytes which should be: [6,7,8,9,10]",
+        readresult
+    );
+    for &byte in &outbuf {
+        print!("{} ", byte);
+    }
+    println!("");
+    println!("result is {} which should be 5", result);
+    println!("-----------------end sendfile-----------------");
+    println!("");
+}
+
 #[no_mangle]
 pub fn main() -> i32 {
     test_fstatat();
@@ -84,5 +125,6 @@ pub fn main() -> i32 {
     test_faccessat();
     test_lseek();
     test_fcntl();
+    test_sendfile();
     0
 }

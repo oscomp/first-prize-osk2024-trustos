@@ -13,6 +13,8 @@ use crate::{
 use alloc::{
     string::{String, ToString},
     sync::Arc,
+    vec,
+    vec::Vec,
 };
 use core::mem::size_of;
 use log::info;
@@ -695,6 +697,73 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
             }
         }
         Ok(0)
+    } else {
+        Err(SysErrNo::ENOENT)
+    }
+}
+
+pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) -> SyscallRet {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+
+    if outfd >= inner.fd_table.len() {
+        return Err(SysErrNo::EINVAL);
+    }
+    if inner.fd_table[outfd].is_none() {
+        return Err(SysErrNo::EINVAL);
+    }
+    if infd >= inner.fd_table.len() {
+        return Err(SysErrNo::EINVAL);
+    }
+    if inner.fd_table[infd].is_none() {
+        return Err(SysErrNo::EINVAL);
+    }
+
+    if let Some(FileClass::File(outfile)) = &inner.fd_table[outfd] {
+        if !outfile.writable() {
+            return Err(SysErrNo::EACCES);
+        }
+
+        if let Some(FileClass::File(infile)) = &inner.fd_table[infd] {
+            if !infile.readable() {
+                return Err(SysErrNo::EACCES);
+            }
+            //构造输入缓冲池
+            let mut buf = vec![0u8; count];
+            let mut inbufv = Vec::new();
+            unsafe {
+                inbufv.push(core::slice::from_raw_parts_mut(
+                    buf.as_mut_slice().as_mut_ptr(),
+                    buf.as_slice().len(),
+                ));
+            }
+            let mut inbuffer = UserBuffer::new(inbufv); //输入缓冲池
+                                                        //读数据
+            let readcount;
+            if offset_ptr == 0 {
+                readcount = infile.read(inbuffer);
+            } else {
+                let offset = translated_ref(token, offset_ptr as *const usize);
+                infile.set_offset(*offset);
+                readcount = infile.read(inbuffer);
+            }
+            //构造输出缓冲池
+            let mut outbufv = Vec::new();
+            unsafe {
+                outbufv.push(core::slice::from_raw_parts_mut(
+                    buf.as_mut_slice().as_mut_ptr(),
+                    readcount,
+                ));
+            }
+            let mut outbuffer = UserBuffer::new(outbufv); //输出缓冲池
+                                                          //写数据
+            let retcount = outfile.write(outbuffer);
+
+            Ok(retcount)
+        } else {
+            Err(SysErrNo::ENOENT)
+        }
     } else {
         Err(SysErrNo::ENOENT)
     }

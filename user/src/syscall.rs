@@ -20,6 +20,7 @@ const SYSCALL_GETDENTS64: usize = 61;
 const SYSCALL_LSEEK: usize = 62;
 const SYSCALL_READ: usize = 63;
 const SYSCALL_WRITE: usize = 64;
+const SYSCALL_SENDFILE: usize = 71;
 const SYSCALL_FSTATAT: usize = 79;
 const SYSCALL_FSTAT: usize = 80;
 const SYSCALL_UTIMENSAT: usize = 88;
@@ -379,5 +380,19 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
     syscall(
         SYSCALL_FCNTL,
         [fd as isize, cmd as isize, arg as isize, 0, 0, 0],
+    )
+}
+
+pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: *const usize, count: usize) -> isize {
+    syscall(
+        SYSCALL_SENDFILE,
+        [
+            outfd as isize,
+            infd as isize,
+            offset_ptr as isize,
+            count as isize,
+            0,
+            0,
+        ],
     )
 }
