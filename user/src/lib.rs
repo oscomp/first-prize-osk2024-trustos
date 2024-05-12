@@ -435,3 +435,10 @@ pub fn fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
 pub fn sendfile(outfd: usize, infd: usize, offset_ptr: *const usize, count: usize) -> isize {
     sys_sendfile(outfd, infd, offset_ptr, count)
 }
+
+pub fn pread64(fd: usize, buf: &mut [u8], count: usize, offset: usize) -> isize {
+    sys_pread64(fd, buf, count, offset)
+}
+pub fn pwrite64(fd: usize, buf: &[u8], count: usize, offset: usize) -> isize {
+    sys_pwrite64(fd, buf, count, offset)
+}

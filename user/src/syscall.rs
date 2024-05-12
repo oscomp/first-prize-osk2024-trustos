@@ -20,6 +20,8 @@ const SYSCALL_GETDENTS64: usize = 61;
 const SYSCALL_LSEEK: usize = 62;
 const SYSCALL_READ: usize = 63;
 const SYSCALL_WRITE: usize = 64;
+const SYSCALL_PREAD64: usize = 67;
+const SYSCALL_PWRITE64: usize = 68;
 const SYSCALL_SENDFILE: usize = 71;
 const SYSCALL_FSTATAT: usize = 79;
 const SYSCALL_FSTAT: usize = 80;
@@ -391,6 +393,34 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: *const usize, count: 
             infd as isize,
             offset_ptr as isize,
             count as isize,
+            0,
+            0,
+        ],
+    )
+}
+
+pub fn sys_pwrite64(fd: usize, buffer: &[u8], count: usize, offset: usize) -> isize {
+    syscall(
+        SYSCALL_PWRITE64,
+        [
+            fd as isize,
+            buffer.as_ptr() as isize,
+            count as isize,
+            offset as isize,
+            0,
+            0,
+        ],
+    )
+}
+
+pub fn sys_pread64(fd: usize, buffer: &mut [u8], count: usize, offset: usize) -> isize {
+    syscall(
+        SYSCALL_PREAD64,
+        [
+            fd as isize,
+            buffer.as_mut_ptr() as isize,
+            count as isize,
+            offset as isize,
             0,
             0,
         ],

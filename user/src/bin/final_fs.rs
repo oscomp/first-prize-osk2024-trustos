@@ -2,8 +2,8 @@
 #![no_main]
 
 use user_lib::{
-    faccessat, fcntl, fstatat, lseek, mkdir, openat, read, sendfile, statfs, write, FaccessatMode,
-    Kstat, OpenFlags, Statfs,
+    faccessat, fcntl, fstatat, lseek, mkdir, openat, pread64, pwrite64, read, sendfile, statfs,
+    write, FaccessatMode, Kstat, OpenFlags, Statfs,
 };
 
 #[macro_use]
@@ -94,7 +94,7 @@ fn test_sendfile() {
     let inbuf: [u8; 10] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
     let writeresult = write(infd as usize, &inbuf, 10);
     println!(
-        "have written {} bytes [1,2,3,4,5,6,7,8,9,10]\nnow lseek to the beginning of the infil",
+        "have written {} bytes [1,2,3,4,5,6,7,8,9,10]\nnow lseek to the beginning of the infile",
         writeresult
     );
     let offset: usize = 5;
@@ -118,6 +118,34 @@ fn test_sendfile() {
     println!("");
 }
 
+fn test_pwr64() {
+    println!("-----------------test pwrite64 & pread64-----------------");
+    let fd = openat(
+        -100,
+        "test_pwr64\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0,
+    );
+    let inbuf: [u8; 10] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    let writeresult = pwrite64(fd as usize, &inbuf, 10, 50);
+    println!(
+        "have written {} bytes [1,2,3,4,5,6,7,8,9,10] at offset 50\n",
+        writeresult
+    );
+    let mut outbuf: [u8; 5] = [0; 5];
+    let readresult = pread64(fd as usize, &mut outbuf, 5, 55);
+    println!(
+        "read {} bytes at offset 55 , now print send bytes which should be: [6,7,8,9,10]",
+        readresult
+    );
+    for &byte in &outbuf {
+        print!("{} ", byte);
+    }
+    println!("");
+    println!("-----------------end pwrite64 & pread64-----------------");
+    println!("");
+}
+
 #[no_mangle]
 pub fn main() -> i32 {
     test_fstatat();
@@ -126,5 +154,6 @@ pub fn main() -> i32 {
     test_lseek();
     test_fcntl();
     test_sendfile();
+    test_pwr64();
     0
 }

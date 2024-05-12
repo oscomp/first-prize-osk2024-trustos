@@ -860,3 +860,62 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
         Err(SysErrNo::ENOENT)
     }
 }
+
+pub fn sys_pwrite64(fd: usize, buf: *const u8, count: usize, offset: usize) -> SyscallRet {
+    let task = current_task().unwrap();
+    let inner = task.inner_lock();
+    let token = inner.user_token();
+
+    if fd >= inner.fd_table.len() {
+        return Err(SysErrNo::EINVAL);
+    }
+    if let Some(file) = &inner.fd_table[fd] {
+        let file = match file {
+            FileClass::File(f) => f.clone(),
+            FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
+        };
+        if !file.writable() {
+            return Err(SysErrNo::EACCES);
+        }
+        let file = file.clone();
+        // release current task TCB manually to avoid multi-borrow
+        drop(inner);
+        drop(task);
+        let cur_offset = file.offset();
+        file.set_offset(offset);
+        let ret = file.write(UserBuffer::new(translated_byte_buffer(token, buf, count)));
+        file.set_offset(cur_offset);
+        Ok(ret)
+    } else {
+        Err(SysErrNo::EBADF)
+    }
+}
+
+pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: usize) -> SyscallRet {
+    let task = current_task().unwrap();
+    let inner = task.inner_lock();
+    let token = inner.user_token();
+
+    if fd >= inner.fd_table.len() {
+        return Err(SysErrNo::EINVAL);
+    }
+    if let Some(file) = &inner.fd_table[fd] {
+        let file = match file {
+            FileClass::File(f) => f.clone(),
+            FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
+        };
+        if !file.readable() {
+            return Err(SysErrNo::EACCES);
+        }
+        // release current task TCB manually to avoid multi-borrow
+        drop(inner);
+        drop(task);
+        let cur_offset = file.offset();
+        file.set_offset(offset);
+        let ret = file.read(UserBuffer::new(translated_byte_buffer(token, buf, count)));
+        file.set_offset(cur_offset);
+        Ok(ret)
+    } else {
+        Err(SysErrNo::EBADF)
+    }
+}
