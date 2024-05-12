@@ -16,6 +16,7 @@ pub enum Syscall {
     Getcwd = 17,
     Dup = 23,
     Dup3 = 24,
+    Fcntl = 25,
     Mkdirat = 34,
     Unlinkat = 35,
     Linkat = 37,
@@ -96,6 +97,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Getcwd => sys_getcwd(args[0] as *const u8, args[1]),
         Syscall::Dup => sys_dup(args[0]),
         Syscall::Dup3 => sys_dup3(args[0], args[1]),
+        Syscall::Fcntl => sys_fcntl(args[0] as usize, args[1] as usize, args[2] as usize),
         Syscall::Mkdirat => sys_mkdirat(args[0] as isize, args[1] as *const u8, args[2]),
         Syscall::Unlinkat => sys_unlinkat(args[0] as isize, args[1] as *const u8, args[2] as u32),
         Syscall::Linkat => sys_linkat(

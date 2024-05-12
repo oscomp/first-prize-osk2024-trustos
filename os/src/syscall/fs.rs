@@ -634,3 +634,68 @@ pub fn sys_lseek(fd: usize, offset: isize, whence: usize) -> SyscallRet {
         Err(SysErrNo::ENOENT)
     }
 }
+
+const F_DUPFD: usize = 0;
+const F_DUPFD_CLOEXEC: usize = 1030;
+const F_GETFD: usize = 1;
+const F_SETFD: usize = 2;
+const F_GETFL: usize = 3;
+const F_SETFL: usize = 4;
+
+const FD_CLOEXEC: usize = 1;
+
+pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+
+    if fd >= inner.fd_table.len() {
+        return Err(SysErrNo::EINVAL);
+    }
+    if inner.fd_table[fd].is_none() {
+        return Err(SysErrNo::EINVAL);
+    }
+
+    if let Some(FileClass::File(file)) = &inner.fd_table[fd] {
+        match cmd {
+            F_DUPFD => {
+                let inode = file.clone();
+                let fd_new = inner.alloc_fd();
+                inner.fd_table[fd_new] = Some(FileClass::File(inode));
+                return Ok(fd_new);
+            }
+            F_DUPFD_CLOEXEC => {
+                let inode = file.clone();
+                inode.set_cloexec();
+                let fd_new = inner.alloc_fd();
+                inner.fd_table[fd_new] = Some(FileClass::File(inode));
+                return Ok(fd_new);
+            }
+            F_GETFD => {
+                return if file.get_openflags().contains(OpenFlags::O_CLOEXEC) {
+                    Ok(1)
+                } else {
+                    Ok(0)
+                };
+            }
+            F_SETFD => {
+                if arg & FD_CLOEXEC == 0 {
+                    file.unset_cloexec();
+                } else {
+                    file.set_cloexec();
+                }
+            }
+            F_GETFL => return Ok(file.get_openflags().bits() as usize),
+            F_SETFL => {
+                let flags = OpenFlags::from_bits_truncate(arg as u32);
+                file.set_openflags(flags);
+            }
+            _ => {
+                return Err(SysErrNo::EINVAL);
+            }
+        }
+        Ok(0)
+    } else {
+        Err(SysErrNo::ENOENT)
+    }
+}

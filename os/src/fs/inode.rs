@@ -6,11 +6,12 @@ use bitflags::*;
 use fat32_fs::{create_root_vfile, FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
 use lazy_static::*;
 use log::info;
-use spin::Mutex;
+use spin::{Mutex, MutexGuard};
 
 pub struct OSInode {
     readable: bool, // 该文件是否允许通过 sys_read 进行读
     writable: bool, // 该文件是否允许通过 sys_write 进行写
+    openflags: Mutex<OpenFlags>,
     inode: Arc<VFile>,
     inner: Mutex<OSInodeInner>,
 }
@@ -22,6 +23,7 @@ impl OSInode {
         Self {
             readable,
             writable,
+            openflags: Mutex::new(OpenFlags::empty()),
             inode,
             inner: Mutex::new(OSInodeInner { offset: 0 }),
         }
@@ -122,6 +124,19 @@ impl OSInode {
     pub fn modification_time(&self) -> u64 {
         self.inode.modification_time()
     }
+
+    pub fn get_openflags(&self) -> MutexGuard<OpenFlags> {
+        self.openflags.lock()
+    }
+    pub fn set_openflags(&self, flags: OpenFlags) {
+        *self.openflags.lock() = flags;
+    }
+    pub fn set_cloexec(&self) {
+        *self.openflags.lock() |= OpenFlags::O_CLOEXEC;
+    }
+    pub fn unset_cloexec(&self) {
+        *self.openflags.lock() &= !OpenFlags::O_CLOEXEC;
+    }
 }
 
 lazy_static! {
@@ -148,6 +163,7 @@ bitflags! {
         const O_CREATE = 1 << 6;
         const O_TRUNC = 1 << 9;
         const O_APPEND = 1 << 10;
+        const O_CLOEXEC = 1<<19;    //描述符标志
         const O_DIRECTROY = 1 << 21;
     }
 }
@@ -196,7 +212,9 @@ fn create_file(
         let (readable, writable) = flags.read_write();
         return parent_dir.create(child_name, attribute).map(|vfile| {
             insert_vfile_idx(abs_path, vfile.clone());
-            Arc::new(OSInode::new(readable, writable, vfile))
+            let mut osinode = OSInode::new(readable, writable, vfile);
+            osinode.set_openflags(flags);
+            Arc::new(osinode)
         });
     }
     let mut pathv = path2vec(path);
@@ -219,7 +237,9 @@ fn create_file(
         let (readable, writable) = flags.read_write();
         parent_dir.create(child_name, attribute).map(|vfile| {
             insert_vfile_idx(abs_path, vfile.clone());
-            Arc::new(OSInode::new(readable, writable, vfile))
+            let mut osinode = OSInode::new(readable, writable, vfile);
+            osinode.set_openflags(flags);
+            Arc::new(osinode)
         })
     } else {
         None
@@ -253,10 +273,11 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
             return create_file(cwd, path, flags, &abs_path, parent_path, child_name);
         }
         let (readable, writable) = flags.read_write();
-        let vfile = OSInode::new(readable, writable, inode);
+        let mut vfile = OSInode::new(readable, writable, inode);
         if flags.contains(OpenFlags::O_APPEND) {
             vfile.set_offset(vfile.file_size());
         }
+        vfile.set_openflags(flags);
         return Some(Arc::new(vfile));
     }
 
@@ -277,10 +298,11 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
             }
             insert_vfile_idx(&abs_path, inode.clone());
             let (readable, writable) = flags.read_write();
-            let vfile = OSInode::new(readable, writable, inode);
+            let mut vfile = OSInode::new(readable, writable, inode);
             if flags.contains(OpenFlags::O_APPEND) {
                 vfile.set_offset(vfile.file_size());
             }
+            vfile.set_openflags(flags);
             return Some(Arc::new(vfile));
         }
     } else {
@@ -299,10 +321,11 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
             }
             insert_vfile_idx(&abs_path, inode.clone());
             let (readable, writable) = flags.read_write();
-            let vfile = OSInode::new(readable, writable, inode);
+            let mut vfile = OSInode::new(readable, writable, inode);
             if flags.contains(OpenFlags::O_APPEND) {
                 vfile.set_offset(vfile.file_size());
             }
+            vfile.set_openflags(flags);
             return Some(Arc::new(vfile));
         }
     }
