@@ -32,6 +32,8 @@ pub enum Syscall {
     Lseek = 62,
     Read = 63,
     Write = 64,
+    Readv = 65,
+    Writev = 66,
     Sendfile = 71,
     Fstatat = 79,
     Fstat = 80,
@@ -144,6 +146,8 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[2] as usize,
             args[3] as usize,
         ),
+        Syscall::Readv => sys_readv(args[0] as usize, args[1] as *const u8, args[2] as usize),
+        Syscall::Writev => sys_writev(args[0] as usize, args[1] as *const u8, args[2] as usize),
         Syscall::Fstatat => sys_fstatat(
             args[0] as isize,
             args[1] as *const u8,

@@ -43,7 +43,7 @@ build: env $(KERNEL_BIN)
 
 initproc:
 	@cd ../user && cargo clean && make build
-	# @cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean && make all
+	@cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean && ./build-oscomp.sh
 
 env:
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
@@ -69,7 +69,7 @@ clean:
 	@cargo clean
 	@cd ../$(FS)&& rm fat32.img
 	@cd ../user && cargo clean
-	# @cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean
+	@cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean
 
 disasm: kernel
 	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) | less
