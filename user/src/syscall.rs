@@ -4,6 +4,7 @@ use core::arch::asm;
 const SYSCALL_GETCWD: usize = 17;
 const SYSCALL_DUP: usize = 23;
 const SYSCALL_DUP3: usize = 24;
+const SYSCALL_FCNTL: usize = 25;
 const SYSCALL_MKDIRAT: usize = 34;
 const SYSCALL_UNLINKAT: usize = 35;
 const SYSCALL_LINKAT: usize = 37;
@@ -371,5 +372,12 @@ pub fn sys_lseek(fd: usize, offset: isize, whence: usize) -> isize {
     syscall(
         SYSCALL_LSEEK,
         [fd as isize, offset as isize, whence as isize, 0, 0, 0],
+    )
+}
+
+pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
+    syscall(
+        SYSCALL_FCNTL,
+        [fd as isize, cmd as isize, arg as isize, 0, 0, 0],
     )
 }

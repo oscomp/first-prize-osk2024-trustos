@@ -427,3 +427,7 @@ pub fn faccessat(dirfd: isize, path: &str, mode: FaccessatMode, flags: usize) ->
 pub fn lseek(fd: usize, offset: isize, whence: usize) -> isize {
     sys_lseek(fd, offset, whence)
 }
+
+pub fn fcntl(fd: usize, cmd: usize, arg: usize) -> isize {
+    sys_fcntl(fd, cmd, arg)
+}
