@@ -43,13 +43,13 @@ trait FrameAllocator {
     fn dealloc(&mut self, ppn: PhysPageNum);
 }
 /// an implementation for frame allocator
-pub struct StackFrameAllocator {
+pub struct PhysFrameAllocator {
     current: usize,
     end: usize,
     recycled: Vec<usize>,
 }
 
-impl StackFrameAllocator {
+impl PhysFrameAllocator {
     pub fn init(&mut self, l: PhysPageNum, r: PhysPageNum) {
         self.current = l.0;
         self.end = r.0;
@@ -61,7 +61,7 @@ impl StackFrameAllocator {
         );
     }
 }
-impl FrameAllocator for StackFrameAllocator {
+impl FrameAllocator for PhysFrameAllocator {
     fn new() -> Self {
         Self {
             current: 0,
@@ -90,7 +90,7 @@ impl FrameAllocator for StackFrameAllocator {
     }
 }
 
-type FrameAllocatorImpl = StackFrameAllocator;
+type FrameAllocatorImpl = PhysFrameAllocator;
 
 lazy_static! {
     /// frame allocator instance through lazy_static!

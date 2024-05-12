@@ -44,7 +44,6 @@ pub struct TaskControlBlockInner {
     pub children: Vec<Arc<TaskControlBlock>>,
     pub exit_code: i32,
     pub fd_table: FdTable,
-    pub file: Option<Arc<OSInode>>,
     pub current_path: String,
     pub time_data: TimeData,
     pub user_heappoint: usize,
@@ -135,7 +134,6 @@ impl TaskControlBlock {
                     // 2 -> stderr
                     Some(FileClass::Abs(Arc::new(Stdout))),
                 ],
-                file: None,
                 current_path: String::from("/"),
                 time_data: TimeData::new(),
                 user_heappoint: user_heapbottom,
@@ -335,7 +333,6 @@ impl TaskControlBlock {
                 children: Vec::new(),
                 exit_code: 0,
                 fd_table: new_fd_table,
-                file: parent_inner.file.clone(),
                 current_path: parent_inner.current_path.clone(),
                 time_data: TimeData::new(),
                 user_heappoint: parent_inner.user_heappoint,

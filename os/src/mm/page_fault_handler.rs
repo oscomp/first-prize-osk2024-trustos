@@ -19,14 +19,14 @@ use super::{
 pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapArea) {
     // 映射页面,拷贝数据
     vma.map_one(page_table, va.into());
-    if vma.file.is_none() {
+    if vma.mmap_file.file.is_none() {
         return;
     }
-    let file = vma.file.clone().unwrap();
+    let file = vma.mmap_file.file.clone().unwrap();
     let old_offset = file.offset();
     let start_addr: VirtAddr = vma.vpn_range.start().into();
     let va = va.0;
-    file.set_offset(va - start_addr.0 + vma.offset);
+    file.set_offset(va - start_addr.0 + vma.mmap_file.offset);
     file.read(UserBuffer {
         buffers: translated_byte_buffer(page_table.token(), va as *const u8, PAGE_SIZE),
     });
