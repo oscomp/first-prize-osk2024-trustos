@@ -504,7 +504,7 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
                 println!("This file doesn't exist!");
                 return Ok(0);
             }
-            return Err(SysErrNo::EBADF);
+            Err(SysErrNo::EINVAL);
         }
     }
     if let Some(osfile) = open(base_path, path.as_str(), OpenFlags::O_RDWR) {
@@ -573,7 +573,7 @@ pub fn sys_utimensat(dirfd: isize, path: *const u8, times: *const u8, _flags: us
                 return Ok(0);
             }
         } else {
-            return Err(SysErrNo::EBADF);
+            return Err(SysErrNo::EINVAL);
         }
     }
     if let Some(osfile) = open(base_path, path.as_str(), OpenFlags::O_RDONLY) {
@@ -613,7 +613,7 @@ pub fn sys_lseek(fd: usize, offset: isize, whence: usize) -> SyscallRet {
         return Err(SysErrNo::EINVAL);
     }
     if inner.fd_table[fd].is_none() {
-        return Err(SysErrNo::EBADF);
+        return Err(SysErrNo::EINVAL);
     }
 
     if let Some(FileClass::File(file)) = &inner.fd_table[fd] {
