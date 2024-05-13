@@ -442,3 +442,7 @@ pub fn pread64(fd: usize, buf: &mut [u8], count: usize, offset: usize) -> isize 
 pub fn pwrite64(fd: usize, buf: &[u8], count: usize, offset: usize) -> isize {
     sys_pwrite64(fd, buf, count, offset)
 }
+
+pub fn ftruncate(fd: usize, length: i32) -> isize {
+    sys_ftruncate(fd, length)
+}

@@ -23,6 +23,7 @@ pub enum Syscall {
     Umount2 = 39,
     Mount = 40,
     Statfs = 43,
+    Ftruncate = 46,
     Faccessat = 48,
     Chdir = 49,
     Openat = 56,
@@ -121,6 +122,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[4] as *const u8,
         ),
         Syscall::Statfs => sys_statfs(args[0] as *const u8, args[1] as *const u8),
+        Syscall::Ftruncate => sys_ftruncate(args[0] as usize, args[1] as i32),
         Syscall::Faccessat => sys_faccessat(
             args[0] as isize,
             args[1] as *const u8,
@@ -148,13 +150,13 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[0] as usize,
             args[1] as *const u8,
             args[2] as usize,
-            args[3] as usize,
+            args[3] as isize,
         ),
         Syscall::Pwrite64 => sys_pwrite64(
             args[0] as usize,
             args[1] as *const u8,
             args[2] as usize,
-            args[3] as usize,
+            args[3] as isize,
         ),
         Syscall::Sendfile => sys_sendfile(
             args[0] as usize,

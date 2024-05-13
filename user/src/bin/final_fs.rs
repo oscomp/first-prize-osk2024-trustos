@@ -2,8 +2,8 @@
 #![no_main]
 
 use user_lib::{
-    faccessat, fcntl, fstatat, lseek, mkdir, openat, pread64, pwrite64, read, sendfile, statfs,
-    write, FaccessatMode, Kstat, OpenFlags, Statfs,
+    faccessat, fcntl, fstatat, ftruncate, lseek, mkdir, openat, pread64, pwrite64, read, sendfile,
+    statfs, write, FaccessatMode, Kstat, OpenFlags, Statfs,
 };
 
 #[macro_use]
@@ -146,6 +146,22 @@ fn test_pwr64() {
     println!("");
 }
 
+fn test_ftruncate() {
+    println!("-----------------test ftruncate-----------------");
+    let fd = openat(
+        -100,
+        "test_ftruncate\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0,
+    );
+    let result1 = ftruncate(fd as usize, -5);
+    let result2 = ftruncate(fd as usize, 100);
+    println!("result1 is {} which should be -1", result1);
+    println!("result2 is {} which should be 0", result2);
+    println!("-----------------end ftruncate-----------------");
+    println!("");
+}
+
 #[no_mangle]
 pub fn main() -> i32 {
     test_fstatat();
@@ -155,5 +171,6 @@ pub fn main() -> i32 {
     test_fcntl();
     test_sendfile();
     test_pwr64();
+    test_ftruncate();
     0
 }

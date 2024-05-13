@@ -11,6 +11,7 @@ const SYSCALL_LINKAT: usize = 37;
 const SYSCALL_UMOUNT2: usize = 39;
 const SYSCALL_MOUNT: usize = 40;
 const SYSCALL_STATFS: usize = 43;
+const SYSCALL_FTRUNCATE: usize = 46;
 const SYSCALL_FACCESSAT: usize = 48;
 const SYSCALL_CHDIR: usize = 49;
 const SYSCALL_OPENAT: usize = 56;
@@ -424,5 +425,12 @@ pub fn sys_pread64(fd: usize, buffer: &mut [u8], count: usize, offset: usize) ->
             0,
             0,
         ],
+    )
+}
+
+pub fn sys_ftruncate(fd: usize, length: i32) -> isize {
+    syscall(
+        SYSCALL_FTRUNCATE,
+        [fd as isize, length as isize, 0, 0, 0, 0],
     )
 }

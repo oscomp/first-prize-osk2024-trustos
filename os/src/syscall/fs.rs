@@ -578,6 +578,7 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
                         println!("This file can be written!");
                     } else {
                         println!("This file can not be written!");
+                        //return Ok(-1);
                     }
                 }
                 if mode.contains(FaccessatMode::R_OK) {
@@ -585,6 +586,7 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
                         println!("This file can be read!");
                     } else {
                         println!("This file can not be read!");
+                        //return Ok(-1);
                     }
                 }
                 return Ok(0);
@@ -821,8 +823,11 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
             if offset_ptr == 0 {
                 readcount = infile.read(inbuffer);
             } else {
-                let offset = translated_ref(token, offset_ptr as *const usize);
-                infile.set_offset(*offset);
+                let offset = translated_ref(token, offset_ptr as *const isize);
+                if *offset < 0 {
+                    return Err(SysErrNo::EINVAL);
+                }
+                infile.set_offset(*offset as usize);
                 readcount = infile.read(inbuffer);
             }
             //构造输出缓冲池
@@ -846,12 +851,12 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
     }
 }
 
-pub fn sys_pwrite64(fd: usize, buf: *const u8, count: usize, offset: usize) -> SyscallRet {
+pub fn sys_pwrite64(fd: usize, buf: *const u8, count: usize, offset: isize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
 
-    if fd >= inner.fd_table.len() {
+    if offset < 0 || fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
     }
     if let Some(file) = &inner.fd_table.get(fd) {
@@ -867,7 +872,7 @@ pub fn sys_pwrite64(fd: usize, buf: *const u8, count: usize, offset: usize) -> S
         drop(inner);
         drop(task);
         let cur_offset = file.offset();
-        file.set_offset(offset);
+        file.set_offset(offset as usize);
         let ret = file.write(UserBuffer::new(translated_byte_buffer(token, buf, count)));
         file.set_offset(cur_offset);
         Ok(ret)
@@ -876,12 +881,12 @@ pub fn sys_pwrite64(fd: usize, buf: *const u8, count: usize, offset: usize) -> S
     }
 }
 
-pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: usize) -> SyscallRet {
+pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: isize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
 
-    if fd >= inner.fd_table.len() {
+    if offset < 0 || fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
     }
     if let Some(file) = &inner.fd_table.get(fd) {
@@ -896,11 +901,35 @@ pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: usize) -> Sy
         drop(inner);
         drop(task);
         let cur_offset = file.offset();
-        file.set_offset(offset);
+        file.set_offset(offset as usize);
         let ret = file.read(UserBuffer::new(translated_byte_buffer(token, buf, count)));
         file.set_offset(cur_offset);
         Ok(ret)
     } else {
         Err(SysErrNo::EBADF)
+    }
+}
+
+pub fn sys_ftruncate(fd: usize, length: i32) -> SyscallRet {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+
+    if length < 0 || fd >= inner.fd_table.len() || inner.fd_table.get(fd).is_none() {
+        return Err(SysErrNo::EINVAL);
+    }
+
+    if let Some(FileClass::File(file)) = &inner.fd_table.get(fd) {
+        if file.is_dir() {
+            return Err(SysErrNo::EISDIR);
+        }
+        if !file.writable() {
+            return Err(SysErrNo::EACCES);
+        }
+
+        file.set_file_size(length as u32);
+        Ok(0)
+    } else {
+        Err(SysErrNo::ENOENT)
     }
 }
