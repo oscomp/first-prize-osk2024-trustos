@@ -578,7 +578,7 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
                         println!("This file can be written!");
                     } else {
                         println!("This file can not be written!");
-                        //return Ok(-1);
+                        return Ok(usize::MAX);
                     }
                 }
                 if mode.contains(FaccessatMode::R_OK) {
@@ -586,7 +586,7 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
                         println!("This file can be read!");
                     } else {
                         println!("This file can not be read!");
-                        //return Ok(-1);
+                        return Ok(usize::MAX);
                     }
                 }
                 return Ok(0);
@@ -608,6 +608,7 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
                 println!("This file can be written!");
             } else {
                 println!("This file can not be written!");
+                return Ok(usize::MAX);
             }
         }
         if mode.contains(FaccessatMode::R_OK) {
@@ -615,13 +616,14 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
                 println!("This file can be read!");
             } else {
                 println!("This file can not be read!");
+                return Ok(usize::MAX);
             }
         }
         return Ok(0);
     } else {
         if mode.contains(FaccessatMode::F_OK) {
             println!("This file doesn't exist!");
-            return Ok(0);
+            return Ok(usize::MAX);
         }
         Err(SysErrNo::ENOENT)
     }
@@ -928,6 +930,23 @@ pub fn sys_ftruncate(fd: usize, length: i32) -> SyscallRet {
         }
 
         file.set_file_size(length as u32);
+        Ok(0)
+    } else {
+        Err(SysErrNo::ENOENT)
+    }
+}
+
+pub fn sys_fsync(fd: usize) -> SyscallRet {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+
+    if fd >= inner.fd_table.len() || inner.fd_table.get(fd).is_none() {
+        return Err(SysErrNo::EINVAL);
+    }
+
+    if let Some(FileClass::File(file)) = &inner.fd_table.get(fd) {
+        file.sync();
         Ok(0)
     } else {
         Err(SysErrNo::ENOENT)

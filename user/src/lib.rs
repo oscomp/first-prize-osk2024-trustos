@@ -446,3 +446,7 @@ pub fn pwrite64(fd: usize, buf: &[u8], count: usize, offset: usize) -> isize {
 pub fn ftruncate(fd: usize, length: i32) -> isize {
     sys_ftruncate(fd, length)
 }
+
+pub fn fsync(fd: usize) -> isize {
+    sys_fsync(fd)
+}

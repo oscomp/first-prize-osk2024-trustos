@@ -139,6 +139,10 @@ impl OSInode {
     pub fn unset_cloexec(&self) {
         self.inner.lock().openflags &= !OpenFlags::O_CLOEXEC;
     }
+
+    pub fn sync(&self) {
+        self.inode.sync();
+    }
 }
 
 lazy_static! {

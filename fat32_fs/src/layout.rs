@@ -778,6 +778,72 @@ impl ShortDirEntry {
         write_size
     }
 
+    //将修改过的块写回磁盘
+    pub fn sync(
+        &self,
+        manager: &Arc<FAT32Manager>,
+        fat: &Arc<RwLock<FAT>>,
+        block_device: &Arc<dyn BlockDevice>,
+        chain: &Arc<RwLock<Chain>>,
+    ) {
+        let bytes_per_sector = manager.bytes_per_sector() as usize;
+        let bytes_per_cluster = manager.bytes_per_cluster() as usize;
+        let mut curr_offset = 0;
+        let end: usize;
+        // 边界检查
+        if self.is_dir() {
+            let size = bytes_per_cluster
+                * chain
+                    .write()
+                    .cluster_count(self.first_cluster(), block_device, fat)
+                    as usize;
+            end = size;
+        } else {
+            end = self.size_in_bytes as usize;
+        }
+        let (curr_cluster, curr_sector, _) = self.get_pos(0, manager, fat, block_device, chain);
+        let mut curr_cluster = curr_cluster;
+        let mut curr_sector = curr_sector;
+
+        loop {
+            // 将偏移量向上对齐扇区大小
+            let mut end_current_block = (curr_offset / bytes_per_sector + 1) * bytes_per_sector;
+            end_current_block = end_current_block.min(end);
+            if self.is_dir() {
+                get_info_block_cache(
+                    // 目录项通过Info block cache读取
+                    curr_sector,
+                    Arc::clone(block_device),
+                    CacheMode::READ,
+                )
+                .write()
+                .sync();
+            } else {
+                get_data_block_cache(
+                    // 文件内容通过Data block cache读取
+                    curr_sector,
+                    Arc::clone(block_device),
+                    CacheMode::READ,
+                )
+                .write()
+                .sync();
+            }
+            if end_current_block >= end {
+                break;
+            }
+            curr_offset = end_current_block;
+            // 如果读完了一个簇，则需要到下一个簇的起始扇区，否则读取当前簇的下一个扇区
+            if curr_offset % bytes_per_cluster == 0 {
+                curr_cluster = chain
+                    .write()
+                    .get_next_cluster(curr_cluster, block_device, fat);
+                curr_sector = manager.first_sector_of_cluster(curr_cluster);
+            } else {
+                curr_sector += 1;
+            }
+        }
+    }
+
     pub fn as_bytes(&self) -> &[u8] {
         unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, DIRENT_SZ) }
     }

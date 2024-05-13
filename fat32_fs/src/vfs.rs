@@ -785,6 +785,35 @@ impl VFile {
         self.fs.dealloc_cluster(all_clusters, &self.chain);
         len
     }
+
+    pub fn sync(&self) {
+        //写回元数据
+        get_info_block_cache(
+            self.short_sector,
+            self.block_device.clone(),
+            CacheMode::READ,
+        )
+        .write()
+        .sync();
+        //写回长文件名元数据（如果有）
+        if !self.is_short() {
+            (0..self.long_pos_vec.len()).for_each(|i| {
+                let (sector, _offset) = self.long_pos_vec[i];
+                get_info_block_cache(sector, self.block_device.clone(), CacheMode::READ)
+                    .write()
+                    .sync();
+            })
+        }
+        //写回信息块或数据块
+        self.modify_short_dirent(|short_ent| {
+            short_ent.sync(
+                &self.fs,
+                &self.fs.get_fat(),
+                &self.block_device,
+                &self.chain,
+            )
+        })
+    }
 }
 
 #[derive(Clone)]
