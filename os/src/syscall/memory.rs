@@ -32,7 +32,7 @@ pub fn sys_mmap(
     );
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
-    let mut memory_set = task_inner.memory_set.inner_lock();
+    let mut memory_set = task_inner.memory_set.get_unchecked_mut();
     let len = page_round_up(len);
     if fd == usize::MAX {
         let rv = memory_set.mmap(addr, len, map_perm, flags, None, off);
@@ -61,7 +61,7 @@ pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
     let len = page_round_up(len);
-    task_inner.memory_set.inner_lock().munmap(addr, len);
+    task_inner.memory_set.get_unchecked_mut().munmap(addr, len);
     Ok(0)
 }
 
@@ -82,7 +82,7 @@ pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> SyscallRet {
     let pte_flags = memory_set.mprotect(start_vpn.into(), end_vpn.into(), map_perm);
     for i in 0..page_num {
         memory_set
-            .inner_lock()
+            .get_unchecked_mut()
             .page_table
             .set_flags(start_vpn.into(), pte_flags);
     }

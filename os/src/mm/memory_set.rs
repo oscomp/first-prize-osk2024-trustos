@@ -15,6 +15,7 @@ use crate::{
     },
     fs::{open_file, File, OSInode, OpenFlags},
     mm::flush_tlb,
+    sync::SyncUnsafeCell,
     syscall::MmapFlags,
     task::{current_task, Aux, AuxType},
 };
@@ -57,22 +58,25 @@ pub fn kernel_token() -> usize {
 }
 
 pub struct MemorySet {
-    inner: Mutex<MemorySetInner>,
+    pub inner: SyncUnsafeCell<MemorySetInner>,
 }
 
 impl MemorySet {
     pub fn new(memory_set: MemorySetInner) -> Self {
         Self {
-            inner: Mutex::new(memory_set),
+            inner: SyncUnsafeCell::new(memory_set),
         }
     }
-    pub fn inner_lock(&self) -> MutexGuard<MemorySetInner> {
-        self.inner.lock()
+    pub fn get_unchecked_mut(&self) -> &mut MemorySetInner {
+        self.inner.get_unchecked_mut()
+    }
+    pub fn get_unchecked_ref(&self) -> &MemorySetInner {
+        self.inner.get_unchecked_ref()
     }
     // 对MemorySetInner封装
     #[inline(always)]
     pub fn token(&self) -> usize {
-        self.inner.lock().token()
+        self.inner.get_unchecked_mut().token()
     }
     #[inline(always)]
     pub fn insert_framed_area(
@@ -83,7 +87,7 @@ impl MemorySet {
         area_type: MapAreaType,
     ) {
         self.inner
-            .lock()
+            .get_unchecked_mut()
             .insert_framed_area(start_va, end_va, permission, area_type)
     }
     #[inline(always)]
@@ -96,16 +100,18 @@ impl MemorySet {
         frames: Vec<Arc<FrameTracker>>,
     ) {
         self.inner
-            .lock()
+            .get_unchecked_mut()
             .insert_given_framed_area(start_va, end_va, permission, area_type, frames)
     }
     #[inline(always)]
     pub fn kernel_stack_frame(&self) -> Vec<Arc<FrameTracker>> {
-        self.inner.lock().kernel_stack_frame()
+        self.inner.get_unchecked_mut().kernel_stack_frame()
     }
     #[inline(always)]
     pub fn remove_area_with_start_vpn(&self, start_vpn: VirtPageNum) {
-        self.inner.lock().remove_area_with_start_vpn(start_vpn)
+        self.inner
+            .get_unchecked_mut()
+            .remove_area_with_start_vpn(start_vpn)
     }
     #[inline(always)]
     pub fn mmap(
@@ -118,20 +124,20 @@ impl MemorySet {
         off: usize,
     ) -> usize {
         self.inner
-            .lock()
+            .get_unchecked_mut()
             .mmap(addr, len, map_perm, flags, file, off)
     }
     #[inline(always)]
     pub fn munmap(&self, addr: usize, len: usize) {
-        self.inner.lock().munmap(addr, len)
+        self.inner.get_unchecked_mut().munmap(addr, len)
     }
     #[inline(always)]
     pub fn lazy_page_fault(&self, vpn: VirtPageNum, scause: Trap) -> bool {
-        self.inner.lock().lazy_page_fault(vpn, scause)
+        self.inner.get_unchecked_mut().lazy_page_fault(vpn, scause)
     }
     #[inline(always)]
     pub fn cow_page_fault(&self, vpn: VirtPageNum, scause: Trap) -> bool {
-        self.inner.lock().cow_page_fault(vpn, scause)
+        self.inner.get_unchecked_mut().cow_page_fault(vpn, scause)
     }
     #[inline(always)]
     pub fn mprotect(
@@ -140,35 +146,41 @@ impl MemorySet {
         end_vpn: VirtPageNum,
         map_perm: MapPermission,
     ) -> PTEFlags {
-        self.inner.lock().mprotect(start_vpn, end_vpn, map_perm)
+        self.inner
+            .get_unchecked_mut()
+            .mprotect(start_vpn, end_vpn, map_perm)
     }
     #[inline(always)]
     fn push(&self, mut map_area: MapArea, data: Option<&[u8]>) {
-        self.inner.lock().push(map_area, data)
+        self.inner.get_unchecked_mut().push(map_area, data)
     }
     #[inline(always)]
     fn push_with_offset(&self, mut map_area: MapArea, offset: usize, data: Option<&[u8]>) {
-        self.inner.lock().push_with_offset(map_area, offset, data)
+        self.inner
+            .get_unchecked_mut()
+            .push_with_offset(map_area, offset, data)
     }
     #[inline(always)]
     fn push_with_given_frames(&self, mut map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
-        self.inner.lock().push_with_given_frames(map_area, frames)
+        self.inner
+            .get_unchecked_mut()
+            .push_with_given_frames(map_area, frames)
     }
     #[inline(always)]
     fn push_lazily(&self, map_area: MapArea) {
-        self.inner.lock().push_lazily(map_area)
+        self.inner.get_unchecked_mut().push_lazily(map_area)
     }
     #[inline(always)]
     pub fn activate(&self) {
-        self.inner.lock().activate();
+        self.inner.get_unchecked_mut().activate();
     }
     #[inline(always)]
     pub fn recycle_data_pages(&self) {
-        self.inner.lock().recycle_data_pages();
+        self.inner.get_unchecked_mut().recycle_data_pages();
     }
     #[inline(always)]
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
-        self.inner.lock().translate(vpn)
+        self.inner.get_unchecked_mut().translate(vpn)
     }
 }
 
@@ -196,6 +208,9 @@ impl MemorySetInner {
     ///Get pagetable `root_ppn`
     pub fn token(&self) -> usize {
         self.page_table.token()
+    }
+    pub fn page_table_mut(self: &mut MemorySetInner) -> &mut PageTable {
+        &mut self.page_table
     }
     /// Assume that no conflicts.
     pub fn insert_framed_area(
@@ -763,7 +778,7 @@ impl MemorySetInner {
     pub fn from_existed_user(user_space: &Arc<MemorySet>, copy_user_stack: bool) -> MemorySetInner {
         let mut memory_set = Self::new_from_kernel();
         // copy data sections/trap_context/user_stack
-        for area in user_space.inner_lock().areas.iter() {
+        for area in user_space.get_unchecked_mut().areas.iter_mut() {
             // don't copy kernel stack
             if area.area_type == MapAreaType::Stack && !area.map_perm.contains(MapPermission::U) {
                 continue;
@@ -782,7 +797,11 @@ impl MemorySetInner {
                 new_area.data_frames = area.data_frames.clone();
                 for (vpn, frame) in area.data_frames.iter() {
                     let vpn = *vpn;
-                    let pte = user_space.inner_lock().page_table.translate(vpn).unwrap();
+                    let pte = user_space
+                        .get_unchecked_mut()
+                        .page_table
+                        .translate(vpn)
+                        .unwrap();
                     let mut pte_flags = pte.flags();
                     let src_ppn = pte.ppn();
                     //说明有共享页，不需要修改为写时复制
@@ -794,8 +813,11 @@ impl MemorySetInner {
                     //下面两步不合起来是因为flags只有8位，全都用掉了
                     //所以Cow位没有放到flags里面
                     pte_flags &= !PTEFlags::W;
-                    user_space.inner_lock().page_table.set_flags(vpn, pte_flags);
-                    user_space.inner_lock().page_table.set_cow(vpn);
+                    user_space
+                        .get_unchecked_mut()
+                        .page_table
+                        .set_flags(vpn, pte_flags);
+                    user_space.get_unchecked_mut().page_table.set_cow(vpn);
                     // 设置新的pagetable
                     memory_set.page_table.map(vpn, src_ppn, pte_flags);
                     memory_set.page_table.set_cow(vpn);
@@ -807,14 +829,21 @@ impl MemorySetInner {
             ///ELF是cow
             if area.area_type == MapAreaType::Elf {
                 for vpn in area.vpn_range {
-                    let pte = user_space.inner_lock().page_table.translate(vpn).unwrap();
+                    let pte = user_space
+                        .get_unchecked_mut()
+                        .page_table
+                        .translate(vpn)
+                        .unwrap();
                     let pte_flags = pte.flags() & !PTEFlags::W;
                     let src_ppn = pte.ppn();
                     //清空可写位，设置COW位
                     //下面两步不合起来是因为flags只有8位，全都用掉了
                     //所以Cow位没有放到flags里面
-                    user_space.inner_lock().page_table.set_flags(vpn, pte_flags);
-                    user_space.inner_lock().page_table.set_cow(vpn);
+                    user_space
+                        .get_unchecked_mut()
+                        .page_table
+                        .set_flags(vpn, pte_flags);
+                    user_space.get_unchecked_mut().page_table.set_cow(vpn);
                     // 设置新的pagetable
                     memory_set.page_table.map(vpn, src_ppn, pte_flags);
                     memory_set.page_table.set_cow(vpn);
@@ -836,7 +865,6 @@ impl MemorySetInner {
                     .copy_from_slice(src_ppn.bytes_array_mut());
             }
         }
-
         flush_tlb();
         memory_set
     }

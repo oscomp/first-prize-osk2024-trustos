@@ -6,7 +6,9 @@ mod pipe;
 mod stat;
 mod stdio;
 
-use crate::mm::UserBuffer;
+use core::cell::RefMut;
+
+use crate::{mm::UserBuffer, sync::SyncUnsafeCell};
 use alloc::string::String;
 use fat32_fs::FSInfoInner;
 pub use fsidx::*;
@@ -15,17 +17,17 @@ pub type RFile = dyn File + Send + Sync;
 pub type FdTableInner = Vec<Option<FileClass>>;
 
 pub struct FdTable {
-    inner: Mutex<FdTableInner>,
+    inner: SyncUnsafeCell<FdTableInner>,
 }
 
 impl FdTable {
     pub fn new(fd_table: FdTableInner) -> Self {
         Self {
-            inner: Mutex::new(fd_table),
+            inner: SyncUnsafeCell::new(fd_table),
         }
     }
     pub fn alloc_fd(&self) -> usize {
-        let mut fd_table = self.inner.lock();
+        let mut fd_table = self.inner.get_unchecked_mut();
         if let Some(fd) = (0..fd_table.len()).find(|fd| fd_table[*fd].is_none()) {
             fd
         } else {
@@ -33,51 +35,66 @@ impl FdTable {
             fd_table.len() - 1
         }
     }
-    pub fn inner_lock(&self) -> MutexGuard<FdTableInner> {
-        self.inner.lock()
+    pub fn get_mut(&self) -> &mut FdTableInner {
+        self.inner.get_unchecked_mut()
+    }
+    pub fn get_ref(&self) -> &FdTableInner {
+        self.inner.get_unchecked_ref()
     }
     pub fn len(&self) -> usize {
-        self.inner.lock().len()
+        self.inner.get_unchecked_ref().len()
     }
     pub fn push(&self, value: Option<FileClass>) {
-        self.inner.lock().push(value);
+        self.inner.get_unchecked_mut().push(value);
     }
     pub fn get(&self, fd: usize) -> Option<FileClass> {
-        let inner = self.inner.lock();
-        inner[fd].clone()
+        self.inner.get_unchecked_mut()[fd].clone()
     }
     pub fn set(&self, fd: usize, value: Option<FileClass>) {
-        let mut inner = self.inner.lock();
-        inner[fd] = value
+        self.inner.get_unchecked_mut()[fd] = value;
     }
     pub fn take(&self, fd: usize) -> Option<FileClass> {
-        let mut inner = self.inner.lock();
-        inner[fd].take()
+        self.inner.get_unchecked_mut()[fd].take()
     }
 }
 
+#[derive(Clone)]
 pub struct FsInfoInner {
     pub cwd: String,
 }
 
 pub struct FsInfo {
-    inner: Mutex<FsInfoInner>,
+    inner: SyncUnsafeCell<FsInfoInner>,
 }
 
 impl FsInfo {
     pub fn new(cwd: String) -> Self {
         Self {
-            inner: Mutex::new(FsInfoInner { cwd }),
+            inner: SyncUnsafeCell::new(FsInfoInner { cwd }),
+        }
+    }
+    pub fn from_another(another: &Arc<FsInfo>) -> Self {
+        Self {
+            inner: SyncUnsafeCell::new(another.inner.get_unchecked_mut().clone()),
         }
     }
     pub fn get_cwd(&self) -> String {
-        self.inner.lock().cwd.clone()
+        self.inner.get_unchecked_mut().cwd.clone()
+    }
+    pub fn cwd(&self) -> &str {
+        self.inner.get_unchecked_ref().cwd.as_str()
+    }
+    pub fn as_bytes(&self) -> &[u8] {
+        self.inner.get_unchecked_ref().cwd.as_bytes()
     }
     pub fn set_cwd(&self, cwd: String) {
-        self.inner.lock().cwd = cwd;
+        self.inner.get_unchecked_mut().cwd = cwd;
     }
-    pub fn inner_lock(&self) -> MutexGuard<FsInfoInner> {
-        self.inner.lock()
+    pub fn get_mut(&self) -> &mut FsInfoInner {
+        self.inner.get_unchecked_mut()
+    }
+    pub fn get_ref(&self) -> &FsInfoInner {
+        self.inner.get_unchecked_ref()
     }
 }
 

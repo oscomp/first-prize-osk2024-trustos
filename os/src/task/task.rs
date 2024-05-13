@@ -300,7 +300,7 @@ impl TaskControlBlock {
         );
         // copy fd table
         let mut new_fd_table: FdTableInner = Vec::new();
-        for fd in parent_inner.fd_table.inner_lock().iter() {
+        for fd in parent_inner.fd_table.get_mut().iter() {
             if let Some(file) = fd {
                 new_fd_table.push(Some(file.clone()));
             } else {
@@ -328,7 +328,7 @@ impl TaskControlBlock {
                 children: Vec::new(),
                 exit_code: 0,
                 fd_table: Arc::new(FdTable::new(new_fd_table)),
-                fs_info: parent_inner.fs_info.clone(),
+                fs_info: Arc::new(FsInfo::from_another(&parent_inner.fs_info)),
                 time_data: TimeData::new(),
                 user_heappoint: parent_inner.user_heappoint,
                 user_heapbottom: parent_inner.user_heapbottom,

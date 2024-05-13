@@ -143,19 +143,12 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
         }
     }
 
-    let fs_info = task_inner.fs_info.clone();
-    let fs_info_inner = fs_info.inner_lock();
-    if let Some(app_inode) = open(
-        fs_info_inner.cwd.as_str(),
-        path.as_str(),
-        OpenFlags::O_RDONLY,
-    ) {
+    if let Some(app_inode) = open(task_inner.fs_info.cwd(), path.as_str(), OpenFlags::O_RDONLY) {
         let elf_data = unsafe { app_inode.read_as_elf() };
         drop(task_inner);
 
         task.exec(elf_data, &argv_vec, &mut env);
-        let task_inner = task.inner_lock();
-        task_inner.memory_set.activate();
+        task.inner_lock().memory_set.activate();
         Ok(0)
     } else {
         Err(SysErrNo::ENOENT)
