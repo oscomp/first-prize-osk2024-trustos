@@ -8,7 +8,7 @@ pub use signal::*;
 
 use crate::{
     mm::{translated_ref, translated_refmut},
-    task::{current_task, TaskControlBlock},
+    task::{current_task, TaskControlBlock, THREAD_GROUP, TID_TO_TASK},
     trap::TrapContext,
 };
 
@@ -108,4 +108,13 @@ pub fn restore_frame() {
 pub fn add_signal(task: Arc<TaskControlBlock>, signal: SigSet) {
     let mut task_inner = task.inner_lock();
     task_inner.sig_pending.get_mut().pending |= signal;
+}
+
+pub fn send_signal_to_thread_group(pid: usize, sig: SigSet) {
+    let tid2task = THREAD_GROUP.lock();
+    if let Some(tasks) = tid2task.get(&pid) {
+        for task in tasks.iter() {
+            add_signal(task.clone(), sig);
+        }
+    }
 }

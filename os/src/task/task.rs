@@ -1,7 +1,8 @@
 //!Implementation of [`TaskControlBlock`]
 use super::{
     aux::{Aux, AuxType},
-    insert_into_tid2task, tid_alloc, KernelStack, TaskContext, TidHandle,
+    insert_into_process_group, insert_into_tid2task, tid_alloc, KernelStack, TaskContext,
+    TidHandle,
 };
 use crate::{
     config::mm::{
@@ -41,6 +42,7 @@ pub struct TaskControlBlock {
 
 pub struct TaskControlBlockInner {
     pub trap_cx_ppn: PhysPageNum,
+    pub trap_cx_bottom: usize,
     pub user_stack_top: usize, // exclusive
     pub task_cx: TaskContext,
     pub task_status: TaskStatus,
@@ -73,31 +75,37 @@ impl TaskControlBlockInner {
         self.status() == TaskStatus::Zombie
     }
     pub fn alloc_user_res(&mut self) {
-        let (_, ustack_top) = self
-            .memory_set
-            .get_unchecked_mut()
-            .insert_framed_area_with_hint(
-                USER_STACK_TOP,
-                USER_STACK_SIZE,
-                MapPermission::R | MapPermission::W | MapPermission::U,
-                MapAreaType::Stack,
-            );
-        let (trap_cx_bottom, _) = self
-            .memory_set
-            .get_unchecked_mut()
-            .insert_framed_area_with_hint(
-                USER_TRAP_CONTEXT_TOP,
-                PAGE_SIZE,
-                MapPermission::R | MapPermission::W,
-                MapAreaType::Trap,
-            );
+        let (_, ustack_top) = self.memory_set.get_mut().insert_framed_area_with_hint(
+            USER_STACK_TOP,
+            USER_STACK_SIZE,
+            MapPermission::R | MapPermission::W | MapPermission::U,
+            MapAreaType::Stack,
+        );
+        let (trap_cx_bottom, _) = self.memory_set.get_mut().insert_framed_area_with_hint(
+            USER_TRAP_CONTEXT_TOP,
+            PAGE_SIZE,
+            MapPermission::R | MapPermission::W,
+            MapAreaType::Trap,
+        );
         let trap_cx_ppn = self
             .memory_set
-            .translate(trap_cx_bottom.into())
+            .translate(VirtAddr::from(trap_cx_bottom).floor())
             .unwrap()
             .ppn();
         self.user_stack_top = ustack_top;
         self.trap_cx_ppn = trap_cx_ppn;
+        self.trap_cx_bottom = trap_cx_bottom;
+    }
+    pub fn clone_user_res(&mut self, another: &TaskControlBlockInner) {
+        self.alloc_user_res();
+        self.memory_set.get_mut().clone_area(
+            VirtAddr::from(self.user_stack_top - USER_STACK_SIZE).floor(),
+            another.memory_set.get_ref(),
+        );
+        self.memory_set.get_mut().clone_area(
+            VirtAddr::from(self.trap_cx_bottom).floor(),
+            another.memory_set.get_ref(),
+        );
     }
 }
 
@@ -117,13 +125,13 @@ impl TaskControlBlock {
     /// 只有initproc会调用
     pub fn new(elf_data: &[u8]) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack
-        let (mut memory_set, user_sp, user_heapbottom, entry_point, mut auxv) =
+        let (mut memory_set, user_heapbottom, entry_point, mut auxv) =
             MemorySetInner::from_elf(elf_data);
         debug!("entry point: {:x}", entry_point);
-        let trap_cx_ppn = memory_set
-            .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
-            .unwrap()
-            .ppn();
+        // let trap_cx_ppn = memory_set
+        //     .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
+        //     .unwrap()
+        //     .ppn();
         // alloc a pid and a kernel stack in kernel space
         let tid_handle = tid_alloc();
         let kernel_stack = KernelStack::new(&tid_handle);
@@ -134,15 +142,15 @@ impl TaskControlBlock {
             MapPermission::R | MapPermission::W,
             MapAreaType::Stack,
         );
-        let task_control_block = Self {
+        let task = Self {
             tid: tid_handle,
             pid: 0,
             ppid: 0,
             kernel_stack,
-            // sig_user_addr: 0,
             inner: Mutex::new(TaskControlBlockInner {
-                trap_cx_ppn,
-                user_stack_top: user_sp,
+                trap_cx_ppn: 0.into(),
+                trap_cx_bottom: 0,
+                user_stack_top: 0,
                 task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                 task_status: TaskStatus::Ready,
                 memory_set: Arc::new(MemorySet::new(memory_set)),
@@ -167,112 +175,27 @@ impl TaskControlBlock {
                 sig_pending: Arc::new(SigPending::new()),
             }),
         };
+        let mut task_inner = task.inner_lock();
+        task_inner.alloc_user_res();
         // prepare TrapContext in user space
-        let trap_cx = task_control_block.inner_lock().trap_cx();
+        let trap_cx = task_inner.trap_cx();
         *trap_cx = TrapContext::app_init_context(
             entry_point,
-            user_sp,
+            task_inner.user_stack_top,
             kernel_stack_top,
             trap_handler as usize,
         );
-        debug!("create task {}", task_control_block.tid.0);
-        task_control_block
+        debug!("create task {}", task.tid.0);
+        drop(task_inner);
+        task
     }
     pub fn exec(&self, elf_data: &[u8], argv: &Vec<String>, mut env: &mut Vec<String>) {
         //用户栈高地址到低地址：环境变量字符串/参数字符串/aux辅助向量/环境变量地址数组/参数地址数组/参数数量
         // memory_set with elf program headers/trampoline/trap context/user stack
-        let (mut memory_set, mut user_sp, user_hp, entry_point, mut auxv) =
-            MemorySetInner::from_elf(elf_data);
-        // println!("user_sp:{:#X}  argv:{:?}", user_sp, argv);
-        let trap_cx_ppn = memory_set
-            .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
-            .unwrap()
-            .ppn();
+        let (mut memory_set, user_hp, entry_point, mut auxv) = MemorySetInner::from_elf(elf_data);
 
-        //一些初始的环境变量
-        env.push(String::from("SHELL=/user_shell"));
-        env.push(String::from("PWD=/"));
-        env.push(String::from("HOME=/"));
-        env.push(String::from("PATH=/"));
-
-        //环境变量内容入栈
-        let mut env_ptr_vec = Vec::new();
-        for (i, env) in env.iter().enumerate() {
-            user_sp -= env.len() + 1;
-            env_ptr_vec.push(user_sp);
-            // println!("{:#X}:{}", user_sp, env);
-            for (j, c) in env.as_bytes().iter().enumerate() {
-                *translated_refmut(memory_set.token(), (user_sp + j) as *mut u8) = *c;
-            }
-            *translated_refmut(memory_set.token(), (user_sp + env.len()) as *mut u8) = 0;
-        }
-        user_sp -= user_sp % core::mem::size_of::<usize>();
-        env_ptr_vec.push(0);
-
-        //存放字符串首址的数组
-        let mut argv_ptr_vec = Vec::new();
-        for (i, arg) in argv.iter().enumerate() {
-            // 计算字符串在栈上的地址
-            user_sp -= arg.len() + 1;
-            argv_ptr_vec.push(user_sp);
-            // println!("{:#X}:{}", user_sp, arg);
-            for (j, c) in arg.as_bytes().iter().enumerate() {
-                *translated_refmut(memory_set.token(), (user_sp + j) as *mut u8) = *c;
-            }
-            // 添加字符串末尾的 null 字符
-            *translated_refmut(memory_set.token(), (user_sp + arg.len()) as *mut u8) = 0;
-        }
-        user_sp -= user_sp % core::mem::size_of::<usize>(); //以8字节对齐
-        argv_ptr_vec.push(0);
-
-        //需要随便放16个字节，不知道干嘛用的。
-        user_sp -= 16;
-        auxv.push(Aux::new(AuxType::RANDOM, user_sp));
-        for i in 0..0xf {
-            *translated_refmut(memory_set.token(), (user_sp + i) as *mut u8) = i as u8;
-        }
-        user_sp -= user_sp % 16;
-
-        // println!("aux:");
-        //将auxv放入栈中
-        auxv.push(Aux::new(AuxType::EXECFN, argv_ptr_vec[0]));
-        auxv.push(Aux::new(AuxType::NULL, 0));
-        for aux in auxv.iter().rev() {
-            // println!("{:?}", aux);
-            user_sp -= size_of::<Aux>();
-            *translated_refmut(memory_set.token(), user_sp as *mut usize) = aux.aux_type as usize;
-            *translated_refmut(
-                memory_set.token(),
-                (user_sp + size_of::<usize>()) as *mut usize,
-            ) = aux.value;
-        }
-
-        //将环境变量指针数组放入栈中
-        // println!("env pointers:");
-        for p in env_ptr_vec.iter().rev() {
-            user_sp -= core::mem::size_of::<usize>();
-            *translated_refmut(memory_set.token(), user_sp as *mut usize) = *p;
-            // println!("{:#X}:{:#X}", user_sp, *p);
-        }
-        // println!("arg pointers:");
-
-        //将参数指针数组放入栈中
-        for p in argv_ptr_vec.iter().rev() {
-            user_sp -= size_of::<usize>();
-            *translated_refmut(memory_set.token(), user_sp as *mut usize) = *p;
-            // println!("{:#X}:{:#X} ", user_sp, *p);
-        }
-
-        //将argc放入栈中
-        user_sp -= size_of::<usize>();
-        *translated_refmut(memory_set.token(), user_sp as *mut usize) = argv.len();
-
-        //以8字节对齐
-        user_sp -= user_sp % size_of::<usize>();
-        //println!("user_sp:{:#X}", user_sp);
-
-        // **** access current TCB exclusively
         let mut inner = self.inner_lock();
+        let token = memory_set.token();
 
         inner.time_data.clear();
 
@@ -287,8 +210,92 @@ impl TaskControlBlock {
         );
         // substitute memory_set
         inner.memory_set = Arc::new(MemorySet::new(memory_set));
-        // update trap_cx ppn
-        inner.trap_cx_ppn = trap_cx_ppn;
+        // 重新分配用户资源
+        inner.alloc_user_res();
+
+        let mut user_sp = inner.user_stack_top;
+
+        // println!("user_sp:{:#X}  argv:{:?}", user_sp, argv);
+
+        //一些初始的环境变量
+        env.push(String::from("SHELL=/user_shell"));
+        env.push(String::from("PWD=/"));
+        env.push(String::from("HOME=/"));
+        env.push(String::from("PATH=/"));
+
+        //环境变量内容入栈
+        let mut env_ptr_vec = Vec::new();
+        for (i, env) in env.iter().enumerate() {
+            user_sp -= env.len() + 1;
+            env_ptr_vec.push(user_sp);
+            // println!("{:#X}:{}", user_sp, env);
+            for (j, c) in env.as_bytes().iter().enumerate() {
+                *translated_refmut(token, (user_sp + j) as *mut u8) = *c;
+            }
+            *translated_refmut(token, (user_sp + env.len()) as *mut u8) = 0;
+        }
+        user_sp -= user_sp % core::mem::size_of::<usize>();
+        env_ptr_vec.push(0);
+
+        //存放字符串首址的数组
+        let mut argv_ptr_vec = Vec::new();
+        for (i, arg) in argv.iter().enumerate() {
+            // 计算字符串在栈上的地址
+            user_sp -= arg.len() + 1;
+            argv_ptr_vec.push(user_sp);
+            // println!("{:#X}:{}", user_sp, arg);
+            for (j, c) in arg.as_bytes().iter().enumerate() {
+                *translated_refmut(token, (user_sp + j) as *mut u8) = *c;
+            }
+            // 添加字符串末尾的 null 字符
+            *translated_refmut(token, (user_sp + arg.len()) as *mut u8) = 0;
+        }
+        user_sp -= user_sp % core::mem::size_of::<usize>(); //以8字节对齐
+        argv_ptr_vec.push(0);
+
+        //需要随便放16个字节，不知道干嘛用的。
+        user_sp -= 16;
+        auxv.push(Aux::new(AuxType::RANDOM, user_sp));
+        for i in 0..0xf {
+            *translated_refmut(token, (user_sp + i) as *mut u8) = i as u8;
+        }
+        user_sp -= user_sp % 16;
+
+        // println!("aux:");
+        //将auxv放入栈中
+        auxv.push(Aux::new(AuxType::EXECFN, argv_ptr_vec[0]));
+        auxv.push(Aux::new(AuxType::NULL, 0));
+        for aux in auxv.iter().rev() {
+            // println!("{:?}", aux);
+            user_sp -= size_of::<Aux>();
+            *translated_refmut(token, user_sp as *mut usize) = aux.aux_type as usize;
+            *translated_refmut(token, (user_sp + size_of::<usize>()) as *mut usize) = aux.value;
+        }
+
+        //将环境变量指针数组放入栈中
+        // println!("env pointers:");
+        for p in env_ptr_vec.iter().rev() {
+            user_sp -= core::mem::size_of::<usize>();
+            *translated_refmut(token, user_sp as *mut usize) = *p;
+            // println!("{:#X}:{:#X}", user_sp, *p);
+        }
+        // println!("arg pointers:");
+
+        //将参数指针数组放入栈中
+        for p in argv_ptr_vec.iter().rev() {
+            user_sp -= size_of::<usize>();
+            *translated_refmut(token, user_sp as *mut usize) = *p;
+            // println!("{:#X}:{:#X} ", user_sp, *p);
+        }
+
+        //将argc放入栈中
+        user_sp -= size_of::<usize>();
+        *translated_refmut(token, user_sp as *mut usize) = argv.len();
+
+        //以8字节对齐
+        user_sp -= user_sp % size_of::<usize>();
+        //println!("user_sp:{:#X}", user_sp);
+
         let trap_cx = TrapContext::app_init_context(
             entry_point,
             user_sp,
@@ -300,16 +307,14 @@ impl TaskControlBlock {
         inner.user_heappoint = user_hp;
         inner.user_heapbottom = user_hp;
         // println!("final user_sp:{:#X}", user_sp);
-        // **** release current PCB
     }
-    ///
+    #[deprecated]
     pub fn fork(self: &Arc<TaskControlBlock>, stack: Option<usize>) -> Arc<TaskControlBlock> {
         // ---- hold parent PCB lock
         let mut parent_inner = self.inner_lock();
         let copy_user_stack = stack.is_none();
         // copy user space(include trap context)
-        let mut memory_set =
-            MemorySetInner::from_existed_user(&parent_inner.memory_set, copy_user_stack);
+        let mut memory_set = MemorySetInner::from_existed_user(&parent_inner.memory_set);
         let trap_cx_ppn = memory_set
             .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
             .unwrap()
@@ -347,6 +352,7 @@ impl TaskControlBlock {
             kernel_stack,
             inner: Mutex::new(TaskControlBlockInner {
                 trap_cx_ppn,
+                trap_cx_bottom: USER_TRAP_CONTEXT,
                 user_stack_top,
                 task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                 task_status: TaskStatus::Ready,
@@ -402,7 +408,6 @@ impl TaskControlBlock {
         } else {
             Arc::new(MemorySet::new(MemorySetInner::from_existed_user(
                 &parent_inner.memory_set,
-                copy_user_stack,
             )))
         };
         // 无论如何都要插入内核栈
@@ -465,6 +470,7 @@ impl TaskControlBlock {
             kernel_stack,
             inner: Mutex::new(TaskControlBlockInner {
                 trap_cx_ppn: 0.into(),
+                trap_cx_bottom: 0,
                 user_stack_top: 0,
                 task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                 task_status: TaskStatus::Ready,
@@ -498,13 +504,14 @@ impl TaskControlBlock {
             *child_inner.trap_cx() = *parent_inner.trap_cx();
         } else {
             // fork
-            child_inner.user_stack_top = user_stack_top;
-            child_inner.trap_cx_ppn = child_inner
-                .memory_set
-                .get_unchecked_ref()
-                .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
-                .unwrap()
-                .ppn();
+            // child_inner.user_stack_top = user_stack_top;
+            child_inner.clone_user_res(&parent_inner);
+            // child_inner.trap_cx_ppn = child_inner
+            //     .memory_set
+            //     .get_unchecked_ref()
+            //     .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
+            //     .unwrap()
+            //     .ppn();
         }
         let trap_cx = child_inner.trap_cx();
         trap_cx.kernel_sp = kernel_stack_top;
@@ -528,6 +535,9 @@ impl TaskControlBlock {
         parent_inner.children.push(child.clone());
         insert_into_tid2task(child.tid(), &child);
         insert_into_thread_group(child.pid, &child);
+        if !flags.contains(CloneFlags::CLONE_THREAD) {
+            insert_into_process_group(child.ppid, &child);
+        }
         child
     }
 

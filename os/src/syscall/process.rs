@@ -7,7 +7,7 @@ use crate::{
     syscall::CloneFlags,
     task::{
         add_task, current_task, current_token, exit_current_and_run_next,
-        suspend_current_and_run_next, task_num,
+        exit_current_group_and_run_next, suspend_current_and_run_next, task_num,
     },
     timer::{get_time_ms, Timespec, Tms},
     utils::{SysErrNo, SyscallRet},
@@ -24,6 +24,11 @@ use log::{debug, info};
 
 pub fn sys_exit(exit_code: i32) -> ! {
     exit_current_and_run_next(exit_code);
+    panic!("Unreachable in sys_exit!");
+}
+
+pub fn sys_exit_group(exit_code: i32) -> ! {
+    exit_current_group_and_run_next(exit_code);
     panic!("Unreachable in sys_exit!");
 }
 

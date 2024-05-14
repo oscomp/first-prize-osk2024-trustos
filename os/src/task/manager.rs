@@ -55,19 +55,19 @@ pub fn ready_procs_num() -> usize {
 }
 ///
 lazy_static! {
-    pub static ref TID_TO_TASK: Mutex<BTreeMap<usize, Weak<TaskControlBlock>>> =
+    pub static ref TID_TO_TASK: Mutex<BTreeMap<usize, Arc<TaskControlBlock>>> =
         Mutex::new(BTreeMap::new());
 }
 
 pub fn tid2task(tid: usize) -> Option<Arc<TaskControlBlock>> {
     match TID_TO_TASK.lock().get(&tid) {
-        Some(task) => task.upgrade(),
+        Some(task) => Some(task.clone()),
         None => None,
     }
 }
 
 pub fn insert_into_tid2task(tid: usize, task: &Arc<TaskControlBlock>) {
-    TID_TO_TASK.lock().insert(tid, Arc::downgrade(task));
+    TID_TO_TASK.lock().insert(tid, task.clone());
 }
 
 pub fn remove_from_tid2task(tid: usize) {
@@ -77,9 +77,10 @@ pub fn remove_from_tid2task(tid: usize) {
 pub fn task_num() -> usize {
     TID_TO_TASK.lock().len()
 }
+
 /// 线程组
 lazy_static! {
-    pub static ref THREAD_GROUP: Mutex<BTreeMap<usize, Vec<Weak<TaskControlBlock>>>> =
+    pub static ref THREAD_GROUP: Mutex<BTreeMap<usize, Vec<Arc<TaskControlBlock>>>> =
         Mutex::new(BTreeMap::new());
 }
 
@@ -88,13 +89,13 @@ pub fn insert_into_thread_group(pid: usize, task: &Arc<TaskControlBlock>) {
         .lock()
         .entry(pid)
         .or_insert_with(Vec::new)
-        .push(Arc::downgrade(task));
+        .push(task.clone());
 }
 
 pub fn remove_from_thread_group(pid: usize, tid: usize) {
     let mut inner = THREAD_GROUP.lock();
     if let Some(tasks) = inner.get_mut(&pid) {
-        tasks.remove(tid);
+        tasks.retain(|x| x.tid() != tid);
         if tasks.is_empty() {
             inner.remove(&pid);
         }
@@ -117,7 +118,7 @@ pub fn insert_into_process_group(ppid: usize, task: &Arc<TaskControlBlock>) {
 pub fn remove_from_process_group(ppid: usize, pid: usize) {
     let mut inner = PROCESS_GROUP.lock();
     if let Some(tasks) = inner.get_mut(&ppid) {
-        tasks.remove(pid);
+        tasks.retain(|x| x.pid() != pid);
         if tasks.is_empty() {
             inner.remove(&ppid);
         }
