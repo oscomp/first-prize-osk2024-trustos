@@ -788,6 +788,11 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
     }
 }
 
+pub fn sys_ioctl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
+    todo!();
+    Ok(0)
+}
+
 pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
