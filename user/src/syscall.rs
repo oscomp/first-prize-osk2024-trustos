@@ -150,7 +150,13 @@ pub fn sys_busyboxsh() -> isize {
         SYSCALL_EXECVE,
         [
             "busybox\0".as_ptr() as isize,
-            ["busybox\0".as_ptr() as isize, "ls\0".as_ptr() as isize, 0].as_ptr() as isize,
+            [
+                "busybox\0".as_ptr() as isize,
+                "echo\0".as_ptr() as isize,
+                "Hello echo!\0".as_ptr() as isize,
+                0,
+            ]
+            .as_ptr() as isize,
             0,
             0,
             0,

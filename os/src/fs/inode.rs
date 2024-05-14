@@ -169,8 +169,9 @@ bitflags! {
         const O_CREATE = 1 << 6;
         const O_TRUNC = 1 << 9;
         const O_APPEND = 1 << 10;
+        const O_UNUSED=1<<15;
+        const O_DIRECTROY = 1 << 16;
         const O_CLOEXEC = 1<<19;    //描述符标志
-        const O_DIRECTROY = 1 << 21;
     }
 }
 

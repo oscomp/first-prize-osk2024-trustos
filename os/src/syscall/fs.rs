@@ -177,7 +177,6 @@ pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> Sysca
     let mut inner = task.inner_lock();
     let token = inner.user_token();
     let mut path = translated_str(token, path);
-
     let flags = OpenFlags::from_bits(flags).unwrap();
     let ret: SyscallRet;
 
