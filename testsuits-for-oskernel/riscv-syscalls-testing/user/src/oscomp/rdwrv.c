@@ -27,6 +27,8 @@ void test_rdwrv() {
         write(STDOUT,buf[i],iov[i].iov_len);
     }
     printf("\nreadv finished!\n");
+    writev(STDOUT,iov,5);
+    printf("\nwritev for stdout finished\n");
     int fd2=open("./writev.txt",O_WRONLY|O_CREATE);
     writev(fd2,iov,5);
     close(fd2);
@@ -34,7 +36,7 @@ void test_rdwrv() {
     char buf[114];
     read(fd3,buf,114);
     printf("%s",buf);
-    printf("\nwritev finished!\n");
+    printf("\nwritev for file finished!\n");
     close(fd3);
 	TEST_END(__func__);
 }

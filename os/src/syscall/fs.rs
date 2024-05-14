@@ -97,7 +97,7 @@ pub fn sys_writev(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
     if let Some(file) = &inner.fd_table.get(fd) {
         let file = match file {
             FileClass::File(f) => f.clone(),
-            FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
+            FileClass::Abs(f) => f.clone(),
         };
         if !file.writable() {
             return Err(SysErrNo::EACCES);
@@ -117,7 +117,7 @@ pub fn sys_writev(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
                 iovinfo.iov_base as *mut u8,
                 iovinfo.iov_len,
             ));
-            file.set_offset(ret);
+            //file.set_offset(ret);
             let write_ret = file.write(buf);
             ret += write_ret as usize;
         }
@@ -138,7 +138,7 @@ pub fn sys_readv(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
     if let Some(file) = &inner.fd_table.get(fd) {
         let file = match file {
             FileClass::File(f) => f.clone(),
-            FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
+            FileClass::Abs(f) => f.clone(),
         };
         if !file.readable() {
             return Err(SysErrNo::EACCES);
@@ -158,7 +158,7 @@ pub fn sys_readv(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
                 iovinfo.iov_base as *mut u8,
                 iovinfo.iov_len,
             ));
-            file.set_offset(ret);
+            //file.set_offset(ret);
             let write_ret = file.read(buf);
             ret += write_ret as usize;
         }
@@ -789,7 +789,7 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
 }
 
 pub fn sys_ioctl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
-    todo!();
+    //TODO
     Ok(0)
 }
 
