@@ -962,3 +962,96 @@ pub fn sys_sync() -> SyscallRet {
     sync_all();
     Ok(0)
 }
+
+pub fn sys_symlinkat(target: *const u8, dirfd: isize, linkpath: *const u8) -> SyscallRet {
+    let task = current_task().unwrap();
+    let task_inner = task.inner_lock();
+    let token = task_inner.user_token();
+    let linkpath = translated_str(token, linkpath);
+
+    let cwd_str = task_inner.fs_info.get_cwd();
+
+    let cwd = if dirfd == AT_FDCWD && !is_abs_path(&linkpath) {
+        cwd_str.as_str()
+    } else {
+        "/"
+    };
+    drop(task_inner);
+
+    let ret: SyscallRet = {
+        if let Some(_) = open(cwd, linkpath.as_str(), OpenFlags::O_RDWR) {
+            Err(SysErrNo::EEXIST)
+        } else {
+            if let Some(newfile) = open(
+                cwd,
+                linkpath.as_str(),
+                OpenFlags::O_RDWR | OpenFlags::O_CREATE,
+            ) {
+                let mut target = translated_str(token, target);
+                let mut buf = Vec::new();
+                unsafe {
+                    let target_bytes = target.as_bytes_mut();
+                    let target_buf = core::slice::from_raw_parts_mut(
+                        target_bytes.as_mut_ptr(),
+                        target_bytes.len(),
+                    );
+                    buf.push(target_buf);
+                }
+                let mut buffer = UserBuffer::new(buf); //输入缓冲池
+                newfile.write(buffer);
+                newfile.setsym();
+                Ok(0)
+            } else {
+                Err(SysErrNo::ENOENT)
+            }
+        }
+    };
+
+    ret
+}
+
+pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsiz: usize) -> SyscallRet {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+    let mut path = translated_str(token, path);
+
+    let mut base_path = inner.fs_info.cwd();
+    // 如果path是绝对路径，则dirfd被忽略
+    if is_abs_path(&path) {
+        base_path = "/";
+    } else if dirfd != AT_FDCWD {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table.get(dirfd as usize) {
+            if let Some(osfile) = osfile.find(path.as_str(), OpenFlags::O_RDONLY) {
+                if !osfile.readable() {
+                    return Err(SysErrNo::EACCES);
+                }
+                if !osfile.sym() {
+                    return Err(SysErrNo::EINVAL);
+                }
+                // release current task TCB manually to avoid multi-borrow
+                drop(inner);
+                drop(task);
+                let ret = osfile.read(UserBuffer::new(translated_byte_buffer(token, buf, bufsiz)));
+                return Ok(ret);
+            }
+        } else {
+            return Err(SysErrNo::EINVAL);
+        }
+    }
+    if let Some(osfile) = open(base_path, path.as_str(), OpenFlags::O_RDONLY) {
+        if !osfile.readable() {
+            return Err(SysErrNo::EACCES);
+        }
+        if !osfile.sym() {
+            return Err(SysErrNo::EINVAL);
+        }
+        // release current task TCB manually to avoid multi-borrow
+        drop(inner);
+        drop(task);
+        let ret = osfile.read(UserBuffer::new(translated_byte_buffer(token, buf, bufsiz)));
+        return Ok(ret);
+    } else {
+        Err(SysErrNo::ENOENT)
+    }
+}

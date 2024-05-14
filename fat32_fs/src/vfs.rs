@@ -11,6 +11,11 @@ fn aligned_down(addr: usize) -> usize {
     addr & PAGE_MASK
 }
 
+//s_mode
+const S_IFDIR: u32 = 0x4000;
+const S_IFREG: u32 = 0x8000;
+const S_IFLINK: u32 = 0xA000;
+
 #[derive(Clone)]
 pub struct VFile {
     name: String,
@@ -641,17 +646,25 @@ impl VFile {
 
     // 获取目录中offset处目录项的信息
     // 返回(size, accessed_time, modification_time, creation_time, first_cluster)
-    pub fn stat(&self) -> (i64, i64, i64, i64, u64) {
+    pub fn stat(&self) -> (i64, i64, i64, i64, u64, u64, u32) {
         self.read_short_dirent(|short_ent| {
             let (_, _, _, _, _, _, ctime) = short_ent.get_creation_time();
             let atime = self.accessed_time();
             let mtime = self.modification_time();
             let mut size = short_ent.get_size();
             let first_cluster = short_ent.first_cluster();
+            let fs = self.get_fs();
+            let cluster_num = short_ent.data_cluster_count(fs.bytes_per_cluster());
+            let blocks = cluster_num * fs.sectors_per_cluster();
+            let mut mode = S_IFREG;
             if self.is_dir() {
                 let fat = self.fs.get_fat();
                 let cluster_count = fat.read().cluster_count(first_cluster, &self.block_device);
                 size = cluster_count * self.fs.bytes_per_cluster();
+                mode = S_IFDIR;
+            }
+            if self.sym() {
+                mode = S_IFLINK;
             }
             (
                 size as i64,
@@ -659,6 +672,8 @@ impl VFile {
                 mtime as i64,
                 ctime as i64,
                 first_cluster as u64,
+                blocks as u64,
+                mode,
             )
         })
     }
@@ -813,6 +828,16 @@ impl VFile {
                 &self.chain,
             )
         })
+    }
+
+    pub fn setsym(&self) {
+        self.modify_short_dirent(|short_ent| {
+            short_ent.setattribute(ATTR_SYMLINK);
+        });
+    }
+    pub fn sym(&self) -> bool {
+        let short_attr = self.read_short_dirent(|short_ent| short_ent.attribute());
+        short_attr == ATTR_SYMLINK
     }
 }
 

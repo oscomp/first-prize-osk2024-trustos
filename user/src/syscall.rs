@@ -7,6 +7,7 @@ const SYSCALL_DUP3: usize = 24;
 const SYSCALL_FCNTL: usize = 25;
 const SYSCALL_MKDIRAT: usize = 34;
 const SYSCALL_UNLINKAT: usize = 35;
+const SYSCALL_SYMLINKAT: usize = 36;
 const SYSCALL_LINKAT: usize = 37;
 const SYSCALL_UMOUNT2: usize = 39;
 const SYSCALL_MOUNT: usize = 40;
@@ -24,6 +25,7 @@ const SYSCALL_WRITE: usize = 64;
 const SYSCALL_PREAD64: usize = 67;
 const SYSCALL_PWRITE64: usize = 68;
 const SYSCALL_SENDFILE: usize = 71;
+const SYSCALL_READLINKAT: usize = 78;
 const SYSCALL_FSTATAT: usize = 79;
 const SYSCALL_FSTAT: usize = 80;
 const SYSCALL_SYNC: usize = 81;
@@ -449,4 +451,32 @@ pub fn sys_fsync(fd: usize) -> isize {
 
 pub fn sys_sync() -> isize {
     syscall(SYSCALL_SYNC, [0, 0, 0, 0, 0, 0])
+}
+
+pub fn sys_symlinkat(target: &str, newfd: isize, linkpath: &str) -> isize {
+    syscall(
+        SYSCALL_SYMLINKAT,
+        [
+            target.as_ptr() as isize,
+            newfd,
+            linkpath.as_ptr() as isize,
+            0,
+            0,
+            0,
+        ],
+    )
+}
+
+pub fn sys_readlinkat(dirfd: isize, pathname: &str, buf: &mut [u8], bufsiz: usize) -> isize {
+    syscall(
+        SYSCALL_READLINKAT,
+        [
+            dirfd,
+            pathname.as_ptr() as isize,
+            buf.as_mut_ptr() as isize,
+            bufsiz as isize,
+            0,
+            0,
+        ],
+    )
 }

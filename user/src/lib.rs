@@ -454,3 +454,11 @@ pub fn fsync(fd: usize) -> isize {
 pub fn sync() -> isize {
     sys_sync()
 }
+
+pub fn symlinkat(target: &str, newfd: isize, linkpath: &str) -> isize {
+    sys_symlinkat(target, newfd, linkpath)
+}
+
+pub fn readlinkat(dirfd: isize, pathname: &str, buf: &mut [u8], bufsiz: usize) -> isize {
+    sys_readlinkat(dirfd, pathname, buf, bufsiz)
+}

@@ -25,6 +25,7 @@ pub const ATTR_SYSTEM: u8 = 0x04;
 pub const ATTR_VOLUME_ID: u8 = 0x08;
 pub const ATTR_DIRECTORY: u8 = 0x10;
 pub const ATTR_ARCHIVE: u8 = 0x20;
+pub const ATTR_SYMLINK: u8 = 0x40; //符号链接属性
 pub const ATTR_LFN: u8 = 0x0F;
 pub const DIRENT_SZ: usize = 32;
 
@@ -263,6 +264,10 @@ impl ShortDirEntry {
 
     pub fn attribute(&self) -> u8 {
         self.attribute
+    }
+
+    pub fn setattribute(&mut self, newattr: u8) {
+        self.attribute = newattr;
     }
 
     pub fn get_creation_time(&self) -> (u32, u32, u32, u32, u32, u32, u64) {

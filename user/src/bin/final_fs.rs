@@ -1,9 +1,9 @@
 #![no_std]
 #![no_main]
-
 use user_lib::{
     close, faccessat, fcntl, fstatat, fsync, ftruncate, lseek, mkdir, openat, pread64, pwrite64,
-    read, sendfile, statfs, sync, write, FaccessatMode, Kstat, OpenFlags, Statfs,
+    read, readlinkat, sendfile, statfs, symlinkat, sync, write, FaccessatMode, Kstat, OpenFlags,
+    Statfs,
 };
 
 #[macro_use]
@@ -192,6 +192,32 @@ fn test_sync() {
     println!("");
 }
 
+fn test_symlinkat_readlinkat() {
+    println!("-----------------test symlinkat & readlinkat-----------------");
+    openat(
+        -100,
+        "test_readlinkat\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0,
+    );
+    let result1 = symlinkat("test_readlinkat\0", -100, "test_symlinkat");
+    let mut buf: [u8; 100] = [0; 100];
+    let result2 = readlinkat(-100, "test_symlinkat", &mut buf, 100);
+    let buf_ascii = buf.to_ascii_lowercase();
+    println!("now print got string which should be test_readlinkat");
+    for i in 0..buf_ascii.len() {
+        print!("{}", buf_ascii[i] as char);
+    }
+    println!("");
+    println!("result1 is {} which should be 0", result1);
+    println!(
+        "result2 is {} which should be 15 which is the length",
+        result2
+    );
+    println!("-----------------end symlinkat & readlinkat-----------------");
+    println!("");
+}
+
 #[no_mangle]
 pub fn main() -> i32 {
     test_fstatat();
@@ -204,5 +230,6 @@ pub fn main() -> i32 {
     test_ftruncate();
     test_fsync();
     test_sync();
+    test_symlinkat_readlinkat();
     0
 }

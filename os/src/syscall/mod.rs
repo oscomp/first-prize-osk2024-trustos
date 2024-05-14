@@ -20,6 +20,7 @@ pub enum Syscall {
     Ioctl = 29,
     Mkdirat = 34,
     Unlinkat = 35,
+    Symlinkat = 36,
     Linkat = 37,
     Umount2 = 39,
     Mount = 40,
@@ -39,6 +40,7 @@ pub enum Syscall {
     Pread64 = 67,
     Pwrite64 = 68,
     Sendfile = 71,
+    Readlinkat = 78,
     Fstatat = 79,
     Fstat = 80,
     Sync = 81,
@@ -109,6 +111,9 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Fcntl => sys_fcntl(args[0] as usize, args[1] as usize, args[2] as usize),
         Syscall::Ioctl => sys_ioctl(args[0] as usize, args[1] as usize, args[2] as usize),
         Syscall::Mkdirat => sys_mkdirat(args[0] as isize, args[1] as *const u8, args[2]),
+        Syscall::Symlinkat => {
+            sys_symlinkat(args[0] as *const u8, args[1] as isize, args[2] as *const u8)
+        }
         Syscall::Unlinkat => sys_unlinkat(args[0] as isize, args[1] as *const u8, args[2] as u32),
         Syscall::Linkat => sys_linkat(
             args[0] as isize,
@@ -166,6 +171,12 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[0] as usize,
             args[1] as usize,
             args[2] as usize,
+            args[3] as usize,
+        ),
+        Syscall::Readlinkat => sys_readlinkat(
+            args[0] as isize,
+            args[1] as *const u8,
+            args[2] as *const u8,
             args[3] as usize,
         ),
         Syscall::Fstatat => sys_fstatat(

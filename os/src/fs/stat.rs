@@ -1,3 +1,7 @@
+const S_IFDIR: u32 = 0x4000;
+const S_IFREG: u32 = 0x8000;
+const S_IFLINK: u32 = 0xA000;
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct Kstat {
@@ -34,7 +38,7 @@ impl Kstat {
             st_rdev: 0,
             __pad: 0,
             st_size: 0,
-            st_blksize: 0,
+            st_blksize: 512,
             __pad2: 0,
             st_blocks: 0,
             st_atime_sec: 0,
@@ -46,8 +50,21 @@ impl Kstat {
             __unused: [0; 2],
         }
     }
-    pub fn init(&mut self, st_size: i64) {
+    pub fn init(
+        &mut self,
+        st_size: i64,
+        st_atime: i64,
+        st_mtime: i64,
+        st_ctime: i64,
+        st_blocks: u64,
+        st_mode: u32,
+    ) {
         self.st_size = st_size;
+        self.st_atime_sec = st_atime;
+        self.st_mtime_sec = st_mtime;
+        self.st_ctime_sec = st_ctime;
+        self.st_blocks = st_blocks;
+        self.st_mode = st_mode;
     }
 
     pub fn as_bytes(&self) -> &[u8] {

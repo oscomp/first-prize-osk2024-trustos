@@ -86,8 +86,8 @@ impl OSInode {
 
     pub fn fstat(&self, kstat: &mut Kstat) {
         let inner = self.inner.lock();
-        let (st_size, _, _, _, _) = self.inode.stat();
-        kstat.init(st_size);
+        let (st_size, st_atime, st_mtime, st_ctime, _, st_blocks, st_mode) = self.inode.stat();
+        kstat.init(st_size, st_atime, st_mtime, st_ctime, st_blocks, st_mode);
     }
 
     pub fn dirent(&self, dirent: &mut Dirent) -> isize {
@@ -142,6 +142,13 @@ impl OSInode {
 
     pub fn sync(&self) {
         self.inode.sync();
+    }
+
+    pub fn setsym(&self) {
+        self.inode.setsym();
+    }
+    pub fn sym(&self) -> bool {
+        self.inode.sym()
     }
 }
 
