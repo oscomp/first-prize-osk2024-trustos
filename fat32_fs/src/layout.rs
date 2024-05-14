@@ -451,29 +451,34 @@ impl ShortDirEntry {
             end_current_block = end_current_block.min(end);
             let block_read_size = end_current_block - curr_offset;
             let dst = &mut buf[read_size..read_size + block_read_size];
-            // if self.is_dir() {
-            // 	get_info_block_cache(  // 目录项通过Info block cache读取
-            // 		curr_sector,
-            // 		Arc::clone(block_device),
-            // 		CacheMode::READ
-            // 	)
-            // 	.read()
-            // 	.read(0, |data_block: &DataBlock| {
-            // 		let src = &data_block[curr_offset % BLOCK_SZ..curr_offset % BLOCK_SZ + block_read_size];
-            // 		dst.copy_from_slice(src);
-            // 	});
-            // } else {
-            // 	get_data_block_cache(  // 文件内容通过Data block cache读取
-            // 		curr_sector,
-            // 		Arc::clone(block_device),
-            // 		CacheMode::READ
-            // 	)
-            // 	.read()
-            // 	.read(0, |data_block: &DataBlock| {
-            // 		let src = &data_block[curr_offset % BLOCK_SZ..curr_offset % BLOCK_SZ + block_read_size];
-            // 		dst.copy_from_slice(src);
-            // 	});
-            // }
+            if self.is_dir() {
+                get_info_block_cache(
+                    // 目录项通过Info block cache读取
+                    curr_sector,
+                    Arc::clone(block_device),
+                    CacheMode::READ,
+                )
+                .read()
+                .read(0, |data_block: &DataBlock| {
+                    let src = &data_block
+                        [curr_offset % BLOCK_SZ..curr_offset % BLOCK_SZ + block_read_size];
+                    dst.copy_from_slice(src);
+                });
+            } else {
+                get_data_block_cache(
+                    // 文件内容通过Data block cache读取
+                    curr_sector,
+                    Arc::clone(block_device),
+                    CacheMode::READ,
+                )
+                .read()
+                .read(0, |data_block: &DataBlock| {
+                    let src = &data_block
+                        [curr_offset % BLOCK_SZ..curr_offset % BLOCK_SZ + block_read_size];
+                    dst.copy_from_slice(src);
+                });
+            }
+            /*
             get_data_block_cache(curr_sector, Arc::clone(block_device), CacheMode::READ)
                 .read()
                 .read(0, |data_block: &DataBlock| {
@@ -481,6 +486,7 @@ impl ShortDirEntry {
                         [curr_offset % BLOCK_SZ..curr_offset % BLOCK_SZ + block_read_size];
                     dst.copy_from_slice(src);
                 });
+                */
             read_size += block_read_size;
             if end_current_block == end {
                 break;

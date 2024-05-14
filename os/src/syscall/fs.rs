@@ -17,6 +17,7 @@ use alloc::{
     vec::Vec,
 };
 use core::mem::size_of;
+use fat32_fs::sync_all;
 use log::info;
 
 pub const AT_FDCWD: isize = -100;
@@ -956,4 +957,9 @@ pub fn sys_fsync(fd: usize) -> SyscallRet {
     } else {
         Err(SysErrNo::ENOENT)
     }
+}
+
+pub fn sys_sync() -> SyscallRet {
+    sync_all();
+    Ok(0)
 }

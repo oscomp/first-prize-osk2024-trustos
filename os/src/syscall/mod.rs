@@ -41,6 +41,7 @@ pub enum Syscall {
     Sendfile = 71,
     Fstatat = 79,
     Fstat = 80,
+    Sync = 81,
     Fsync = 82,
     Utimensat = 88,
     Exit = 93,
@@ -174,6 +175,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[3] as usize,
         ),
         Syscall::Fstat => sys_fstat(args[0] as usize, args[1] as *const u8),
+        Syscall::Sync => sys_sync(),
         Syscall::Fsync => sys_fsync(args[0] as usize),
         Syscall::Utimensat => sys_utimensat(
             args[0] as isize,
