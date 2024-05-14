@@ -1,18 +1,21 @@
 //!Implementation of [`TaskControlBlock`]
 use super::{
     aux::{Aux, AuxType},
-    manager::insert_into_pid2task,
-    tid_alloc, KernelStack, TaskContext, TidHandle,
+    insert_into_tid2task, tid_alloc, KernelStack, TaskContext, TidHandle,
 };
 use crate::{
-    config::mm::{USER_HEAP_SIZE, USER_TRAP_CONTEXT},
+    config::mm::{
+        PAGE_SIZE, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP, USER_TRAP_CONTEXT,
+        USER_TRAP_CONTEXT_TOP,
+    },
     fs::{FdTable, FdTableInner, File, FileClass, FsInfo, OSInode, Stdin, Stdout},
     mm::{
         translated_refmut, MapAreaType, MapPermission, MemorySet, MemorySetInner, PhysPageNum,
         VirtAddr,
     },
-    signal::SigPending,
-    task::TASK_MONITOR,
+    signal::{SigPending, SigPendingInner},
+    syscall::CloneFlags,
+    task::insert_into_thread_group,
     timer::TimeData,
     trap::{trap_handler, TrapContext},
 };
@@ -53,7 +56,7 @@ pub struct TaskControlBlockInner {
     pub strace_mask: usize,
     pub set_child_tid: usize,
     pub clear_child_tid: usize,
-    pub sig_pending: SigPending,
+    pub sig_pending: Arc<SigPending>,
 }
 
 impl TaskControlBlockInner {
@@ -69,9 +72,33 @@ impl TaskControlBlockInner {
     pub fn is_zombie(&self) -> bool {
         self.status() == TaskStatus::Zombie
     }
-    // pub fn alloc_fd(&mut self) -> usize {
-    //     self.fd_table.alloc_fd()
-    // }
+    pub fn alloc_user_res(&mut self) {
+        let (_, ustack_top) = self
+            .memory_set
+            .get_unchecked_mut()
+            .insert_framed_area_with_hint(
+                USER_STACK_TOP,
+                USER_STACK_SIZE,
+                MapPermission::R | MapPermission::W | MapPermission::U,
+                MapAreaType::Stack,
+            );
+        let (trap_cx_bottom, _) = self
+            .memory_set
+            .get_unchecked_mut()
+            .insert_framed_area_with_hint(
+                USER_TRAP_CONTEXT_TOP,
+                PAGE_SIZE,
+                MapPermission::R | MapPermission::W,
+                MapAreaType::Trap,
+            );
+        let trap_cx_ppn = self
+            .memory_set
+            .translate(trap_cx_bottom.into())
+            .unwrap()
+            .ppn();
+        self.user_stack_top = ustack_top;
+        self.trap_cx_ppn = trap_cx_ppn;
+    }
 }
 
 impl TaskControlBlock {
@@ -137,7 +164,7 @@ impl TaskControlBlock {
                 strace_mask: 0,
                 set_child_tid: 0,
                 clear_child_tid: 0,
-                sig_pending: SigPending::new(),
+                sig_pending: Arc::new(SigPending::new()),
             }),
         };
         // prepare TrapContext in user space
@@ -335,11 +362,9 @@ impl TaskControlBlock {
                 strace_mask: parent_inner.strace_mask,
                 set_child_tid: 0,
                 clear_child_tid: 0,
-                sig_pending: SigPending::from_another(&parent_inner.sig_pending),
+                sig_pending: Arc::new(SigPending::from_another(&parent_inner.sig_pending)),
             }),
         });
-
-        insert_into_pid2task(pid, task_control_block.clone());
 
         // add child
         parent_inner.children.push(task_control_block.clone());
@@ -350,9 +375,7 @@ impl TaskControlBlock {
         if !copy_user_stack {
             trap_cx.set_sp(user_stack_top);
         }
-        TASK_MONITOR
-            .lock()
-            .add(task_control_block.tid(), &task_control_block);
+        insert_into_tid2task(task_control_block.tid(), &task_control_block);
         // return
         task_control_block
         // **** release child PCB
@@ -360,10 +383,154 @@ impl TaskControlBlock {
     }
     pub fn clone_process(
         self: &Arc<TaskControlBlock>,
+        flags: CloneFlags,
         stack: Option<usize>,
+        parent_tid: *mut u32,
+        tls: usize,
+        child_tid: *mut u32,
     ) -> Arc<TaskControlBlock> {
-        todo!()
+        let mut parent_inner = self.inner.lock();
+
+        let copy_user_stack = stack.is_none();
+        let tid_handle = tid_alloc();
+        let kernel_stack = KernelStack::new(&tid_handle);
+        let (kernel_stack_bottom, kernel_stack_top) = kernel_stack.pos();
+
+        // 检查是否共享虚拟内存
+        let memory_set = if flags.contains(CloneFlags::CLONE_VM) {
+            Arc::clone(&parent_inner.memory_set)
+        } else {
+            Arc::new(MemorySet::new(MemorySetInner::from_existed_user(
+                &parent_inner.memory_set,
+                copy_user_stack,
+            )))
+        };
+        // 无论如何都要插入内核栈
+        memory_set.insert_framed_area(
+            kernel_stack_bottom.into(),
+            kernel_stack_top.into(),
+            MapPermission::R | MapPermission::W,
+            MapAreaType::Stack,
+        );
+        // 检查是否共享文件系统信息
+        //filesystem information.  This includes the root
+        //of the filesystem, the current working directory, and the umask
+        let fs_info = if flags.contains(CloneFlags::CLONE_FS) {
+            Arc::clone(&parent_inner.fs_info)
+        } else {
+            Arc::new(FsInfo::from_another(&parent_inner.fs_info))
+        };
+        // 检查是否共享打开文件表
+        let fd_table = if flags.contains(CloneFlags::CLONE_FILES) {
+            Arc::clone(&parent_inner.fd_table)
+        } else {
+            Arc::new(FdTable::from_another(&parent_inner.fd_table))
+        };
+        // 检查是否共享信号处理程序表
+        let sig_pending = if flags.contains(CloneFlags::CLONE_SIGHAND) {
+            Arc::clone(&parent_inner.sig_pending)
+        } else {
+            Arc::new(SigPending::from_another(&parent_inner.sig_pending))
+        };
+        // 检查是否需要设置 parent_tid
+        if flags.contains(CloneFlags::CLONE_PARENT_SETTID) {
+            *translated_refmut(parent_inner.user_token(), parent_tid) = tid_handle.0 as u32;
+        }
+        // 检查是否需要设置子进程的 set_child_tid,clear_child_tid
+        let set_child_tid = if flags.contains(CloneFlags::CLONE_CHILD_SETTID) {
+            child_tid as usize
+        } else {
+            0
+        };
+        let clear_child_tid = if flags.contains(CloneFlags::CLONE_CHILD_CLEARTID) {
+            child_tid as usize
+        } else {
+            0
+        };
+        let (pid, ppid, parent);
+        // 检查是否创建线程
+        if flags.contains(CloneFlags::CLONE_THREAD) {
+            pid = self.pid;
+            ppid = self.ppid;
+            parent = parent_inner.parent.clone();
+        } else {
+            pid = tid_handle.0;
+            ppid = self.pid;
+            parent = Some(Arc::downgrade(self));
+        }
+        let child = Arc::new(TaskControlBlock {
+            tid: tid_handle,
+            ppid,
+            pid,
+            kernel_stack,
+            inner: Mutex::new(TaskControlBlockInner {
+                trap_cx_ppn: 0.into(),
+                user_stack_top: 0,
+                task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+                task_status: TaskStatus::Ready,
+                memory_set,
+                parent,
+                children: Vec::new(),
+                exit_code: 0,
+                fd_table,
+                fs_info,
+                time_data: TimeData::new(),
+                user_heappoint: parent_inner.user_heappoint,
+                user_heapbottom: parent_inner.user_heapbottom,
+                strace_mask: 0,
+                set_child_tid,
+                clear_child_tid,
+                sig_pending,
+            }),
+        });
+
+        // 检查是否需要使用传入的用户栈
+        let user_stack_top = if !copy_user_stack {
+            stack.unwrap()
+        } else {
+            parent_inner.user_stack_top
+        };
+
+        let mut child_inner = child.inner_lock();
+        if flags.contains(CloneFlags::CLONE_THREAD) {
+            // 线程
+            child_inner.alloc_user_res();
+            *child_inner.trap_cx() = *parent_inner.trap_cx();
+        } else {
+            // fork
+            child_inner.user_stack_top = user_stack_top;
+            child_inner.trap_cx_ppn = child_inner
+                .memory_set
+                .get_unchecked_ref()
+                .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
+                .unwrap()
+                .ppn();
+        }
+        let trap_cx = child_inner.trap_cx();
+        trap_cx.kernel_sp = kernel_stack_top;
+        if !copy_user_stack {
+            let ustack = child_inner.user_stack_top;
+            child_inner
+                .memory_set
+                .remove_area_with_start_vpn((user_stack_top - USER_STACK_SIZE).into());
+            trap_cx.set_sp(user_stack_top);
+        }
+        if flags.contains(CloneFlags::CLONE_SETTLS) {
+            // tp
+            trap_cx.x[4] = tls;
+        }
+        // CLONE_CHILD_SETTID
+        if flags.contains(CloneFlags::CLONE_CHILD_SETTID) {
+            let child_token = child_inner.user_token();
+            *translated_refmut(child_token, child_tid) = child.tid() as u32;
+        }
+        drop(child_inner);
+        parent_inner.children.push(child.clone());
+        insert_into_tid2task(child.tid(), &child);
+        insert_into_thread_group(child.pid, &child);
+        child
     }
+
     ///修改数据段大小，懒分配
     pub fn growproc(&self, grow_size: isize) -> usize {
         let mut inner = self.inner_lock();

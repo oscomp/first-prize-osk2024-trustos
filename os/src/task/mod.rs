@@ -111,9 +111,9 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     // deallocate user space
     inner.memory_set.recycle_data_pages();
 
-    remove_from_pid2task(task.pid());
+    // remove_from_pid2task(task.pid());
 
-    TASK_MONITOR.lock().remove(task.tid());
+    remove_from_tid2task(task.tid());
 
     drop(inner);
     // **** release current PCB
@@ -137,9 +137,7 @@ lazy_static! {
 pub fn add_initproc() {
     add_task(INITPROC.clone());
 
-    insert_into_pid2task(0, INITPROC.clone());
-
-    TASK_MONITOR.lock().add(0, &INITPROC);
+    insert_into_tid2task(0, &INITPROC);
 }
 ///Init PROCESSORS
 pub fn init() {

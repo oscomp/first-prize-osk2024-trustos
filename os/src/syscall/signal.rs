@@ -3,7 +3,7 @@ use log::{debug, info};
 use crate::{
     mm::{translated_ref, translated_refmut},
     signal::{add_signal, restore_frame, KSigAction, SigAction, SigSet, SIG_MAX_NUM},
-    task::{current_task, TASK_MONITOR},
+    task::{current_task, tid2task},
     utils::{SysErrNo, SyscallRet},
 };
 
@@ -20,7 +20,7 @@ pub fn sys_rt_sigaction(
     let mut task_inner = task.inner_lock();
     let token = task_inner.user_token();
     if old_act as usize != 0 {
-        let sig_handler = &task_inner.sig_pending.actions[signo].act;
+        let sig_handler = &task_inner.sig_pending.get_ref().actions[signo].act;
         *translated_refmut(token, old_act) = *sig_handler;
     }
     if act as usize != 0 {
@@ -33,7 +33,7 @@ pub fn sys_rt_sigaction(
                 customed: true,
             }
         };
-        task_inner.sig_pending.actions[signo] = new_sig;
+        task_inner.sig_pending.get_mut().actions[signo] = new_sig;
     }
     Ok(0)
 }
@@ -51,7 +51,7 @@ pub fn sys_kill(pid: usize, signo: usize) -> SyscallRet {
     match pid {
         _ if pid > 0 => {
             // 目前没有线程组,发送给单进程
-            if let Some(task) = TASK_MONITOR.lock().get(pid) {
+            if let Some(task) = tid2task(pid) {
                 add_signal(task, SigSet::from_sig(signo));
             }
         }

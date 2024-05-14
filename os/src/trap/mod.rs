@@ -96,7 +96,7 @@ pub fn trap_handler() {
             // handle error
             match result {
                 Ok(ret) => debug!("[syscall ret] {:?} ret = {}", syscall_id, ret),
-                Err(errno) => warn!("[syscall ret] {:?} ret = {}", syscall_id, errno.str()),
+                Err(errno) => debug!("[syscall ret] {:?} ret = {}", syscall_id, errno.str()),
             }
             // strace
             if strace_mask != 0 && (strace_mask == usize::MAX || strace_mask == cx.x[17]) {

@@ -2,6 +2,7 @@
 use super::{tid, TaskControlBlock};
 use alloc::collections::{BTreeMap, VecDeque};
 use alloc::sync::{Arc, Weak};
+use alloc::vec::Vec;
 use hashbrown::HashMap;
 use lazy_static::*;
 use spin::{Mutex, MutexGuard, RwLock};
@@ -53,32 +54,6 @@ pub fn ready_procs_num() -> usize {
     TASK_MANAGER.lock().ready_procs_num()
 }
 
-lazy_static! {
-    pub static ref PID2TCB: RwLock<HashMap<usize, Arc<TaskControlBlock>>> =
-        RwLock::new(HashMap::new());
-}
-
-pub fn pid2task(pid: usize) -> Option<Arc<TaskControlBlock>> {
-    let map = PID2TCB.read();
-    map.get(&pid).map(Arc::clone)
-}
-
-pub fn insert_into_pid2task(pid: usize, task: Arc<TaskControlBlock>) {
-    PID2TCB.write().insert(pid, task);
-}
-
-pub fn remove_from_pid2task(pid: usize) {
-    let mut map = PID2TCB.write();
-    if map.remove(&pid).is_none() {
-        panic!("cannot find pid {} in PID2TCB!", pid);
-    }
-}
-
-pub fn task_num() -> usize {
-    let map = PID2TCB.read();
-    map.len()
-}
-
 pub struct TaskMonitor {
     tid_to_task: BTreeMap<usize, Weak<TaskControlBlock>>,
 }
@@ -105,4 +80,43 @@ impl TaskMonitor {
 
 lazy_static! {
     pub static ref TASK_MONITOR: Mutex<TaskMonitor> = Mutex::new(TaskMonitor::new());
+}
+
+pub fn tid2task(tid: usize) -> Option<Arc<TaskControlBlock>> {
+    TASK_MONITOR.lock().get(tid)
+}
+
+pub fn insert_into_tid2task(tid: usize, task: &Arc<TaskControlBlock>) {
+    TASK_MONITOR.lock().add(tid, task);
+}
+
+pub fn remove_from_tid2task(tid: usize) {
+    TASK_MONITOR.lock().remove(tid);
+}
+
+pub fn task_num() -> usize {
+    TASK_MONITOR.lock().tid_to_task.len()
+}
+
+lazy_static! {
+    pub static ref THREAD_GROUP: Mutex<BTreeMap<usize, Vec<Weak<TaskControlBlock>>>> =
+        Mutex::new(BTreeMap::new());
+}
+
+pub fn insert_into_thread_group(pid: usize, task: &Arc<TaskControlBlock>) {
+    THREAD_GROUP
+        .lock()
+        .entry(pid)
+        .or_insert_with(Vec::new)
+        .push(Arc::downgrade(task));
+}
+
+pub fn remove_from_thread_group(pid: usize, tid: usize) {
+    let mut inner = THREAD_GROUP.lock();
+    if let Some(tasks) = inner.get_mut(&pid) {
+        tasks.remove(tid);
+        if tasks.is_empty() {
+            inner.remove(&pid);
+        }
+    }
 }

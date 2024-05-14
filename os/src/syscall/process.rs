@@ -7,7 +7,7 @@ use crate::{
     syscall::CloneFlags,
     task::{
         add_task, current_task, current_token, exit_current_and_run_next,
-        suspend_current_and_run_next,
+        suspend_current_and_run_next, task_num,
     },
     timer::{get_time_ms, Timespec, Tms},
     utils::{SysErrNo, SyscallRet},
@@ -15,9 +15,9 @@ use crate::{
 use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
 
-use crate::config::processor::HART_NUM;
+use crate::config::sync::HART_NUM;
 use crate::console::print;
-use crate::task::manager::{pid2task, ready_procs_num, task_num};
+use crate::task::manager::ready_procs_num;
 use crate::task::processor::get_proc_by_hartid;
 use crate::utils::hart_id;
 use log::{debug, info};
@@ -87,24 +87,41 @@ pub fn sys_clone(
             Some(stack as usize)
         }
     };
+    let current_task = current_task().unwrap();
+    let new_task = current_task.clone_process(
+        flags,
+        stack,
+        parent_tid_ptr as *mut u32,
+        tls_ptr,
+        chilren_tid_ptr as *mut u32,
+    );
+    let new_tid = new_task.tid();
+    // modify trap context of new_task, because it returns immediately after switching
+    let trap_cx = new_task.inner_lock().trap_cx();
+    // we do not have to move to next instruction since we have done it before
+    // for child process, fork returns 0
+    trap_cx.x[10] = 0;
+    // add new task to scheduler
+    add_task(new_task);
+    Ok(new_tid)
     // fork or create new
-    if flags.is_fork() {
-        //通常使用默认的 CLONE_CHILD_CLEARTID、CLONE_CHILD_SETTID 和 SIGCHLD 标志。
-        //ptid、tls、ctid 通常设置为 NULL
-        let current_task = current_task().unwrap();
-        let new_task = current_task.fork(stack);
-        let new_pid = new_task.pid();
-        // modify trap context of new_task, because it returns immediately after switching
-        let trap_cx = new_task.inner_lock().trap_cx();
-        // we do not have to move to next instruction since we have done it before
-        // for child process, fork returns 0
-        trap_cx.x[10] = 0;
-        // add new task to scheduler
-        add_task(new_task);
-        Ok(new_pid)
-    } else {
-        unimplemented!();
-    }
+    // if flags.is_fork() {
+    //     //通常使用默认的 CLONE_CHILD_CLEARTID、CLONE_CHILD_SETTID 和 SIGCHLD 标志。
+    //     //ptid、tls、ctid 通常设置为 NULL
+    //     let current_task = current_task().unwrap();
+    //     let new_task = current_task.fork(stack);
+    //     let new_pid = new_task.pid();
+    //     // modify trap context of new_task, because it returns immediately after switching
+    //     let trap_cx = new_task.inner_lock().trap_cx();
+    //     // we do not have to move to next instruction since we have done it before
+    //     // for child process, fork returns 0
+    //     trap_cx.x[10] = 0;
+    //     // add new task to scheduler
+    //     add_task(new_task);
+    //     Ok(new_pid)
+    // } else {
+    //     unimplemented!();
+    // }
 }
 
 pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usize) -> SyscallRet {
@@ -211,6 +228,10 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
             suspend_current_and_run_next();
         }
     }
+}
+pub fn sys_wait4_v2(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
+    assert!(options == 0, "not support options yet");
+    todo!()
 }
 
 pub fn sys_nanosleep(req: *const u8, _rem: *const u8) -> SyscallRet {

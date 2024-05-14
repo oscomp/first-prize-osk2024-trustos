@@ -26,6 +26,19 @@ impl FdTable {
             inner: SyncUnsafeCell::new(fd_table),
         }
     }
+    pub fn from_another(another: &Arc<FdTable>) -> Self {
+        let mut fd_table = FdTableInner::new();
+        for fd in another.get_ref().iter() {
+            if let Some(file) = fd {
+                fd_table.push(Some(file.clone()));
+            } else {
+                fd_table.push(None);
+            }
+        }
+        Self {
+            inner: SyncUnsafeCell::new(fd_table),
+        }
+    }
     pub fn alloc_fd(&self) -> usize {
         let mut fd_table = self.inner.get_unchecked_mut();
         if let Some(fd) = (0..fd_table.len()).find(|fd| fd_table[*fd].is_none()) {

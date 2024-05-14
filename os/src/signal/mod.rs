@@ -26,12 +26,9 @@ pub fn check_signal_for_current_task() {
         let task = current_task().unwrap();
         let task_inner = task.inner_lock();
         let sig = SigSet::from_sig(signo);
-        if task_inner.sig_pending.pending.contains(sig)
-            && !task_inner.sig_pending.blocked.contains(sig)
-        {
+        if task_inner.sig_pending.need_handle(sig) {
             debug!("handle signal {}", signo);
-
-            let sig_act = task_inner.sig_pending.actions[signo];
+            let sig_act = task_inner.sig_pending.get_ref().actions[signo];
             drop(task_inner);
             drop(task);
             handle_signal(signo, sig_act);
@@ -45,9 +42,10 @@ pub fn handle_signal(signo: usize, sig_action: KSigAction) {
         setup_frame(signo, sig_action);
         let task = current_task().unwrap();
         let mut task_inner = task.inner_lock();
-        task_inner.sig_pending.blocked |= sig_action.act.sa_mask;
-        task_inner.sig_pending.blocked |= SigSet::from_sig(signo);
-        task_inner.sig_pending.pending ^= SigSet::from_sig(signo);
+        let sig_pending = task_inner.sig_pending.get_mut();
+        sig_pending.blocked |= sig_action.act.sa_mask;
+        sig_pending.blocked |= SigSet::from_sig(signo);
+        sig_pending.pending ^= SigSet::from_sig(signo);
     } else {
         // 就在S模式运行,转换成fn(i32)
         let handler: fn(i32) =
@@ -72,7 +70,7 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
 
     // signal mask
     user_sp -= core::mem::size_of::<SigSet>();
-    *translated_refmut(token, user_sp as *mut SigSet) = task_inner.sig_pending.blocked;
+    *translated_refmut(token, user_sp as *mut SigSet) = task_inner.sig_pending.get_ref().blocked;
 
     // checkout(Magic Num)
     user_sp -= core::mem::size_of::<usize>();
@@ -100,7 +98,7 @@ pub fn restore_frame() {
     assert!(checkout == 0xdeadbeef, "restore frame checkout error!");
     user_sp += core::mem::size_of::<usize>();
     // signal mask
-    task_inner.sig_pending.blocked = *translated_ref(token, user_sp as *const SigSet);
+    task_inner.sig_pending.get_mut().blocked = *translated_ref(token, user_sp as *const SigSet);
     user_sp += core::mem::size_of::<SigSet>();
     // Trap cx
     *trap_cx = *translated_ref(token, user_sp as *const TrapContext);
@@ -109,5 +107,5 @@ pub fn restore_frame() {
 
 pub fn add_signal(task: Arc<TaskControlBlock>, signal: SigSet) {
     let mut task_inner = task.inner_lock();
-    task_inner.sig_pending.pending |= signal;
+    task_inner.sig_pending.get_mut().pending |= signal;
 }

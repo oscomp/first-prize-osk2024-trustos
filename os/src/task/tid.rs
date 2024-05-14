@@ -1,6 +1,6 @@
 //!Implementation of [`PidAllocator`]
 use crate::{
-    config::mm::{KERNEL_STACK_SIZE, PAGE_SIZE, TRAMPOLINE},
+    config::mm::{KERNEL_STACK_SIZE, KSTACK_TOP, PAGE_SIZE},
     mm::{MapPermission, VirtAddr},
 };
 use alloc::vec::Vec;
@@ -60,7 +60,7 @@ pub fn tid_alloc() -> TidHandle {
 
 /// Return (bottom, top) of a kernel stack in kernel space.
 pub fn kernel_stack_position(app_id: usize) -> (usize, usize) {
-    let top = TRAMPOLINE - app_id * (KERNEL_STACK_SIZE + PAGE_SIZE);
+    let top = KSTACK_TOP - app_id * (KERNEL_STACK_SIZE + PAGE_SIZE);
     let bottom = top - KERNEL_STACK_SIZE;
     (bottom, top)
 }

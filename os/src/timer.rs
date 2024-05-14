@@ -48,6 +48,7 @@ impl Tms {
     }
 }
 
+#[derive(Clone)]
 pub struct TimeData {
     pub utime: isize,
     pub stime: isize,

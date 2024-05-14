@@ -80,7 +80,7 @@ impl MemorySet {
     }
     #[inline(always)]
     pub fn insert_framed_area(
-        &mut self,
+        &self,
         start_va: VirtAddr,
         end_va: VirtAddr,
         permission: MapPermission,
@@ -92,7 +92,7 @@ impl MemorySet {
     }
     #[inline(always)]
     pub fn insert_given_framed_area(
-        &mut self,
+        &self,
         start_va: VirtAddr,
         end_va: VirtAddr,
         permission: MapPermission,
@@ -115,7 +115,7 @@ impl MemorySet {
     }
     #[inline(always)]
     pub fn mmap(
-        &mut self,
+        &self,
         addr: usize,
         len: usize,
         map_perm: MapPermission,
@@ -263,6 +263,37 @@ impl MemorySetInner {
             area.unmap(&mut self.page_table);
             self.areas.remove(idx);
         }
+    }
+    // 根据hint插入页面到指定的area并返回(va_bottom,va_top)
+    // hint指示的区域必须存在
+    pub fn insert_framed_area_with_hint(
+        &mut self,
+        hint: usize,
+        size: usize,
+        map_perm: MapPermission,
+        area_type: MapAreaType,
+    ) -> (usize, usize) {
+        let start_va = self.find_insert_addr(hint, size);
+        let end_va = start_va + size;
+        self.insert_framed_area(
+            VirtAddr::from(start_va),
+            VirtAddr::from(end_va),
+            map_perm,
+            area_type,
+        );
+        (start_va, end_va)
+    }
+    pub fn find_insert_addr(&self, hint: usize, size: usize) -> usize {
+        let end_vpn = VirtAddr::from(hint).floor();
+        let start_vpn = VirtAddr::from(hint - size).floor();
+        for area in self.areas.iter() {
+            let (start, end) = area.vpn_range.range();
+            if end_vpn > start && start_vpn < end {
+                let new_hint = VirtAddr::from(start_vpn).0 - PAGE_SIZE;
+                return self.find_insert_addr(new_hint, size);
+            }
+        }
+        VirtAddr::from(start_vpn).0
     }
     /// mmap
     pub fn mmap(
