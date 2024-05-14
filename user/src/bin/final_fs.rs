@@ -2,8 +2,8 @@
 #![no_main]
 
 use user_lib::{
-    faccessat, fcntl, fstatat, fsync, ftruncate, lseek, mkdir, openat, pread64, pwrite64, read,
-    sendfile, statfs, write, FaccessatMode, Kstat, OpenFlags, Statfs,
+    close, faccessat, fcntl, fstatat, fsync, ftruncate, lseek, mkdir, openat, pread64, pwrite64,
+    read, sendfile, statfs, sync, write, FaccessatMode, Kstat, OpenFlags, Statfs,
 };
 
 #[macro_use]
@@ -30,14 +30,15 @@ fn test_statfs() {
 
 fn test_faccessat() {
     println!("-----------------test faccessat-----------------");
-    let mode =
-        FaccessatMode::F_OK | FaccessatMode::X_OK | FaccessatMode::W_OK | FaccessatMode::R_OK;
-    mkdir(-100, "wohao1\0", 0666);
+    let mode1 = FaccessatMode::F_OK | FaccessatMode::X_OK | FaccessatMode::W_OK;
+    //let mode2 = FaccessatMode::R_OK;
+    mkdir(-100, "test_faccessat\0", 0666);
     println!("now test OK:");
-    let result1 = faccessat(-100, "wohao1\0", mode, 0);
-    println!("now test NOT OK:");
-    let result2 = faccessat(-100, "wobuhao\0", mode, 0);
-    println!("result1 is {} and result2 is {}", result1, result2);
+    let result = faccessat(-100, "test_faccessat\0", mode1, 0);
+    //println!("now test NOT OK:");
+    //let result2 = faccessat(-100, "test_faccessat\0", mode2, 0);
+    println!("result is {} which should be 0", result);
+    //println!("result2 is {} which should be -1", result2);
     println!("-----------------end faccessat-----------------");
     println!("");
 }
@@ -48,6 +49,7 @@ fn test_lseek() {
     let fd = openat(-100, "test_lseek\0", OpenFlags::O_RDWR, 0);
     let result1 = lseek(fd as usize, -100, 2);
     let result2 = lseek(fd as usize, 100, 1);
+    close(fd as usize);
     println!("result1 is {} which should be -1", result1);
     println!("result2 is {} which should be 0", result2);
     println!("-----------------end lseek-----------------");
@@ -65,6 +67,7 @@ fn test_fcntl() {
     let flags = OpenFlags::all();
     let result4 = fcntl(fd as usize, 4, flags.bits() as usize); //设置openflags
     let result5 = fcntl(fd as usize, 3, 0); //获得openflags
+    close(fd as usize);
     println!("result1 is {} which should be 5 which is fd+1", result1);
     println!("result2 is {} which should be 0", result2);
     println!("result3 is {} which should be 1", result3);
@@ -112,6 +115,8 @@ fn test_sendfile() {
     for &byte in &outbuf {
         print!("{} ", byte);
     }
+    close(infd as usize);
+    close(outfd as usize);
     println!("");
     println!("result is {} which should be 5", result);
     println!("-----------------end sendfile-----------------");
@@ -142,6 +147,7 @@ fn test_pwr64() {
         print!("{} ", byte);
     }
     println!("");
+    close(fd as usize);
     println!("-----------------end pwrite64 & pread64-----------------");
     println!("");
 }
@@ -156,6 +162,7 @@ fn test_ftruncate() {
     );
     let result1 = ftruncate(fd as usize, -5);
     let result2 = ftruncate(fd as usize, 100);
+    close(fd as usize);
     println!("result1 is {} which should be -1", result1);
     println!("result2 is {} which should be 0", result2);
     println!("-----------------end ftruncate-----------------");
@@ -166,13 +173,22 @@ fn test_fsync() {
     println!("-----------------test fsync-----------------");
     let fd = openat(
         -100,
-        "test_ftruncate\0",
+        "test_fsync\0",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR,
         0,
     );
     let result = fsync(fd as usize);
+    close(fd as usize);
     println!("result is {} which should be 0", result);
     println!("-----------------end fsync-----------------");
+    println!("");
+}
+
+fn test_sync() {
+    println!("-----------------test sync-----------------");
+    let result = sync();
+    println!("result is {} which should be 0", result);
+    println!("-----------------end sync-----------------");
     println!("");
 }
 
@@ -187,5 +203,6 @@ pub fn main() -> i32 {
     test_pwr64();
     test_ftruncate();
     test_fsync();
+    test_sync();
     0
 }

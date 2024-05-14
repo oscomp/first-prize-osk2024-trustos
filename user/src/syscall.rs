@@ -26,6 +26,7 @@ const SYSCALL_PWRITE64: usize = 68;
 const SYSCALL_SENDFILE: usize = 71;
 const SYSCALL_FSTATAT: usize = 79;
 const SYSCALL_FSTAT: usize = 80;
+const SYSCALL_SYNC: usize = 81;
 const SYSCALL_FSYNC: usize = 82;
 const SYSCALL_UTIMENSAT: usize = 88;
 const SYSCALL_EXIT: usize = 93;
@@ -444,4 +445,8 @@ pub fn sys_ftruncate(fd: usize, length: i32) -> isize {
 
 pub fn sys_fsync(fd: usize) -> isize {
     syscall(SYSCALL_FSYNC, [fd as isize, 0, 0, 0, 0, 0])
+}
+
+pub fn sys_sync() -> isize {
+    syscall(SYSCALL_SYNC, [0, 0, 0, 0, 0, 0])
 }

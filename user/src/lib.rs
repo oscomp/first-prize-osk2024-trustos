@@ -450,3 +450,7 @@ pub fn ftruncate(fd: usize, length: i32) -> isize {
 pub fn fsync(fd: usize) -> isize {
     sys_fsync(fd)
 }
+
+pub fn sync() -> isize {
+    sys_sync()
+}
