@@ -111,8 +111,6 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     // deallocate user space
     inner.memory_set.recycle_data_pages();
 
-    // remove_from_pid2task(task.pid());
-
     remove_from_tid2task(task.tid());
 
     drop(inner);

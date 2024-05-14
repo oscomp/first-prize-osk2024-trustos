@@ -53,51 +53,31 @@ pub fn lock_task_manager() -> MutexGuard<'static, TaskManager> {
 pub fn ready_procs_num() -> usize {
     TASK_MANAGER.lock().ready_procs_num()
 }
-
-pub struct TaskMonitor {
-    tid_to_task: BTreeMap<usize, Weak<TaskControlBlock>>,
-}
-
-impl TaskMonitor {
-    pub fn new() -> Self {
-        Self {
-            tid_to_task: BTreeMap::new(),
-        }
-    }
-    pub fn add(&mut self, tid: usize, task: &Arc<TaskControlBlock>) {
-        self.tid_to_task.insert(tid, Arc::downgrade(task));
-    }
-    pub fn remove(&mut self, tid: usize) {
-        self.tid_to_task.remove(&tid);
-    }
-    pub fn get(&self, tid: usize) -> Option<Arc<TaskControlBlock>> {
-        match self.tid_to_task.get(&tid) {
-            Some(task) => task.upgrade(),
-            None => None,
-        }
-    }
-}
-
+///
 lazy_static! {
-    pub static ref TASK_MONITOR: Mutex<TaskMonitor> = Mutex::new(TaskMonitor::new());
+    pub static ref TID_TO_TASK: Mutex<BTreeMap<usize, Weak<TaskControlBlock>>> =
+        Mutex::new(BTreeMap::new());
 }
 
 pub fn tid2task(tid: usize) -> Option<Arc<TaskControlBlock>> {
-    TASK_MONITOR.lock().get(tid)
+    match TID_TO_TASK.lock().get(&tid) {
+        Some(task) => task.upgrade(),
+        None => None,
+    }
 }
 
 pub fn insert_into_tid2task(tid: usize, task: &Arc<TaskControlBlock>) {
-    TASK_MONITOR.lock().add(tid, task);
+    TID_TO_TASK.lock().insert(tid, Arc::downgrade(task));
 }
 
 pub fn remove_from_tid2task(tid: usize) {
-    TASK_MONITOR.lock().remove(tid);
+    TID_TO_TASK.lock().remove(&tid);
 }
 
 pub fn task_num() -> usize {
-    TASK_MONITOR.lock().tid_to_task.len()
+    TID_TO_TASK.lock().len()
 }
-
+/// 线程组
 lazy_static! {
     pub static ref THREAD_GROUP: Mutex<BTreeMap<usize, Vec<Weak<TaskControlBlock>>>> =
         Mutex::new(BTreeMap::new());
@@ -117,6 +97,29 @@ pub fn remove_from_thread_group(pid: usize, tid: usize) {
         tasks.remove(tid);
         if tasks.is_empty() {
             inner.remove(&pid);
+        }
+    }
+}
+/// 需要持有Arc,避免进程在exit时被释放,等待到wait释放进程
+lazy_static! {
+    pub static ref PROCESS_GROUP: Mutex<BTreeMap<usize, Vec<Arc<TaskControlBlock>>>> =
+        Mutex::new(BTreeMap::new());
+}
+
+pub fn insert_into_process_group(ppid: usize, task: &Arc<TaskControlBlock>) {
+    PROCESS_GROUP
+        .lock()
+        .entry(ppid)
+        .or_insert_with(Vec::new)
+        .push(Arc::clone(task));
+}
+
+pub fn remove_from_process_group(ppid: usize, pid: usize) {
+    let mut inner = PROCESS_GROUP.lock();
+    if let Some(tasks) = inner.get_mut(&ppid) {
+        tasks.remove(pid);
+        if tasks.is_empty() {
+            inner.remove(&ppid);
         }
     }
 }

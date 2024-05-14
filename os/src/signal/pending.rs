@@ -46,6 +46,7 @@ pub struct SigPendingInner {
     pub pending: SigSet,
     pub blocked: SigSet,
     pub actions: [KSigAction; SIG_MAX_NUM + 1],
+    pub group_exit_code: Option<i32>,
 }
 
 impl SigPendingInner {
@@ -54,6 +55,7 @@ impl SigPendingInner {
             pending: SigSet::empty(),
             blocked: SigSet::empty(),
             actions: [KSigAction::new(0, false); SIG_MAX_NUM + 1],
+            group_exit_code: None,
         }
     }
     pub fn from_another(other: &SigPendingInner) -> Self {
@@ -61,6 +63,7 @@ impl SigPendingInner {
             pending: SigSet::empty(),
             blocked: SigSet::empty(),
             actions: other.actions.clone(),
+            group_exit_code: None,
         }
     }
 }

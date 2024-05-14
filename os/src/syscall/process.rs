@@ -229,6 +229,12 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
         }
     }
 }
+/// < -1   meaning wait for any child process whose process group ID
+///         is equal to the absolute value of pid.
+///-1     meaning wait for any child process.
+///0      meaning wait for any child process whose process group ID
+///       is equal to that of the calling process at the time of the call to waitpid().
+///> 0    meaning wait for the child whose process ID is equal to the value of pid.
 pub fn sys_wait4_v2(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
     assert!(options == 0, "not support options yet");
     todo!()
