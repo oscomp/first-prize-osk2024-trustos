@@ -1,5 +1,6 @@
-# make run 重新编译内核、rCore测例和官方测例，并全部写入镜像fat32.img后运行
-# make srun 重新编译内核、rCore测例，不重新编译官方测例，写入镜像fat32.img后运行
+# make srun 只编译内核和rust测例
+# make run 编译rust内核、rust测例和c测例
+# make brun 编译rust内核、rust测例、c测例和busybox
 # Building
 TARGET := riscv64gc-unknown-none-elf
 MODE := release
@@ -41,9 +42,15 @@ TEST ?=
 
 build: env $(KERNEL_BIN)
 
-initproc:
+initrust: 
 	@cd ../user && cargo clean && make build
+
+initproc: initrust
 	@cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean && ./build-oscomp.sh
+
+initbusybox: initproc
+	@-rm ../busybox
+	@cd ../busyb0x&&make defconfig&&make -j 2&&cp ./busybox ../busybox
 
 env:
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
@@ -81,7 +88,9 @@ disasm-vim: kernel
 
 run: initproc run-inner
 
-srun: run-inner
+srun: initrust run-inner
+
+brun: initbusybox run-inner
 
 QEMU_ARGS := -machine virt \
 			 -nographic \
@@ -108,4 +117,4 @@ gdbserver: build
 gdbclient:
 	@riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'
 
-.PHONY: build env kernel clean disasm disasm-vim run-inner copy-to-fs procinit gdbserver gdbclient srun ssrun
+.PHONY: build env kernel clean disasm disasm-vim run-inner copy-to-fs procinit gdbserver gdbclient srun ssrun initrust initbusybox brun
