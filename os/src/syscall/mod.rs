@@ -77,6 +77,7 @@ pub enum Syscall {
     Execve = 221,
     Mprotect = 226,
     Wait4 = 260,
+    Renameat2 = 276,
     // 非标准系统调用
     Shutdown = 1000,
     Strace = 2000,
@@ -238,6 +239,13 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Munmap => sys_munmap(args[0], args[1]),
         Syscall::Mprotect => sys_mprotect(args[0], args[1], args[2] as u32),
         Syscall::Wait4 => sys_wait4(args[0] as isize, args[1] as *mut i32, args[2] as i32),
+        Syscall::Renameat2 => sys_renameat2(
+            args[0] as isize,
+            args[1] as *const u8,
+            args[2] as isize,
+            args[3] as *const u8,
+            args[4] as u32,
+        ),
         Syscall::Shutdown => shutdown(false),
         Syscall::Strace => sys_strace(args[0]),
         _ => panic!("Unsupported syscall_id: {}", id),

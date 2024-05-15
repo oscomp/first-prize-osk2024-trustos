@@ -533,3 +533,13 @@ impl Rusage {
 pub fn getrusage(who: isize, usage: &mut Rusage) -> isize {
     sys_getrusage(who, usage.as_bytes_mut())
 }
+
+pub fn renameat2(
+    olddirfd: isize,
+    oldpath: &str,
+    newdirfd: isize,
+    newpath: &str,
+    flags: u32,
+) -> isize {
+    sys_renameat2(olddirfd, oldpath, newdirfd, newpath, flags)
+}

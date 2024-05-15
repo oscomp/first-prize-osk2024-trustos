@@ -150,6 +150,32 @@ impl OSInode {
     pub fn sym(&self) -> bool {
         self.inode.sym()
     }
+
+    pub fn first_cluster(&self) -> u32 {
+        self.inode.first_cluster()
+    }
+    pub fn set_first_cluster(&self, first_cluster: u32) {
+        self.inode.set_first_cluster(first_cluster);
+    }
+
+    pub fn create(&self, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
+        let path = if path.starts_with("./") {
+            &path[2..]
+        } else {
+            path
+        };
+        let (readable, writable) = flags.read_write();
+        let attribute = {
+            if flags.contains(OpenFlags::O_DIRECTROY) {
+                ATTR_DIRECTORY
+            } else {
+                ATTR_ARCHIVE
+            }
+        };
+        self.inode
+            .create(path, attribute)
+            .map(|vfile| Arc::new(OSInode::new(readable, writable, vfile)))
+    }
 }
 
 lazy_static! {

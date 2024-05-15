@@ -1,9 +1,9 @@
 #![no_std]
 #![no_main]
 use user_lib::{
-    close, faccessat, fcntl, fstatat, fsync, ftruncate, lseek, mkdir, openat, pread64, pwrite64,
-    read, readlinkat, sendfile, statfs, symlinkat, sync, write, FaccessatMode, Kstat, OpenFlags,
-    Statfs,
+    chdir, close, faccessat, fcntl, fstatat, fsync, ftruncate, lseek, mkdir, openat, pread64,
+    pwrite64, read, readlinkat, renameat2, sendfile, statfs, symlinkat, sync, write, FaccessatMode,
+    Kstat, OpenFlags, Statfs,
 };
 
 #[macro_use]
@@ -68,7 +68,7 @@ fn test_fcntl() {
     let result4 = fcntl(fd as usize, 4, flags.bits() as usize); //设置openflags
     let result5 = fcntl(fd as usize, 3, 0); //获得openflags
     close(fd as usize);
-    println!("result1 is {} which should be 5 which is fd+1", result1);
+    println!("result1 is {} which should fd+1", result1);
     println!("result2 is {} which should be 0", result2);
     println!("result3 is {} which should be 1", result3);
     println!("result4 is {} which should be 0", result4);
@@ -194,7 +194,7 @@ fn test_sync() {
 
 fn test_symlinkat_readlinkat() {
     println!("-----------------test symlinkat & readlinkat-----------------");
-    openat(
+    let fd = openat(
         -100,
         "test_readlinkat\0",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR,
@@ -209,12 +209,52 @@ fn test_symlinkat_readlinkat() {
         print!("{}", buf_ascii[i] as char);
     }
     println!("");
+    close(fd as usize);
     println!("result1 is {} which should be 0", result1);
     println!(
         "result2 is {} which should be 15 which is the length",
         result2
     );
     println!("-----------------end symlinkat & readlinkat-----------------");
+    println!("");
+}
+
+fn test_renameat2() {
+    println!("-----------------test renameat2-----------------");
+    let fd = openat(
+        -100,
+        "test_renameat2\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0,
+    );
+    let result1 = renameat2(-100, "test_renameat2\0", -100, "test_renameat2_ok\0", 1);
+    let result2 = openat(-100, "test_renameat2_ok\0", OpenFlags::O_RDWR, 0);
+    println!("result1 is {} which should be 0", result1);
+    println!("result2 is {} which should not be 0", result2);
+    close(fd as usize);
+    close(result2 as usize);
+    println!("-----------------end renameat2-----------------");
+    println!("");
+}
+
+fn test_openat() {
+    println!("-----------------test openat-----------------");
+    let fd = openat(-100, "./mnt\0", OpenFlags::O_DIRECTROY, 0);
+    println!("fd {} open ./mnt ok ", fd);
+    let result1 = openat(
+        fd,
+        "test_openat\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0,
+    );
+    chdir("./mnt\0");
+    let result2 = openat(-100, "test_openat\0", OpenFlags::O_RDWR, 0);
+    println!("result1 is {} which should not be 0", result1);
+    println!("result2 is {} which should not be 0", result2);
+    close(fd as usize);
+    close(result1 as usize);
+    close(result2 as usize);
+    println!("-----------------end openat-----------------");
     println!("");
 }
 
@@ -231,5 +271,7 @@ pub fn main() -> i32 {
     test_fsync();
     test_sync();
     test_symlinkat_readlinkat();
+    test_renameat2();
+    test_openat();
     0
 }

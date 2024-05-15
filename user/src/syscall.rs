@@ -49,6 +49,7 @@ const SYSCALL_SYSINFO: usize = 179;
 const SYSCALL_CLONE: usize = 220;
 const SYSCALL_EXECVE: usize = 221;
 const SYSCALL_WAIT4: usize = 260;
+const SYSCALL_RENAMEAT2: usize = 276;
 
 const SYSCALL_SHUTDOWN: usize = 1000;
 const SYSCALL_STRACE: usize = 2000;
@@ -486,5 +487,25 @@ pub fn sys_getrusage(who: isize, usage: &mut [u8]) -> isize {
     syscall(
         SYSCALL_GETRUSAGE,
         [who as isize, usage.as_mut_ptr() as isize, 0, 0, 0, 0],
+    )
+}
+
+pub fn sys_renameat2(
+    olddirfd: isize,
+    oldpath: &str,
+    newdirfd: isize,
+    newpath: &str,
+    flags: u32,
+) -> isize {
+    syscall(
+        SYSCALL_RENAMEAT2,
+        [
+            olddirfd,
+            oldpath.as_ptr() as isize,
+            newdirfd,
+            newpath.as_ptr() as isize,
+            flags as isize,
+            0,
+        ],
     )
 }
