@@ -60,6 +60,7 @@ pub enum Syscall {
     Times = 153,
     Uname = 160,
     Getrusage = 165,
+    Umask = 166,
     Gettimeofday = 169,
     Getpid = 172,
     Getppid = 173,
@@ -111,7 +112,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Dup3 => sys_dup3(args[0], args[1]),
         Syscall::Fcntl => sys_fcntl(args[0] as usize, args[1] as usize, args[2] as usize),
         Syscall::Ioctl => sys_ioctl(args[0] as usize, args[1] as usize, args[2] as usize),
-        Syscall::Mkdirat => sys_mkdirat(args[0] as isize, args[1] as *const u8, args[2]),
+        Syscall::Mkdirat => sys_mkdirat(args[0] as isize, args[1] as *const u8, args[2] as u32),
         Syscall::Symlinkat => {
             sys_symlinkat(args[0] as *const u8, args[1] as isize, args[2] as *const u8)
         }
@@ -144,7 +145,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[0] as isize,
             args[1] as *const u8,
             args[2] as u32,
-            args[3],
+            args[3] as u32,
         ),
         Syscall::Close => sys_close(args[0]),
         Syscall::Pipe2 => sys_pipe2(args[0] as *mut u32),

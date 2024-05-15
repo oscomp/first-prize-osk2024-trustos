@@ -54,7 +54,7 @@ bitflags! {
     }
 }
 
-pub fn openat(fd: isize, path: &str, flags: OpenFlags, mode: usize) -> isize {
+pub fn openat(fd: isize, path: &str, flags: OpenFlags, mode: u32) -> isize {
     sys_openat(fd, path, flags.bits, mode)
 }
 pub fn close(fd: usize) -> isize {
@@ -161,7 +161,7 @@ pub fn chdir(path: &str) -> isize {
     sys_chdir(path)
 }
 
-pub fn mkdir(dirfd: isize, path: &str, mode: usize) -> isize {
+pub fn mkdir(dirfd: isize, path: &str, mode: u32) -> isize {
     sys_mkdirat(dirfd, path, mode)
 }
 

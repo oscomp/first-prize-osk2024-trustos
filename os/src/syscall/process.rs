@@ -1,5 +1,5 @@
 use crate::{
-    fs::{open, open_file, OpenFlags},
+    fs::{open, open_file, Mode, OpenFlags},
     mm::{
         translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer,
         VirtAddr,
@@ -341,5 +341,15 @@ pub fn sys_sysinfo(info: *const u8) -> SyscallRet {
 
     let ourinfo = Sysinfo::new(get_time_ms() / 1000, 1 << 56, task_num());
     info.write(ourinfo.as_bytes());
+    Ok(0)
+}
+
+pub fn sys_umask(mask: u32) -> SyscallRet {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+    let mask = Mode::from_bits(mask).unwrap();
+
+    inner.umask = mask;
     Ok(0)
 }

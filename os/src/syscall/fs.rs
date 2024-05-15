@@ -3,7 +3,7 @@ use crate::{
     console::print,
     fs::{
         is_abs_path, make_pipe, open, open_file, remove_vfile_idx, Dirent, File, FileClass, Kstat,
-        OpenFlags, Statfs, MNT_TABLE,
+        Mode, OpenFlags, Statfs, MNT_TABLE,
     },
     mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer},
     task::{current_task, current_token},
@@ -169,7 +169,7 @@ pub fn sys_readv(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
     }
 }
 
-pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> SyscallRet {
+pub fn sys_openat(fd: isize, path: *const u8, flags: u32, mode: u32) -> SyscallRet {
     if path as usize == 0 {
         return Err(SysErrNo::ENOENT);
     }
@@ -179,6 +179,7 @@ pub fn sys_openat(fd: isize, path: *const u8, flags: u32, _mode: usize) -> Sysca
     let token = inner.user_token();
     let mut path = translated_str(token, path);
     let flags = OpenFlags::from_bits(flags).unwrap();
+    let _mode = Mode::from_bits(mode & inner.umask.bits()).unwrap();
     let ret: SyscallRet;
 
     if fd == AT_FDCWD && !is_abs_path(&path) {
@@ -296,11 +297,12 @@ pub fn sys_chdir(path: *const u8) -> SyscallRet {
     }
 }
 
-pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: usize) -> SyscallRet {
+pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
     let path = translated_str(token, path);
+    let _mode = Mode::from_bits(mode & task_inner.umask.bits()).unwrap();
 
     let cwd_str = task_inner.fs_info.get_cwd();
 

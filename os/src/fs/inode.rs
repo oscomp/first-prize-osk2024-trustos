@@ -388,3 +388,41 @@ impl File for OSInode {
         total_write_size
     }
 }
+
+bitflags! {
+    pub struct Mode: u32 {
+        /// Set-user-ID on execution.
+        const SET_UID = 0o4000;
+        /// Set-group-ID on execution.
+        const SET_GID = 0o2000;
+        /// sticky bit
+        const STICKY = 0o1000;
+
+        /// Read, write, execute/search by owner.
+        const OWNER_MASK = 0o700;
+        /// Read permission, owner.
+        const OWNER_READ = 0o400;
+        /// Write permission, owner.
+        const OWNER_WRITE = 0o200;
+        /// Execute/search permission, owner.
+        const OWNER_EXEC = 0o100;
+
+        /// Read, write, execute/search by group.
+        const GROUP_MASK = 0o70;
+        /// Read permission, group.
+        const GROUP_READ = 0o40;
+        /// Write permission, group.
+        const GROUP_WRITE = 0o20;
+        /// Execute/search permission, group.
+        const GROUP_EXEC = 0o10;
+
+        /// Read, write, execute/search by others.
+        const OTHER_MASK = 0o7;
+        /// Read permission, others.
+        const OTHER_READ = 0o4;
+        /// Write permission, others.
+        const OTHER_WRITE = 0o2;
+        /// Execute/search permission, others.
+        const OTHER_EXEC = 0o1;
+    }
+}

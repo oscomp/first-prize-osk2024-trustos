@@ -70,7 +70,7 @@ fn syscall(id: usize, args: [isize; 6]) -> isize {
     ret
 }
 
-pub fn sys_openat(fd: isize, path: &str, flags: u32, mode: usize) -> isize {
+pub fn sys_openat(fd: isize, path: &str, flags: u32, mode: u32) -> isize {
     syscall(
         SYSCALL_OPENAT,
         [
@@ -194,7 +194,7 @@ pub fn sys_chdir(path: &str) -> isize {
     syscall(SYSCALL_CHDIR, [path.as_ptr() as isize, 0, 0, 0, 0, 0])
 }
 
-pub fn sys_mkdirat(dirfd: isize, path: &str, mode: usize) -> isize {
+pub fn sys_mkdirat(dirfd: isize, path: &str, mode: u32) -> isize {
     syscall(
         SYSCALL_MKDIRAT,
         [dirfd, path.as_ptr() as isize, mode as isize, 0, 0, 0],

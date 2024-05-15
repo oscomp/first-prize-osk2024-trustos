@@ -6,7 +6,7 @@ use super::{
 };
 use crate::{
     config::mm::{USER_HEAP_SIZE, USER_TRAP_CONTEXT},
-    fs::{FdTable, FdTableInner, File, FileClass, FsInfo, OSInode, Stdin, Stdout},
+    fs::{FdTable, FdTableInner, File, FileClass, FsInfo, Mode, OSInode, Stdin, Stdout},
     mm::{
         translated_refmut, MapAreaType, MapPermission, MemorySet, MemorySetInner, PhysPageNum,
         VirtAddr,
@@ -54,6 +54,7 @@ pub struct TaskControlBlockInner {
     pub set_child_tid: usize,
     pub clear_child_tid: usize,
     pub sig_pending: SigPending,
+    pub umask: Mode,
 }
 
 impl TaskControlBlockInner {
@@ -138,6 +139,7 @@ impl TaskControlBlock {
                 set_child_tid: 0,
                 clear_child_tid: 0,
                 sig_pending: SigPending::new(),
+                umask: Mode::all(),
             }),
         };
         // prepare TrapContext in user space
@@ -336,6 +338,7 @@ impl TaskControlBlock {
                 set_child_tid: 0,
                 clear_child_tid: 0,
                 sig_pending: SigPending::from_another(&parent_inner.sig_pending),
+                umask: Mode::all(),
             }),
         });
 
