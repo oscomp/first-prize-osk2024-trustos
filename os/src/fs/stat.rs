@@ -1,6 +1,6 @@
-const S_IFLINK: u32 = 0120000;
-const S_IFDIR: u32 = 0040000;
-const S_IFREG: u32 = 0100000;
+const S_IFDIR: u32 = 0x4000;
+const S_IFREG: u32 = 0x8000;
+const S_IFLINK: u32 = 0xA000;
 
 #[repr(C)]
 #[derive(Debug)]
