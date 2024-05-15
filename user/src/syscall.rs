@@ -41,6 +41,7 @@ const SYSCALL_KILL: usize = 129;
 const SYSCALL_SIGACTION: usize = 134;
 const SYSCALL_SIGRETURN: usize = 139;
 const SYSCALL_TIMES: usize = 153;
+const SYSCALL_GETRUSAGE: usize = 165;
 const SYSCALL_GETTIMEOFDAY: usize = 169;
 const SYSCALL_GETPID: usize = 172;
 const SYSCALL_GETPPID: usize = 173;
@@ -478,5 +479,12 @@ pub fn sys_readlinkat(dirfd: isize, pathname: &str, buf: &mut [u8], bufsiz: usiz
             0,
             0,
         ],
+    )
+}
+
+pub fn sys_getrusage(who: isize, usage: &mut [u8]) -> isize {
+    syscall(
+        SYSCALL_GETRUSAGE,
+        [who as isize, usage.as_mut_ptr() as isize, 0, 0, 0, 0],
     )
 }

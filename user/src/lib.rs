@@ -462,3 +462,74 @@ pub fn symlinkat(target: &str, newfd: isize, linkpath: &str) -> isize {
 pub fn readlinkat(dirfd: isize, pathname: &str, buf: &mut [u8], bufsiz: usize) -> isize {
     sys_readlinkat(dirfd, pathname, buf, bufsiz)
 }
+
+#[derive(Debug)]
+pub struct TimeVal {
+    pub tv_sec: usize,  //秒
+    pub tv_usec: usize, //微秒
+}
+
+impl TimeVal {
+    pub fn new(sec: usize, usec: usize) -> Self {
+        Self {
+            tv_sec: sec,
+            tv_usec: usec,
+        }
+    }
+    pub fn as_bytes(&self) -> &[u8] {
+        let size = core::mem::size_of::<Self>();
+        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
+    }
+}
+
+#[derive(Debug)]
+pub struct Rusage {
+    pub ru_utime: TimeVal,
+    pub ru_stime: TimeVal,
+    //unused but needed
+    ru_maxrss: isize,
+    ru_ixrss: isize,
+    ru_idrss: isize,
+    ru_isrss: isize,
+    ru_minflt: isize,
+    ru_majflt: isize,
+    ru_nswap: isize,
+    ru_inblock: isize,
+    ru_oublock: isize,
+    ru_msgsnd: isize,
+    ru_msgrcv: isize,
+    ru_nsignals: isize,
+    ru_nvcsw: isize,
+    ru_nivcsw: isize,
+}
+
+impl Rusage {
+    pub fn new() -> Self {
+        Self {
+            ru_utime: TimeVal::new(0, 0),
+            ru_stime: TimeVal::new(0, 0),
+            ru_maxrss: 0,
+            ru_ixrss: 0,
+            ru_idrss: 0,
+            ru_isrss: 0,
+            ru_minflt: 0,
+            ru_majflt: 0,
+            ru_nswap: 0,
+            ru_inblock: 0,
+            ru_oublock: 0,
+            ru_msgsnd: 0,
+            ru_msgrcv: 0,
+            ru_nsignals: 0,
+            ru_nvcsw: 0,
+            ru_nivcsw: 0,
+        }
+    }
+    pub fn as_bytes_mut(&mut self) -> &mut [u8] {
+        let size = core::mem::size_of::<Self>();
+        unsafe { core::slice::from_raw_parts_mut(self as *mut _ as *mut u8, size) }
+    }
+}
+
+pub fn getrusage(who: isize, usage: &mut Rusage) -> isize {
+    sys_getrusage(who, usage.as_bytes_mut())
+}

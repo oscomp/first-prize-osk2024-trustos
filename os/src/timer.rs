@@ -68,19 +68,19 @@ impl TimeData {
         }
     }
     pub fn update_utime(&mut self) {
-        let now = time::read() as isize;
+        let now = (get_time_ms()) as isize;
         let duration = now - self.lasttime;
         self.utime += duration;
         self.lasttime = now;
     }
     pub fn update_stime(&mut self) {
-        let now = time::read() as isize;
+        let now = (get_time_ms()) as isize;
         let duration = now - self.lasttime;
         self.stime += duration;
         self.lasttime = now;
     }
     pub fn clear(&mut self) {
-        let now = time::read() as isize;
+        let now = (get_time_ms()) as isize;
         self.utime = 0;
         self.stime = 0;
         self.cutime = 0;
@@ -107,5 +107,72 @@ bitflags! {
         const CLOCK_REALTIME = 0;
         const CLOCK_MONOTONIC = 1 << 0;
         const CLOCK_PROCESS_CPUTIME_ID = 1 << 1;
+    }
+}
+
+pub struct TimeVal {
+    pub tv_sec: usize,  //秒
+    pub tv_usec: usize, //微秒
+}
+
+impl TimeVal {
+    pub fn new(sec: usize, usec: usize) -> Self {
+        Self {
+            tv_sec: sec,
+            tv_usec: usec,
+        }
+    }
+    pub fn as_bytes(&self) -> &[u8] {
+        let size = core::mem::size_of::<Self>();
+        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
+    }
+}
+
+pub struct Rusage {
+    pub ru_utime: TimeVal,
+    pub ru_stime: TimeVal,
+    //unused but needed
+    ru_maxrss: isize,
+    ru_ixrss: isize,
+    ru_idrss: isize,
+    ru_isrss: isize,
+    ru_minflt: isize,
+    ru_majflt: isize,
+    ru_nswap: isize,
+    ru_inblock: isize,
+    ru_oublock: isize,
+    ru_msgsnd: isize,
+    ru_msgrcv: isize,
+    ru_nsignals: isize,
+    ru_nvcsw: isize,
+    ru_nivcsw: isize,
+}
+
+impl Rusage {
+    pub fn new_from_ms(utime: usize, stime: usize) -> Self {
+        let utimeval = TimeVal::new(utime / 1000, (utime % 1000) * 1000);
+        let stimeval = TimeVal::new(stime / 1000, (stime % 1000) * 1000);
+        Self {
+            ru_utime: utimeval,
+            ru_stime: stimeval,
+            ru_maxrss: 0,
+            ru_ixrss: 0,
+            ru_idrss: 0,
+            ru_isrss: 0,
+            ru_minflt: 0,
+            ru_majflt: 0,
+            ru_nswap: 0,
+            ru_inblock: 0,
+            ru_oublock: 0,
+            ru_msgsnd: 0,
+            ru_msgrcv: 0,
+            ru_nsignals: 0,
+            ru_nvcsw: 0,
+            ru_nivcsw: 0,
+        }
+    }
+    pub fn as_bytes(&self) -> &[u8] {
+        let size = core::mem::size_of::<Self>();
+        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
     }
 }

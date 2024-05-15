@@ -2,7 +2,7 @@ use crate::mm::{
     translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr,
 };
 use crate::task::{current_task, current_token};
-use crate::timer::{get_time_ms, Clockid, Timespec, Tms};
+use crate::timer::{get_time_ms, Clockid, Rusage, Timespec, Tms};
 use crate::utils::{SysErrNo, SyscallRet};
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -63,6 +63,37 @@ pub fn sys_clock_gettime(clockid: usize, tp: *const u8) -> SyscallRet {
             let time = get_time_ms();
             let mut timespec = Timespec::new(time / 1000, (time % 1000) * 1000000);
             tp.write(timespec.as_bytes());
+            Ok(0)
+        }
+        _ => return Err(SysErrNo::EINVAL),
+    }
+}
+
+const RUSAGESELF: isize = 0;
+const RUSAGECHILDEN: isize = -1;
+
+pub fn sys_getrusage(who: isize, usage: *const u8) -> SyscallRet {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+
+    let mut usage = UserBuffer::new(translated_byte_buffer(token, usage, size_of::<Rusage>()));
+
+    match who {
+        RUSAGESELF => {
+            let gotusage = Rusage::new_from_ms(
+                inner.time_data.utime as usize,
+                inner.time_data.stime as usize,
+            );
+            usage.write(gotusage.as_bytes());
+            Ok(0)
+        }
+        RUSAGECHILDEN => {
+            let gotusage = Rusage::new_from_ms(
+                inner.time_data.cutime as usize,
+                inner.time_data.cstime as usize,
+            );
+            usage.write(gotusage.as_bytes());
             Ok(0)
         }
         _ => return Err(SysErrNo::EINVAL),
