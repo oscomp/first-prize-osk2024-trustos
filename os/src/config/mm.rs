@@ -1,3 +1,5 @@
+use super::sync::THREAD_MAX_NUM;
+
 // #![allow(unused)]
 pub const USER_STACK_SIZE: usize = 4096 * 2;
 pub const KERNEL_STACK_SIZE: usize = 4096 * 2;
@@ -17,9 +19,15 @@ pub const USER_SPACE_SIZE: usize = 0x30_0000_0000;
 /// User Space layout
 /// TrapContext GuardPage Stack GuardPage Mmap Heap Elf
 pub const USER_TRAP_CONTEXT: usize = USER_SPACE_SIZE - PAGE_SIZE;
-pub const MMAP_TOP: usize = USER_TRAP_CONTEXT - PAGE_SIZE - USER_STACK_SIZE - PAGE_SIZE;
+// pub const MMAP_TOP: usize = USER_TRAP_CONTEXT - PAGE_SIZE - USER_STACK_SIZE - PAGE_SIZE;
+pub const USER_TRAP_CONTEXT_TOP: usize = USER_SPACE_SIZE;
+pub const USER_STACK_TOP: usize = USER_TRAP_CONTEXT_TOP - PAGE_SIZE * THREAD_MAX_NUM;
+pub const MMAP_TOP: usize = USER_TRAP_CONTEXT_TOP
+    - PAGE_SIZE * THREAD_MAX_NUM
+    - USER_STACK_SIZE * THREAD_MAX_NUM
+    - PAGE_SIZE;
 /// Kernel Stack Start
-pub const TRAMPOLINE: usize = usize::MAX - PAGE_SIZE + 1;
+pub const KSTACK_TOP: usize = usize::MAX - PAGE_SIZE + 1;
 
 /// boot
 pub const HART_START_ADDR: usize = 0x80200000;

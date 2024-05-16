@@ -25,7 +25,7 @@ pub fn sys_times(tms: *const u8) -> SyscallRet {
     let mut inner = task.inner_lock();
     let token = inner.user_token();
 
-    let mut tms = UserBuffer::new(translated_byte_buffer(token, tms, size_of::<Timespec>()));
+    let mut tms = UserBuffer::new(translated_byte_buffer(token, tms, size_of::<Tms>()));
     let mut times = Tms::new(&inner.time_data);
     tms.write(times.as_bytes());
     Ok(0)

@@ -67,10 +67,10 @@ impl MemorySet {
             inner: SyncUnsafeCell::new(memory_set),
         }
     }
-    pub fn get_unchecked_mut(&self) -> &mut MemorySetInner {
+    pub fn get_mut(&self) -> &mut MemorySetInner {
         self.inner.get_unchecked_mut()
     }
-    pub fn get_unchecked_ref(&self) -> &MemorySetInner {
+    pub fn get_ref(&self) -> &MemorySetInner {
         self.inner.get_unchecked_ref()
     }
     // 对MemorySetInner封装
@@ -80,7 +80,7 @@ impl MemorySet {
     }
     #[inline(always)]
     pub fn insert_framed_area(
-        &mut self,
+        &self,
         start_va: VirtAddr,
         end_va: VirtAddr,
         permission: MapPermission,
@@ -92,7 +92,7 @@ impl MemorySet {
     }
     #[inline(always)]
     pub fn insert_given_framed_area(
-        &mut self,
+        &self,
         start_va: VirtAddr,
         end_va: VirtAddr,
         permission: MapPermission,
@@ -115,7 +115,7 @@ impl MemorySet {
     }
     #[inline(always)]
     pub fn mmap(
-        &mut self,
+        &self,
         addr: usize,
         len: usize,
         map_perm: MapPermission,
@@ -188,7 +188,7 @@ impl MemorySet {
 /// 地址空间
 pub struct MemorySetInner {
     pub page_table: PageTable,
-    areas: Vec<MapArea>,
+    pub areas: Vec<MapArea>,
 }
 
 impl MemorySetInner {
@@ -262,6 +262,53 @@ impl MemorySetInner {
         {
             area.unmap(&mut self.page_table);
             self.areas.remove(idx);
+        }
+    }
+    // 根据hint插入页面到指定的area并返回(va_bottom,va_top)
+    // hint指示的区域必须存在
+    pub fn insert_framed_area_with_hint(
+        &mut self,
+        hint: usize,
+        size: usize,
+        map_perm: MapPermission,
+        area_type: MapAreaType,
+    ) -> (usize, usize) {
+        let start_va = self.find_insert_addr(hint, size);
+        let end_va = start_va + size;
+        self.insert_framed_area(
+            VirtAddr::from(start_va),
+            VirtAddr::from(end_va),
+            map_perm,
+            area_type,
+        );
+        (start_va, end_va)
+    }
+    pub fn find_insert_addr(&self, hint: usize, size: usize) -> usize {
+        let end_vpn = VirtAddr::from(hint).floor();
+        let start_vpn = VirtAddr::from(hint - size).floor();
+        for area in self.areas.iter() {
+            let (start, end) = area.vpn_range.range();
+            if end_vpn > start && start_vpn < end {
+                let new_hint = VirtAddr::from(start_vpn).0 - PAGE_SIZE;
+                return self.find_insert_addr(new_hint, size);
+            }
+        }
+        VirtAddr::from(start_vpn).0
+    }
+    /// 复制逻辑段内容
+    pub fn clone_area(&mut self, start_vpn: VirtPageNum, another: &MemorySetInner) {
+        if let Some(area) = another
+            .areas
+            .iter()
+            .find(|area| area.vpn_range.start() == start_vpn)
+        {
+            for vpn in area.vpn_range {
+                let src_ppn = another.page_table.translate(vpn).unwrap().ppn();
+                let dst_ppn = self.translate(vpn).unwrap().ppn();
+                dst_ppn
+                    .bytes_array_mut()
+                    .copy_from_slice(src_ppn.bytes_array());
+            }
         }
     }
     /// mmap
@@ -649,7 +696,8 @@ impl MemorySetInner {
     }
     /// Include sections in elf and trampoline and TrapContext and user stack,
     /// also returns user_sp and entry point.
-    pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize, usize, Vec<Aux>) {
+    /// 不包括用户栈和Trap
+    pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize, Vec<Aux>) {
         let mut auxv = Vec::new();
         let mut memory_set = Self::new_from_kernel();
         // debug!("from_elf new stap={:#x}", memory_set.page_table.token());
@@ -740,50 +788,22 @@ impl MemorySetInner {
             MapAreaType::Brk,
         ));
 
-        // map user stack with U flags
-        let user_stack_top = USER_TRAP_CONTEXT - PAGE_SIZE;
-        let user_stack_bottom = user_stack_top - USER_STACK_SIZE;
-        memory_set.push(
-            MapArea::new(
-                user_stack_bottom.into(),
-                user_stack_top.into(),
-                MapType::Framed,
-                MapPermission::R | MapPermission::W | MapPermission::U,
-                MapAreaType::Stack,
-            ),
-            None,
-        );
-        // println!("user_stack:{:#X}~{:#X}", user_stack_bottom, user_stack_top);
-        // map TrapContext
-        memory_set.push(
-            MapArea::new(
-                USER_TRAP_CONTEXT.into(),
-                USER_SPACE_SIZE.into(),
-                MapType::Framed,
-                MapPermission::R | MapPermission::W,
-                MapAreaType::Trap,
-            ),
-            None,
-        );
         // println!("start:{:#X}", elf.header.pt2.entry_point() as usize);
         (
             memory_set,
-            user_stack_top,
             user_heap_bottom,
             elf.header.pt2.entry_point() as usize,
             auxv,
         )
     }
     ///Clone a same `MemorySet`
-    pub fn from_existed_user(user_space: &Arc<MemorySet>, copy_user_stack: bool) -> MemorySetInner {
+    pub fn from_existed_user(user_space: &Arc<MemorySet>) -> MemorySetInner {
         let mut memory_set = Self::new_from_kernel();
-        // copy data sections/trap_context/user_stack
-        for area in user_space.get_unchecked_mut().areas.iter_mut() {
-            // don't copy kernel stack
-            if area.area_type == MapAreaType::Stack && !area.map_perm.contains(MapPermission::U) {
-                continue;
-            }
-            if !copy_user_stack && area.area_type == MapAreaType::Stack {
+        // copy data sections
+        for area in user_space.get_mut().areas.iter_mut() {
+            // don't copy stack and trap
+            // 每个线程单独分配
+            if area.area_type == MapAreaType::Stack || area.area_type == MapAreaType::Trap {
                 continue;
             }
             let mut new_area = MapArea::from_another(area);
@@ -797,11 +817,7 @@ impl MemorySetInner {
                 new_area.data_frames = area.data_frames.clone();
                 for (vpn, frame) in area.data_frames.iter() {
                     let vpn = *vpn;
-                    let pte = user_space
-                        .get_unchecked_mut()
-                        .page_table
-                        .translate(vpn)
-                        .unwrap();
+                    let pte = user_space.get_mut().page_table.translate(vpn).unwrap();
                     let mut pte_flags = pte.flags();
                     let src_ppn = pte.ppn();
                     //说明有共享页，不需要修改为写时复制
@@ -813,11 +829,8 @@ impl MemorySetInner {
                     //下面两步不合起来是因为flags只有8位，全都用掉了
                     //所以Cow位没有放到flags里面
                     pte_flags &= !PTEFlags::W;
-                    user_space
-                        .get_unchecked_mut()
-                        .page_table
-                        .set_flags(vpn, pte_flags);
-                    user_space.get_unchecked_mut().page_table.set_cow(vpn);
+                    user_space.get_mut().page_table.set_flags(vpn, pte_flags);
+                    user_space.get_mut().page_table.set_cow(vpn);
                     // 设置新的pagetable
                     memory_set.page_table.map(vpn, src_ppn, pte_flags);
                     memory_set.page_table.set_cow(vpn);
@@ -829,21 +842,14 @@ impl MemorySetInner {
             ///ELF是cow
             if area.area_type == MapAreaType::Elf {
                 for vpn in area.vpn_range {
-                    let pte = user_space
-                        .get_unchecked_mut()
-                        .page_table
-                        .translate(vpn)
-                        .unwrap();
+                    let pte = user_space.get_mut().page_table.translate(vpn).unwrap();
                     let pte_flags = pte.flags() & !PTEFlags::W;
                     let src_ppn = pte.ppn();
                     //清空可写位，设置COW位
                     //下面两步不合起来是因为flags只有8位，全都用掉了
                     //所以Cow位没有放到flags里面
-                    user_space
-                        .get_unchecked_mut()
-                        .page_table
-                        .set_flags(vpn, pte_flags);
-                    user_space.get_unchecked_mut().page_table.set_cow(vpn);
+                    user_space.get_mut().page_table.set_flags(vpn, pte_flags);
+                    user_space.get_mut().page_table.set_cow(vpn);
                     // 设置新的pagetable
                     memory_set.page_table.map(vpn, src_ppn, pte_flags);
                     memory_set.page_table.set_cow(vpn);

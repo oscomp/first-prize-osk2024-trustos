@@ -1,3 +1,3 @@
 pub mod board;
 pub mod mm;
-pub mod processor;
+pub mod sync;

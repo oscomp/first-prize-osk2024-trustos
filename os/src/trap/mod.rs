@@ -96,7 +96,7 @@ pub fn trap_handler() {
             // handle error
             match result {
                 Ok(ret) => debug!("[syscall ret] {:?} ret = {}", syscall_id, ret),
-                Err(errno) => warn!("[syscall ret] {:?} ret = {}", syscall_id, errno.str()),
+                Err(errno) => debug!("[syscall ret] {:?} ret = {}", syscall_id, errno.str()),
             }
             // strace
             if strace_mask != 0 && (strace_mask == usize::MAX || strace_mask == cx.x[17]) {
@@ -134,6 +134,7 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
                 // page fault exit code
+                // exit_current_and_run_next(-2);
                 exit_current_and_run_next(-2);
             }
         }
@@ -149,6 +150,7 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
             // page fault exit code
+            // exit_current_and_run_next(-2);
             exit_current_and_run_next(-2);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
@@ -159,6 +161,7 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
             // illegal instruction exit code
+            // exit_current_and_run_next(-3);
             exit_current_and_run_next(-3);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {

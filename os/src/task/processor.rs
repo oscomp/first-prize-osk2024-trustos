@@ -3,7 +3,7 @@ use core::arch::asm;
 
 use super::{__switch, add_task, fetch_task, TaskContext, TaskControlBlock, TaskStatus};
 use crate::{
-    config::processor::HART_NUM,
+    config::sync::HART_NUM,
     mm::{activate_kernel_space, VirtAddr},
     trap::TrapContext,
     utils::hart_id,

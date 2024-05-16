@@ -55,7 +55,7 @@ pub mod utils;
 
 use config::{
     mm::{HART_START_ADDR, KERNEL_ADDR_OFFSET},
-    processor::HART_NUM,
+    sync::HART_NUM,
 };
 use core::{
     arch::{asm, global_asm},

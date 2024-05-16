@@ -28,6 +28,7 @@ use crate::{
     fs::{open_file, OpenFlags},
     mm::kernel_token,
     sbi::shutdown,
+    signal::{send_signal_to_thread_group, SigSet},
 };
 use alloc::{boxed::Box, sync::Arc};
 pub use context::TaskContext;
@@ -61,65 +62,58 @@ pub fn suspend_current_and_run_next() {
 /// pid of usertests app in make run TEST=1
 pub const IDLE_PID: usize = 0;
 
-/// Exit the current 'Running' task and run the next task in task list.
+/// 杀死当前线程组的所有线程
+pub fn exit_current_group_and_run_next(exit_code: i32) {
+    let task = current_task().unwrap();
+    let task_inner = task.inner_lock();
+    let sig_pending = task_inner.sig_pending.get_mut();
+    let mut exit_code = exit_code;
+    if sig_pending.group_exit_code.is_none() {
+        //设置进程的SIGNAL_GROUP_EXIT标志并把终止代号放到current->signal->group_exit_code字段
+        sig_pending.group_exit_code = Some(exit_code);
+        let pid = task.pid();
+        drop(task_inner);
+        drop(task);
+        send_signal_to_thread_group(pid, SigSet::SIGKILL);
+    } else {
+        exit_code = sig_pending.group_exit_code.unwrap();
+        drop(task_inner);
+        drop(task);
+    }
+
+    exit_current_and_run_next(exit_code);
+}
+
 pub fn exit_current_and_run_next(exit_code: i32) {
-    let mut initproc_inner = INITPROC.inner_lock();
-    // take from Processor
     let task = take_current_task().unwrap();
-    // let _ = take_current_token();
-    debug!(
-        "[sys_exit] process {} ,thread {} exit! exit_code={}",
-        task.pid(),
-        task.tid(),
-        exit_code
-    );
-    let pid = task.pid();
-    if pid == IDLE_PID {
-        println!(
-            "[kernel] Idle process exit with exit_code {} ...",
-            exit_code
-        );
-        if exit_code != 0 {
-            //crate::sbi::shutdown(255); //255 == -1 for err hint
-            shutdown(true)
-        } else {
-            //crate::sbi::shutdown(0); //0 for success hint
-            shutdown(false)
-        }
-    }
-
-    // **** access current TCB exclusively
-    // let mut inner = task.inner_exclusive_access();
     let mut inner = task.inner_lock();
-    // Change status to Zombie
-    inner.task_status = TaskStatus::Zombie;
-    // Record exit code
+    debug!("[sys_exit] thread {}", task.tid());
+
+    // 无论如何一个轻量级进程都会是一个线程
+    // 释放线程相关资源
+    remove_from_tid2task(task.tid());
+    inner.dealloc_user_res();
     inner.exit_code = exit_code;
-    // do not move to its parent but under initproc
-
-    // ++++++ access initproc TCB exclusively
-    {
-        for child in inner.children.iter() {
-            child.inner_lock().parent = Some(Arc::downgrade(&INITPROC));
-            initproc_inner.children.push(child.clone());
-        }
-        drop(initproc_inner);
-    }
-    // ++++++ release parent PCB
-
-    inner.children.clear();
-    // deallocate user space
-    inner.memory_set.recycle_data_pages();
-
-    remove_from_pid2task(task.pid());
-
-    TASK_MONITOR.lock().remove(task.tid());
+    inner.task_status = TaskStatus::Zombie;
 
     drop(inner);
-    // **** release current PCB
-    // drop task manually to maintain rc correctly
+
+    // 一个进程的所有线程都退出了,此时回收资源
+    {
+        let thread_group = THREAD_GROUP.lock();
+        if let Some(tasks) = thread_group.get(&task.pid()) {
+            if tasks.iter().all(|task| task.inner_lock().is_zombie()) {
+                drop(thread_group);
+                let inner = task.inner_lock();
+                inner.memory_set.recycle_data_pages();
+                if inner.sig_pending.get_mut().group_exit_code.is_none() {
+                    inner.sig_pending.get_mut().group_exit_code = Some(exit_code);
+                }
+            }
+        }
+    }
+
     drop(task);
-    // we do not have to save task context
     let mut _unused = TaskContext::zero_init();
     schedule(&mut _unused as *mut _);
 }
@@ -137,9 +131,8 @@ lazy_static! {
 pub fn add_initproc() {
     add_task(INITPROC.clone());
 
-    insert_into_pid2task(0, INITPROC.clone());
-
-    TASK_MONITOR.lock().add(0, &INITPROC);
+    insert_into_tid2task(0, &INITPROC);
+    insert_into_thread_group(0, &INITPROC);
 }
 ///Init PROCESSORS
 pub fn init() {
