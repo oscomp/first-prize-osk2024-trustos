@@ -98,6 +98,7 @@ impl OSInode {
         let offset = inner.offset as u32;
         if let Some((name, off, _, _)) = self.inode.dirent_info(offset as usize) {
             dirent.init(name.as_str());
+            dirent.init_off(off as isize);
             inner.offset = off as usize;
             let len = (name.len() + 8 * 4) as isize;
             len
@@ -196,15 +197,30 @@ pub fn list_apps() {
 // 定义一份打开文件的标志
 bitflags! {
     pub struct OpenFlags: u32 {
-        const O_RDONLY = 0;
-        const O_WRONLY = 1 << 0;
-        const O_RDWR = 1 << 1;
-        const O_CREATE = 1 << 6;
-        const O_TRUNC = 1 << 9;
-        const O_APPEND = 1 << 10;
-        const O_UNUSED=1<<15;
-        const O_DIRECTROY = 1 << 16;
-        const O_CLOEXEC = 1<<19;    //描述符标志
+        // reserve 3 bits for the access mode
+        const O_RDONLY      = 0;
+        const O_WRONLY      = 1;
+        const O_RDWR        = 2;
+        const O_ACCMODE     = 3;
+        const O_CREATE      = 0o100;
+        const O_EXCL        = 0o200;
+        const O_NOCTTY      = 0o400;
+        const O_TRUNC       = 0o1000;
+        const O_APPEND      = 0o2000;
+        const O_NONBLOCK    = 0o4000;
+        const O_DSYNC       = 0o10000;
+        const O_SYNC        = 0o4010000;
+        const O_RSYNC       = 0o4010000;
+        const O_DIRECTROY   = 0o200000;
+        const O_NOFOLLOW    = 0o400000;
+        const O_CLOEXEC     = 0o2000000;    //描述符标志
+
+        const O_ASYNC       = 0o20000;
+        const O_DIRECT      = 0o40000;
+        const O_LARGEFILE   = 0o100000;
+        const O_NOATIME     = 0o1000000;
+        const O_PATH        = 0o10000000;
+        const O_TMPFILE     = 0o20200000;
     }
 }
 

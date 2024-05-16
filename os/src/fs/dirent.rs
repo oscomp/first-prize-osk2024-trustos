@@ -32,6 +32,15 @@ impl Dirent {
             self.d_name[i] = name_bytes[i];
         }
         self.d_name[len] = 0;
+        //为d_reclen赋值
+        let size = core::mem::size_of::<Self>() + name.len() + 1;
+        // align to 8 bytes
+        let size = (size + 7) & !7;
+        self.d_reclen = size as u16;
+    }
+
+    pub fn init_off(&mut self, off: isize) {
+        self.d_off = off;
     }
 
     pub fn as_bytes(&self) -> &[u8] {
