@@ -2,7 +2,10 @@ use log::{debug, info};
 
 use crate::{
     mm::{translated_ref, translated_refmut},
-    signal::{add_signal, restore_frame, KSigAction, SigAction, SigSet, SIG_MAX_NUM},
+    signal::{
+        add_signal, restore_frame, send_access_signal, send_signal_to_thread_group, KSigAction,
+        SigAction, SigSet, SIG_MAX_NUM,
+    },
     task::{current_task, tid2task},
     utils::{SysErrNo, SyscallRet},
 };
@@ -69,16 +72,14 @@ pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) ->
 /// pid == -1 then sig is sent to every process which current process has permission ( except init proc )
 /// pid > 0 then sig is sent to the process with the ID specified by pid
 /// pid < -1 the sig is sent to every process in process group whose ID is -pid
-pub fn sys_kill(pid: usize, signo: usize) -> SyscallRet {
+pub fn sys_kill(pid: isize, signo: usize) -> SyscallRet {
+    let sig = SigSet::from_sig(signo);
     match pid {
-        _ if pid > 0 => {
-            // 目前没有线程组,发送给单进程
-            if let Some(task) = tid2task(pid) {
-                add_signal(task, SigSet::from_sig(signo));
-            }
-        }
+        _ if pid > 0 => send_signal_to_thread_group(pid as usize, sig),
+        0 => send_signal_to_thread_group(current_task().unwrap().pid(), sig),
+        -1 => send_access_signal(current_task().unwrap().tid(), sig),
         _ => {
-            unimplemented!()
+            send_signal_to_thread_group(-pid as usize, sig);
         }
     }
     Ok(0)

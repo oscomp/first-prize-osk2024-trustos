@@ -203,7 +203,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Nanosleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
         Syscall::ClockGettime => sys_clock_gettime(args[0], args[1] as *const u8),
         Syscall::SchedYield => sys_sched_yield(),
-        Syscall::SigKill => sys_kill(args[0], args[0]),
+        Syscall::SigKill => sys_kill(args[0] as isize, args[0]),
         Syscall::Sigaction => sys_rt_sigaction(
             args[0],
             args[1] as *const SigAction,

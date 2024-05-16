@@ -118,3 +118,16 @@ pub fn send_signal_to_thread_group(pid: usize, sig: SigSet) {
         }
     }
 }
+// 目前的进程组只是一个进程的所有子进程的集合
+pub fn send_signal_to_process_group(pid: usize, sig: SigSet) {
+    todo!()
+}
+
+/// 向除自身以及 `init` 进程之外的所有进程发送信号
+pub fn send_access_signal(tid: usize, sig: SigSet) {
+    TID_TO_TASK
+        .lock()
+        .iter()
+        .filter(|(k, _)| **k != tid && **k != 0)
+        .for_each(|(_, task)| add_signal(task.clone(), sig));
+}
