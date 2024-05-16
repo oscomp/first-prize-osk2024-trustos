@@ -6,7 +6,8 @@ use crate::{
         add_signal, restore_frame, send_access_signal, send_signal_to_thread_group, KSigAction,
         SigAction, SigSet, SIG_MAX_NUM,
     },
-    task::{current_task, tid2task},
+    task::{current_task, current_token, suspend_current_and_run_next, tid2task},
+    timer::{get_time_spec, Timespec},
     utils::{SysErrNo, SyscallRet},
 };
 
@@ -66,6 +67,36 @@ pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) ->
         }
     }
     Ok(0)
+}
+/// 在指定时间内挂起给定信号
+pub fn sys_rt_sigtimedwait(
+    sig: *const SigSet,
+    _info: usize,
+    timeout: *const Timespec,
+) -> SyscallRet {
+    let token = current_token();
+    let sig = *translated_ref(token, sig);
+    let timeout = *translated_ref(token, timeout);
+
+    let end_time = timeout + get_time_spec();
+    loop {
+        let task = current_task().unwrap();
+        let mut task_inner = task.inner_lock();
+        for signum in 1..(SIG_MAX_NUM + 1) {
+            let signal = SigSet::from_sig(signum);
+            if sig.contains(signal) && task_inner.sig_pending.get_ref().pending.contains(signal) {
+                task_inner.sig_pending.get_mut().pending &= !signal;
+                return Ok(signum);
+            }
+        }
+        if get_time_spec() > end_time {
+            return Err(SysErrNo::EAGAIN);
+        } else {
+            drop(task_inner);
+            drop(task);
+            suspend_current_and_run_next();
+        }
+    }
 }
 
 // pid == 0 then sig is sent to every process in the process group of current process

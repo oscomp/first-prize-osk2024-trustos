@@ -2,7 +2,7 @@ use crate::mm::{
     translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr,
 };
 use crate::task::{current_task, current_token};
-use crate::timer::{get_time_ms, Clockid, Rusage, Timespec, Tms};
+use crate::timer::{get_time_ms, get_time_spec, Clockid, Rusage, Timespec, Tms};
 use crate::utils::{SysErrNo, SyscallRet};
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -14,8 +14,7 @@ pub fn sys_gettimeofday(ts: *const u8) -> SyscallRet {
     let token = current_token();
 
     let mut ts = UserBuffer::new(translated_byte_buffer(token, ts, size_of::<Timespec>()));
-    let time = get_time_ms();
-    let mut timespec = Timespec::new(time / 1000, (time % 1000) * 1000000);
+    let timespec = get_time_spec();
     ts.write(timespec.as_bytes());
     Ok(0)
 }

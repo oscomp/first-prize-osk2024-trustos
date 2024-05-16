@@ -55,7 +55,11 @@ pub enum Syscall {
     SchedGetaffinity = 123,
     SchedYield = 124,
     SigKill = 129,
+    Tkill = 130,
+    Sigsupend = 133,
     Sigaction = 134,
+    Sigprocmask = 135,
+    Sigtimedwait = 137,
     SigReturn = 139,
     Times = 153,
     Uname = 160,
@@ -99,7 +103,13 @@ use process::*;
 use signal::*;
 use time::*;
 
-use crate::{console::print, sbi::shutdown, signal::SigAction, utils::SyscallRet};
+use crate::{
+    console::print,
+    sbi::shutdown,
+    signal::{SigAction, SigSet},
+    timer::Timespec,
+    utils::SyscallRet,
+};
 use log::{debug, info};
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
@@ -208,6 +218,16 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[0],
             args[1] as *const SigAction,
             args[2] as *mut SigAction,
+        ),
+        Syscall::Sigprocmask => sys_rt_sigprocmask(
+            args[0] as u32,
+            args[1] as *const SigSet,
+            args[2] as *mut SigSet,
+        ),
+        Syscall::Sigtimedwait => sys_rt_sigtimedwait(
+            args[0] as *const SigSet,
+            args[1],
+            args[2] as *const Timespec,
         ),
         Syscall::SigReturn => sys_rt_sigreturn(),
         Syscall::Times => sys_times(args[0] as *const u8),
