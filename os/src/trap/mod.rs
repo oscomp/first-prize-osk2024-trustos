@@ -134,6 +134,7 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
                 // page fault exit code
+                // exit_current_and_run_next(-2);
                 exit_current_and_run_next(-2);
             }
         }
@@ -149,6 +150,7 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
             // page fault exit code
+            // exit_current_and_run_next(-2);
             exit_current_and_run_next(-2);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
@@ -159,6 +161,7 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
             // illegal instruction exit code
+            // exit_current_and_run_next(-3);
             exit_current_and_run_next(-3);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {

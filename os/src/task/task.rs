@@ -11,8 +11,8 @@ use crate::{
     },
     fs::{FdTable, FdTableInner, File, FileClass, FsInfo, OSInode, Stdin, Stdout},
     mm::{
-        translated_refmut, MapAreaType, MapPermission, MemorySet, MemorySetInner, PhysPageNum,
-        VirtAddr,
+        flush_tlb, translated_refmut, MapAreaType, MapPermission, MemorySet, MemorySetInner,
+        PhysPageNum, VirtAddr,
     },
     signal::{SigPending, SigPendingInner},
     syscall::CloneFlags,
@@ -48,7 +48,6 @@ pub struct TaskControlBlockInner {
     pub task_status: TaskStatus,
     pub memory_set: Arc<MemorySet>,
     pub parent: Option<Weak<TaskControlBlock>>,
-    pub children: Vec<Arc<TaskControlBlock>>,
     pub exit_code: i32,
     pub fd_table: Arc<FdTable>,
     pub fs_info: Arc<FsInfo>,
@@ -73,6 +72,9 @@ impl TaskControlBlockInner {
     }
     pub fn is_zombie(&self) -> bool {
         self.status() == TaskStatus::Zombie
+    }
+    pub fn is_group_exit(&self) -> bool {
+        self.sig_pending.get_ref().group_exit_code.is_some()
     }
     pub fn alloc_user_res(&mut self) {
         let (_, ustack_top) = self.memory_set.get_mut().insert_framed_area_with_hint(
@@ -106,6 +108,17 @@ impl TaskControlBlockInner {
             VirtAddr::from(self.trap_cx_bottom).floor(),
             another.memory_set.get_ref(),
         );
+    }
+    pub fn dealloc_user_res(&mut self) {
+        if self.user_stack_top != 0 {
+            self.memory_set.get_mut().remove_area_with_start_vpn(
+                VirtAddr::from(self.user_stack_top - USER_STACK_SIZE).floor(),
+            );
+        }
+        self.memory_set
+            .get_mut()
+            .remove_area_with_start_vpn(VirtAddr::from(self.trap_cx_bottom).floor());
+        flush_tlb();
     }
 }
 
@@ -155,7 +168,6 @@ impl TaskControlBlock {
                 task_status: TaskStatus::Ready,
                 memory_set: Arc::new(MemorySet::new(memory_set)),
                 parent: None,
-                children: Vec::new(),
                 exit_code: 0,
                 fd_table: Arc::new(FdTable::new(vec![
                     // 0 -> stdin
@@ -308,85 +320,7 @@ impl TaskControlBlock {
         inner.user_heapbottom = user_hp;
         // println!("final user_sp:{:#X}", user_sp);
     }
-    #[deprecated]
-    pub fn fork(self: &Arc<TaskControlBlock>, stack: Option<usize>) -> Arc<TaskControlBlock> {
-        // ---- hold parent PCB lock
-        let mut parent_inner = self.inner_lock();
-        let copy_user_stack = stack.is_none();
-        // copy user space(include trap context)
-        let mut memory_set = MemorySetInner::from_existed_user(&parent_inner.memory_set);
-        let trap_cx_ppn = memory_set
-            .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
-            .unwrap()
-            .ppn();
-        // alloc a pid and a kernel stack in kernel space
-        let tid_handle = tid_alloc();
-        let pid = tid_handle.0;
-        let kernel_stack = KernelStack::new(&tid_handle);
-        let (kernel_stack_bottom, kernel_stack_top) = kernel_stack.pos();
-        memory_set.insert_framed_area(
-            kernel_stack_bottom.into(),
-            kernel_stack_top.into(),
-            MapPermission::R | MapPermission::W,
-            MapAreaType::Stack,
-        );
-        // copy fd table
-        let mut new_fd_table: FdTableInner = Vec::new();
-        for fd in parent_inner.fd_table.get_mut().iter() {
-            if let Some(file) = fd {
-                new_fd_table.push(Some(file.clone()));
-            } else {
-                new_fd_table.push(None);
-            }
-        }
-        let user_stack_top = if !copy_user_stack {
-            stack.unwrap()
-        } else {
-            parent_inner.user_stack_top
-        };
-        // map sig_trampoline
-        let task_control_block = Arc::new(TaskControlBlock {
-            tid: tid_handle,
-            pid,
-            ppid: self.pid,
-            kernel_stack,
-            inner: Mutex::new(TaskControlBlockInner {
-                trap_cx_ppn,
-                trap_cx_bottom: USER_TRAP_CONTEXT,
-                user_stack_top,
-                task_cx: TaskContext::goto_trap_return(kernel_stack_top),
-                task_status: TaskStatus::Ready,
-                memory_set: Arc::new(MemorySet::new(memory_set)),
-                parent: Some(Arc::downgrade(self)),
-                children: Vec::new(),
-                exit_code: 0,
-                fd_table: Arc::new(FdTable::new(new_fd_table)),
-                fs_info: Arc::new(FsInfo::from_another(&parent_inner.fs_info)),
-                time_data: TimeData::new(),
-                user_heappoint: parent_inner.user_heappoint,
-                user_heapbottom: parent_inner.user_heapbottom,
-                strace_mask: parent_inner.strace_mask,
-                set_child_tid: 0,
-                clear_child_tid: 0,
-                sig_pending: Arc::new(SigPending::from_another(&parent_inner.sig_pending)),
-            }),
-        });
-
-        // add child
-        parent_inner.children.push(task_control_block.clone());
-        // modify kernel_sp in trap_cx
-        // **** access child PCB exclusively
-        let trap_cx = task_control_block.inner_lock().trap_cx();
-        trap_cx.kernel_sp = kernel_stack_top;
-        if !copy_user_stack {
-            trap_cx.set_sp(user_stack_top);
-        }
-        insert_into_tid2task(task_control_block.tid(), &task_control_block);
-        // return
-        task_control_block
-        // **** release child PCB
-        // ---- release parent PCB
-    }
+    ///
     pub fn clone_process(
         self: &Arc<TaskControlBlock>,
         flags: CloneFlags,
@@ -476,7 +410,6 @@ impl TaskControlBlock {
                 task_status: TaskStatus::Ready,
                 memory_set,
                 parent,
-                children: Vec::new(),
                 exit_code: 0,
                 fd_table,
                 fs_info,
@@ -504,14 +437,7 @@ impl TaskControlBlock {
             *child_inner.trap_cx() = *parent_inner.trap_cx();
         } else {
             // fork
-            // child_inner.user_stack_top = user_stack_top;
             child_inner.clone_user_res(&parent_inner);
-            // child_inner.trap_cx_ppn = child_inner
-            //     .memory_set
-            //     .get_unchecked_ref()
-            //     .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
-            //     .unwrap()
-            //     .ppn();
         }
         let trap_cx = child_inner.trap_cx();
         trap_cx.kernel_sp = kernel_stack_top;
@@ -520,6 +446,7 @@ impl TaskControlBlock {
             child_inner
                 .memory_set
                 .remove_area_with_start_vpn((user_stack_top - USER_STACK_SIZE).into());
+            child_inner.user_stack_top = 0;
             trap_cx.set_sp(user_stack_top);
         }
         if flags.contains(CloneFlags::CLONE_SETTLS) {
@@ -532,7 +459,6 @@ impl TaskControlBlock {
             *translated_refmut(child_token, child_tid) = child.tid() as u32;
         }
         drop(child_inner);
-        parent_inner.children.push(child.clone());
         insert_into_tid2task(child.tid(), &child);
         insert_into_thread_group(child.pid, &child);
         if !flags.contains(CloneFlags::CLONE_THREAD) {

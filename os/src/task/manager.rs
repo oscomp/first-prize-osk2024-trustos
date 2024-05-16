@@ -1,5 +1,5 @@
 //!Implementation of [`TaskManager`]
-use super::{tid, TaskControlBlock};
+use super::{tid, TaskControlBlock, INITPROC};
 use alloc::collections::{BTreeMap, VecDeque};
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
@@ -91,17 +91,12 @@ pub fn insert_into_thread_group(pid: usize, task: &Arc<TaskControlBlock>) {
         .or_insert_with(Vec::new)
         .push(task.clone());
 }
-
-pub fn remove_from_thread_group(pid: usize, tid: usize) {
-    let mut inner = THREAD_GROUP.lock();
-    if let Some(tasks) = inner.get_mut(&pid) {
-        tasks.retain(|x| x.tid() != tid);
-        if tasks.is_empty() {
-            inner.remove(&pid);
-        }
-    }
+/// 删除整个线程组,同时将线程从tid2task移除
+pub fn remove_all_from_thread_group(pid: usize) {
+    THREAD_GROUP.lock().remove(&pid);
 }
 /// 需要持有Arc,避免进程在exit时被释放,等待到wait释放进程
+/// 一个进程组实际上是一个进程的所有子进程
 lazy_static! {
     pub static ref PROCESS_GROUP: Mutex<BTreeMap<usize, Vec<Arc<TaskControlBlock>>>> =
         Mutex::new(BTreeMap::new());
@@ -121,6 +116,17 @@ pub fn remove_from_process_group(ppid: usize, pid: usize) {
         tasks.retain(|x| x.pid() != pid);
         if tasks.is_empty() {
             inner.remove(&ppid);
+        }
+    }
+}
+
+pub fn move_child_process_to_init(ppid: usize) {
+    let mut inner = PROCESS_GROUP.lock();
+    if let Some(tasks) = inner.remove(&ppid) {
+        let init_childer = inner.get_mut(&INITPROC.pid()).unwrap();
+        for child in tasks {
+            child.inner_lock().parent = Some(Arc::downgrade(&INITPROC));
+            init_childer.push(child);
         }
     }
 }

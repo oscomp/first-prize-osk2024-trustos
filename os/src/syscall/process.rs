@@ -7,7 +7,8 @@ use crate::{
     syscall::CloneFlags,
     task::{
         add_task, current_task, current_token, exit_current_and_run_next,
-        exit_current_group_and_run_next, suspend_current_and_run_next, task_num,
+        exit_current_group_and_run_next, move_child_process_to_init, remove_all_from_thread_group,
+        suspend_current_and_run_next, task_num, PROCESS_GROUP,
     },
     timer::{get_time_ms, Timespec, Tms},
     utils::{SysErrNo, SyscallRet},
@@ -23,6 +24,7 @@ use crate::utils::hart_id;
 use log::{debug, info};
 
 pub fn sys_exit(exit_code: i32) -> ! {
+    // exit_current_and_run_next(exit_code);
     exit_current_and_run_next(exit_code);
     panic!("Unreachable in sys_exit!");
 }
@@ -109,24 +111,6 @@ pub fn sys_clone(
     // add new task to scheduler
     add_task(new_task);
     Ok(new_tid)
-    // fork or create new
-    // if flags.is_fork() {
-    //     //通常使用默认的 CLONE_CHILD_CLEARTID、CLONE_CHILD_SETTID 和 SIGCHLD 标志。
-    //     //ptid、tls、ctid 通常设置为 NULL
-    //     let current_task = current_task().unwrap();
-    //     let new_task = current_task.fork(stack);
-    //     let new_pid = new_task.pid();
-    //     // modify trap context of new_task, because it returns immediately after switching
-    //     let trap_cx = new_task.inner_lock().trap_cx();
-    //     // we do not have to move to next instruction since we have done it before
-    //     // for child process, fork returns 0
-    //     trap_cx.x[10] = 0;
-    //     // add new task to scheduler
-    //     add_task(new_task);
-    //     Ok(new_pid)
-    // } else {
-    //     unimplemented!();
-    // }
 }
 
 pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usize) -> SyscallRet {
@@ -177,72 +161,80 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
     }
 }
 /// 等待子进程状态发生变化,即子进程终止或被信号停止或被信号挂起
-pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
-    // TODO(ZMY) 加入信号和进程组支持
-    debug!("sys_wait4 enter");
-    assert!(options == 0, "not support options yet");
-    loop {
-        let task = current_task().unwrap();
-        // find a child process
-        // ---- access current PCB exclusively
-        let mut inner = task.inner_lock();
-        if !inner
-            .children
-            .iter()
-            .any(|p| pid == -1 || pid as usize == p.pid())
-        {
-            debug!("[sys_wait4] no child process");
-            return Err(SysErrNo::ECHILD);
-            // ---- release current PCB
-        }
-        let pair = inner.children.iter().enumerate().find(|(_, p)| {
-            // ++++ temporarily access child PCB exclusively
-            p.inner_lock().is_zombie() && (pid == -1 || pid as usize == p.pid())
-            // ++++ release child PCB
-        });
-        if let Some((idx, _)) = pair {
-            let child = inner.children.remove(idx);
-            // confirm that child will be deallocated after being removed from children list
-            assert_eq!(
-                Arc::strong_count(&child),
-                1,
-                "process{} can't recycled",
-                child.pid()
-            );
-
-            let mut childinner = child.inner_lock();
-
-            inner.time_data.cutime += childinner.time_data.utime;
-            inner.time_data.cstime += childinner.time_data.stime;
-
-            let found_pid = child.pid();
-            // ++++ temporarily access child PCB exclusively
-            let exit_code = childinner.exit_code;
-            // ++++ release child PCB
-            if wstatus as usize != 0x0 {
-                debug!(
-                    "[sys_wait4] child {} exit with code {}, wstatus= {:#x}",
-                    found_pid, exit_code, wstatus as usize
-                );
-                *translated_refmut(inner.memory_set.token(), wstatus) = exit_code << 8;
-            }
-            return Ok(found_pid);
-        } else {
-            drop(inner);
-            drop(task);
-            suspend_current_and_run_next();
-        }
-    }
-}
 /// < -1   meaning wait for any child process whose process group ID
 ///         is equal to the absolute value of pid.
 ///-1     meaning wait for any child process.
 ///0      meaning wait for any child process whose process group ID
 ///       is equal to that of the calling process at the time of the call to waitpid().
 ///> 0    meaning wait for the child whose process ID is equal to the value of pid.
-pub fn sys_wait4_v2(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
+pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
     assert!(options == 0, "not support options yet");
-    todo!()
+    loop {
+        let mut process_group = PROCESS_GROUP.lock();
+        let task = current_task().unwrap();
+        let mut task_inner = task.inner_lock();
+        // 暂时没有子进程,返回即可
+        if !process_group.contains_key(&task.pid()) {
+            debug!("[sys_wait4] no child process");
+            return Err(SysErrNo::ECHILD);
+        }
+        // 只有fork出来的子进程会被放入
+        let children = process_group.get_mut(&task.pid()).unwrap();
+        if !children
+            .iter()
+            .any(|p| pid == -1 || pid as usize == p.pid())
+        {
+            debug!("[sys_wait4] no child process");
+            return Err(SysErrNo::ECHILD);
+        }
+        // 寻找符合条件的进程组
+        // 使用clone避免多次借用或借用冲突
+        let pair = children
+            .iter()
+            .enumerate()
+            .find(|(_, p)| {
+                // ++++ temporarily access child PCB exclusively
+                p.inner_lock().is_group_exit() && (pid == -1 || pid as usize == p.pid())
+                // ++++ release child PCB
+            })
+            .map(|(idx, t)| (idx, Arc::clone(t)));
+
+        if let Some((idx, child)) = pair {
+            let found_pid = child.pid();
+            let child_inner = child.inner_lock();
+            let exit_code = child_inner.sig_pending.get_ref().group_exit_code.unwrap();
+            if wstatus as usize != 0x0 {
+                debug!(
+                    "[sys_wait4] child {} exit with code {}, wstatus= {:#x}",
+                    found_pid, exit_code, wstatus as usize
+                );
+                *translated_refmut(task_inner.memory_set.token(), wstatus) = exit_code << 8;
+            }
+            drop(child_inner);
+            // 从父进程的子进程组移除
+            children.remove(idx);
+            // 从线程组移除
+            remove_all_from_thread_group(found_pid);
+            drop(task_inner);
+            drop(task);
+            drop(process_group);
+            // 转移子进程
+            move_child_process_to_init(found_pid);
+
+            assert_eq!(
+                Arc::strong_count(&child),
+                1,
+                "process{} can't recycled",
+                child.pid()
+            );
+            return Ok(found_pid);
+        } else {
+            drop(task_inner);
+            drop(task);
+            drop(process_group);
+            suspend_current_and_run_next();
+        }
+    }
 }
 
 pub fn sys_nanosleep(req: *const u8, _rem: *const u8) -> SyscallRet {
