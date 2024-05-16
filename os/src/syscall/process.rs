@@ -94,14 +94,15 @@ pub fn sys_clone(
             Some(stack as usize)
         }
     };
-    let current_task = current_task().unwrap();
-    let new_task = current_task.clone_process(
+    let task = current_task().unwrap();
+    let new_task = task.clone_process(
         flags,
         stack,
         parent_tid_ptr as *mut u32,
         tls_ptr,
         chilren_tid_ptr as *mut u32,
     );
+    let task_inner = task.inner_lock();
     let new_tid = new_task.tid();
     // modify trap context of new_task, because it returns immediately after switching
     let trap_cx = new_task.inner_lock().trap_cx();

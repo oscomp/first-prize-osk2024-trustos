@@ -788,31 +788,6 @@ impl MemorySetInner {
             MapAreaType::Brk,
         ));
 
-        // map user stack with U flags
-        // let user_stack_top = USER_TRAP_CONTEXT - PAGE_SIZE;
-        // let user_stack_bottom = user_stack_top - USER_STACK_SIZE;
-        // memory_set.push(
-        //     MapArea::new(
-        //         user_stack_bottom.into(),
-        //         user_stack_top.into(),
-        //         MapType::Framed,
-        //         MapPermission::R | MapPermission::W | MapPermission::U,
-        //         MapAreaType::Stack,
-        //     ),
-        //     None,
-        // );
-        // println!("user_stack:{:#X}~{:#X}", user_stack_bottom, user_stack_top);
-        // map TrapContext
-        // memory_set.push(
-        //     MapArea::new(
-        //         USER_TRAP_CONTEXT.into(),
-        //         USER_SPACE_SIZE.into(),
-        //         MapType::Framed,
-        //         MapPermission::R | MapPermission::W,
-        //         MapAreaType::Trap,
-        //     ),
-        //     None,
-        // );
         // println!("start:{:#X}", elf.header.pt2.entry_point() as usize);
         (
             memory_set,
@@ -824,15 +799,10 @@ impl MemorySetInner {
     ///Clone a same `MemorySet`
     pub fn from_existed_user(user_space: &Arc<MemorySet>) -> MemorySetInner {
         let mut memory_set = Self::new_from_kernel();
-        // copy data sections/trap_context/user_stack
+        // copy data sections
         for area in user_space.get_mut().areas.iter_mut() {
-            // don't copy kernel stack
-            // if area.area_type == MapAreaType::Stack && !area.map_perm.contains(MapPermission::U) {
-            //     continue;
-            // }
-            // if !copy_user_stack && area.area_type == MapAreaType::Stack {
-            //     continue;
-            // }
+            // don't copy stack and trap
+            // 每个线程单独分配
             if area.area_type == MapAreaType::Stack || area.area_type == MapAreaType::Trap {
                 continue;
             }

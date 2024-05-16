@@ -202,11 +202,11 @@ impl TaskControlBlock {
         task
     }
     pub fn exec(&self, elf_data: &[u8], argv: &Vec<String>, mut env: &mut Vec<String>) {
+        let mut inner = self.inner_lock();
         //用户栈高地址到低地址：环境变量字符串/参数字符串/aux辅助向量/环境变量地址数组/参数地址数组/参数数量
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (mut memory_set, user_hp, entry_point, mut auxv) = MemorySetInner::from_elf(elf_data);
 
-        let mut inner = self.inner_lock();
         let token = memory_set.token();
 
         inner.time_data.clear();
@@ -459,6 +459,7 @@ impl TaskControlBlock {
             *translated_refmut(child_token, child_tid) = child.tid() as u32;
         }
         drop(child_inner);
+        drop(parent_inner);
         insert_into_tid2task(child.tid(), &child);
         insert_into_thread_group(child.pid, &child);
         if !flags.contains(CloneFlags::CLONE_THREAD) {

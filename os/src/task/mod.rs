@@ -87,6 +87,7 @@ pub fn exit_current_group_and_run_next(exit_code: i32) {
 pub fn exit_current_and_run_next(exit_code: i32) {
     let task = take_current_task().unwrap();
     let mut inner = task.inner_lock();
+    debug!("[sys_exit] thread {}", task.tid());
 
     // 无论如何一个轻量级进程都会是一个线程
     // 释放线程相关资源
