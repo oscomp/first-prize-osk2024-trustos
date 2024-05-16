@@ -43,6 +43,28 @@ pub fn sys_rt_sigreturn() -> SyscallRet {
     Ok(0)
 }
 
+pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) -> SyscallRet {
+    const SIG_BLOCK: u32 = 0;
+    const SIG_UNBLOCK: u32 = 1;
+    const SIG_SETMASK: u32 = 2;
+    let task = current_task().unwrap();
+    let mut task_inner = task.inner_lock();
+    let token = task_inner.user_token();
+    if old_set as usize != 0 {
+        *translated_refmut(token, old_set) = task_inner.sig_pending.get_ref().blocked;
+    }
+    if set as usize != 0 {
+        let mut mask = *translated_ref(token, set);
+        match how {
+            SIG_BLOCK => task_inner.sig_pending.get_mut().blocked |= mask,
+            SIG_UNBLOCK => task_inner.sig_pending.get_mut().blocked &= !mask,
+            SIG_SETMASK => task_inner.sig_pending.get_mut().blocked = mask,
+            _ => return Err(SysErrNo::EINVAL),
+        }
+    }
+    Ok(0)
+}
+
 // pid == 0 then sig is sent to every process in the process group of current process
 /// pid == -1 then sig is sent to every process which current process has permission ( except init proc )
 /// pid > 0 then sig is sent to the process with the ID specified by pid
