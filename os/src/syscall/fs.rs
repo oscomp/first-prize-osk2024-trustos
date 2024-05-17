@@ -395,6 +395,7 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
             if readsize < 0 {
                 return Ok(all_len);
             }
+            //println!("{:?}", dirent);
             buffer.write_at(all_len, dirent.as_bytes());
             all_len += dirent_size;
         }

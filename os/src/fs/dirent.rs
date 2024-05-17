@@ -2,6 +2,7 @@ pub const NAME_LIMIT: usize = 256;
 
 /// 存储目录中的文件信息
 #[repr(C)]
+#[derive(Debug)]
 pub struct Dirent {
     d_ino: usize,             // 索引节点号
     d_off: isize,             // 从 0 开始到下一个 dirent 的偏移
@@ -15,7 +16,7 @@ impl Dirent {
         Self {
             d_ino: 0,
             d_off: 0,
-            d_reclen: 0,
+            d_reclen: core::mem::size_of::<Self>() as u16,
             d_type: 0,
             d_name: [0; NAME_LIMIT],
         }
@@ -32,11 +33,6 @@ impl Dirent {
             self.d_name[i] = name_bytes[i];
         }
         self.d_name[len] = 0;
-        //为d_reclen赋值
-        let size = core::mem::size_of::<Self>() + name.len() + 1;
-        // align to 8 bytes
-        let size = (size + 7) & !7;
-        self.d_reclen = size as u16;
     }
 
     pub fn init_off(&mut self, off: isize) {
