@@ -1,9 +1,9 @@
 #![no_std]
 #![no_main]
 use user_lib::{
-    chdir, close, faccessat, fcntl, fstatat, fsync, ftruncate, lseek, mkdir, openat, pread64,
-    pwrite64, read, readlinkat, renameat2, sendfile, statfs, symlinkat, sync, write, FaccessatMode,
-    Kstat, OpenFlags, Statfs,
+    chdir, close, copy_file_range, faccessat, fcntl, fstatat, fsync, ftruncate, lseek, mkdir,
+    openat, pread64, pwrite64, read, readlinkat, renameat2, sendfile, statfs, symlinkat, sync,
+    write, FaccessatMode, Kstat, OpenFlags, Statfs,
 };
 
 #[macro_use]
@@ -230,7 +230,7 @@ fn test_renameat2() {
     let result1 = renameat2(-100, "test_renameat2\0", -100, "test_renameat2_ok\0", 1);
     let result2 = openat(-100, "test_renameat2_ok\0", OpenFlags::O_RDWR, 0);
     println!("result1 is {} which should be 0", result1);
-    println!("result2 is {} which should not be 0", result2);
+    println!("result2 is {} which should not be -1", result2);
     close(fd as usize);
     close(result2 as usize);
     println!("-----------------end renameat2-----------------");
@@ -249,12 +249,63 @@ fn test_openat() {
     );
     chdir("./mnt\0");
     let result2 = openat(-100, "test_openat\0", OpenFlags::O_RDWR, 0);
-    println!("result1 is {} which should not be 0", result1);
-    println!("result2 is {} which should not be 0", result2);
+    println!("result1 is {} which should not be -1", result1);
+    println!("result2 is {} which should not be -1", result2);
     close(fd as usize);
     close(result1 as usize);
     close(result2 as usize);
     println!("-----------------end openat-----------------");
+    println!("");
+}
+
+fn test_copy_file_range() {
+    println!("-----------------test copy_file_range-----------------");
+    let infd = openat(
+        -100,
+        "test_infd2\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0,
+    );
+    let outfd = openat(
+        -100,
+        "test_outfd2\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0,
+    );
+    let inbuf: [u8; 10] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    let writeresult = write(infd as usize, &inbuf, 10);
+    println!(
+        "have written {} bytes [1,2,3,4,5,6,7,8,9,10]\nnow lseek to the beginning of the infile",
+        writeresult
+    );
+    let inoffset: usize = 2;
+    let outoffset: usize = 4;
+    println!("now we need the middle 5 number");
+    let result = copy_file_range(
+        infd as usize,
+        &inoffset as *const usize,
+        outfd as usize,
+        &outoffset as *const usize,
+        5,
+        0,
+    );
+    println!("copy_file_range over, now lseek to the beginning of the outfile");
+    lseek(outfd as usize, 4, 0);
+    println!("lseek over, now let's read");
+    let mut outbuf: [u8; 5] = [0; 5];
+    let readresult = read(outfd as usize, &mut outbuf, 5);
+    println!(
+        "read {} bytes , now print send bytes which should be: [3,4,5,6,7]",
+        readresult
+    );
+    for &byte in &outbuf {
+        print!("{} ", byte);
+    }
+    close(infd as usize);
+    close(outfd as usize);
+    println!("");
+    println!("result is {} which should be 5", result);
+    println!("-----------------end copy_file_range-----------------");
     println!("");
 }
 
@@ -273,5 +324,6 @@ pub fn main() -> i32 {
     test_symlinkat_readlinkat();
     test_renameat2();
     test_openat();
+    test_copy_file_range();
     0
 }

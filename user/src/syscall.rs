@@ -50,6 +50,7 @@ const SYSCALL_CLONE: usize = 220;
 const SYSCALL_EXECVE: usize = 221;
 const SYSCALL_WAIT4: usize = 260;
 const SYSCALL_RENAMEAT2: usize = 276;
+const SYSCALL_COPYFILERANGE: usize = 285;
 
 const SYSCALL_SHUTDOWN: usize = 1000;
 const SYSCALL_STRACE: usize = 2000;
@@ -506,6 +507,27 @@ pub fn sys_renameat2(
             newpath.as_ptr() as isize,
             flags as isize,
             0,
+        ],
+    )
+}
+
+pub fn sys_copy_file_range(
+    infd: usize,
+    off_in: *const usize,
+    outfd: usize,
+    off_out: *const usize,
+    count: usize,
+    flags: u32,
+) -> isize {
+    syscall(
+        SYSCALL_COPYFILERANGE,
+        [
+            infd as isize,
+            off_in as isize,
+            outfd as isize,
+            off_out as isize,
+            count as isize,
+            flags as isize,
         ],
     )
 }

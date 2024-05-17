@@ -1281,3 +1281,87 @@ pub fn sys_renameat2(
         return Err(SysErrNo::ENOENT);
     }
 }
+
+pub fn sys_copy_file_range(
+    infd: usize,
+    off_in: usize,
+    outfd: usize,
+    off_out: usize,
+    count: usize,
+    _flags: u32,
+) -> SyscallRet {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+
+    if outfd >= inner.fd_table.len()
+        || inner.fd_table.get(outfd).is_none()
+        || infd >= inner.fd_table.len()
+        || inner.fd_table.get(infd).is_none()
+    {
+        return Err(SysErrNo::EINVAL);
+    }
+
+    if let Some(FileClass::File(outfile)) = &inner.fd_table.get(outfd) {
+        if !outfile.writable() {
+            return Err(SysErrNo::EACCES);
+        }
+
+        if let Some(FileClass::File(infile)) = &inner.fd_table.get(infd) {
+            if !infile.readable() {
+                return Err(SysErrNo::EACCES);
+            }
+            //构造输入缓冲池
+            let mut buf = vec![0u8; count];
+            let mut inbufv = Vec::new();
+            unsafe {
+                inbufv.push(core::slice::from_raw_parts_mut(
+                    buf.as_mut_slice().as_mut_ptr(),
+                    buf.as_slice().len(),
+                ));
+            }
+            let mut inbuffer = UserBuffer::new(inbufv); //输入缓冲池
+
+            //读数据
+            let readcount;
+            if off_in == 0 {
+                readcount = infile.read(inbuffer);
+            } else {
+                let offset = translated_ref(token, off_in as *const isize);
+                if *offset < 0 {
+                    return Err(SysErrNo::EINVAL);
+                }
+                infile.set_offset(*offset as usize);
+                readcount = infile.read(inbuffer);
+            }
+            //构造输出缓冲池
+            let mut outbufv = Vec::new();
+            unsafe {
+                outbufv.push(core::slice::from_raw_parts_mut(
+                    buf.as_mut_slice().as_mut_ptr(),
+                    readcount,
+                ));
+            }
+            let mut outbuffer = UserBuffer::new(outbufv); //输出缓冲池
+
+            //写数据
+            let writecount;
+            if off_out == 0 {
+                writecount = outfile.write(outbuffer);
+            } else {
+                let offset = translated_ref(token, off_out as *const isize);
+                if *offset < 0 {
+                    return Err(SysErrNo::EINVAL);
+                }
+                outfile.set_offset(*offset as usize);
+                writecount = outfile.write(outbuffer);
+            }
+
+            Ok(writecount)
+        } else {
+            Err(SysErrNo::ENOENT)
+        }
+    } else {
+        Err(SysErrNo::ENOENT)
+    }
+}

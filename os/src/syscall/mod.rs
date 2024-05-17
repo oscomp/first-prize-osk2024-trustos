@@ -82,6 +82,7 @@ pub enum Syscall {
     Mprotect = 226,
     Wait4 = 260,
     Renameat2 = 276,
+    CopyFileRange = 285,
     // 非标准系统调用
     Shutdown = 1000,
     Strace = 2000,
@@ -267,6 +268,14 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[2] as isize,
             args[3] as *const u8,
             args[4] as u32,
+        ),
+        Syscall::CopyFileRange => sys_copy_file_range(
+            args[0] as usize,
+            args[1] as usize,
+            args[2] as usize,
+            args[3] as usize,
+            args[4] as usize,
+            args[5] as u32,
         ),
         Syscall::Shutdown => shutdown(false),
         Syscall::Strace => sys_strace(args[0]),

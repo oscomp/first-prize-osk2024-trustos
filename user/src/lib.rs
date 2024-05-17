@@ -543,3 +543,14 @@ pub fn renameat2(
 ) -> isize {
     sys_renameat2(olddirfd, oldpath, newdirfd, newpath, flags)
 }
+
+pub fn copy_file_range(
+    infd: usize,
+    off_in: *const usize,
+    outfd: usize,
+    off_out: *const usize,
+    count: usize,
+    flags: u32,
+) -> isize {
+    sys_copy_file_range(infd, off_in, outfd, off_out, count, flags)
+}
