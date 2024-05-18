@@ -21,5 +21,6 @@ run:
 		-device virtio-net-device,netdev=net \
 		-netdev user,id=net
 	@rm kernel-qemu
+	@rm disk.img
 
 .PHONY: all run
