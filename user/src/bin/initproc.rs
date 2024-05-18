@@ -1,5 +1,7 @@
 #![no_std]
 #![no_main]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
 
 #[macro_use]
 extern crate user_lib;

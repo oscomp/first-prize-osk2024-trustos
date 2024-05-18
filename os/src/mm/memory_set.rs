@@ -336,16 +336,17 @@ impl MemorySetInner {
             addr
         } else {
             // 自行选择地址,计算已经使用的MMap地址
-            let map_size: usize = self
-                .areas
-                .iter()
-                .filter(|area| area.area_type == MapAreaType::Mmap)
-                .map(|area| {
-                    let (start, end) = area.vpn_range.range();
-                    (VirtAddr::from(end).0 - VirtAddr::from(start).0)
-                })
-                .sum();
-            let addr = MMAP_TOP - map_size - len;
+            // let map_size: usize = self
+            //     .areas
+            //     .iter()
+            //     .filter(|area| area.area_type == MapAreaType::Mmap)
+            //     .map(|area| {
+            //         let (start, end) = area.vpn_range.range();
+            //         (VirtAddr::from(end).0 - VirtAddr::from(start).0)
+            //     })
+            //     .sum();
+            let addr = self.find_insert_addr(MMAP_TOP, len);
+            // let addr = MMAP_TOP - map_size - len;
             self.push_lazily(MapArea::new_mmap(
                 VirtAddr::from(addr),
                 VirtAddr::from(addr + len),
