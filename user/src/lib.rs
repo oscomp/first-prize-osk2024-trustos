@@ -77,11 +77,6 @@ pub fn shutdown() -> isize {
     sys_shutdown()
 }
 
-/// 如果参数为0 跟踪所有
-pub fn strace(mask: usize) -> isize {
-    let mask = if mask == 0 { usize::MAX } else { mask };
-    sys_strace(mask)
-}
 /// 返回ms
 pub fn get_time() -> usize {
     let mut time_sepc: [usize; 2] = [0, 0];

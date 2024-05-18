@@ -69,8 +69,6 @@ pub fn trap_handler() {
         .time_data
         .update_utime();
 
-    let strace_mask = current_task().unwrap().inner_lock().strace_mask;
-
     let hartid = hart_id();
 
     set_kernel_trap_entry();
@@ -98,17 +96,6 @@ pub fn trap_handler() {
                 Ok(ret) => debug!("[syscall ret] {:?} ret = {}", syscall_id, ret),
                 Err(errno) => debug!("[syscall ret] {:?} ret = {}", syscall_id, errno.str()),
             }
-            // strace
-            if strace_mask != 0 && (strace_mask == usize::MAX || strace_mask == cx.x[17]) {
-                info!(
-                    "[strace] syscall {} {:?} -> {}",
-                    cx.x[17], syscall_id, cx.x[10]
-                );
-            } else {
-                if syscall_id == Syscall::Default {
-                    info!("[strace] unknown syscall id {} -> {}", cx.x[17], cx.x[10]);
-                }
-            }
         }
         Trap::Exception(Exception::StorePageFault) | Trap::Exception(Exception::LoadPageFault) => {
             // page fault
@@ -134,7 +121,6 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
                 // page fault exit code
-                // exit_current_and_run_next(-2);
                 exit_current_and_run_next(-2);
             }
         }
@@ -150,7 +136,6 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
             // page fault exit code
-            // exit_current_and_run_next(-2);
             exit_current_and_run_next(-2);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
@@ -161,7 +146,6 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
             // illegal instruction exit code
-            // exit_current_and_run_next(-3);
             exit_current_and_run_next(-3);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {

@@ -125,7 +125,6 @@ pub fn move_child_process_to_init(ppid: usize) {
     if let Some(tasks) = inner.remove(&ppid) {
         let init_childer = inner.get_mut(&INITPROC.pid()).unwrap();
         for child in tasks {
-            child.inner_lock().parent = Some(Arc::downgrade(&INITPROC));
             init_childer.push(child);
         }
     }

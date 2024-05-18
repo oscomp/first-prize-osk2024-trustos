@@ -179,7 +179,6 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> Sysca
     let token = inner.user_token();
     let mut path = translated_str(token, path);
     let flags = OpenFlags::from_bits(flags).unwrap();
-    let _mode = Mode::from_bits(mode & inner.umask.bits()).unwrap();
 
     let mut base_path = inner.fs_info.cwd();
     // 如果path是绝对路径，则dirfd被忽略
@@ -318,7 +317,6 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> SyscallRet {
     let inner = task.inner_lock();
     let token = inner.user_token();
     let path = translated_str(token, path);
-    let _mode = Mode::from_bits(mode & inner.umask.bits()).unwrap();
 
     let mut base_path = inner.fs_info.cwd();
     // 如果path是绝对路径，则dirfd被忽略

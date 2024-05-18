@@ -93,7 +93,6 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     // 释放线程相关资源
     remove_from_tid2task(task.tid());
     inner.dealloc_user_res();
-    inner.exit_code = exit_code;
     inner.task_status = TaskStatus::Zombie;
 
     drop(inner);

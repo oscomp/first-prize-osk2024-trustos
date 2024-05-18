@@ -47,17 +47,13 @@ pub struct TaskControlBlockInner {
     pub task_cx: TaskContext,
     pub task_status: TaskStatus,
     pub memory_set: Arc<MemorySet>,
-    pub parent: Option<Weak<TaskControlBlock>>,
-    pub exit_code: i32,
     pub fd_table: Arc<FdTable>,
     pub fs_info: Arc<FsInfo>,
     pub time_data: TimeData,
     pub user_heappoint: usize,
     pub user_heapbottom: usize,
-    pub strace_mask: usize,
     pub set_child_tid: usize,
     pub clear_child_tid: usize,
-    pub umask: Mode,
     pub sig_pending: Arc<SigPending>,
 }
 
@@ -141,11 +137,6 @@ impl TaskControlBlock {
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (mut memory_set, user_heapbottom, entry_point, mut auxv) =
             MemorySetInner::from_elf(elf_data);
-        debug!("entry point: {:x}", entry_point);
-        // let trap_cx_ppn = memory_set
-        //     .translate(VirtAddr::from(USER_TRAP_CONTEXT).into())
-        //     .unwrap()
-        //     .ppn();
         // alloc a pid and a kernel stack in kernel space
         let tid_handle = tid_alloc();
         let kernel_stack = KernelStack::new(&tid_handle);
@@ -168,8 +159,6 @@ impl TaskControlBlock {
                 task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                 task_status: TaskStatus::Ready,
                 memory_set: Arc::new(MemorySet::new(memory_set)),
-                parent: None,
-                exit_code: 0,
                 fd_table: Arc::new(FdTable::new(vec![
                     // 0 -> stdin
                     Some(FileClass::Abs(Arc::new(Stdin))),
@@ -182,10 +171,8 @@ impl TaskControlBlock {
                 time_data: TimeData::new(),
                 user_heappoint: user_heapbottom,
                 user_heapbottom,
-                strace_mask: 0,
                 set_child_tid: 0,
                 clear_child_tid: 0,
-                umask: Mode::all(),
                 sig_pending: Arc::new(SigPending::new()),
             }),
         };
@@ -199,7 +186,6 @@ impl TaskControlBlock {
             kernel_stack_top,
             trap_handler as usize,
         );
-        debug!("create task {}", task.tid.0);
         drop(task_inner);
         task
     }
@@ -388,16 +374,14 @@ impl TaskControlBlock {
         } else {
             0
         };
-        let (pid, ppid, parent);
+        let (pid, ppid);
         // 检查是否创建线程
         if flags.contains(CloneFlags::CLONE_THREAD) {
             pid = self.pid;
             ppid = self.ppid;
-            parent = parent_inner.parent.clone();
         } else {
             pid = tid_handle.0;
             ppid = self.pid;
-            parent = Some(Arc::downgrade(self));
         }
         let child = Arc::new(TaskControlBlock {
             tid: tid_handle,
@@ -411,17 +395,13 @@ impl TaskControlBlock {
                 task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                 task_status: TaskStatus::Ready,
                 memory_set,
-                parent,
-                exit_code: 0,
                 fd_table,
                 fs_info,
                 time_data: TimeData::new(),
                 user_heappoint: parent_inner.user_heappoint,
                 user_heapbottom: parent_inner.user_heapbottom,
-                strace_mask: 0,
                 set_child_tid,
                 clear_child_tid,
-                umask: Mode::all(),
                 sig_pending,
             }),
         });

@@ -4,6 +4,7 @@ use core::ops::Add;
 
 use crate::config::board::CLOCK_FREQ;
 use crate::sbi::set_timer;
+use crate::sync::SyncUnsafeCell;
 use riscv::register::time;
 
 const TICKS_PER_SEC: usize = 100;
@@ -103,22 +104,39 @@ impl TimeData {
     }
 }
 
-///get current time
-pub fn get_time() -> usize {
-    time::read()
-}
-/// get current time in microseconds
-pub fn get_time_ms() -> usize {
-    time::read() / (CLOCK_FREQ / MSEC_PER_SEC)
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct Itimerval {
+    /// Interval for periodic timer
+    pub it_interval: TimeVal,
+    /// Time until next expiration
+    pub it_value: TimeVal,
 }
 
-pub fn get_time_spec() -> Timespec {
-    let time = get_time_ms();
-    Timespec::new(time / 1000, (time % 1000) * 1000000)
+impl Itimerval {
+    pub fn new() -> Self {
+        Self {
+            it_interval: TimeVal::new(0, 0),
+            it_value: TimeVal::new(0, 0),
+        }
+    }
 }
-/// set the next timer interrupt
-pub fn set_next_trigger() {
-    set_timer(get_time() + CLOCK_FREQ / TICKS_PER_SEC);
+///以实际（即挂钟）时间倒计时。在每次到期时，都会生成一个 SIGALRM 信号
+pub const ITIMER_REAL: usize = 0;
+/// 此计时器根据进程消耗的用户模式 CPU 时间倒计时。（测量值包括进程中所有线程消耗的 CPU 时间。
+/// 在每次到期时，都会生成一个 SIGVTALRM 信号
+pub const ITIMER_VIRTUAL: usize = 1;
+/// 此计时器根据进程消耗的总 CPU 时间（即用户和系统）进行倒计时。（测量值包括进程中所有线程消耗的 CPU 时间。
+/// 在每次到期时，都会生成一个 SIGPROF 信号。
+pub const ITIMER_PROF: usize = 2;
+
+/// 三种 itimer
+pub struct Timer {
+    inner: SyncUnsafeCell<TimerInner>,
+}
+pub struct TimerInner {
+    pub which: usize,
+    pub itimer: [Itimerval; 3],
 }
 
 bitflags! {
@@ -129,6 +147,8 @@ bitflags! {
     }
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub struct TimeVal {
     pub tv_sec: usize,  //秒
     pub tv_usec: usize, //微秒
@@ -194,4 +214,22 @@ impl Rusage {
         let size = core::mem::size_of::<Self>();
         unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
     }
+}
+
+///get current time
+pub fn get_time() -> usize {
+    time::read()
+}
+/// get current time in microseconds
+pub fn get_time_ms() -> usize {
+    time::read() / (CLOCK_FREQ / MSEC_PER_SEC)
+}
+
+pub fn get_time_spec() -> Timespec {
+    let time = get_time_ms();
+    Timespec::new(time / 1000, (time % 1000) * 1000000)
+}
+/// set the next timer interrupt
+pub fn set_next_trigger() {
+    set_timer(get_time() + CLOCK_FREQ / TICKS_PER_SEC);
 }

@@ -292,10 +292,6 @@ pub fn sys_nanosleep(req: &mut [u8], rem: &mut [u8]) -> isize {
     )
 }
 
-pub fn sys_strace(mask: usize) -> isize {
-    syscall(SYSCALL_STRACE, [mask as isize, 0, 0, 0, 0, 0])
-}
-
 pub fn sys_clock_gettime(clockid: usize, tp: &mut [u8]) -> isize {
     syscall(
         SYSCALL_CLOCK_GETTIME,

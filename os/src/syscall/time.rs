@@ -2,7 +2,7 @@ use crate::mm::{
     translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr,
 };
 use crate::task::{current_task, current_token};
-use crate::timer::{get_time_ms, get_time_spec, Clockid, Rusage, Timespec, Tms};
+use crate::timer::{get_time_ms, get_time_spec, Clockid, Itimerval, Rusage, Timespec, Tms};
 use crate::utils::{SysErrNo, SyscallRet};
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -28,6 +28,14 @@ pub fn sys_times(tms: *const u8) -> SyscallRet {
     let mut times = Tms::new(&inner.time_data);
     tms.write(times.as_bytes());
     Ok(0)
+}
+
+pub fn sys_settimmer(
+    which: usize,
+    new_value: *const Itimerval,
+    old_value: *const Itimerval,
+) -> SyscallRet {
+    todo!()
 }
 /*//暂时没办法实现，无法修改csr
 pub fn sys_clock_settime(clockid: usize, tp: *const u8) -> isize {

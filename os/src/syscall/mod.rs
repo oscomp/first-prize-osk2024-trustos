@@ -85,7 +85,6 @@ pub enum Syscall {
     CopyFileRange = 285,
     // 非标准系统调用
     Shutdown = 1000,
-    Strace = 2000,
     #[num_enum(default)]
     Default = 0,
 }
@@ -236,6 +235,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Times => sys_times(args[0] as *const u8),
         Syscall::Getrusage => sys_getrusage(args[0] as isize, args[1] as *const u8),
         Syscall::Gettimeofday => sys_gettimeofday(args[0] as *const u8),
+        Syscall::Umask => sys_umask(args[0] as u32),
         Syscall::Uname => sys_uname(args[0] as *mut u8),
         Syscall::Getpid => sys_getpid(),
         Syscall::Getppid => sys_getppid(),
@@ -279,7 +279,6 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[5] as u32,
         ),
         Syscall::Shutdown => shutdown(false),
-        Syscall::Strace => sys_strace(args[0]),
         _ => panic!("Unsupported syscall_id: {}", id),
     }
 }

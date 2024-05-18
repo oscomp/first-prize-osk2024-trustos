@@ -24,7 +24,6 @@ use crate::utils::hart_id;
 use log::{debug, info};
 
 pub fn sys_exit(exit_code: i32) -> ! {
-    // exit_current_and_run_next(exit_code);
     exit_current_and_run_next(exit_code);
     panic!("Unreachable in sys_exit!");
 }
@@ -68,11 +67,6 @@ pub fn sys_gettid() -> SyscallRet {
 pub fn sys_settidaddress(tidptr: usize) -> SyscallRet {
     current_task().unwrap().inner_lock().clear_child_tid = tidptr;
     sys_gettid()
-}
-
-pub fn sys_strace(mask: usize) -> SyscallRet {
-    current_task().unwrap().inner_lock().strace_mask = mask;
-    Ok(0)
 }
 
 /// void (*fn)(void* arg) 参数通过栈传递,如果stack_ptr!=0, fn=0(stack),arg=8(stack)
@@ -299,45 +293,6 @@ pub fn sys_brk(brk_addr: usize) -> SyscallRet {
     Ok(current_task().unwrap().growproc(grow_size))
 }
 
-// pub fn sys_sched_setaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> SyscallRet {
-//     let task = current_task().unwrap();
-//     let mut inner = task.inner_lock();
-//     let token = inner.user_token();
-//     let mask = *translated_ref(token, mask as *const usize);
-
-//     //尝试匹配当前进程
-//     if pid == 0 || task.pid() == pid {
-//         inner.kind_cpu = mask as isize;
-//         return Ok(0);
-//     }
-//     //尝试匹配其其他进程
-//     if let Some(found_task) = pid2task(pid) {
-//         found_task.inner_lock().kind_cpu = mask as isize;
-//         return Ok(0);
-//     }
-//     //匹配不到
-//     Err(SysErrNo::EINVAL)
-// }
-
-// pub fn sys_sched_getaffinity(pid: usize, _cpusetsize: usize, mask: usize) -> SyscallRet {
-//     let task = current_task().unwrap();
-//     let mut inner = task.inner_lock();
-//     let token = inner.user_token();
-
-//     //尝试匹配当前进程
-//     if pid == 0 || task.pid() == pid {
-//         *translated_refmut(token, mask as *mut usize) = inner.kind_cpu as usize;
-//         return Ok(0);
-//     }
-//     //尝试匹配其其他进程
-//     if let Some(found_task) = pid2task(pid) {
-//         *translated_refmut(token, mask as *mut usize) = found_task.inner_lock().kind_cpu as usize;
-//         return Ok(0);
-//     }
-//     //匹配不到
-//     Err(SysErrNo::EINVAL)
-// }
-
 pub struct Sysinfo {
     pub uptime: usize,
     pub totalram: usize,
@@ -370,11 +325,5 @@ pub fn sys_sysinfo(info: *const u8) -> SyscallRet {
 }
 
 pub fn sys_umask(mask: u32) -> SyscallRet {
-    let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
-    let token = inner.user_token();
-    let mask = Mode::from_bits(mask).unwrap();
-
-    inner.umask = mask;
     Ok(0)
 }
