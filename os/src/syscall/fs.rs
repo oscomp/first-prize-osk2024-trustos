@@ -576,6 +576,7 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
         let file = osfile.clone();
         file.fstat(&mut kstat);
         kst.write(kstat.as_bytes());
+        //println!("{:?}", kstat);
         return Ok(0);
     } else {
         Err(SysErrNo::ENOENT)

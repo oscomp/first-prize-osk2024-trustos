@@ -52,6 +52,7 @@ impl Kstat {
     }
     pub fn init(
         &mut self,
+        st_ino: u64,
         st_size: i64,
         st_atime: i64,
         st_mtime: i64,
@@ -59,6 +60,7 @@ impl Kstat {
         st_blocks: u64,
         st_mode: u32,
     ) {
+        self.st_ino = st_ino;
         self.st_size = st_size;
         self.st_atime_sec = st_atime;
         self.st_mtime_sec = st_mtime;
