@@ -40,7 +40,7 @@ DISASM ?= -x
 # Run usertests or usershell
 TEST ?=
 
-build: env $(KERNEL_BIN)
+build: env initrust $(KERNEL_BIN)
 
 initrust: 
 	@cd ../user && cargo clean && make build
@@ -54,7 +54,6 @@ initbusybox: initproc
 
 env:
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
-	cargo install cargo-binutils
 	rustup component add rust-src
 	rustup component add llvm-tools-preview
 

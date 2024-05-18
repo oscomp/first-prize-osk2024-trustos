@@ -161,15 +161,15 @@ pub fn flush_preload() {
     });
     initproc.write(UserBuffer::new(v));
 
-    // let onlinetests = open_file("onlinetests", OpenFlags::O_CREATE).unwrap();
-    // let mut v = Vec::new();
-    // v.push(unsafe {
-    //     core::slice::from_raw_parts_mut(
-    //         shell_start as *mut u8,
-    //         shell_end as usize - shell_start as usize,
-    //     ) as &'static mut [u8]
-    // });
-    // onlinetests.write(UserBuffer::new(v));
+    let onlinetests = open_file("onlinetests", OpenFlags::O_CREATE).unwrap();
+    let mut v = Vec::new();
+    v.push(unsafe {
+        core::slice::from_raw_parts_mut(
+            shell_start as *mut u8,
+            shell_end as usize - shell_start as usize,
+        ) as &'static mut [u8]
+    });
+    onlinetests.write(UserBuffer::new(v));
 }
 
 pub fn path2abs<'a>(cwdv: &mut Vec<&'a str>, pathv: &Vec<&'a str>) -> String {
