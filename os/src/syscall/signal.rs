@@ -3,8 +3,8 @@ use log::{debug, info};
 use crate::{
     mm::{translated_ref, translated_refmut},
     signal::{
-        add_signal, restore_frame, send_access_signal, send_signal_to_thread_group, KSigAction,
-        SigAction, SigOp, SigSet, SIG_MAX_NUM,
+        add_signal, restore_frame, send_access_signal, send_signal_to_thread,
+        send_signal_to_thread_group, KSigAction, SigAction, SigOp, SigSet, SIG_MAX_NUM,
     },
     task::{current_task, current_token, suspend_current_and_run_next, tid2task},
     timer::{get_time_spec, Timespec},
@@ -155,5 +155,11 @@ pub fn sys_kill(pid: isize, signo: usize) -> SyscallRet {
             send_signal_to_thread_group(-pid as usize, sig);
         }
     }
+    Ok(0)
+}
+
+pub fn sys_tkill(tid: usize, signo: usize) -> SyscallRet {
+    let sig = SigSet::from_sig(signo);
+    send_signal_to_thread(tid, sig);
     Ok(0)
 }

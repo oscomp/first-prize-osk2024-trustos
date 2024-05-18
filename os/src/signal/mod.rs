@@ -111,11 +111,18 @@ pub fn add_signal(task: Arc<TaskControlBlock>, signal: SigSet) {
 }
 
 pub fn send_signal_to_thread_group(pid: usize, sig: SigSet) {
-    let tid2task = THREAD_GROUP.lock();
-    if let Some(tasks) = tid2task.get(&pid) {
+    let thread_group = THREAD_GROUP.lock();
+    if let Some(tasks) = thread_group.get(&pid) {
         for task in tasks.iter() {
             add_signal(task.clone(), sig);
         }
+    }
+}
+
+pub fn send_signal_to_thread(tid: usize, sig: SigSet) {
+    let tid2task = TID_TO_TASK.lock();
+    if let Some(task) = tid2task.get(&tid) {
+        add_signal(Arc::clone(task), sig);
     }
 }
 // 目前的进程组只是一个进程的所有子进程的集合

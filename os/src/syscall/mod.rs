@@ -215,6 +215,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::ClockGettime => sys_clock_gettime(args[0], args[1] as *const u8),
         Syscall::SchedYield => sys_sched_yield(),
         Syscall::SigKill => sys_kill(args[0] as isize, args[0]),
+        Syscall::Tkill => sys_tkill(args[0] as usize, args[1] as usize),
         Syscall::Sigsupend => sys_rt_sigsuspend(args[0] as *const SigSet),
         Syscall::Sigaction => sys_rt_sigaction(
             args[0],
