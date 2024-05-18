@@ -864,7 +864,7 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
         return Err(SysErrNo::EINVAL);
     }
 
-    if let Some(FileClass::File(outfile)) = &inner.fd_table.get(outfd) {
+    if let Some(FileClass::Abs(outfile)) = &inner.fd_table.get(outfd) {
         if !outfile.writable() {
             return Err(SysErrNo::EACCES);
         }

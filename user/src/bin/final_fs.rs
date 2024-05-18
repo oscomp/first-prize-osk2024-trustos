@@ -2,8 +2,8 @@
 #![no_main]
 use user_lib::{
     chdir, close, copy_file_range, faccessat, fcntl, fstatat, fsync, ftruncate, lseek, mkdir,
-    openat, pread64, pwrite64, read, readlinkat, renameat2, sendfile, statfs, symlinkat, sync,
-    write, FaccessatMode, Kstat, OpenFlags, Statfs,
+    openat, pread64, pwrite64, read, readlinkat, renameat2, statfs, symlinkat, sync, write,
+    FaccessatMode, Kstat, OpenFlags, Statfs,
 };
 
 #[macro_use]
@@ -79,7 +79,7 @@ fn test_fcntl() {
     println!("-----------------end fcntl-----------------");
     println!("");
 }
-
+/*
 fn test_sendfile() {
     println!("-----------------test sendfile-----------------");
     let infd = openat(
@@ -122,6 +122,7 @@ fn test_sendfile() {
     println!("-----------------end sendfile-----------------");
     println!("");
 }
+*/
 
 fn test_pwr64() {
     println!("-----------------test pwrite64 & pread64-----------------");
@@ -316,7 +317,7 @@ pub fn main() -> i32 {
     test_faccessat();
     test_lseek();
     test_fcntl();
-    test_sendfile();
+    //test_sendfile();  //无法使用，因为sendfile是抽象文件传给普通文件
     test_pwr64();
     test_ftruncate();
     test_fsync();

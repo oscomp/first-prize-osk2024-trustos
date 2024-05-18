@@ -158,8 +158,8 @@ pub fn sys_busyboxsh() -> isize {
             "busybox\0".as_ptr() as isize,
             [
                 "busybox\0".as_ptr() as isize,
-                "ls\0".as_ptr() as isize,
-                "/rCoretests\0".as_ptr() as isize,
+                "cat\0".as_ptr() as isize,
+                "./nihao\0".as_ptr() as isize,
                 0,
             ]
             .as_ptr() as isize,
