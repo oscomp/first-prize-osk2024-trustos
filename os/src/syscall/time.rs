@@ -2,7 +2,9 @@ use crate::mm::{
     translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr,
 };
 use crate::task::{current_task, current_token};
-use crate::timer::{get_time_ms, get_time_spec, Clockid, Itimerval, Rusage, Timespec, Tms};
+use crate::timer::{
+    get_time_ms, get_time_spec, Clockid, Itimerval, Rusage, Timespec, Tms, ITIMER_REAL,
+};
 use crate::utils::{SysErrNo, SyscallRet};
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -33,9 +35,20 @@ pub fn sys_times(tms: *const u8) -> SyscallRet {
 pub fn sys_settimmer(
     which: usize,
     new_value: *const Itimerval,
-    old_value: *const Itimerval,
+    old_value: *mut Itimerval,
 ) -> SyscallRet {
-    todo!()
+    //TODO(ZMY) 什么时候更新呢?
+    assert!(which == ITIMER_REAL, "only support Itimer Real");
+    let task = current_task().unwrap();
+    let task_inner = task.inner_lock();
+    let token = task_inner.user_token();
+    if old_value as usize != 0 {
+        *translated_refmut(token, old_value) = *task_inner.timer.inner.get_unchecked_mut();
+    }
+    if new_value as usize != 0 {
+        *task_inner.timer.inner.get_unchecked_mut() = *translated_ref(token, new_value);
+    }
+    Ok(0)
 }
 /*//暂时没办法实现，无法修改csr
 pub fn sys_clock_settime(clockid: usize, tp: *const u8) -> isize {

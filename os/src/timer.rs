@@ -130,13 +130,17 @@ pub const ITIMER_VIRTUAL: usize = 1;
 /// 在每次到期时，都会生成一个 SIGPROF 信号。
 pub const ITIMER_PROF: usize = 2;
 
-/// 三种 itimer
+/// 三种 itimer,实际只会使用ITIMER_REAL
 pub struct Timer {
-    inner: SyncUnsafeCell<TimerInner>,
+    pub inner: SyncUnsafeCell<Itimerval>,
 }
-pub struct TimerInner {
-    pub which: usize,
-    pub itimer: [Itimerval; 3],
+
+impl Timer {
+    pub fn new() -> Self {
+        Self {
+            inner: SyncUnsafeCell::new(Itimerval::new()),
+        }
+    }
 }
 
 bitflags! {

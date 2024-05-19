@@ -17,7 +17,7 @@ use crate::{
     signal::{SigPending, SigPendingInner},
     syscall::CloneFlags,
     task::insert_into_thread_group,
-    timer::TimeData,
+    timer::{TimeData, Timer, ITIMER_REAL},
     trap::{trap_handler, TrapContext},
 };
 use alloc::{
@@ -55,6 +55,7 @@ pub struct TaskControlBlockInner {
     pub set_child_tid: usize,
     pub clear_child_tid: usize,
     pub sig_pending: Arc<SigPending>,
+    pub timer: Arc<Timer>,
 }
 
 impl TaskControlBlockInner {
@@ -174,6 +175,7 @@ impl TaskControlBlock {
                 set_child_tid: 0,
                 clear_child_tid: 0,
                 sig_pending: Arc::new(SigPending::new()),
+                timer: Arc::new(Timer::new()),
             }),
         };
         let mut task_inner = task.inner_lock();
@@ -374,14 +376,16 @@ impl TaskControlBlock {
         } else {
             0
         };
-        let (pid, ppid);
+        let (pid, ppid, timer);
         // 检查是否创建线程
         if flags.contains(CloneFlags::CLONE_THREAD) {
             pid = self.pid;
             ppid = self.ppid;
+            timer = Arc::clone(&parent_inner.timer);
         } else {
             pid = tid_handle.0;
             ppid = self.pid;
+            timer = Arc::new(Timer::new());
         }
         let child = Arc::new(TaskControlBlock {
             tid: tid_handle,
@@ -403,6 +407,7 @@ impl TaskControlBlock {
                 set_child_tid,
                 clear_child_tid,
                 sig_pending,
+                timer,
             }),
         });
 
