@@ -80,18 +80,17 @@ pub fn sys_clone(
     let flags = CloneFlags::from_bits(flags as u32).unwrap();
     debug!("[sys_clone] flags {:?}", flags);
 
-    let stack = match stack_ptr {
-        0 => None,
-        stack => {
-            debug!("[sys_clone] assign the user stack {:#x}", stack);
-            // UserCheck::new().check_writable_slice(stack as *mut u8, USER_STACK_SIZE)?;
-            Some(stack as usize)
-        }
-    };
+    // let stack = match stack_ptr {
+    //     0 => None,
+    //     stack => {
+    //         debug!("[sys_clone] assign the user stack {:#x}", stack);
+    //         Some(stack as usize)
+    //     }
+    // };
     let task = current_task().unwrap();
     let new_task = task.clone_process(
         flags,
-        stack,
+        stack_ptr,
         parent_tid_ptr as *mut u32,
         tls_ptr,
         chilren_tid_ptr as *mut u32,

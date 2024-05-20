@@ -94,7 +94,7 @@ pub fn trap_handler() {
             // handle error
             match result {
                 Ok(ret) => debug!("[syscall ret] {:?} ret = {}", syscall_id, ret),
-                Err(errno) => debug!("[syscall ret] {:?} ret = {}", syscall_id, errno.str()),
+                Err(errno) => info!("[syscall ret] {:?} ret = {}", syscall_id, errno.str()),
             }
         }
         Trap::Exception(Exception::StorePageFault) | Trap::Exception(Exception::LoadPageFault) => {

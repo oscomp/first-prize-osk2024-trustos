@@ -15,7 +15,7 @@ const BS: u8 = 0x08u8;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use user_lib::console::getchar;
-use user_lib::{exec, execve, fork, waitpid};
+use user_lib::{execve, fork, waitpid};
 
 #[no_mangle]
 pub fn main() -> i32 {

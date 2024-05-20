@@ -11,8 +11,8 @@ use crate::{
     },
     fs::{FdTable, FdTableInner, File, FileClass, FsInfo, Mode, OSInode, Stdin, Stdout},
     mm::{
-        flush_tlb, translated_refmut, MapAreaType, MapPermission, MemorySet, MemorySetInner,
-        PhysPageNum, VirtAddr,
+        flush_tlb, translated_ref, translated_refmut, MapAreaType, MapPermission, MemorySet,
+        MemorySetInner, PhysPageNum, VirtAddr,
     },
     signal::{SigPending, SigPendingInner},
     syscall::CloneFlags,
@@ -314,14 +314,13 @@ impl TaskControlBlock {
     pub fn clone_process(
         self: &Arc<TaskControlBlock>,
         flags: CloneFlags,
-        stack: Option<usize>,
+        stack: usize,
         parent_tid: *mut u32,
         tls: usize,
         child_tid: *mut u32,
     ) -> Arc<TaskControlBlock> {
         let mut parent_inner = self.inner.lock();
 
-        let copy_user_stack = stack.is_none();
         let tid_handle = tid_alloc();
         let kernel_stack = KernelStack::new(&tid_handle);
         let (kernel_stack_bottom, kernel_stack_top) = kernel_stack.pos();
@@ -412,8 +411,8 @@ impl TaskControlBlock {
         });
 
         // 检查是否需要使用传入的用户栈
-        let user_stack_top = if !copy_user_stack {
-            stack.unwrap()
+        let user_stack_top = if stack != 0 {
+            stack
         } else {
             parent_inner.user_stack_top
         };
@@ -423,13 +422,29 @@ impl TaskControlBlock {
             // 线程
             child_inner.alloc_user_res();
             *child_inner.trap_cx() = *parent_inner.trap_cx();
+            let mut trap_cx = child_inner.trap_cx();
+            let token = parent_inner.user_token();
+            // 如果创建线程,一定会设置stack
+            assert!(stack != 0);
+            let entry_point = *translated_ref(token, stack as *const usize);
+            let arg = {
+                let arg_addr = stack + core::mem::size_of::<usize>();
+                *translated_ref(token, arg_addr as *const usize)
+            };
+            trap_cx.sepc = entry_point;
+            //sp
+            trap_cx.x[2] = stack;
+            //a0
+            trap_cx.x[10] = arg;
+            // tp/tls
+            trap_cx.x[4] = tls;
         } else {
             // fork
             child_inner.clone_user_res(&parent_inner);
         }
         let trap_cx = child_inner.trap_cx();
         trap_cx.kernel_sp = kernel_stack_top;
-        if !copy_user_stack {
+        if stack != 0 {
             let ustack = child_inner.user_stack_top;
             child_inner
                 .memory_set
