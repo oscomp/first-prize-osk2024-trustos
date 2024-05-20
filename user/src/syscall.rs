@@ -176,8 +176,8 @@ pub fn sys_busyboxsh() -> isize {
             "busybox\0".as_ptr() as isize,
             [
                 "busybox\0".as_ptr() as isize,
-                "sort\0".as_ptr() as isize,
-                "./test_sort\0".as_ptr() as isize,
+                "df\0".as_ptr() as isize,
+                0,
                 0,
             ]
             .as_ptr() as isize,

@@ -203,6 +203,19 @@ pub fn list_apps() {
     println!("**************/");
 }
 
+pub fn create_df() {
+    open(
+        "/",
+        "./proc",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTROY,
+    );
+    open(
+        "./proc",
+        "./mounts",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+    );
+}
+
 // 定义一份打开文件的标志
 bitflags! {
     pub struct OpenFlags: u32 {

@@ -777,7 +777,7 @@ pub fn sys_lseek(fd: usize, offset: isize, whence: usize) -> SyscallRet {
             return Err(SysErrNo::EINVAL);
         }
         file.set_offset(offset as usize);
-        Ok(0)
+        Ok(offset as usize)
     } else {
         Err(SysErrNo::ENOENT)
     }
@@ -1160,9 +1160,6 @@ pub fn sys_renameat2(
     let token = inner.user_token();
     let mut oldpath = translated_str(token, oldpath);
     let mut newpath = translated_str(token, newpath);
-    if flags == 0 {
-        return Err(SysErrNo::EINVAL);
-    }
     let flags = Renameat2Flags::from_bits(flags).unwrap();
 
     let mut oldfile;

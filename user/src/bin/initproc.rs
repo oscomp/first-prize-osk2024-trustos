@@ -6,7 +6,7 @@
 #[macro_use]
 extern crate user_lib;
 
-use user_lib::{exec, fork, run_busyboxsh, sleep, wait};
+use user_lib::{close, exec, fork, openat, run_busyboxsh, sleep, wait, write, OpenFlags};
 
 #[no_mangle]
 fn main() -> i32 {
@@ -14,7 +14,7 @@ fn main() -> i32 {
     if fork() == 0 {
         exec("user_shell\0");
         //exec("onlinetests\0");
-        //run_busyboxsh();\
+        //run_busyboxsh();
     } else {
         loop {
             let mut exit_code: i32 = 0;

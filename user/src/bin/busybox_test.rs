@@ -3,6 +3,8 @@
 
 #[macro_use]
 extern crate user_lib;
+extern crate alloc;
+use alloc::string::String;
 use user_lib::{close, openat, run_busyboxsh, write, OpenFlags};
 
 pub fn test_cat() {
@@ -85,7 +87,9 @@ pub fn test_head() {
         OpenFlags::O_CREATE | OpenFlags::O_RDWR,
         0666,
     );
-    let inbuf: [u8; 10] = [1, b'\n', 3, 4, b'\n', 6, 7, 8, b'\n', 10];
+    let inbuf: [u8; 10] = [
+        b'1', b'\n', b'3', b'4', b'\n', b'6', b'7', b'8', b'\n', b'6',
+    ];
     write(fd as usize, &inbuf, 10);
     close(fd as usize);
     println!("have create './test_head' and write 4 lines, now head 2 lines");
@@ -127,11 +131,11 @@ pub fn test_mv() {
     close(fd1 as usize);
     close(fd2 as usize);
     //println!("have create './test_mv.txt' now mv to ./mnt/test_mvnew.txt");
-    println!("have create './test_mv.txt' now mv to ./mnt/");
+    println!("have create './test_mv.txt' now mv to ./mnt/test_mvnew.txt");
     /*"busybox\0".as_ptr() as isize,
     "mv\0".as_ptr() as isize,
     "./test_mv.txt\0".as_ptr() as isize,
-    "./mnt/\0".as_ptr() as isize,
+    "./mnt/test_mvnew.txt\0".as_ptr() as isize,
     0, */
     run_busyboxsh();
 }
@@ -164,6 +168,7 @@ pub fn test_rm() {
 }
 
 pub fn test_sleep() {
+    //make run SBI=opensbi
     /*"busybox\0".as_ptr() as isize,
     "sleep\0".as_ptr() as isize,
     "2\0".as_ptr() as isize,
@@ -172,19 +177,121 @@ pub fn test_sleep() {
 }
 
 pub fn test_sort() {
+    //make run SBI=opensbi
     let fd = openat(
         -100,
         "test_sort\0",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR,
         0666,
     );
-    let inbuf: [u8; 10] = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
-    write(fd as usize, &inbuf, 10);
+    let inbuf: [u8; 9] = [b't', b'r', b'u', b's', b't', b'o', b's', b'n', b'b'];
+    write(fd as usize, &inbuf, 9);
     close(fd as usize);
-    println!("have create './test_sort' and write 10~1 number, now sort it");
+    println!("have create './test_sort' and write trustosnb, now sort it");
     /*"busybox\0".as_ptr() as isize,
     "sort\0".as_ptr() as isize,
     "./test_sort\0".as_ptr() as isize,
+    0, */
+    run_busyboxsh();
+}
+
+pub fn test_strings() {
+    let fd = openat(
+        -100,
+        "test_strings\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0666,
+    );
+    let inbuf: [u8; 9] = [b't', b'r', b'u', b's', b't', b'o', b's', b'n', b'b'];
+    write(fd as usize, &inbuf, 9);
+    close(fd as usize);
+    println!("have create './test_strings' and write trustosnb, now strings it");
+    /*"busybox\0".as_ptr() as isize,
+    "strings\0".as_ptr() as isize,
+    "./test_strings\0".as_ptr() as isize,
+    0, */
+    run_busyboxsh();
+}
+
+pub fn test_tail() {
+    let fd = openat(
+        -100,
+        "test_tail\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0666,
+    );
+    let inbuf: [u8; 10] = [
+        b'1', b'\n', b'3', b'4', b'\n', b'6', b'7', b'8', b'\n', b'6',
+    ];
+    write(fd as usize, &inbuf, 10);
+    close(fd as usize);
+    println!("have create './test_tail' and write 4 lines, now tail 2 lines");
+    /*"busybox\0".as_ptr() as isize,
+    "tail\0".as_ptr() as isize,
+    "-n\0".as_ptr() as isize,
+    "2\0".as_ptr() as isize,
+    "./test_tail\0".as_ptr() as isize,
+    0, */
+    run_busyboxsh();
+}
+
+pub fn test_touch() {
+    let fd = openat(
+        -100,
+        "test_touch\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0666,
+    );
+    close(fd as usize);
+    /*"busybox\0".as_ptr() as isize,
+    "touch\0".as_ptr() as isize,
+    "./test_touch\0".as_ptr() as isize,
+    0, */
+    run_busyboxsh();
+}
+
+pub fn test_uniq() {
+    let fd = openat(
+        -100,
+        "test_uniq\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0666,
+    );
+    let inbuf: [u8; 9] = [b'1', b'\n', b'3', b'\n', b'3', b'\n', b'7', b'\n', b'3'];
+    write(fd as usize, &inbuf, 9);
+    close(fd as usize);
+    println!("have create './test_uniq' and write 1/3/3/7/3, now uniq to 1/3/7/3");
+    /*"busybox\0".as_ptr() as isize,
+    "uniq\0".as_ptr() as isize,
+    "./test_uniq\0".as_ptr() as isize,
+    0, */
+    run_busyboxsh();
+}
+
+pub fn test_clear() {
+    run_busyboxsh();
+}
+
+pub fn test_cut() {
+    let fd = openat(
+        -100,
+        "test_cut\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0666,
+    );
+    let inbufstring = String::from("apple:6\npear:10\nwatermalen:99");
+    write(
+        fd as usize,
+        inbufstring.as_bytes(),
+        inbufstring.as_bytes().len(),
+    );
+    close(fd as usize);
+    println!("have create './test_cut' and write fruits and price, now cut for fruits");
+    /*"busybox\0".as_ptr() as isize,
+    "cut\0".as_ptr() as isize,
+    "-d:\0".as_ptr() as isize,
+    "-f1\0".as_ptr() as isize,
+    "./test_cut\0".as_ptr() as isize,
     0, */
     run_busyboxsh();
 }
@@ -193,7 +300,7 @@ pub fn test_sort() {
 pub fn main() -> i32 {
     //test_cat();
     //test_dirname();
-    //test_mkdir_date_df();
+    test_mkdir_date_df();
     //test_basename();
     //test_cp();
     //test_head();
@@ -202,6 +309,12 @@ pub fn main() -> i32 {
     //test_rmdir();
     //test_rm();
     //test_sleep();
-    test_sort();
+    //test_sort();
+    //test_strings();
+    //test_tail();
+    //test_touch();
+    //test_uniq();
+    //test_clear();
+    //test_cut();
     0
 }
