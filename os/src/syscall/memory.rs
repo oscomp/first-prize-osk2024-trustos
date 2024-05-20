@@ -24,7 +24,7 @@ pub fn sys_mmap(
     let flags = MmapFlags::from_bits(flags).unwrap();
     // 地址合法性
     if flags.contains(MmapFlags::MAP_FIXED) && addr == 0 {
-        return Err(SysErrNo::EINVAL);
+        return Err(SysErrNo::EPERM);
     }
     debug!(
         "[sys_mmap]: start...  addr {:#x}, len {:#x}, fd {}, offset {:#x}, flags {:?}, prot {:?}",
@@ -51,7 +51,7 @@ pub fn sys_mmap(
             && map_perm.contains(MapPermission::W)
             && !file.writable())
     {
-        return Err(SysErrNo::EINVAL);
+        return Err(SysErrNo::EPERM);
     }
     let rv = memory_set.mmap(addr, len, map_perm, flags, Some(file), off);
     Ok(rv)

@@ -191,10 +191,14 @@ pub fn sys_busyboxsh() -> isize {
 }
 
 pub fn sys_waitpid(pid: isize, exit_code: *mut i32, options: i32) -> isize {
-    syscall(
+    let mut rv = syscall(
         SYSCALL_WAIT4,
         [pid as isize, exit_code as isize, options as isize, 0, 0, 0],
-    )
+    );
+    if rv < 0 {
+        rv = -1;
+    }
+    rv
 }
 pub fn sys_getcwd(buf: &mut [u8], size: usize) -> isize {
     syscall(

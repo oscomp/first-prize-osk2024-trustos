@@ -89,12 +89,12 @@ pub fn trap_handler() {
             cx = current_trap_cx();
             cx.x[10] = match result {
                 Ok(res) => res,
-                Err(errno) => (-1isize) as usize,
+                Err(errno) => -(errno as isize) as usize,
             };
             // handle error
             match result {
                 Ok(ret) => debug!("[syscall ret] {:?} ret = {}", syscall_id, ret),
-                Err(errno) => info!("[syscall ret] {:?} ret = {}", syscall_id, errno.str()),
+                Err(errno) => debug!("[syscall ret] {:?} ret = {}", syscall_id, errno.str()),
             }
         }
         Trap::Exception(Exception::StorePageFault) | Trap::Exception(Exception::LoadPageFault) => {
