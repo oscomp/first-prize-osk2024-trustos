@@ -18,7 +18,7 @@ use alloc::{
 };
 use core::mem::size_of;
 use fat32_fs::sync_all;
-use log::info;
+use log::{debug, info};
 
 pub const AT_FDCWD: isize = -100;
 pub const FD_LIMIT: usize = 128;
@@ -620,21 +620,21 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
         if let Some(FileClass::File(osfile)) = &inner.fd_table.get(dirfd) {
             if let Some(osfile) = osfile.find(path.as_str(), OpenFlags::O_RDWR) {
                 if mode.contains(FaccessatMode::X_OK) {
-                    println!("This file can be searched!");
+                    //println!("This file can be searched!");
                 }
                 if mode.contains(FaccessatMode::W_OK) {
                     if osfile.writable() {
-                        println!("This file can be written!");
+                        //println!("This file can be written!");
                     } else {
-                        println!("This file can not be written!");
+                        //println!("This file can not be written!");
                         return Ok(usize::MAX);
                     }
                 }
                 if mode.contains(FaccessatMode::R_OK) {
                     if osfile.readable() {
-                        println!("This file can be read!");
+                        //println!("This file can be read!");
                     } else {
-                        println!("This file can not be read!");
+                        //println!("This file can not be read!");
                         return Ok(usize::MAX);
                     }
                 }
@@ -644,7 +644,7 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
             }
         } else {
             if mode.contains(FaccessatMode::F_OK) {
-                println!("This file doesn't exist!");
+                //println!("This file doesn't exist!");
                 return Ok(0);
             }
             return Err(SysErrNo::EINVAL);
@@ -652,28 +652,28 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
     }
     if let Some(osfile) = open(base_path, path.as_str(), OpenFlags::O_RDWR) {
         if mode.contains(FaccessatMode::X_OK) {
-            println!("This file can be searched!");
+            //println!("This file can be searched!");
         }
         if mode.contains(FaccessatMode::W_OK) {
             if osfile.writable() {
-                println!("This file can be written!");
+                //println!("This file can be written!");
             } else {
-                println!("This file can not be written!");
+                //println!("This file can not be written!");
                 return Ok(usize::MAX);
             }
         }
         if mode.contains(FaccessatMode::R_OK) {
             if osfile.readable() {
-                println!("This file can be read!");
+                //println!("This file can be read!");
             } else {
-                println!("This file can not be read!");
+                //println!("This file can not be read!");
                 return Ok(usize::MAX);
             }
         }
         return Ok(0);
     } else {
         if mode.contains(FaccessatMode::F_OK) {
-            println!("This file doesn't exist!");
+            //println!("This file doesn't exist!");
             return Ok(usize::MAX);
         }
         Err(SysErrNo::ENOENT)
@@ -1241,7 +1241,7 @@ pub fn sys_renameat2(
                 newfile = osfile.clone();
                 newfile.set_file_size(oldfile.file_size() as u32);
                 newfile.set_first_cluster(oldfile.first_cluster());
-                oldfile.remove();
+                oldfile.delete();
                 return Ok(0);
             } else {
                 return Err(SysErrNo::ENOENT);
@@ -1274,7 +1274,20 @@ pub fn sys_renameat2(
         newfile = osfile.clone();
         newfile.set_file_size(oldfile.file_size() as u32);
         newfile.set_first_cluster(oldfile.first_cluster());
-        oldfile.remove();
+        let abs_path = if is_abs_path(&oldpath) {
+            oldpath.to_string()
+        } else {
+            let mut wpath = {
+                if base_path == "/" {
+                    Vec::with_capacity(32)
+                } else {
+                    path2vec(base_path)
+                }
+            };
+            path2abs(&mut wpath, &path2vec(&oldpath))
+        };
+        remove_vfile_idx(&abs_path);
+        oldfile.delete();
         return Ok(0);
     } else {
         return Err(SysErrNo::ENOENT);
