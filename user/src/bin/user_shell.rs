@@ -12,10 +12,10 @@ const CR: u8 = 0x0du8;
 const DL: u8 = 0x7fu8;
 const BS: u8 = 0x08u8;
 
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use user_lib::console::getchar;
-use user_lib::{exec, fork, waitpid};
+use user_lib::{exec, execve, fork, waitpid};
 
 #[no_mangle]
 pub fn main() -> i32 {
@@ -32,14 +32,16 @@ pub fn main() -> i32 {
                 if true {
                     if line.is_empty() {
                         line = old.clone();
-                    } else {
-                        line.push('\0');
                     }
                     let pid = fork();
                     if pid == 0 {
                         // child process
-                        let args: Vec<&str> = line.split_whitespace().collect();
-                        if exec(args[0]) == -1 {
+                        let args: Vec<String> = line
+                            .split_whitespace()
+                            .map(|s| (s.to_string() + "\0"))
+                            .collect();
+                        let argsstr: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+                        if execve(&argsstr) == -1 {
                             println!("Error when executing!");
                             return -4;
                         }

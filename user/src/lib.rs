@@ -97,6 +97,9 @@ pub fn fork() -> isize {
 pub fn exec(path: &str) -> isize {
     sys_exec(path)
 }
+pub fn execve(args: &[&str]) -> isize {
+    sys_execve(args)
+}
 pub fn run_busyboxsh() -> isize {
     sys_busyboxsh()
 }

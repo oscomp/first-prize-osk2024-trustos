@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 use core::arch::asm;
 
+use alloc::vec::Vec;
+
 const SYSCALL_GETCWD: usize = 17;
 const SYSCALL_DUP: usize = 23;
 const SYSCALL_DUP3: usize = 24;
@@ -149,6 +151,22 @@ pub fn sys_fork() -> isize {
 
 pub fn sys_exec(path: &str) -> isize {
     syscall(SYSCALL_EXECVE, [path.as_ptr() as isize, 0, 0, 0, 0, 0])
+}
+
+pub fn sys_execve(args: &[&str]) -> isize {
+    let mut v: Vec<isize> = args.iter().map(|s| s.as_ptr() as isize).collect();
+    v.push(0);
+    syscall(
+        SYSCALL_EXECVE,
+        [
+            args[0].as_ptr() as isize,
+            v.as_mut_slice().as_ptr() as isize,
+            0,
+            0,
+            0,
+            0,
+        ],
+    )
 }
 
 pub fn sys_busyboxsh() -> isize {
