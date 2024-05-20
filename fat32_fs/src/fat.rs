@@ -35,6 +35,10 @@ impl FAT {
         (fat1_sec, 0, offset)
     }
 
+    pub fn get_max_cluster(&self) -> u32 {
+        self.max_cluster
+    }
+
     // 计算从curr_cluster开始的下一个可用簇号,如果FAT表中没有空闲表项了，则返回0
     pub fn next_free_cluster(&self, curr_cluster: u32, block_device: &Arc<dyn BlockDevice>) -> u32 {
         // let mut curr_cluster = curr_cluster + 1;

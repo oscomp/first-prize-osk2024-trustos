@@ -1,3 +1,6 @@
+use super::ROOT_INODE;
+use fat32_fs::FAT32Manager;
+
 const S_IFDIR: u32 = 0x4000;
 const S_IFREG: u32 = 0x8000;
 const S_IFLINK: u32 = 0xA000;
@@ -96,14 +99,21 @@ pub struct Statfs {
 
 impl Statfs {
     pub fn new() -> Self {
+        let fs = ROOT_INODE.get_fs();
+        let fsinfo = fs.get_fsinfo();
+        let fsinfo = fsinfo.read();
+        let bfree = fsinfo.read_free_cluster_count() * fs.sectors_per_cluster();
+        let fat = fs.get_fat();
+        let fat = fat.read();
+        let files = fat.get_max_cluster();
         Self {
             f_type: FAT_SUPER_MAGIC,
             f_bsize: 512,
-            f_blocks: 1048576,
-            f_bfree: 1048576,
-            f_bavail: 0,
-            f_files: 131072,
-            f_ffree: 131072,
+            f_blocks: 262144,
+            f_bfree: bfree as i64,
+            f_bavail: bfree as i64,
+            f_files: files as i64,
+            f_ffree: files as i64,
             f_fsid: 0,
             f_name_len: 255,
             f_frsize: 0,

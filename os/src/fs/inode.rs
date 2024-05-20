@@ -5,7 +5,7 @@ use alloc::{string::String, sync::Arc, vec::Vec};
 use bitflags::*;
 use fat32_fs::{create_root_vfile, FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
 use lazy_static::*;
-use log::info;
+use log::{debug, info};
 use spin::{Mutex, MutexGuard};
 
 pub struct OSInode {
@@ -209,11 +209,24 @@ pub fn create_df() {
         "./proc",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTROY,
     );
-    open(
+    if let Some(mountsfile) = open(
         "./proc",
         "./mounts",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR,
-    );
+    ) {
+        let mut mountsinfo = String::from(" fat32 / fat rw 0 0\n");
+        let mut mountsvec = Vec::new();
+        unsafe {
+            let mut mounts = mountsinfo.as_bytes_mut();
+            mountsvec.push(core::slice::from_raw_parts_mut(
+                mounts.as_mut_ptr(),
+                mounts.len(),
+            ));
+        }
+        let mountbuf = UserBuffer::new(mountsvec);
+        let mountssize = mountsfile.write(mountbuf);
+        debug!("create /proc/mounts with {} sizes", mountssize);
+    }
 }
 
 // 定义一份打开文件的标志
