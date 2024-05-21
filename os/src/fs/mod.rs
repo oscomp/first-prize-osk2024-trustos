@@ -132,7 +132,7 @@ pub trait File: Send + Sync {
 use alloc::{sync::Arc, vec, vec::Vec};
 pub use dirent::Dirent;
 pub use inode::{
-    create_df, is_abs_path, list_apps, open, open_file, path2vec, Mode, OSInode, OpenFlags,
+    create_init_files, is_abs_path, list_apps, open, open_file, path2vec, Mode, OSInode, OpenFlags,
     ROOT_INODE,
 };
 pub use mount::MNT_TABLE;

@@ -35,7 +35,7 @@ pub fn test_dirname() {
     run_busyboxsh();
 }
 
-pub fn test_mkdir_date_df() {
+pub fn test_direct() {
     run_busyboxsh();
 }
 
@@ -296,11 +296,55 @@ pub fn test_cut() {
     run_busyboxsh();
 }
 
+pub fn test_find() {
+    let fd1 = openat(-100, "./mnt\0", OpenFlags::O_DIRECTROY, 0);
+    let fd2 = openat(
+        fd1,
+        "test_find\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0,
+    );
+    close(fd1 as usize);
+    close(fd2 as usize);
+    //println!("have create './test_mv.txt' now mv to ./mnt/test_mvnew.txt");
+    println!("have create './test_find' in './mnt' now find it");
+    /*"busybox\0".as_ptr() as isize,
+    "find\0".as_ptr() as isize,
+    ".\0".as_ptr() as isize,
+    "-name\0".as_ptr() as isize,
+    "test_find\0".as_ptr() as isize,
+    0, */
+    run_busyboxsh();
+}
+
+pub fn test_grep() {
+    let fd = openat(
+        -100,
+        "test_grep\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0666,
+    );
+    let inbufstring = String::from("apple:6\npear:10\nwatermalen:99");
+    write(
+        fd as usize,
+        inbufstring.as_bytes(),
+        inbufstring.as_bytes().len(),
+    );
+    close(fd as usize);
+    println!("have create './test_grep' and write fruits and price, now grep for pear");
+    /*"busybox\0".as_ptr() as isize,
+    "grep\0".as_ptr() as isize,
+    "pear\0".as_ptr() as isize,
+    "./test_grep\0".as_ptr() as isize,
+    0, */
+    run_busyboxsh();
+}
+
 #[no_mangle]
 pub fn main() -> i32 {
     //test_cat();
     //test_dirname();
-    test_mkdir_date_df();
+    test_direct();
     //test_basename();
     //test_cp();
     //test_head();
@@ -316,5 +360,7 @@ pub fn main() -> i32 {
     //test_uniq();
     //test_clear();
     //test_cut();
+    //test_find();
+    //test_grep();
     0
 }

@@ -8,7 +8,7 @@ use crate::{
     task::{
         add_task, current_task, current_token, exit_current_and_run_next,
         exit_current_group_and_run_next, move_child_process_to_init, remove_all_from_thread_group,
-        suspend_current_and_run_next, task_num, PROCESS_GROUP,
+        suspend_current_and_run_next, task_num, Sysinfo, PROCESS_GROUP,
     },
     timer::{get_time_ms, Timespec, Tms},
     utils::{SysErrNo, SyscallRet},
@@ -291,26 +291,6 @@ pub fn sys_brk(brk_addr: usize) -> SyscallRet {
     Ok(current_task().unwrap().growproc(grow_size))
 }
 
-pub struct Sysinfo {
-    pub uptime: usize,
-    pub totalram: usize,
-    pub procs: usize,
-}
-
-impl Sysinfo {
-    pub fn new(newuptime: usize, newtotalram: usize, newprocs: usize) -> Self {
-        Self {
-            uptime: newuptime,
-            totalram: newtotalram,
-            procs: newprocs,
-        }
-    }
-    pub fn as_bytes(&self) -> &[u8] {
-        let size = core::mem::size_of::<Self>();
-        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
-    }
-}
-
 pub fn sys_sysinfo(info: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
@@ -319,6 +299,7 @@ pub fn sys_sysinfo(info: *const u8) -> SyscallRet {
 
     let ourinfo = Sysinfo::new(get_time_ms() / 1000, 1 << 56, task_num());
     info.write(ourinfo.as_bytes());
+    println!("{:?}", ourinfo);
     Ok(0)
 }
 

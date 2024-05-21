@@ -147,7 +147,7 @@ pub fn rust_main(hartid: usize) -> ! {
         timer::set_next_trigger();
     }
     if hart_id() == START_HART_ID.load(Ordering::SeqCst) {
-        fs::create_df();
+        fs::create_init_files();
         fs::list_apps();
     }
     task::run_tasks();

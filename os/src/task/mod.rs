@@ -19,6 +19,7 @@ mod context;
 pub mod manager;
 pub mod processor;
 mod switch;
+mod sysinfo;
 #[allow(clippy::module_inception)]
 #[allow(rustdoc::private_intra_doc_links)]
 mod task;
@@ -36,6 +37,7 @@ use lazy_static::*;
 use log::{debug, info};
 pub use manager::*;
 use switch::__switch;
+pub use sysinfo::Sysinfo;
 pub use task::{TaskControlBlock, TaskStatus};
 
 pub use aux::*;
