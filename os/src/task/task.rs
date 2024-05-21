@@ -9,7 +9,7 @@ use crate::{
         PAGE_SIZE, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP, USER_TRAP_CONTEXT,
         USER_TRAP_CONTEXT_TOP,
     },
-    fs::{FdTable, FdTableInner, File, FileClass, FsInfo, Mode, OSInode, Stdin, Stdout},
+    fs::{FdTable, FdTableInner, File, FileClass, FsInfo, Mode, OSInode, OpenFlags, Stdin, Stdout},
     mm::{
         flush_tlb, translated_ref, translated_refmut, MapAreaType, MapPermission, MemorySet,
         MemorySetInner, PhysPageNum, VirtAddr,
@@ -297,6 +297,15 @@ impl TaskControlBlock {
         //以8字节对齐
         user_sp -= user_sp % size_of::<usize>();
         //println!("user_sp:{:#X}", user_sp);
+
+        //将设置了O_CLOEXEC位的文件描述符关闭
+        for i in 0..inner.fd_table.len() {
+            if let Some(FileClass::File(file)) = inner.fd_table.get(i) {
+                if file.get_openflags().contains(OpenFlags::O_CLOEXEC) {
+                    inner.fd_table.take(i);
+                }
+            }
+        }
 
         let trap_cx = TrapContext::app_init_context(
             entry_point,

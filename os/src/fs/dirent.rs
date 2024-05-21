@@ -1,4 +1,4 @@
-pub const NAME_LIMIT: usize = 256;
+pub const NAME_LIMIT: usize = 253;
 
 /// 存储目录中的文件信息
 #[repr(C)]
@@ -22,8 +22,15 @@ impl Dirent {
         }
     }
 
-    pub fn init(&mut self, name: &str) {
+    pub fn len(&self) -> u16 {
+        self.d_reclen
+    }
+
+    pub fn init(&mut self, name: &str, off: isize, ino: usize, dtype: u8) {
         self.fill_name(name);
+        self.d_off = off;
+        self.d_ino = ino;
+        self.d_type = dtype;
     }
 
     fn fill_name(&mut self, name: &str) {
@@ -33,10 +40,6 @@ impl Dirent {
             self.d_name[i] = name_bytes[i];
         }
         self.d_name[len] = 0;
-    }
-
-    pub fn init_off(&mut self, off: isize) {
-        self.d_off = off;
     }
 
     pub fn as_bytes(&self) -> &[u8] {

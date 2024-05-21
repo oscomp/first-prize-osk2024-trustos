@@ -86,8 +86,7 @@ impl OSInode {
 
     pub fn fstat(&self, kstat: &mut Kstat) {
         let inner = self.inner.lock();
-        let (st_ino, st_size, st_atime, st_mtime, st_ctime, _, st_blocks, st_mode) =
-            self.inode.stat();
+        let (st_ino, st_size, st_atime, st_mtime, st_ctime, st_blocks, st_mode) = self.inode.stat();
         kstat.init(
             st_ino as u64,
             st_size,
@@ -105,11 +104,10 @@ impl OSInode {
         }
         let mut inner = self.inner.lock();
         let offset = inner.offset as u32;
-        if let Some((name, off, _, _)) = self.inode.dirent_info(offset as usize) {
-            dirent.init(name.as_str());
-            dirent.init_off(off as isize);
+        if let Some((name, off, ino, dtype)) = self.inode.dirent_info(offset as usize) {
+            dirent.init(name.as_str(), off as isize, ino as usize, dtype);
             inner.offset = off as usize;
-            let len = (name.len() + 8 * 4) as isize;
+            let len = dirent.len() as isize;
             len
         } else {
             -1

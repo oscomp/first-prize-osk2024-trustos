@@ -393,7 +393,7 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
             if readsize < 0 {
                 return Ok(all_len);
             }
-            //println!("{:?}", dirent);
+            println!("{:?}", dirent);
             buffer.write_at(all_len, dirent.as_bytes());
             all_len += dirent_size;
         }
@@ -545,6 +545,8 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
     let token = inner.user_token();
     let mut path = translated_str(token, path);
     let mut kst = UserBuffer::new(translated_byte_buffer(token, kst, size_of::<Kstat>()));
+
+    println!("path is {}", path);
 
     let mut base_path = inner.fs_info.cwd();
     // 如果path是绝对路径，则dirfd被忽略
@@ -796,6 +798,8 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     let token = inner.user_token();
+
+    println!("fd is {} and cmd is {}", fd, cmd);
 
     if fd >= inner.fd_table.len() || inner.fd_table.get(fd).is_none() {
         return Err(SysErrNo::EINVAL);
