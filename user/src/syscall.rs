@@ -177,8 +177,8 @@ pub fn sys_busyboxsh() -> isize {
             "busybox\0".as_ptr() as isize,
             [
                 "busybox\0".as_ptr() as isize,
-                "hwclock\0".as_ptr() as isize,
-                0,
+                "more\0".as_ptr() as isize,
+                "./test_more\0".as_ptr() as isize,
                 0,
                 0,
             ]

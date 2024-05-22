@@ -467,6 +467,9 @@ pub fn is_abs_file(abs_path: &String) -> bool {
     if (abs_path == "/dev/rtc0") {
         return true;
     }
+    if (abs_path == "/dev/tty") {
+        return true;
+    }
     false
 }
 
@@ -604,6 +607,10 @@ impl File for OSInode {
             total_write_size += write_size;
         }
         total_write_size
+    }
+
+    fn ioctl(&self, cmd: usize, arg: usize) -> isize {
+        -1
     }
 }
 

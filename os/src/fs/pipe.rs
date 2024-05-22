@@ -212,4 +212,8 @@ impl File for Pipe {
             }
         }
     }
+
+    fn ioctl(&self, cmd: usize, arg: usize) -> isize {
+        -1
+    }
 }

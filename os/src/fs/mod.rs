@@ -9,7 +9,7 @@ mod stdio;
 
 use core::cell::RefMut;
 
-use crate::{mm::UserBuffer, sync::SyncUnsafeCell};
+use crate::{mm::UserBuffer, sync::SyncUnsafeCell, utils::SyscallRet};
 use alloc::string::String;
 pub use devfs::*;
 use fat32_fs::FSInfoInner;
@@ -129,6 +129,8 @@ pub trait File: Send + Sync {
     fn read(&self, buf: UserBuffer) -> usize;
     /// 将缓冲区中的数据写入文件，最多将缓冲区中的数据全部写入，并返回直接写入的字节数
     fn write(&self, buf: UserBuffer) -> usize;
+    //ioctl处理
+    fn ioctl(&self, cmd: usize, arg: usize) -> isize;
 }
 
 use alloc::{sync::Arc, vec, vec::Vec};

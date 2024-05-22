@@ -68,6 +68,8 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let inner = task.inner_lock();
     let token = inner.user_token();
 
+    debug!("[sys_read] fd is {}, len is {}", fd, len);
+
     if fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
     }
@@ -181,7 +183,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> Sysca
     let mut path = translated_str(token, path);
     let flags = OpenFlags::from_bits(flags).unwrap();
 
-    println!("open at {}", path);
+    debug!("[sys_openat], path is {}", path);
 
     let mut base_path = inner.fs_info.cwd();
     // 如果path是绝对路径，则dirfd被忽略
@@ -888,8 +890,31 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
 }
 
 pub fn sys_ioctl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
-    //TODO
-    Ok(0)
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+
+    debug!("[sys_ioctl] fd is {},cmd is {:x},arg is {:x}", fd, cmd, arg);
+
+    if fd >= inner.fd_table.len() || inner.fd_table.get(fd).is_none() {
+        return Err(SysErrNo::EINVAL);
+    }
+
+    if let Some(file) = &inner.fd_table.get(fd) {
+        let file = match file {
+            FileClass::File(f) => return Err(SysErrNo::EINVAL),
+            FileClass::Abs(f) => f.clone(),
+        };
+        drop(inner);
+        drop(task);
+        let res = file.ioctl(cmd, arg);
+        if res == -1 {
+            return Err(SysErrNo::EINVAL);
+        }
+        Ok(0)
+    } else {
+        Err(SysErrNo::ENOENT)
+    }
 }
 
 pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) -> SyscallRet {

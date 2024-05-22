@@ -340,11 +340,59 @@ pub fn test_grep() {
     run_busyboxsh();
 }
 
+pub fn test_md5sum() {
+    let fd = openat(
+        -100,
+        "test_md5sum\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0666,
+    );
+    let inbufstring = String::from("apple:6\npear:10\nwatermalen:99");
+    write(
+        fd as usize,
+        inbufstring.as_bytes(),
+        inbufstring.as_bytes().len(),
+    );
+    close(fd as usize);
+    println!("have create './test_md5sum' and write fruits and price, now calculate");
+    /*"busybox\0".as_ptr() as isize,
+    "md5sum\0".as_ptr() as isize,
+    "./test_md5sum\0".as_ptr() as isize,
+    0, */
+    run_busyboxsh();
+}
+
+pub fn test_more() {
+    let fd = openat(
+        -100,
+        "test_more\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0666,
+    );
+    let mut inbuf: [u8; 200] = [0; 200];
+    for i in 0..inbuf.len() {
+        if i % 2 == 1 {
+            inbuf[i] = b'\n';
+        } else {
+            let num = (i % 10) as u8 + b'0';
+            inbuf[i] = num;
+        }
+    }
+    write(fd as usize, &inbuf, 200);
+    close(fd as usize);
+    println!("have create './test_more' and write 100个number+enter, now more to see");
+    /*"busybox\0".as_ptr() as isize,
+    "more\0".as_ptr() as isize,
+    "./test_more\0".as_ptr() as isize,
+    0, */
+    run_busyboxsh();
+}
+
 #[no_mangle]
 pub fn main() -> i32 {
     //test_cat();
     //test_dirname();
-    test_direct();
+    //test_direct();
     //test_basename();
     //test_cp();
     //test_head();
@@ -362,5 +410,7 @@ pub fn main() -> i32 {
     //test_cut();
     //test_find();
     //test_grep();
+    //test_md5sum();
+    test_more();
     0
 }
