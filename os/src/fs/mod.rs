@@ -129,8 +129,10 @@ pub trait File: Send + Sync {
     fn read(&self, buf: UserBuffer) -> usize;
     /// 将缓冲区中的数据写入文件，最多将缓冲区中的数据全部写入，并返回直接写入的字节数
     fn write(&self, buf: UserBuffer) -> usize;
-    //ioctl处理
+    /// ioctl处理
     fn ioctl(&self, cmd: usize, arg: usize) -> isize;
+    /// 获得文件描述符标志
+    fn get_openflags(&self) -> OpenFlags;
 }
 
 use alloc::{sync::Arc, vec, vec::Vec};

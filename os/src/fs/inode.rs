@@ -139,9 +139,6 @@ impl OSInode {
         self.inode.modification_time()
     }
 
-    pub fn get_openflags(&self) -> OpenFlags {
-        self.inner.lock().openflags
-    }
     pub fn set_openflags(&self, flags: OpenFlags) {
         self.inner.lock().openflags = flags;
     }
@@ -610,6 +607,10 @@ impl File for OSInode {
 
     fn ioctl(&self, cmd: usize, arg: usize) -> isize {
         -1
+    }
+
+    fn get_openflags(&self) -> OpenFlags {
+        self.inner.lock().openflags
     }
 }
 

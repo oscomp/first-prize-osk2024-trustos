@@ -89,8 +89,13 @@ impl File for Stdin {
     fn write(&self, _user_buf: UserBuffer) -> usize {
         panic!("Cannot write to stdin!");
     }
+
     fn ioctl(&self, cmd: usize, arg: usize) -> isize {
         -1
+    }
+
+    fn get_openflags(&self) -> OpenFlags {
+        OpenFlags::O_RDONLY
     }
 }
 
@@ -158,6 +163,10 @@ impl File for Stdout {
                 return -1;
             }
         };
+    }
+
+    fn get_openflags(&self) -> OpenFlags {
+        OpenFlags::O_WRONLY
     }
 }
 

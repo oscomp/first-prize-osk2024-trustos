@@ -77,6 +77,9 @@ impl File for DevZero {
     fn ioctl(&self, cmd: usize, arg: usize) -> isize {
         -1
     }
+    fn get_openflags(&self) -> OpenFlags {
+        OpenFlags::O_RDWR
+    }
 }
 
 impl DevNull {
@@ -102,6 +105,9 @@ impl File for DevNull {
     }
     fn ioctl(&self, cmd: usize, arg: usize) -> isize {
         -1
+    }
+    fn get_openflags(&self) -> OpenFlags {
+        OpenFlags::O_RDWR
     }
 }
 
@@ -186,6 +192,9 @@ impl File for DevRtc {
         }
         0
     }
+    fn get_openflags(&self) -> OpenFlags {
+        OpenFlags::O_RDWR
+    }
 }
 
 impl DevRandom {
@@ -210,6 +219,9 @@ impl File for DevRandom {
     }
     fn ioctl(&self, cmd: usize, arg: usize) -> isize {
         -1
+    }
+    fn get_openflags(&self) -> OpenFlags {
+        OpenFlags::O_RDWR
     }
 }
 
@@ -246,5 +258,8 @@ impl File for DevTty {
         } else {
             panic!("get Stdout error!");
         }
+    }
+    fn get_openflags(&self) -> OpenFlags {
+        OpenFlags::O_RDWR
     }
 }

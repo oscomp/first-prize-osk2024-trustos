@@ -388,11 +388,35 @@ pub fn test_more() {
     run_busyboxsh();
 }
 
+pub fn test_od() {
+    let fd = openat(
+        -100,
+        "test_od\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0666,
+    );
+    let inbufstring = String::from("apple:6\npear:10\nwatermalen:99");
+    write(
+        fd as usize,
+        inbufstring.as_bytes(),
+        inbufstring.as_bytes().len(),
+    );
+    close(fd as usize);
+    println!("have create './test_od' and write fruits and price, now od it in hex");
+    /*"busybox\0".as_ptr() as isize,
+    "od\0".as_ptr() as isize,
+    "-t\0".as_ptr() as isize,
+    "x1\0".as_ptr() as isize,
+    "./test_od\0".as_ptr() as isize,
+    0, */
+    run_busyboxsh();
+}
+
 #[no_mangle]
 pub fn main() -> i32 {
     //test_cat();
     //test_dirname();
-    //test_direct();
+    test_direct();
     //test_basename();
     //test_cp();
     //test_head();
@@ -411,6 +435,7 @@ pub fn main() -> i32 {
     //test_find();
     //test_grep();
     //test_md5sum();
-    test_more();
+    //test_more();
+    //test_od();
     0
 }

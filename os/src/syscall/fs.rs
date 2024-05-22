@@ -835,25 +835,25 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
     let mut inner = task.inner_lock();
     let token = inner.user_token();
 
-    //println!("fd is {} and cmd is {}", fd, cmd);
+    debug!("[sys_fcntl] fd is {}, cmd is {}, arg is {}", fd, cmd, arg);
 
     if fd >= inner.fd_table.len() || inner.fd_table.get(fd).is_none() {
         return Err(SysErrNo::EINVAL);
     }
 
     if let Some(file) = &inner.fd_table.get(fd) {
-        let file = match file {
-            FileClass::File(f) => f.clone(),
-            FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
-        };
         match cmd {
             F_DUPFD => {
                 let inode = file.clone();
                 let fd_new = inner.fd_table.alloc_fd();
-                inner.fd_table.set(fd_new, Some(FileClass::File(inode)));
+                inner.fd_table.set(fd_new, Some(inode));
                 return Ok(fd_new);
             }
             F_DUPFD_CLOEXEC => {
+                let file = match file {
+                    FileClass::File(f) => f.clone(),
+                    FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
+                };
                 let inode = file.clone();
                 inode.set_cloexec();
                 let fd_new = inner.fd_table.alloc_fd();
@@ -861,6 +861,10 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
                 return Ok(fd_new);
             }
             F_GETFD => {
+                let file = match file {
+                    FileClass::File(f) => f.clone(),
+                    FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
+                };
                 return if file.get_openflags().contains(OpenFlags::O_CLOEXEC) {
                     Ok(1)
                 } else {
@@ -868,14 +872,28 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
                 };
             }
             F_SETFD => {
+                let file = match file {
+                    FileClass::File(f) => f.clone(),
+                    FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
+                };
                 if arg & FD_CLOEXEC == 0 {
                     file.unset_cloexec();
                 } else {
                     file.set_cloexec();
                 }
             }
-            F_GETFL => return Ok(file.get_openflags().bits() as usize),
+            F_GETFL => {
+                let file = match file {
+                    FileClass::File(f) => f.clone(),
+                    FileClass::Abs(f) => f.clone(),
+                };
+                return Ok(file.get_openflags().bits() as usize);
+            }
             F_SETFL => {
+                let file = match file {
+                    FileClass::File(f) => f.clone(),
+                    FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
+                };
                 let flags = OpenFlags::from_bits_truncate(arg as u32);
                 file.set_openflags(flags);
             }
