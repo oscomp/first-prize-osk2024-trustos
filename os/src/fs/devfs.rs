@@ -2,11 +2,15 @@ use crate::fs::FileClass;
 use crate::mm::{translated_byte_buffer, UserBuffer};
 use crate::syscall::IoctlCommand;
 use crate::task::{current_task, INITPROC};
+use alloc::collections::BTreeSet;
 use alloc::fmt::{Debug, Formatter};
 use alloc::format;
+use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use core::cmp::min;
 use core::mem::size_of;
+use lazy_static::lazy_static;
+use spin::Mutex;
 
 use super::{File, OpenFlags};
 
@@ -17,17 +21,33 @@ pub struct DevRandom;
 
 pub struct DevTty;
 
-pub fn open_device_file(path: &str) -> Option<Arc<dyn File + Send + Sync>> {
+lazy_static! {
+    pub static ref DEVICES: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+}
+
+pub fn register_device(abs_path: &str) {
+    DEVICES.lock().insert(abs_path.to_string());
+}
+
+pub fn unregister_device(abs_path: &str) {
+    DEVICES.lock().remove(&abs_path.to_string());
+}
+
+pub fn find_device(abs_path: &str) -> bool {
+    DEVICES.lock().contains(&abs_path.to_string())
+}
+
+pub fn open_device_file(abs_path: &str) -> Option<Arc<dyn File + Send + Sync>> {
     // warning: just a fake implementation
-    if path.ends_with("zero") {
+    if abs_path == "/dev/zero" {
         Some(Arc::new(DevZero::new()))
-    } else if path.ends_with("null") {
+    } else if abs_path == "/dev/null" {
         Some(Arc::new(DevNull::new()))
-    } else if path.ends_with("rtc") || path.ends_with("rtc0") {
+    } else if abs_path == "/dev/rtc" || abs_path == "/dev/rtc0" || abs_path == "/dev/misc/rtc" {
         Some(Arc::new(DevRtc::new()))
-    } else if path.ends_with("random") {
+    } else if abs_path == "/dev/random" {
         Some(Arc::new(DevRandom::new()))
-    } else if path.ends_with("tty") {
+    } else if abs_path == "/dev/tty" {
         Some(Arc::new(DevTty::new()))
     } else {
         None

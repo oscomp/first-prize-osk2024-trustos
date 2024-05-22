@@ -1,5 +1,9 @@
 use super::{find_vfile_idx, insert_vfile_idx, remove_vfile_idx, Dirent, File, FileClass, Kstat};
-use crate::{drivers::BLOCK_DEVICE, fs::open_device_file, mm::UserBuffer};
+use crate::{
+    drivers::BLOCK_DEVICE,
+    fs::{find_device, open_device_file, register_device},
+    mm::UserBuffer,
+};
 use _core::str::FromStr;
 use alloc::{string::String, sync::Arc, vec::Vec};
 use bitflags::*;
@@ -298,12 +302,23 @@ pub fn create_init_files() {
         "./dev",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTROY,
     );
+    //注册设备/dev/rtc和/dev/rtc0
+    register_device("/dev/rtc");
+    register_device("/dev/rtc0");
+    //注册设备/dev/tty
+    register_device("/dev/tty");
+    //注册设备/dev/zero
+    register_device("/dev/zero");
+    //注册设备/dev/numm
+    register_device("/dev/null");
     //创建./dev/misc文件夹
     open(
         "./dev",
         "./misc",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTROY,
     );
+    //注册设备/dev/misc/rtc
+    register_device("/dev/misc/rtc");
     //创建./etc文件夹
     open(
         "/",
@@ -457,22 +472,6 @@ fn create_file(
     }
 }
 
-pub fn is_abs_file(abs_path: &String) -> bool {
-    if (abs_path == "/dev/misc/rtc") {
-        return true;
-    }
-    if (abs_path == "/dev/rtc") {
-        return true;
-    }
-    if (abs_path == "/dev/rtc0") {
-        return true;
-    }
-    if (abs_path == "/dev/tty") {
-        return true;
-    }
-    false
-}
-
 pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
     use crate::fs::path2abs;
     use alloc::string::ToString;
@@ -489,8 +488,8 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
         path2abs(&mut wpath, &path2vec(path))
     };
     //判断是否是设备文件
-    if is_abs_file(&abs_path) {
-        if let Some(device) = open_device_file(path) {
+    if find_device(&abs_path[..]) {
+        if let Some(device) = open_device_file(&abs_path[..]) {
             return Some(FileClass::Abs(device));
         } else {
             return None;
