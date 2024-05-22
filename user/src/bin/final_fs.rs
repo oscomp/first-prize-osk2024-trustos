@@ -1,8 +1,8 @@
 #![no_std]
 #![no_main]
 use user_lib::{
-    chdir, close, copy_file_range, faccessat, fcntl, fstatat, fsync, ftruncate, lseek, mkdir,
-    openat, pread64, pwrite64, read, readlinkat, renameat2, statfs, symlinkat, sync, write,
+    chdir, close, copy_file_range, faccessat, fcntl, fstatat, fsync, ftruncate, getrandom, lseek,
+    mkdir, openat, pread64, pwrite64, read, readlinkat, renameat2, statfs, symlinkat, sync, write,
     FaccessatMode, Kstat, OpenFlags, Statfs,
 };
 
@@ -310,6 +310,20 @@ fn test_copy_file_range() {
     println!("");
 }
 
+pub fn test_getrandom() {
+    println!("-----------------test getrandom-----------------");
+    let mut buf: [u8; 10] = [0; 10];
+    let result = getrandom(&mut buf, 10, 0);
+    println!("have get 10 random number");
+    for &byte in &buf {
+        print!("{} ", byte);
+    }
+    println!("");
+    println!("result is {} which should be 10", result);
+    println!("-----------------end getrandom-----------------");
+    println!("");
+}
+
 #[no_mangle]
 pub fn main() -> i32 {
     test_fstatat();
@@ -326,5 +340,6 @@ pub fn main() -> i32 {
     test_renameat2();
     test_openat();
     test_copy_file_range();
+    test_getrandom();
     0
 }

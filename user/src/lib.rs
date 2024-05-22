@@ -552,3 +552,7 @@ pub fn copy_file_range(
 ) -> isize {
     sys_copy_file_range(infd, off_in, outfd, off_out, count, flags)
 }
+
+pub fn getrandom(buf: &mut [u8], buflen: usize, flags: u32) -> isize {
+    sys_getrandom(buf, buflen, flags)
+}

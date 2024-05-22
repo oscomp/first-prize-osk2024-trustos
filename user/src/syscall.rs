@@ -52,6 +52,7 @@ const SYSCALL_CLONE: usize = 220;
 const SYSCALL_EXECVE: usize = 221;
 const SYSCALL_WAIT4: usize = 260;
 const SYSCALL_RENAMEAT2: usize = 276;
+const SYSCALL_GETRANDOM: usize = 278;
 const SYSCALL_COPYFILERANGE: usize = 285;
 
 const SYSCALL_SHUTDOWN: usize = 1000;
@@ -547,6 +548,20 @@ pub fn sys_copy_file_range(
             off_out as isize,
             count as isize,
             flags as isize,
+        ],
+    )
+}
+
+pub fn sys_getrandom(buf: &mut [u8], buflen: usize, flags: u32) -> isize {
+    syscall(
+        SYSCALL_GETRANDOM,
+        [
+            buf.as_mut_ptr() as isize,
+            buflen as isize,
+            flags as isize,
+            0,
+            0,
+            0,
         ],
     )
 }

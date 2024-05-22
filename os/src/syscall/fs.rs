@@ -2,10 +2,11 @@
 use crate::{
     console::print,
     fs::{
-        is_abs_path, make_pipe, open, open_file, path2abs, path2vec, remove_vfile_idx, Dirent,
-        File, FileClass, Kstat, Mode, OpenFlags, Statfs, MNT_TABLE,
+        is_abs_path, make_pipe, open, open_device_file, open_file, path2abs, path2vec,
+        remove_vfile_idx, Dirent, File, FileClass, Kstat, Mode, OpenFlags, Statfs, MNT_TABLE,
     },
     mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer},
+    syscall::{FaccessatMode, Renameat2Flags},
     task::{current_task, current_token},
     timer::{get_time_ms, Timespec},
     utils::{SysErrNo, SyscallRet},
@@ -616,15 +617,6 @@ pub fn sys_statfs(_path: *const u8, statfs: *const u8) -> SyscallRet {
     Ok(0)
 }
 
-bitflags! {
-    pub struct FaccessatMode: u32 {
-        const F_OK = 0;
-        const X_OK = 1<<0;
-        const W_OK = 1<<1;
-        const R_OK = 1<<2;
-    }
-}
-
 pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
@@ -1221,15 +1213,6 @@ pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsiz: usi
     }
 }
 
-bitflags! {
-     /// renameat flag
-    pub struct Renameat2Flags: u32 {
-        const RENAME_NOREPLACE = 1 << 0;
-        const RENAME_EXCHANGE = 1 << 1;
-        const RENAME_WHITEOUT = 1 << 2;
-    }
-}
-
 pub fn sys_renameat2(
     olddirfd: isize,
     oldpath: *const u8,
@@ -1484,6 +1467,25 @@ pub fn sys_copy_file_range(
         } else {
             Err(SysErrNo::ENOENT)
         }
+    } else {
+        Err(SysErrNo::ENOENT)
+    }
+}
+
+pub fn sys_getrandom(buf_ptr: *const u8, buflen: usize, _flags: u32) -> SyscallRet {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+
+    if buf_ptr.is_null() {
+        return Err(SysErrNo::EINVAL);
+    }
+
+    if let Some(random_device) = open_device_file("/dev/random") {
+        let ret = random_device.read(UserBuffer::new(translated_byte_buffer(
+            token, buf_ptr, buflen,
+        )));
+        Ok(ret)
     } else {
         Err(SysErrNo::ENOENT)
     }

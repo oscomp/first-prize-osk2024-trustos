@@ -378,10 +378,15 @@ impl UserBuffer {
     }
 
     pub fn fillrandom(&mut self) -> usize {
+        //随机数生成方法： 线性计算+噪声+零特殊处理
+        let mut random: u8 = (get_time() % 256) as u8;
         for sub_buff in self.buffers.iter_mut() {
             let sblen = (*sub_buff).len();
             for j in 0..sblen {
-                let random = (get_time() % 256) as u8; //生成一个字节大小的随机数
+                if random == 0 {
+                    random = (get_time() % 256) as u8;
+                }
+                random = (((random as usize) * (get_time() / 3 % 256) + 37) % 256) as u8; //生成一个字节大小的随机数
                 (*sub_buff)[j] = random;
             }
         }
