@@ -1,5 +1,5 @@
 use crate::{
-    fs::{open, open_file, Mode, OpenFlags},
+    fs::{open, open_file, FileClass, Mode, OpenFlags},
     mm::{
         translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer,
         VirtAddr,
@@ -143,6 +143,10 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
         }
     }
     if let Some(app_inode) = open(task_inner.fs_info.cwd(), path.as_str(), OpenFlags::O_RDONLY) {
+        let app_inode = match app_inode {
+            FileClass::File(f) => f.clone(),
+            FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
+        };
         let elf_data = unsafe { app_inode.read_as_elf() };
         drop(task_inner);
 

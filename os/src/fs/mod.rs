@@ -1,3 +1,4 @@
+mod devfs;
 mod dirent;
 mod fsidx;
 mod inode;
@@ -10,6 +11,7 @@ use core::cell::RefMut;
 
 use crate::{mm::UserBuffer, sync::SyncUnsafeCell};
 use alloc::string::String;
+pub use devfs::*;
 use fat32_fs::FSInfoInner;
 pub use fsidx::*;
 
@@ -152,25 +154,27 @@ pub fn flush_preload() {
         fn shell_end();
     }
 
-    let initproc = open_file("initproc", OpenFlags::O_CREATE).unwrap();
-    let mut v = Vec::new();
-    v.push(unsafe {
-        core::slice::from_raw_parts_mut(
-            initproc_start as *mut u8,
-            initproc_end as usize - initproc_start as usize,
-        ) as &'static mut [u8]
-    });
-    initproc.write(UserBuffer::new(v));
+    if let Some(FileClass::File(initproc)) = open_file("initproc", OpenFlags::O_CREATE) {
+        let mut v = Vec::new();
+        v.push(unsafe {
+            core::slice::from_raw_parts_mut(
+                initproc_start as *mut u8,
+                initproc_end as usize - initproc_start as usize,
+            ) as &'static mut [u8]
+        });
+        initproc.write(UserBuffer::new(v));
+    }
 
-    let onlinetests = open_file("onlinetests", OpenFlags::O_CREATE).unwrap();
-    let mut v = Vec::new();
-    v.push(unsafe {
-        core::slice::from_raw_parts_mut(
-            shell_start as *mut u8,
-            shell_end as usize - shell_start as usize,
-        ) as &'static mut [u8]
-    });
-    onlinetests.write(UserBuffer::new(v));
+    if let Some(FileClass::File(onlinetests)) = open_file("onlinetests", OpenFlags::O_CREATE) {
+        let mut v = Vec::new();
+        v.push(unsafe {
+            core::slice::from_raw_parts_mut(
+                shell_start as *mut u8,
+                shell_end as usize - shell_start as usize,
+            ) as &'static mut [u8]
+        });
+        onlinetests.write(UserBuffer::new(v));
+    }
 }
 
 pub fn path2abs<'a>(cwdv: &mut Vec<&'a str>, pathv: &Vec<&'a str>) -> String {

@@ -26,7 +26,7 @@ mod task;
 mod tid;
 
 use crate::{
-    fs::{open_file, OpenFlags},
+    fs::{open_file, FileClass, OpenFlags},
     mm::kernel_token,
     sbi::shutdown,
     signal::{send_signal_to_thread_group, SigSet},
@@ -122,10 +122,14 @@ pub fn exit_current_and_run_next(exit_code: i32) {
 lazy_static! {
     ///Globle process that init user shell
     pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new({
-        let inode = open_file("initproc", OpenFlags::O_RDONLY).unwrap();
-        let elf_data = unsafe {inode.read_as_elf()};
-        let mut res=TaskControlBlock::new(elf_data);
-        res
+        if let Some(FileClass::File(inode)) = open_file("initproc", OpenFlags::O_RDONLY) {
+            let elf_data = unsafe {inode.read_as_elf()};
+            let mut res=TaskControlBlock::new(elf_data);
+            res
+        } else {
+            panic!("error: initproc from Abs File!");
+        }
+
     });
 }
 ///Add init process to the manager

@@ -1,5 +1,5 @@
-use super::{find_vfile_idx, insert_vfile_idx, remove_vfile_idx, Dirent, File, Kstat};
-use crate::{drivers::BLOCK_DEVICE, mm::UserBuffer};
+use super::{find_vfile_idx, insert_vfile_idx, remove_vfile_idx, Dirent, File, FileClass, Kstat};
+use crate::{drivers::BLOCK_DEVICE, fs::open_device_file, mm::UserBuffer};
 use _core::str::FromStr;
 use alloc::{string::String, sync::Arc, vec::Vec};
 use bitflags::*;
@@ -76,12 +76,12 @@ impl OSInode {
     pub fn set_file_size(&self, size: u32) {
         self.inode.set_size(size);
     }
-    pub fn find(&self, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
+    pub fn find(&self, path: &str, flags: OpenFlags) -> Option<FileClass> {
         let pathv = path2vec(path);
         let (readable, writable) = flags.read_write();
         self.inode
             .find_vfile_path(&pathv)
-            .map(|vfile| Arc::new(OSInode::new(readable, writable, vfile)))
+            .map(|vfile| FileClass::File(Arc::new(OSInode::new(readable, writable, vfile))))
     }
 
     pub fn fstat(&self, kstat: &mut Kstat) {
@@ -166,7 +166,7 @@ impl OSInode {
         self.inode.set_first_cluster(first_cluster);
     }
 
-    pub fn create(&self, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
+    pub fn create(&self, path: &str, flags: OpenFlags) -> Option<FileClass> {
         let path = if path.starts_with("./") {
             &path[2..]
         } else {
@@ -182,7 +182,7 @@ impl OSInode {
         };
         self.inode
             .create(path, attribute)
-            .map(|vfile| Arc::new(OSInode::new(readable, writable, vfile)))
+            .map(|vfile| FileClass::File(Arc::new(OSInode::new(readable, writable, vfile))))
     }
 }
 
@@ -246,6 +246,9 @@ HugePages_Surp:        0
 Hugepagesize:       2048 kB
 Hugetlb:               0 kB
 ";
+const ADJTIME: &str = "0.000000 0.000000 UTC\n";
+const LOCALTIME: &str =
+    "lrwxrwxrwx 1 root root 33 11月 18  2023 /etc/localtime -> /usr/share/zoneinfo/Asia/Shanghai\n";
 
 pub fn create_init_files() {
     //创建./proc文件夹
@@ -255,7 +258,7 @@ pub fn create_init_files() {
         OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTROY,
     );
     //创建./proc/mounts文件系统使用情况
-    if let Some(mountsfile) = open(
+    if let Some(FileClass::File(mountsfile)) = open(
         "./proc",
         "./mounts",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR,
@@ -274,7 +277,7 @@ pub fn create_init_files() {
         debug!("create /proc/mounts with {} sizes", mountssize);
     }
     //创建./proc/meminfo系统内存使用情况
-    if let Some(memfile) = open(
+    if let Some(FileClass::File(memfile)) = open(
         "./proc",
         "./meminfo",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR,
@@ -301,7 +304,49 @@ pub fn create_init_files() {
         "./misc",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTROY,
     );
-    //创建./dev/misc/rtc
+    //创建./etc文件夹
+    open(
+        "/",
+        "./etc",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTROY,
+    );
+    //创建./etc/adjtime记录时间偏差
+    if let Some(FileClass::File(adjtimefile)) = open(
+        "./etc",
+        "./adjtime",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+    ) {
+        let mut adjtime = String::from(ADJTIME);
+        let mut adjtimevec = Vec::new();
+        unsafe {
+            let mut adj = adjtime.as_bytes_mut();
+            adjtimevec.push(core::slice::from_raw_parts_mut(adj.as_mut_ptr(), adj.len()));
+        }
+        let adjtimebuf = UserBuffer::new(adjtimevec);
+        let adjtimesize = adjtimefile.write(adjtimebuf);
+        debug!("create /etc/adjtime with {} sizes", adjtimesize);
+    }
+    //创建./etc/localtime记录时区
+    if let Some(FileClass::File(localtimefile)) = open(
+        "./etc",
+        "./localtime",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+    ) {
+        let mut localtime = String::from(LOCALTIME);
+        let mut localtimevec = Vec::new();
+        unsafe {
+            let mut local = localtime.as_bytes_mut();
+            localtimevec.push(core::slice::from_raw_parts_mut(
+                local.as_mut_ptr(),
+                local.len(),
+            ));
+        }
+        let localtimebuf = UserBuffer::new(localtimevec);
+        let localtimesize = localtimefile.write(localtimebuf);
+        debug!("create /etc/localtime with {} sizes", localtimesize);
+    }
+
+    println!("create_init_files success!");
 }
 
 // 定义一份打开文件的标志
@@ -345,7 +390,7 @@ impl OpenFlags {
         }
     }
 }
-pub fn open_file(path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
+pub fn open_file(path: &str, flags: OpenFlags) -> Option<FileClass> {
     open(&"/", path, flags)
 }
 
@@ -366,7 +411,7 @@ fn create_file(
     abs_path: &str,
     parent_path: &str,
     child_name: &str,
-) -> Option<Arc<OSInode>> {
+) -> Option<FileClass> {
     if let Some(parent_dir) = find_vfile_idx(parent_path) {
         let attribute = {
             if flags.contains(OpenFlags::O_DIRECTROY) {
@@ -380,7 +425,7 @@ fn create_file(
             insert_vfile_idx(abs_path, vfile.clone());
             let mut osinode = OSInode::new(readable, writable, vfile);
             osinode.set_openflags(flags);
-            Arc::new(osinode)
+            FileClass::File(Arc::new(osinode))
         });
     }
     let mut pathv = path2vec(path);
@@ -405,14 +450,27 @@ fn create_file(
             insert_vfile_idx(abs_path, vfile.clone());
             let mut osinode = OSInode::new(readable, writable, vfile);
             osinode.set_openflags(flags);
-            Arc::new(osinode)
+            FileClass::File(Arc::new(osinode))
         })
     } else {
         None
     }
 }
 
-pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
+pub fn is_abs_file(abs_path: &String) -> bool {
+    if (abs_path == "/dev/misc/rtc") {
+        return true;
+    }
+    if (abs_path == "/dev/rtc") {
+        return true;
+    }
+    if (abs_path == "/dev/rtc0") {
+        return true;
+    }
+    false
+}
+
+pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
     use crate::fs::path2abs;
     use alloc::string::ToString;
     let abs_path = if is_abs_path(path) {
@@ -427,6 +485,14 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
         };
         path2abs(&mut wpath, &path2vec(path))
     };
+    //判断是否是设备文件
+    if is_abs_file(&abs_path) {
+        if let Some(device) = open_device_file(path) {
+            return Some(FileClass::Abs(device));
+        } else {
+            return None;
+        }
+    }
     // 首先在FSIDX中查找文件是否存在
     if let Some(inode) = find_vfile_idx(&abs_path) {
         if flags.contains(OpenFlags::O_TRUNC) {
@@ -444,7 +510,7 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
             vfile.set_offset(vfile.file_size());
         }
         vfile.set_openflags(flags);
-        return Some(Arc::new(vfile));
+        return Some(FileClass::File(Arc::new(vfile)));
     }
 
     // 若在FSIDX中无法找到，尝试在FSIDX寻找父级目录
@@ -469,7 +535,7 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
                 vfile.set_offset(vfile.file_size());
             }
             vfile.set_openflags(flags);
-            return Some(Arc::new(vfile));
+            return Some(FileClass::File(Arc::new(vfile)));
         }
     } else {
         let cur_vfile = {
@@ -492,7 +558,7 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
                 vfile.set_offset(vfile.file_size());
             }
             vfile.set_openflags(flags);
-            return Some(Arc::new(vfile));
+            return Some(FileClass::File(Arc::new(vfile)));
         }
     }
 

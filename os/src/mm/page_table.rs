@@ -2,6 +2,7 @@
 use crate::{
     config::mm::{KERNEL_ADDR_OFFSET, KERNEL_PGNUM_OFFSET},
     mm::KernelAddr,
+    timer::get_time,
 };
 
 use super::{
@@ -364,6 +365,32 @@ impl UserBuffer {
             head += sblen;
         }
         0
+    }
+
+    pub fn fill0(&mut self) -> usize {
+        for sub_buff in self.buffers.iter_mut() {
+            let sblen = (*sub_buff).len();
+            for j in 0..sblen {
+                (*sub_buff)[j] = 0;
+            }
+        }
+        self.len()
+    }
+
+    pub fn fillrandom(&mut self) -> usize {
+        for sub_buff in self.buffers.iter_mut() {
+            let sblen = (*sub_buff).len();
+            for j in 0..sblen {
+                let random = (get_time() % 256) as u8; //生成一个字节大小的随机数
+                (*sub_buff)[j] = random;
+            }
+        }
+        self.len()
+    }
+
+    pub fn clear(&mut self) -> usize {
+        self.buffers.clear();
+        self.len()
     }
 }
 
