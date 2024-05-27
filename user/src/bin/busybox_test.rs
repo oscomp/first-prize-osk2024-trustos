@@ -5,7 +5,7 @@
 extern crate user_lib;
 extern crate alloc;
 use alloc::string::String;
-use user_lib::{close, openat, run_busyboxsh, write, OpenFlags};
+use user_lib::{chdir, close, openat, run_busyboxsh, write, OpenFlags};
 
 pub fn test_cat() {
     let fd = openat(
@@ -184,12 +184,13 @@ pub fn test_sort() {
         OpenFlags::O_CREATE | OpenFlags::O_RDWR,
         0666,
     );
-    let inbuf: [u8; 9] = [b't', b'r', b'u', b's', b't', b'o', b's', b'n', b'b'];
+    let inbuf: [u8; 9] = [b'5', b'\n', b'7', b'\n', b'6', b'\n', b'1', b'\n', b'3'];
     write(fd as usize, &inbuf, 9);
     close(fd as usize);
-    println!("have create './test_sort' and write trustosnb, now sort it");
+    println!("have create './test_sort' and write unordered numbers, now sort it");
     /*"busybox\0".as_ptr() as isize,
     "sort\0".as_ptr() as isize,
+    "-n\0".as_ptr() as isize,
     "./test_sort\0".as_ptr() as isize,
     0, */
     run_busyboxsh();
@@ -412,6 +413,22 @@ pub fn test_od() {
     run_busyboxsh();
 }
 
+pub fn test_pwd() {
+    let fd = openat(
+        -100,
+        "test_pwd\0",
+        OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE,
+        0666,
+    );
+    chdir("./test_pwd\0");
+    println!("have create './test_pwd' and chdir to it, now pwd");
+    close(fd as usize);
+    /*"busybox\0".as_ptr() as isize,
+    "pwd\0".as_ptr() as isize,
+    0, */
+    run_busyboxsh();
+}
+
 #[no_mangle]
 pub fn main() -> i32 {
     //test_cat();
@@ -437,5 +454,6 @@ pub fn main() -> i32 {
     //test_md5sum();
     //test_more();
     //test_od();
+    //test_pwd();
     0
 }

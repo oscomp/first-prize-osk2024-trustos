@@ -91,7 +91,53 @@ impl File for Stdin {
     }
 
     fn ioctl(&self, cmd: usize, arg: usize) -> isize {
-        -1
+        let cmd = IoctlCommand::from(cmd);
+        let task = current_task().unwrap();
+        let mut inner = task.inner_lock();
+        let token = inner.user_token();
+
+        match cmd {
+            IoctlCommand::TCGETS | IoctlCommand::TCGETA => {
+                let mut arg = UserBuffer::new(translated_byte_buffer(
+                    token,
+                    arg as *const u8,
+                    size_of::<Termios>(),
+                ));
+                arg.write(IOINFO.lock().termios.as_bytes());
+                return 0;
+            }
+            IoctlCommand::TCSETS | IoctlCommand::TCSETSW | IoctlCommand::TCSETSF => {
+                let arg = translated_ref(token, arg as *const Termios);
+                IOINFO.lock().termios.update(arg);
+                return 0;
+            }
+            IoctlCommand::TIOCGPGRP => {
+                *translated_refmut(token, arg as *mut u32) = IOINFO.lock().foreground_pgid;
+                return 0;
+            }
+            IoctlCommand::TIOCSPGRP => {
+                let arg = translated_ref(token, arg as *const u32);
+                IOINFO.lock().foreground_pgid = *arg;
+                return 0;
+            }
+            IoctlCommand::TIOCGWINSZ => {
+                let mut arg = UserBuffer::new(translated_byte_buffer(
+                    token,
+                    arg as *const u8,
+                    size_of::<WinSize>(),
+                ));
+                arg.write(IOINFO.lock().winsize.as_bytes());
+                return 0;
+            }
+            IoctlCommand::TIOCSWINSZ => {
+                let arg = translated_ref(token, arg as *const WinSize);
+                IOINFO.lock().winsize.update(arg);
+                return 0;
+            }
+            _ => {
+                return -1;
+            }
+        };
     }
 
     fn get_openflags(&self) -> OpenFlags {

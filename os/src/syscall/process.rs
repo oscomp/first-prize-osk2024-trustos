@@ -113,6 +113,8 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
 
     let token = task_inner.user_token();
     let path = translated_str(token, path);
+
+    debug!("[sys_execve] path is {}", path);
     //处理argv参数
     let mut argv_vec = Vec::<String>::new();
     loop {
@@ -142,19 +144,38 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
             envp = envp.add(1);
         }
     }
-    if let Some(app_inode) = open(task_inner.fs_info.cwd(), path.as_str(), OpenFlags::O_RDONLY) {
-        let app_inode = match app_inode {
-            FileClass::File(f) => f.clone(),
-            FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
-        };
-        let elf_data = unsafe { app_inode.read_as_elf() };
-        drop(task_inner);
 
-        task.exec(elf_data, &argv_vec, &mut env);
-        task.inner_lock().memory_set.activate();
-        Ok(0)
+    if path.starts_with('/') {
+        if let Some(app_inode) = open_file(path.as_str(), OpenFlags::O_RDONLY) {
+            let app_inode = match app_inode {
+                FileClass::File(f) => f.clone(),
+                FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
+            };
+            let elf_data = unsafe { app_inode.read_as_elf() };
+            drop(task_inner);
+
+            task.exec(elf_data, &argv_vec, &mut env);
+            task.inner_lock().memory_set.activate();
+            Ok(0)
+        } else {
+            Err(SysErrNo::ENOENT)
+        }
     } else {
-        Err(SysErrNo::ENOENT)
+        let now_path: String = task_inner.fs_info.get_cwd();
+        if let Some(app_inode) = open(now_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
+            let app_inode = match app_inode {
+                FileClass::File(f) => f.clone(),
+                FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
+            };
+            let elf_data = unsafe { app_inode.read_as_elf() };
+            drop(task_inner);
+
+            task.exec(elf_data, &argv_vec, &mut env);
+            task.inner_lock().memory_set.activate();
+            Ok(0)
+        } else {
+            Err(SysErrNo::ENOENT)
+        }
     }
 }
 /// 等待子进程状态发生变化,即子进程终止或被信号停止或被信号挂起
@@ -303,7 +324,7 @@ pub fn sys_sysinfo(info: *const u8) -> SyscallRet {
 
     let ourinfo = Sysinfo::new(get_time_ms() / 1000, 1 << 56, task_num());
     info.write(ourinfo.as_bytes());
-    println!("{:?}", ourinfo);
+    debug!("[sys_sysinfo] ourinfo is {:?}", ourinfo);
     Ok(0)
 }
 

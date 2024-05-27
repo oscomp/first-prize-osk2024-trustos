@@ -287,12 +287,20 @@ pub fn sys_chdir(path: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     let token = inner.user_token();
-
     let path = translated_str(token, path);
+
+    debug!("[sys_chdir] path is {}", path);
+
     if path.starts_with('/') {
-        drop(inner);
         if let Some(inode) = open_file(path.as_str(), OpenFlags::O_RDONLY) {
-            let mut inner = task.inner_lock();
+            let file = match inode {
+                FileClass::File(f) => f.clone(),
+                FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
+            };
+            if !file.is_dir() {
+                return Err(SysErrNo::ENOTDIR);
+            }
+
             inner.fs_info.set_cwd(path.clone());
             Ok(0)
         } else {
@@ -300,15 +308,31 @@ pub fn sys_chdir(path: *const u8) -> SyscallRet {
         }
     } else {
         let now_path: String = inner.fs_info.get_cwd();
-        drop(inner);
         if let Some(inode) = open(now_path.as_str(), path.as_str(), OpenFlags::O_RDONLY) {
-            let mut inner = task.inner_lock();
+            let file = match inode {
+                FileClass::File(f) => f.clone(),
+                FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
+            };
+            if !file.is_dir() {
+                return Err(SysErrNo::ENOTDIR);
+            }
+
             if now_path == "/" {
-                inner.fs_info.set_cwd(alloc::format! {"/{}",path.as_str()});
+                let path = if path.starts_with("./") {
+                    &path[2..]
+                } else {
+                    &path
+                };
+                inner.fs_info.set_cwd(alloc::format! {"/{}",path});
             } else {
+                let path = if path.starts_with("./") {
+                    &path[2..]
+                } else {
+                    &path
+                };
                 inner
                     .fs_info
-                    .set_cwd(alloc::format! {   "{}/{}",inner.fs_info.cwd(),path.as_str()});
+                    .set_cwd(alloc::format! {   "{}/{}",inner.fs_info.cwd(),path});
             }
             Ok(0)
         } else {
@@ -367,6 +391,8 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     let token = inner.user_token();
+
+    debug!("[sys_getdents64] fd is {}, len is {}", fd, len);
 
     let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, len));
 
@@ -563,7 +589,7 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
     let mut path = translated_str(token, path);
     let mut kst = UserBuffer::new(translated_byte_buffer(token, kst, size_of::<Kstat>()));
 
-    //println!("path is {}", path);
+    debug!("[sys_fstatat] dirfd is {}, path is {}", dirfd, path);
 
     let mut base_path = inner.fs_info.cwd();
     // 如果path是绝对路径，则dirfd被忽略
@@ -624,6 +650,12 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
     let mut inner = task.inner_lock();
     let token = inner.user_token();
     let mut path = translated_str(token, path);
+
+    debug!(
+        "[sys_faccessat] dirfd is {} and path is {} and mode is {}",
+        dirfd, path, mode
+    );
+
     let mode = FaccessatMode::from_bits(mode).unwrap();
 
     let mut base_path = inner.fs_info.cwd();
@@ -645,20 +677,10 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
                     //println!("This file can be searched!");
                 }
                 if mode.contains(FaccessatMode::W_OK) {
-                    if osfile.writable() {
-                        //println!("This file can be written!");
-                    } else {
-                        //println!("This file can not be written!");
-                        return Ok(usize::MAX);
-                    }
+                    //println!("This file can be written!");
                 }
                 if mode.contains(FaccessatMode::R_OK) {
-                    if osfile.readable() {
-                        //println!("This file can be read!");
-                    } else {
-                        //println!("This file can not be read!");
-                        return Ok(usize::MAX);
-                    }
+                    //println!("This file can be read!");
                 }
                 return Ok(0);
             } else {
@@ -667,7 +689,7 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
         } else {
             if mode.contains(FaccessatMode::F_OK) {
                 //println!("This file doesn't exist!");
-                return Ok(0);
+                return Ok(usize::MAX);
             }
             return Err(SysErrNo::EINVAL);
         }
@@ -681,20 +703,10 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
             //println!("This file can be searched!");
         }
         if mode.contains(FaccessatMode::W_OK) {
-            if osfile.writable() {
-                //println!("This file can be written!");
-            } else {
-                //println!("This file can not be written!");
-                return Ok(usize::MAX);
-            }
+            //println!("This file can be written!");
         }
         if mode.contains(FaccessatMode::R_OK) {
-            if osfile.readable() {
-                //println!("This file can be read!");
-            } else {
-                //println!("This file can not be read!");
-                return Ok(usize::MAX);
-            }
+            //println!("This file can be read!");
         }
         return Ok(0);
     } else {
