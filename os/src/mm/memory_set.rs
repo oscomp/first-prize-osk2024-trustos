@@ -421,7 +421,7 @@ impl MemorySetInner {
             });
         if area.is_some() {
             let area_inner = area.unwrap();
-            if scause == Trap::Exception(Exception::StorePageFault) {
+            if scause == Trap::Exception(Exception::LoadPageFault) {
                 mmap_read_page_fault(vpn.into(), &mut self.page_table, area_inner);
             } else {
                 mmap_write_page_fault(vpn.into(), &mut self.page_table, area_inner);
