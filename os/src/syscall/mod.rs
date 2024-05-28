@@ -214,7 +214,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Settidaddress => sys_settidaddress(args[0]),
         Syscall::Nanosleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
         Syscall::ClockGettime => sys_clock_gettime(args[0], args[1] as *const u8),
-        Syscall::Syslog => unimplemented!(),
+        Syscall::Syslog => sys_syslog(args[0] as isize, args[1] as *const u8, args[2] as usize),
         Syscall::SchedYield => sys_sched_yield(),
         Syscall::SigKill => sys_kill(args[0] as isize, args[0]),
         Syscall::Tkill => sys_tkill(args[0] as usize, args[1] as usize),
