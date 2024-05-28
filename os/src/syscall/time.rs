@@ -15,7 +15,7 @@ use log::{debug, info};
 pub fn sys_gettimeofday(ts: *const u8) -> SyscallRet {
     let token = current_token();
 
-    let mut ts = UserBuffer::new(translated_byte_buffer(token, ts, size_of::<Timespec>()));
+    let mut ts = UserBuffer::new(translated_byte_buffer(token, ts, size_of::<Timespec>()).unwrap());
     let timespec = get_time_spec();
     ts.write(timespec.as_bytes());
     Ok(0)
@@ -26,7 +26,7 @@ pub fn sys_times(tms: *const u8) -> SyscallRet {
     let mut inner = task.inner_lock();
     let token = inner.user_token();
 
-    let mut tms = UserBuffer::new(translated_byte_buffer(token, tms, size_of::<Tms>()));
+    let mut tms = UserBuffer::new(translated_byte_buffer(token, tms, size_of::<Tms>()).unwrap());
     let mut times = Tms::new(&inner.time_data);
     tms.write(times.as_bytes());
     Ok(0)
@@ -75,7 +75,7 @@ pub fn sys_clock_gettime(clockid: usize, tp: *const u8) -> SyscallRet {
     let token = inner.user_token();
 
     let clockid = Clockid::from_bits(clockid as u32).unwrap();
-    let mut tp = UserBuffer::new(translated_byte_buffer(token, tp, size_of::<Timespec>()));
+    let mut tp = UserBuffer::new(translated_byte_buffer(token, tp, size_of::<Timespec>()).unwrap());
 
     match clockid {
         //当前可匹配实时时钟，单调时钟，进程CPU时钟，且三者返回值相同
@@ -97,7 +97,8 @@ pub fn sys_getrusage(who: isize, usage: *const u8) -> SyscallRet {
     let mut inner = task.inner_lock();
     let token = inner.user_token();
 
-    let mut usage = UserBuffer::new(translated_byte_buffer(token, usage, size_of::<Rusage>()));
+    let mut usage =
+        UserBuffer::new(translated_byte_buffer(token, usage, size_of::<Rusage>()).unwrap());
 
     match who {
         RUSAGESELF => {

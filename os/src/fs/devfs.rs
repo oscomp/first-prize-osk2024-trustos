@@ -181,11 +181,9 @@ impl File for DevRtc {
         match cmd {
             IoctlCommand::RTC_RD_TIME => {
                 let time = RtcTime::new(2000, 1, 1, 0, 0, 0);
-                let mut arg = UserBuffer::new(translated_byte_buffer(
-                    token,
-                    arg as *const u8,
-                    size_of::<RtcTime>(),
-                ));
+                let mut arg = UserBuffer::new(
+                    translated_byte_buffer(token, arg as *const u8, size_of::<RtcTime>()).unwrap(),
+                );
                 arg.write(time.as_bytes());
             }
             _ => return -1,

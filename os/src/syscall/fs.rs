@@ -56,7 +56,9 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
         // release current task TCB manually to avoid multi-borrow
         drop(inner);
         drop(task);
-        let ret = file.write(UserBuffer::new(translated_byte_buffer(token, buf, len)));
+        let ret = file.write(UserBuffer::new(
+            translated_byte_buffer(token, buf, len).unwrap(),
+        ));
         Ok(ret)
     } else {
         Err(SysErrNo::EBADF)
@@ -84,7 +86,9 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
         // release current task TCB manually to avoid multi-borrow
         drop(inner);
         drop(task);
-        let ret = file.read(UserBuffer::new(translated_byte_buffer(token, buf, len)));
+        let ret = file.read(UserBuffer::new(
+            translated_byte_buffer(token, buf, len).unwrap(),
+        ));
         Ok(ret)
     } else {
         Err(SysErrNo::EBADF)
@@ -116,11 +120,10 @@ pub fn sys_writev(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
             // current iovec pointer
             let current = unsafe { iov.add(iovec_size * i) };
             let iovinfo = *translated_refmut(token, current as *mut Iovec);
-            let buf = UserBuffer::new(translated_byte_buffer(
-                token,
-                iovinfo.iov_base as *mut u8,
-                iovinfo.iov_len,
-            ));
+            let buf = UserBuffer::new(
+                translated_byte_buffer(token, iovinfo.iov_base as *mut u8, iovinfo.iov_len)
+                    .unwrap(),
+            );
             //file.set_offset(ret);
             let write_ret = file.write(buf);
             ret += write_ret as usize;
@@ -157,11 +160,10 @@ pub fn sys_readv(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
             // current iovec pointer
             let current = unsafe { iov.add(iovec_size * i) };
             let iovinfo = *translated_refmut(token, current as *mut Iovec);
-            let buf = UserBuffer::new(translated_byte_buffer(
-                token,
-                iovinfo.iov_base as *mut u8,
-                iovinfo.iov_len,
-            ));
+            let buf = UserBuffer::new(
+                translated_byte_buffer(token, iovinfo.iov_base as *mut u8, iovinfo.iov_len)
+                    .unwrap(),
+            );
             //file.set_offset(ret);
             let write_ret = file.read(buf);
             ret += write_ret as usize;
@@ -241,7 +243,7 @@ pub fn sys_getcwd(buf: *const u8, size: usize) -> SyscallRet {
     let mut inner = task.inner_lock();
     let token = inner.user_token();
 
-    let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, size));
+    let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, size).unwrap());
     buffer.write(inner.fs_info.as_bytes());
     Ok(buf as usize)
 }
@@ -394,7 +396,7 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
 
     debug!("[sys_getdents64] fd is {}, len is {}", fd, len);
 
-    let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, len));
+    let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, len).unwrap());
 
     if fd >= inner.fd_table.len() || inner.fd_table.get(fd).is_none() {
         return Err(SysErrNo::EINVAL);
@@ -544,7 +546,7 @@ pub fn sys_fstat(fd: usize, kst: *const u8) -> SyscallRet {
     let mut inner = task.inner_lock();
     let token = inner.user_token();
 
-    let mut kst = UserBuffer::new(translated_byte_buffer(token, kst, size_of::<Kstat>()));
+    let mut kst = UserBuffer::new(translated_byte_buffer(token, kst, size_of::<Kstat>()).unwrap());
 
     if fd >= inner.fd_table.len() || inner.fd_table.get(fd).is_none() {
         return Err(SysErrNo::EINVAL);
@@ -587,7 +589,7 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
     let mut inner = task.inner_lock();
     let token = inner.user_token();
     let mut path = translated_str(token, path);
-    let mut kst = UserBuffer::new(translated_byte_buffer(token, kst, size_of::<Kstat>()));
+    let mut kst = UserBuffer::new(translated_byte_buffer(token, kst, size_of::<Kstat>()).unwrap());
 
     debug!("[sys_fstatat] dirfd is {}, path is {}", dirfd, path);
 
@@ -638,7 +640,8 @@ pub fn sys_statfs(_path: *const u8, statfs: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     let token = inner.user_token();
-    let mut statfs = UserBuffer::new(translated_byte_buffer(token, statfs, size_of::<Statfs>()));
+    let mut statfs =
+        UserBuffer::new(translated_byte_buffer(token, statfs, size_of::<Statfs>()).unwrap());
 
     let ourstatfs = Statfs::new();
     statfs.write(ourstatfs.as_bytes());
@@ -1042,7 +1045,9 @@ pub fn sys_pwrite64(fd: usize, buf: *const u8, count: usize, offset: isize) -> S
         drop(task);
         let cur_offset = file.offset();
         file.set_offset(offset as usize);
-        let ret = file.write(UserBuffer::new(translated_byte_buffer(token, buf, count)));
+        let ret = file.write(UserBuffer::new(
+            translated_byte_buffer(token, buf, count).unwrap(),
+        ));
         file.set_offset(cur_offset);
         Ok(ret)
     } else {
@@ -1071,7 +1076,9 @@ pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: isize) -> Sy
         drop(task);
         let cur_offset = file.offset();
         file.set_offset(offset as usize);
-        let ret = file.read(UserBuffer::new(translated_byte_buffer(token, buf, count)));
+        let ret = file.read(UserBuffer::new(
+            translated_byte_buffer(token, buf, count).unwrap(),
+        ));
         file.set_offset(cur_offset);
         Ok(ret)
     } else {
@@ -1238,7 +1245,9 @@ pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsiz: usi
                 // release current task TCB manually to avoid multi-borrow
                 drop(inner);
                 drop(task);
-                let ret = osfile.read(UserBuffer::new(translated_byte_buffer(token, buf, bufsiz)));
+                let ret = osfile.read(UserBuffer::new(
+                    translated_byte_buffer(token, buf, bufsiz).unwrap(),
+                ));
                 return Ok(ret);
             } else {
                 return Err(SysErrNo::ENOENT);
@@ -1261,7 +1270,9 @@ pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsiz: usi
         // release current task TCB manually to avoid multi-borrow
         drop(inner);
         drop(task);
-        let ret = osfile.read(UserBuffer::new(translated_byte_buffer(token, buf, bufsiz)));
+        let ret = osfile.read(UserBuffer::new(
+            translated_byte_buffer(token, buf, bufsiz).unwrap(),
+        ));
         return Ok(ret);
     } else {
         Err(SysErrNo::ENOENT)
@@ -1537,9 +1548,9 @@ pub fn sys_getrandom(buf_ptr: *const u8, buflen: usize, _flags: u32) -> SyscallR
     }
 
     if let Some(random_device) = open_device_file("/dev/random") {
-        let ret = random_device.read(UserBuffer::new(translated_byte_buffer(
-            token, buf_ptr, buflen,
-        )));
+        let ret = random_device.read(UserBuffer::new(
+            translated_byte_buffer(token, buf_ptr, buflen).unwrap(),
+        ));
         Ok(ret)
     } else {
         Err(SysErrNo::ENOENT)

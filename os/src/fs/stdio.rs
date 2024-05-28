@@ -98,11 +98,9 @@ impl File for Stdin {
 
         match cmd {
             IoctlCommand::TCGETS | IoctlCommand::TCGETA => {
-                let mut arg = UserBuffer::new(translated_byte_buffer(
-                    token,
-                    arg as *const u8,
-                    size_of::<Termios>(),
-                ));
+                let mut arg = UserBuffer::new(
+                    translated_byte_buffer(token, arg as *const u8, size_of::<Termios>()).unwrap(),
+                );
                 arg.write(IOINFO.lock().termios.as_bytes());
                 return 0;
             }
@@ -121,11 +119,9 @@ impl File for Stdin {
                 return 0;
             }
             IoctlCommand::TIOCGWINSZ => {
-                let mut arg = UserBuffer::new(translated_byte_buffer(
-                    token,
-                    arg as *const u8,
-                    size_of::<WinSize>(),
-                ));
+                let mut arg = UserBuffer::new(
+                    translated_byte_buffer(token, arg as *const u8, size_of::<WinSize>()).unwrap(),
+                );
                 arg.write(IOINFO.lock().winsize.as_bytes());
                 return 0;
             }
@@ -169,11 +165,9 @@ impl File for Stdout {
 
         match cmd {
             IoctlCommand::TCGETS | IoctlCommand::TCGETA => {
-                let mut arg = UserBuffer::new(translated_byte_buffer(
-                    token,
-                    arg as *const u8,
-                    size_of::<Termios>(),
-                ));
+                let mut arg = UserBuffer::new(
+                    translated_byte_buffer(token, arg as *const u8, size_of::<Termios>()).unwrap(),
+                );
                 arg.write(IOINFO.lock().termios.as_bytes());
                 return 0;
             }
@@ -192,11 +186,9 @@ impl File for Stdout {
                 return 0;
             }
             IoctlCommand::TIOCGWINSZ => {
-                let mut arg = UserBuffer::new(translated_byte_buffer(
-                    token,
-                    arg as *const u8,
-                    size_of::<WinSize>(),
-                ));
+                let mut arg = UserBuffer::new(
+                    translated_byte_buffer(token, arg as *const u8, size_of::<WinSize>()).unwrap(),
+                );
                 arg.write(IOINFO.lock().winsize.as_bytes());
                 return 0;
             }

@@ -232,7 +232,11 @@ impl PageTable {
     }
 }
 /// Translate a pointer to a mutable u8 Vec through page table
-pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&'static mut [u8]> {
+pub fn translated_byte_buffer(
+    token: usize,
+    ptr: *const u8,
+    len: usize,
+) -> Option<Vec<&'static mut [u8]>> {
     let page_table = PageTable::from_token(token);
     let mut start = ptr as usize;
     let end = start + len;
@@ -242,10 +246,14 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
         let mut vpn = start_va.floor();
         match page_table.translate(vpn) {
             None => {
-                panic!("[kernel] mm: 0x{:x} not mapped", start);
+                //panic!("[kernel] mm: 0x{:x} not mapped", start);
+                return None;
             }
             Some(ref pte) => {
-                assert!(pte.is_valid(), "vpn {} to ppn {}", vpn.0, pte.ppn().0);
+                //assert!(pte.is_valid(), "vpn {} to ppn {}", vpn.0, pte.ppn().0);
+                if !pte.is_valid() {
+                    return None;
+                }
             }
         }
         let ppn = page_table.translate(vpn).unwrap().ppn();
@@ -259,7 +267,7 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
         }
         start = end_va.into();
     }
-    v
+    Some(v)
 }
 
 /// Translate a pointer to a mutable u8 Vec end with `\0` through page table to a `String`

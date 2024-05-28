@@ -391,7 +391,8 @@ impl MemorySetInner {
                         self.page_table.token(),
                         addr as *const u8,
                         mapped_len,
-                    ),
+                    )
+                    .unwrap(),
                 });
             }
             // 取消映射
@@ -909,7 +910,8 @@ impl MemorySetInner {
                             self.page_table.token(),
                             addr.0 as *const u8,
                             mapped_len,
-                        ),
+                        )
+                        .unwrap(),
                     });
                 }
             }
