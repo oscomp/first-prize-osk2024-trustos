@@ -6,12 +6,13 @@ use crate::{
 };
 
 use super::{
-    frame_alloc, FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum,
-    KERNEL_SPACE,
+    frame_alloc, FrameTracker, MemorySetInner, PhysAddr, PhysPageNum, StepByOne, VirtAddr,
+    VirtPageNum, KERNEL_SPACE,
 };
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use bitflags::*;
 use log::info;
+use riscv::register::scause::{Exception, Trap};
 
 use core::arch::asm;
 pub fn flush_tlb() {
@@ -257,6 +258,52 @@ pub fn translated_byte_buffer(
             }
         }
         let ppn = page_table.translate(vpn).unwrap().ppn();
+        vpn.step();
+        let mut end_va: VirtAddr = vpn.into();
+        end_va = end_va.min(VirtAddr::from(end));
+        if end_va.page_offset() == 0 {
+            v.push(&mut ppn.bytes_array_mut()[start_va.page_offset()..]);
+        } else {
+            v.push(&mut ppn.bytes_array_mut()[start_va.page_offset()..end_va.page_offset()]);
+        }
+        start = end_va.into();
+    }
+    Some(v)
+}
+/// Safely Translate a pointer to a mutable u8 Vec through page table
+pub fn safe_translated_byte_buffer(
+    memory_set: &mut MemorySetInner,
+    ptr: *const u8,
+    len: usize,
+) -> Option<Vec<&'static mut [u8]>> {
+    //let page_table = PageTable::from_token(token);
+    let mut start = ptr as usize;
+    let end = start + len;
+    let mut v = Vec::new();
+    while start < end {
+        let start_va = VirtAddr::from(start);
+        let mut vpn = start_va.floor();
+        match memory_set.page_table.translate(vpn) {
+            None => {
+                memory_set.lazy_page_fault(vpn, Trap::Exception(Exception::LoadPageFault));
+            }
+            Some(ref pte) => {
+                if !pte.is_valid() {
+                    memory_set.lazy_page_fault(vpn, Trap::Exception(Exception::LoadPageFault));
+                }
+            }
+        }
+        let ppn = match memory_set.page_table.translate(vpn) {
+            None => {
+                return None;
+            }
+            Some(ref pte) => {
+                if !pte.is_valid() {
+                    return None;
+                }
+                pte.ppn()
+            }
+        };
         vpn.step();
         let mut end_va: VirtAddr = vpn.into();
         end_va = end_va.min(VirtAddr::from(end));
