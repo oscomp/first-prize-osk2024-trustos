@@ -6,8 +6,8 @@ use crate::{
 };
 
 use super::{
-    frame_alloc, FrameTracker, MemorySetInner, PhysAddr, PhysPageNum, StepByOne, VirtAddr,
-    VirtPageNum, KERNEL_SPACE,
+    frame_alloc, FrameTracker, MemorySet, MemorySetInner, PhysAddr, PhysPageNum, StepByOne,
+    VirtAddr, VirtPageNum, KERNEL_SPACE,
 };
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use bitflags::*;
@@ -272,18 +272,18 @@ pub fn translated_byte_buffer(
 }
 /// Safely Translate a pointer to a mutable u8 Vec through page table
 pub fn safe_translated_byte_buffer(
-    memory_set: &mut MemorySetInner,
+    memory_set: &mut MemorySet,
     ptr: *const u8,
     len: usize,
 ) -> Option<Vec<&'static mut [u8]>> {
-    //let page_table = PageTable::from_token(token);
+    let page_table = PageTable::from_token(memory_set.token());
     let mut start = ptr as usize;
     let end = start + len;
     let mut v = Vec::new();
     while start < end {
         let start_va = VirtAddr::from(start);
         let mut vpn = start_va.floor();
-        match memory_set.page_table.translate(vpn) {
+        match page_table.translate(vpn) {
             None => {
                 memory_set.lazy_page_fault(vpn, Trap::Exception(Exception::LoadPageFault));
             }
@@ -293,7 +293,7 @@ pub fn safe_translated_byte_buffer(
                 }
             }
         }
-        let ppn = match memory_set.page_table.translate(vpn) {
+        let ppn = match page_table.translate(vpn) {
             None => {
                 return None;
             }
