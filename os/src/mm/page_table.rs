@@ -272,7 +272,7 @@ pub fn translated_byte_buffer(
 }
 /// Safely Translate a pointer to a mutable u8 Vec through page table
 pub fn safe_translated_byte_buffer(
-    memory_set: &mut MemorySet,
+    memory_set: Arc<MemorySet>,
     ptr: *const u8,
     len: usize,
 ) -> Option<Vec<&'static mut [u8]>> {
