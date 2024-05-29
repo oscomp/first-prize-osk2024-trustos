@@ -2,8 +2,8 @@ use crate::{
     fs::{open, open_file, FileClass, Mode, OpenFlags},
     logger::{change_log_level, clear_log_buf, console_log_off, console_log_on, unread_size},
     mm::{
-        translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer,
-        VirtAddr,
+        safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
+        translated_str, UserBuffer, VirtAddr,
     },
     syscall::CloneFlags,
     task::{
@@ -350,21 +350,27 @@ pub fn sys_syslog(logtype: isize, bufp: *const u8, len: usize) -> SyscallRet {
 
     match logtype {
         SyslogType::SYSLOG_ACTION_READ => {
-            let mut bufp = UserBuffer::new(translated_byte_buffer(token, bufp, len).unwrap());
+            let mut bufp = UserBuffer::new(
+                safe_translated_byte_buffer(inner.memory_set.clone(), bufp, len).unwrap(),
+            );
             let mut logbuf: [u8; LOG_BUF_LEN] = [0; LOG_BUF_LEN];
             let logsize = read_log_buf(logbuf.as_mut_slice(), len);
             bufp.write(&logbuf[0..logsize]);
             Ok(logsize)
         }
         SyslogType::SYSLOG_ACTION_READ_ALL => {
-            let mut bufp = UserBuffer::new(translated_byte_buffer(token, bufp, len).unwrap());
+            let mut bufp = UserBuffer::new(
+                safe_translated_byte_buffer(inner.memory_set.clone(), bufp, len).unwrap(),
+            );
             let mut logbuf: [u8; LOG_BUF_LEN] = [0; LOG_BUF_LEN];
             let logsize = read_all_log_buf(logbuf.as_mut_slice(), len);
             bufp.write(&logbuf[0..logsize]);
             Ok(logsize)
         }
         SyslogType::SYSLOG_ACTION_READ_CLEAR => {
-            let mut bufp = UserBuffer::new(translated_byte_buffer(token, bufp, len).unwrap());
+            let mut bufp = UserBuffer::new(
+                safe_translated_byte_buffer(inner.memory_set.clone(), bufp, len).unwrap(),
+            );
             let mut logbuf: [u8; LOG_BUF_LEN] = [0; LOG_BUF_LEN];
             let logsize = read_clear_log_buf(logbuf.as_mut_slice(), len);
             bufp.write(&logbuf[0..logsize]);

@@ -26,7 +26,7 @@ num_enum = { version = "0.7.2", default-features = false }
 
 [features]
 board_qemu = []
-default = ["debug", "fat32_fs"]
+default = ["info", "fat32_fs"]
 error = []
 warn = []
 info = []
