@@ -63,6 +63,7 @@ use core::{
     usize,
 };
 use log::info;
+use riscv::register::sstatus::{self, FS};
 use task::PROCESSORS;
 
 use crate::{mm::activate_kernel_space, utils::hart_id};
@@ -126,6 +127,11 @@ pub fn rust_main(hartid: usize) -> ! {
         trap::init();
         task::init();
         fs::flush_preload();
+        //开启rustsbi的浮点指令
+        unsafe {
+            sstatus::set_fs(FS::Clean);
+        }
+
         task::add_initproc();
         INIT_FINISHED.store(true, Ordering::SeqCst);
         START_HART_ID.store(hartid, Ordering::SeqCst);
