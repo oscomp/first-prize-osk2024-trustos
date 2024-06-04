@@ -5,7 +5,10 @@ use crate::{
         is_abs_path, make_pipe, open, open_device_file, open_file, path2abs, path2vec,
         remove_vfile_idx, Dirent, File, FileClass, Kstat, Mode, OpenFlags, Statfs, MNT_TABLE,
     },
-    mm::{translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer},
+    mm::{
+        safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
+        translated_str, UserBuffer,
+    },
     syscall::{FaccessatMode, Renameat2Flags},
     task::{current_task, current_token},
     timer::{get_time_ms, Timespec},
@@ -394,9 +397,13 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let mut inner = task.inner_lock();
     let token = inner.user_token();
 
-    debug!("[sys_getdents64] fd is {}, len is {}", fd, len);
+    debug!(
+        "[sys_getdents64] fd is {},buf is {:x}, len is {}",
+        fd, buf as usize, len
+    );
 
-    let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, len).unwrap());
+    let mut buffer =
+        UserBuffer::new(safe_translated_byte_buffer(inner.memory_set.clone(), buf, len).unwrap());
 
     if fd >= inner.fd_table.len() || inner.fd_table.get(fd).is_none() {
         return Err(SysErrNo::EINVAL);
@@ -426,9 +433,9 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
             if readsize < 0 {
                 return Ok(all_len);
             }
-            //println!("{:?}", dirent);
+            //debug!("[sys_getdents64] dirent got: {:?}", dirent);
             buffer.write_at(all_len, dirent.as_bytes());
-            all_len += dirent_size;
+            all_len += dirent.len() as usize;
         }
     } else {
         Err(SysErrNo::EINVAL)
@@ -628,8 +635,8 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
         let mut kstat = Kstat::new();
         let file = osfile.clone();
         file.fstat(&mut kstat);
+        //debug!("[sys_fstatat] stat got {:?}", kstat);
         kst.write(kstat.as_bytes());
-        //println!("{:?}", kstat);
         return Ok(0);
     } else {
         Err(SysErrNo::ENOENT)

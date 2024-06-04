@@ -647,7 +647,7 @@ impl VFile {
 
     // 获取目录中offset处目录项的信息
     // 返回(size, accessed_time, modification_time, creation_time, first_cluster)
-    pub fn stat(&self) -> (u32, i64, i64, i64, i64, u64, u32) {
+    pub fn stat(&self) -> (u32, u64, i64, i64, i64, u64, u32) {
         self.read_short_dirent(|short_ent| {
             let (_, _, _, _, _, _, ctime) = short_ent.get_creation_time();
             let atime = self.accessed_time();
@@ -669,7 +669,7 @@ impl VFile {
             }
             (
                 first_cluster,
-                size as i64,
+                size as u64,
                 atime as i64,
                 mtime as i64,
                 ctime as i64,
