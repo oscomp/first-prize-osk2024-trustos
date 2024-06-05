@@ -1,6 +1,7 @@
 .*
 !.gitignore
 *.a
+Config.in
 applets/Kbuild
 applets/applet_tables
 applets/usage
