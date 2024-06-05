@@ -27,12 +27,6 @@ ssize_t write(int fd, const void *buf, size_t len)
 {
     return syscall(SYS_write, fd, buf, len);
 }
-int readv(int fd,void*iov,int len){
-    return syscall(SYS_readv,fd,iov,len);
-}
-int writev(int fd,void*iov,int len){
-    return syscall(SYS_writev,fd,iov,len);
-}
 
 pid_t getpid(void)
 {

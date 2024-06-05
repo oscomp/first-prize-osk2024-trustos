@@ -10,8 +10,6 @@ int openat(int, const char*, int);
 
 ssize_t read(int, void *, size_t);
 ssize_t write(int, const void *, size_t);
-int readv(int,void*,int);
-int writev(int ,void*,int);
 
 int close(int);
 pid_t getpid(void);
