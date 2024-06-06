@@ -28,7 +28,9 @@ use log::{debug, info, warn};
 use riscv::register::{
     mtvec::TrapMode,
     scause::{self, Exception, Interrupt, Trap},
-    sie, stval, stvec,
+    sie,
+    sstatus::{self, FS},
+    stval, stvec,
 };
 
 global_asm!(include_str!("trap.S"));
@@ -39,6 +41,10 @@ extern "C" {
 /// initialize CSR `stvec` as the entry of `__alltraps`
 pub fn init() {
     set_kernel_trap_entry();
+    //开启rustsbi的浮点指令
+    unsafe {
+        sstatus::set_fs(FS::Clean);
+    }
 }
 
 fn set_kernel_trap_entry() {

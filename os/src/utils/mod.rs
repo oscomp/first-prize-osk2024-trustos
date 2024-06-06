@@ -13,13 +13,16 @@ pub fn backtrace() {
     unsafe {
         let mut fp: usize;
         asm!("mv {}, fp", out(reg) fp);
-        let start: VirtAddr = VirtAddr::from(fp).floor().into();
-        let end: VirtAddr = VirtAddr::from(fp).ceil().into();
-        let fp_addr = VirtAddr::from(fp);
-        if (start <= fp_addr && fp_addr < end) {
+        let mut start: VirtAddr = VirtAddr::from(fp).floor().into();
+        let mut end: VirtAddr = VirtAddr::from(fp).ceil().into();
+        let mut fp_addr = VirtAddr::from(fp);
+        while (start <= fp_addr && fp_addr < end) {
             let ptr = fp as *const usize;
             warn!("[stack_backtrace] {:#x},", ptr.offset(-8).read());
             fp = ptr.offset(-16).read();
+            start = VirtAddr::from(fp).floor().into();
+            end = VirtAddr::from(fp).ceil().into();
+            fp_addr = VirtAddr::from(fp);
         }
     }
 }

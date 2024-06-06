@@ -26,14 +26,12 @@ num_enum = { version = "0.7.2", default-features = false }
 
 [features]
 board_qemu = []
-default = ["debug", "fat32_fs"]
+default = ["info"]
 error = []
 warn = []
 info = []
 debug = []
 trace = []
-simple_fs = []
-fat32_fs = []
 
 [profile.release]
 debug = true

@@ -1,8 +1,6 @@
 //! Uniprocessor interior mutability primitives
 use core::cell::{Ref, RefCell, RefMut};
 
-use crate::utils::backtrace;
-
 /// Wrap a static data structure inside it so that we are
 /// able to access it without any `unsafe`.
 ///
@@ -62,9 +60,4 @@ impl<T> SyncUnsafeCell<T> {
     pub fn get_unchecked_ref(&self) -> &T {
         unsafe { &*self.0.get() }
     }
-
-    // #[inline]
-    // pub fn lock(&self) -> &mut T {
-    //     unsafe { &mut *self.0.get() }
-    // }
 }

@@ -142,7 +142,7 @@ pub fn add_initproc() {
 ///Init PROCESSORS
 pub fn init() {
     unsafe {
-        for (id, p) in PROCESSORS.iter_mut().enumerate() {
+        for p in PROCESSORS.iter_mut() {
             p.idle_task_cx = Some(Box::new(TaskContext::zero_init()));
         }
     }

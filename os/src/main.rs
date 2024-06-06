@@ -53,6 +53,7 @@ pub mod timer;
 pub mod trap;
 pub mod utils;
 
+use crate::{mm::activate_kernel_space, utils::hart_id};
 use config::{
     mm::{HART_START_ADDR, KERNEL_ADDR_OFFSET},
     sync::HART_NUM,
@@ -63,10 +64,6 @@ use core::{
     usize,
 };
 use log::info;
-use riscv::register::sstatus::{self, FS};
-use task::PROCESSORS;
-
-use crate::{mm::activate_kernel_space, utils::hart_id};
 
 global_asm!(include_str!("entry.asm"));
 /// clear BSS segment
@@ -127,11 +124,6 @@ pub fn rust_main(hartid: usize) -> ! {
         trap::init();
         task::init();
         fs::flush_preload();
-        //开启rustsbi的浮点指令
-        unsafe {
-            sstatus::set_fs(FS::Clean);
-        }
-
         task::add_initproc();
         INIT_FINISHED.store(true, Ordering::SeqCst);
         START_HART_ID.store(hartid, Ordering::SeqCst);

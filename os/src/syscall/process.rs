@@ -83,13 +83,6 @@ pub fn sys_clone(
     let flags = CloneFlags::from_bits(flags as u32).unwrap();
     debug!("[sys_clone] flags {:?}", flags);
 
-    // let stack = match stack_ptr {
-    //     0 => None,
-    //     stack => {
-    //         debug!("[sys_clone] assign the user stack {:#x}", stack);
-    //         Some(stack as usize)
-    //     }
-    // };
     let task = current_task().unwrap();
     let new_task = task.clone_process(
         flags,
@@ -98,13 +91,8 @@ pub fn sys_clone(
         tls_ptr,
         chilren_tid_ptr as *mut u32,
     );
-    let task_inner = task.inner_lock();
     let new_tid = new_task.tid();
-    // modify trap context of new_task, because it returns immediately after switching
-    let trap_cx = new_task.inner_lock().trap_cx();
     // we do not have to move to next instruction since we have done it before
-    // for child process, fork returns 0
-    trap_cx.x[10] = 0;
     // add new task to scheduler
     add_task(new_task);
     Ok(new_tid)
@@ -265,13 +253,8 @@ pub fn sys_nanosleep(req: *const u8, _rem: *const u8) -> SyscallRet {
     let begin = get_time_ms();
     let waittime = req.tv_sec * 1000 + req.tv_nsec / 1000000;
 
-    loop {
-        let now = get_time_ms();
-        if now - begin >= waittime {
-            break;
-        } else {
-            suspend_current_and_run_next();
-        }
+    while get_time_ms() - begin < waittime {
+        suspend_current_and_run_next();
     }
     Ok(0)
 }

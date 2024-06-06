@@ -450,6 +450,9 @@ impl TaskControlBlock {
         } else {
             // fork
             child_inner.clone_user_res(&parent_inner);
+            // for child process, fork returns 0
+            let mut trap_cx = child_inner.trap_cx();
+            trap_cx.x[10] = 0;
         }
         let trap_cx = child_inner.trap_cx();
         trap_cx.kernel_sp = kernel_stack_top;

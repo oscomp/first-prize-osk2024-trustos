@@ -93,7 +93,7 @@ impl OSInode {
         let (st_ino, st_size, st_atime, st_mtime, st_ctime, st_blocks, st_mode) = self.inode.stat();
         kstat.init(
             st_ino as u64,
-            st_size,
+            st_size as u64,
             st_atime,
             st_mtime,
             st_ctime,
