@@ -63,6 +63,8 @@ pub enum Syscall {
     Sigtimedwait = 137,
     SigReturn = 139,
     Times = 153,
+    Setpgid = 154,
+    Getpgid = 155,
     Uname = 160,
     Getrusage = 165,
     Umask = 166,
@@ -113,6 +115,7 @@ use crate::{
     utils::SyscallRet,
 };
 use log::{debug, info};
+
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
     // debug!("syscall:{}", syscall_id);
@@ -236,6 +239,8 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         ),
         Syscall::SigReturn => sys_rt_sigreturn(),
         Syscall::Times => sys_times(args[0] as *const u8),
+        Syscall::Setpgid => Ok(0),
+        Syscall::Getpgid => Ok(0),
         Syscall::Getrusage => sys_getrusage(args[0] as isize, args[1] as *const u8),
         Syscall::Gettimeofday => sys_gettimeofday(args[0] as *const u8),
         Syscall::Umask => sys_umask(args[0] as u32),
