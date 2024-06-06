@@ -3,7 +3,8 @@ use crate::{
     console::print,
     fs::{
         is_abs_path, make_pipe, open, open_device_file, open_file, path2abs, path2vec,
-        remove_vfile_idx, Dirent, File, FileClass, Kstat, Mode, OpenFlags, Statfs, MNT_TABLE,
+        remove_vfile_idx, sync_all, Dirent, File, FileClass, Kstat, Mode, OpenFlags, Statfs,
+        MNT_TABLE,
     },
     mm::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
@@ -21,7 +22,6 @@ use alloc::{
     vec::Vec,
 };
 use core::mem::size_of;
-use fat32_fs::sync_all;
 use log::{debug, info};
 
 pub const AT_FDCWD: isize = -100;

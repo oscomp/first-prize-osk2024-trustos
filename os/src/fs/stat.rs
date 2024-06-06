@@ -1,5 +1,4 @@
 use super::ROOT_INODE;
-use fat32_fs::FAT32Manager;
 
 const S_IFDIR: u32 = 0x4000;
 const S_IFREG: u32 = 0x8000;

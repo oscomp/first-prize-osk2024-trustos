@@ -1,7 +1,8 @@
-use super::{find_vfile_idx, insert_vfile_idx, remove_vfile_idx, Dirent, File, FileClass, Kstat};
+use super::{find_vfile_idx, insert_vfile_idx, remove_vfile_idx};
+
 use crate::{
     drivers::BLOCK_DEVICE,
-    fs::{find_device, open_device_file, register_device},
+    fs::{find_device, open_device_file, register_device, Dirent, File, FileClass, Kstat},
     mm::UserBuffer,
 };
 use _core::str::FromStr;

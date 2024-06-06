@@ -1,19 +1,33 @@
 mod devfs;
 mod dirent;
-mod fsidx;
-mod inode;
+mod ext4;
+mod fat32;
 mod mount;
 mod pipe;
 mod stat;
 mod stdio;
-
-use core::cell::RefMut;
+cfg_if::cfg_if! {
+    if #[cfg(feature="fat32")]{
+        pub use fat32::{
+            create_init_files, is_abs_path, list_apps, open, open_file, path2vec, Mode, OSInode, OpenFlags,
+            ROOT_INODE,remove_vfile_idx
+        };
+        pub use fat32_fs::{sync_all,BlockDevice};
+    }
+}
 
 use crate::{mm::UserBuffer, sync::SyncUnsafeCell, utils::SyscallRet};
 use alloc::string::String;
+use alloc::{sync::Arc, vec, vec::Vec};
+use core::cell::RefMut;
 pub use devfs::*;
-use fat32_fs::FSInfoInner;
-pub use fsidx::*;
+pub use dirent::Dirent;
+
+pub use mount::MNT_TABLE;
+pub use pipe::{make_pipe, Pipe};
+use spin::{Mutex, MutexGuard};
+pub use stat::{Kstat, Statfs};
+pub use stdio::{Stdin, Stdout};
 
 pub type RFile = dyn File + Send + Sync;
 pub type FdTableInner = Vec<Option<FileClass>>;
@@ -135,17 +149,6 @@ pub trait File: Send + Sync {
     fn get_openflags(&self) -> OpenFlags;
 }
 
-use alloc::{sync::Arc, vec, vec::Vec};
-pub use dirent::Dirent;
-pub use inode::{
-    create_init_files, is_abs_path, list_apps, open, open_file, path2vec, Mode, OSInode, OpenFlags,
-    ROOT_INODE,
-};
-pub use mount::MNT_TABLE;
-pub use pipe::{make_pipe, Pipe};
-use spin::{Mutex, MutexGuard};
-pub use stat::{Kstat, Statfs};
-pub use stdio::{Stdin, Stdout};
 core::arch::global_asm!(include_str!("preload.S"));
 
 // os\src\fs\mod.rs

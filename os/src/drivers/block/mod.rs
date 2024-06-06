@@ -3,8 +3,8 @@ mod virtio_blk;
 pub use virtio_blk::VirtIOBlock;
 
 use crate::board::BlockDeviceImpl;
+use crate::fs::BlockDevice;
 use alloc::sync::Arc;
-use fat32_fs::BlockDevice;
 use lazy_static::*;
 lazy_static! {
     /// 实现 Trait BlockDevice时对内部操作加锁
