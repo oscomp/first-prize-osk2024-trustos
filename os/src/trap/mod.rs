@@ -28,7 +28,7 @@ use log::{debug, info, warn};
 use riscv::register::{
     mtvec::TrapMode,
     scause::{self, Exception, Interrupt, Trap},
-    sie,
+    sepc, sie,
     sstatus::{self, FS},
     stval, stvec,
 };
@@ -158,6 +158,16 @@ pub fn trap_handler() {
             debug!("Timer Interupt!");
             set_next_trigger();
             suspend_current_and_run_next();
+        }
+        Trap::Exception(Exception::Breakpoint) => {
+            warn!(
+                "[kernel] Breakpoint from application, sepc = {:#x}",
+                sepc::read(),
+            );
+            // jump to next instruction anyway
+            let mut cx = current_trap_cx();
+            cx.sepc += 2;
+            // process::yield_now().await
         }
         _ => {
             panic!(

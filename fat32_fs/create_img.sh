@@ -22,5 +22,7 @@ sudo cp ../user/target/riscv64gc-unknown-none-elf/release/usertests ../${DIR}/fs
 sudo cp -r ../testsuits-for-oskernel/riscv-syscalls-testing/user/build/riscv64/* ../${DIR}/fs/ 
 sudo cp ../busybox ../${DIR}/fs/busybox
 
+sudo cp ../test_scripts/* ../${DIR}/fs
+
 sudo umount ../${DIR}/fs 
 sudo rmdir ../${DIR}/fs
