@@ -410,6 +410,10 @@ impl MemorySetInner {
         }
     }
     pub fn lazy_page_fault(&mut self, vpn: VirtPageNum, scause: Trap) -> bool {
+        let pte = self.page_table.translate(vpn);
+        if pte.is_some() && pte.unwrap().is_valid() {
+            return false;
+        }
         //mmap
         let area = self
             .areas
