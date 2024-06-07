@@ -33,7 +33,7 @@ pub struct Ext4Superblock {
     last_check_time: u32,          // 最后检查时间
     check_interval: u32,           // 检查间隔
     pub creator_os: u32,           // 创建者操作系统
-    pub rev_level: u32,                // 版本号
+    pub rev_level: u32,            // 版本号
     def_resuid: u16,               // 保留块的默认uid
     def_resgid: u16,               // 保留块的默认gid
 
@@ -183,7 +183,7 @@ impl Ext4Superblock {
             1
         } else {
             cnt
-        } 
+        }
 
         // cnt
     }
@@ -243,11 +243,7 @@ impl Ext4Superblock {
         let data = unsafe {
             core::slice::from_raw_parts(self as *const _ as *const u8, size_of::<Ext4Superblock>())
         };
-        let checksum = ext4_crc32c(
-            EXT4_CRC32_INIT,
-            &data,
-            0x3fc,
-        );
+        let checksum = ext4_crc32c(EXT4_CRC32_INIT, &data, 0x3fc);
 
         self.checksum = checksum;
         let data = unsafe {

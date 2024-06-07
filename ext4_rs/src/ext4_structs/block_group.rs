@@ -2,8 +2,8 @@ use super::*;
 use crate::consts::*;
 use crate::prelude::*;
 use crate::utils::*;
-use crate::BLOCK_SIZE;
 use crate::BlockDevice;
+use crate::BLOCK_SIZE;
 use core::mem::size_of;
 
 /// Represents the structure of an Ext4 block group descriptor.
@@ -45,7 +45,6 @@ impl TryFrom<&[u8]> for Ext4BlockGroup {
 }
 
 impl Ext4BlockGroup {
-
     /// Get the block number of the block bitmap for this block group.
     pub fn get_block_bitmap_block(&self, s: &Ext4Superblock) -> u64 {
         let mut v = self.block_bitmap_lo as u64;
@@ -85,7 +84,7 @@ impl Ext4BlockGroup {
     }
 
     /// Set the count of used directories in this block group.
-    pub fn set_used_dirs_count(&mut self, s: &Ext4Superblock, cnt: u32){
+    pub fn set_used_dirs_count(&mut self, s: &Ext4Superblock, cnt: u32) {
         self.itable_unused_lo = ((cnt << 16) >> 16) as u16;
         if s.desc_size() > EXT4_MIN_BLOCK_GROUP_DESCRIPTOR_SIZE {
             self.itable_unused_hi = (cnt >> 16) as u16;
@@ -235,19 +234,19 @@ impl Ext4BlockGroup {
         }
         v
     }
-    
+
     /// Set the count of free blocks in this block group.
     pub fn set_free_blocks_count(&mut self, cnt: u32) {
         self.free_blocks_count_lo = ((cnt << 16) >> 16) as u16;
         self.free_blocks_count_hi = (cnt >> 16) as u16;
     }
 
-    pub fn ext4_blocks_in_group_cnt(&self, s: &Ext4Superblock) -> u32{
+    pub fn ext4_blocks_in_group_cnt(&self, s: &Ext4Superblock) -> u32 {
         let blocks_count = s.blocks_count();
         let blocks_per_group = s.blocks_per_group();
         let mut block_groups_count = s.block_groups_count();
 
-        if (blocks_count % blocks_per_group) != 0  {
+        if (blocks_count % blocks_per_group) != 0 {
             block_groups_count += 1;
         }
         block_groups_count
@@ -279,7 +278,6 @@ impl Ext4BlockGroup {
         bg
     }
 }
-
 
 /// Calculate the count of inodes in a block group.
 pub fn ext4_inodes_in_group_cnt(bgid: u32, s: &Ext4Superblock) -> u32 {

@@ -1,8 +1,8 @@
 // use super::*;
 use crate::consts::*;
 use crate::prelude::*;
-use core::mem::size_of;
 use crate::BlockDevice;
+use core::mem::size_of;
 
 /// Structure representing the header of an Ext4 extent.
 #[derive(Debug, Default, Clone, Copy)]
@@ -115,13 +115,12 @@ impl<T> TryFrom<&[T]> for Ext4Extent {
     }
 }
 
-impl Ext4ExtentHeader{
-    pub fn try_from_u32(data: &mut [u32]) -> Self{
+impl Ext4ExtentHeader {
+    pub fn try_from_u32(data: &mut [u32]) -> Self {
         // let data = data;
         unsafe { core::ptr::read(data.as_mut_ptr() as *mut _) }
     }
 }
-
 
 impl Ext4ExtentIndex {
     /// Returns the physical block number represented by this index.
@@ -136,7 +135,6 @@ impl Ext4ExtentIndex {
         pblock
     }
 }
-
 
 impl Ext4ExtentHeader {
     pub fn new(magic: u16, entries: u16, max_entries: u16, depth: u16, generation: u32) -> Self {
@@ -338,20 +336,20 @@ impl Ext4ExtentPath {
 
     /// Perform binary search on indices to find a specific block.
     pub fn binsearch_extentidx(&mut self, block: u32) -> bool {
-        unsafe{
+        unsafe {
             if (*self.header).entries_count == 0 {
                 return false;
             }
-    
+
             let header_ref = match self.header.as_mut() {
                 Some(h) => h,
                 None => return false, // Early return if the pointer is null
             };
-    
+
             let mut left = header_ref.first_extent_index_mut().add(1);
             let mut right = header_ref.last_extent_index_mut();
             while left <= right {
-                let mid =left.add((right as usize - left as usize) / 2) ;
+                let mid = left.add((right as usize - left as usize) / 2);
                 if (*mid).first_block > block {
                     right = mid.sub(1);
                 } else if (*mid).first_block + size_of::<Ext4ExtentIndex>() as u32 > block {
@@ -382,9 +380,8 @@ pub struct Ext4ExtentPathNew {
     /// Lower 32-bits of the block number to which this extent points.
     pub start_lo: u32,
 
-    pub p_block: Option<u64>,          
+    pub p_block: Option<u64>,
 }
-
 
 #[derive(Debug, Clone)]
 pub struct ExtentTreeNode {
@@ -489,5 +486,5 @@ impl ExtentTreeNode {
                 }
             }
         }
-    }    
+    }
 }

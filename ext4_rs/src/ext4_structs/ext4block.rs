@@ -1,6 +1,6 @@
 use crate::prelude::*;
-use crate::BLOCK_SIZE;
 use crate::BlockDevice;
+use crate::BLOCK_SIZE;
 
 #[derive(Debug)]
 // A single block descriptor
@@ -16,8 +16,8 @@ pub struct Ext4Block<'a> {
     pub dirty: bool,
 }
 
-impl <'a>Ext4Block<'a>{
-    pub fn sync_blk_to_disk(&self, block_device: Arc<dyn BlockDevice>  ){
+impl<'a> Ext4Block<'a> {
+    pub fn sync_blk_to_disk(&self, block_device: Arc<dyn BlockDevice>) {
         let block_id = self.disk_block_id as usize;
         block_device.write_offset(block_id * BLOCK_SIZE, &self.block_data);
     }

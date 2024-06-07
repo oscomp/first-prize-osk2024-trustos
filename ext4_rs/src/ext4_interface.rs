@@ -716,11 +716,7 @@ impl Ext4 {
         entries
     }
 
-    pub fn ext4_trunc_inode(
-        &self,
-        inode_ref: &mut Ext4InodeRef,
-        new_size: u64,
-    ) -> Result<usize> {
+    pub fn ext4_trunc_inode(&self, inode_ref: &mut Ext4InodeRef, new_size: u64) -> Result<usize> {
         let inode_size = inode_ref.inner.inode.inode_get_size();
 
         if inode_size > new_size {
@@ -805,19 +801,23 @@ impl Ext4 {
 
         let mut child_inode_ref = Ext4InodeRef::get_inode_ref(self.self_ref.clone(), r.inode);
 
-        if child_inode_ref.has_children(){
+        if child_inode_ref.has_children() {
             return_errno_with_message!(Errnum::ENOTSUP, "rm dir with children not supported");
         }
 
         /* Truncate */
         self.ext4_trunc_inode(&mut child_inode_ref, 0);
 
-        self.ext4_unlink(&mut parent_inode_ref, &mut child_inode_ref, path, path.len() as u32);
+        self.ext4_unlink(
+            &mut parent_inode_ref,
+            &mut child_inode_ref,
+            path,
+            path.len() as u32,
+        );
 
         self.ext4_fs_put_inode_ref_csum(&mut parent_inode_ref);
 
-
-        // to do 
+        // to do
 
         // ext4_inode_set_del_time
         // ext4_inode_set_links_cnt
