@@ -6,6 +6,8 @@ mod mount;
 mod pipe;
 mod stat;
 mod stdio;
+mod vfs;
+
 cfg_if::cfg_if! {
     if #[cfg(feature="fat32")]{
         pub use fat32::{
@@ -28,12 +30,27 @@ pub use pipe::{make_pipe, Pipe};
 use spin::{Mutex, MutexGuard};
 pub use stat::{Kstat, Statfs};
 pub use stdio::{Stdin, Stdout};
-
-pub type RFile = dyn File + Send + Sync;
-pub type FdTableInner = Vec<Option<FileClass>>;
+pub use vfs::{File, Ioctl};
 
 pub struct FdTable {
     inner: SyncUnsafeCell<FdTableInner>,
+}
+
+pub struct FdTableInner {
+    flags: Vec<Option<OpenFlags>>,
+    table: Vec<Option<FileClass>>,
+}
+
+impl FdTableInner {
+    pub fn empty() -> Self {
+        Self {
+            flags: Vec::new(),
+            table: Vec::new(),
+        }
+    }
+    pub fn new(flags: Vec<Option<OpenFlags>>, table: Vec<Option<FileClass>>) -> Self {
+        FdTableInner { flags, table }
+    }
 }
 
 impl FdTable {
@@ -42,48 +59,115 @@ impl FdTable {
             inner: SyncUnsafeCell::new(fd_table),
         }
     }
+    pub fn new_with_stdio() -> Self {
+        FdTable::new(FdTableInner::new(
+            vec![None, None, None],
+            vec![
+                // 0 -> stdin
+                Some(FileClass::Abs(Arc::new(Stdin))),
+                // 1 -> stdout
+                Some(FileClass::Abs(Arc::new(Stdout))),
+                // 2 -> stderr
+                Some(FileClass::Abs(Arc::new(Stdout))),
+            ],
+        ))
+    }
     pub fn from_another(another: &Arc<FdTable>) -> Self {
-        let mut fd_table = FdTableInner::new();
-        for fd in another.get_ref().iter() {
+        let mut fd_table: Vec<_> = Vec::new();
+        let other = another.get_ref();
+        for fd in other.table.iter() {
             if let Some(file) = fd {
                 fd_table.push(Some(file.clone()));
             } else {
                 fd_table.push(None);
             }
         }
+        let mut flags: Vec<Option<OpenFlags>> = Vec::new();
+        flags.extend(&other.flags);
         Self {
-            inner: SyncUnsafeCell::new(fd_table),
+            inner: SyncUnsafeCell::new(FdTableInner::new(flags, fd_table)),
         }
     }
     pub fn alloc_fd(&self) -> usize {
-        let mut fd_table = self.inner.get_unchecked_mut();
+        let mut fd_table = &mut self.get_mut().table;
+        let mut flags = &mut self.get_mut().flags;
         if let Some(fd) = (0..fd_table.len()).find(|fd| fd_table[*fd].is_none()) {
             fd
         } else {
             fd_table.push(None);
+            flags.push(None);
             fd_table.len() - 1
         }
     }
-    pub fn get_mut(&self) -> &mut FdTableInner {
-        self.inner.get_unchecked_mut()
-    }
-    pub fn get_ref(&self) -> &FdTableInner {
-        self.inner.get_unchecked_ref()
+    pub fn close_on_exec(&self) {
+        let mut inner = self.get_mut();
+        for idx in 0..inner.flags.len() {
+            if let Some(flag) = inner.flags[idx] {
+                if (flag.contains(OpenFlags::O_CLOEXEC)) {
+                    inner.flags[idx].take();
+                    inner.table[idx].take();
+                }
+            }
+        }
     }
     pub fn len(&self) -> usize {
-        self.inner.get_unchecked_ref().len()
+        self.get_ref().table.len()
     }
-    pub fn push(&self, value: Option<FileClass>) {
-        self.inner.get_unchecked_mut().push(value);
+
+    pub fn resize(&self, size: usize) {
+        self.get_mut().table.resize(size, None);
+        self.get_mut().flags.resize(size, None);
     }
-    pub fn get(&self, fd: usize) -> Option<FileClass> {
-        self.inner.get_unchecked_mut()[fd].clone()
+
+    pub fn get_file(&self, fd: usize) -> Option<FileClass> {
+        self.get_mut().table[fd].clone()
     }
-    pub fn set(&self, fd: usize, value: Option<FileClass>) {
-        self.inner.get_unchecked_mut()[fd] = value;
+
+    pub fn get_flag(&self, fd: usize) -> Option<OpenFlags> {
+        self.get_mut().flags[fd].clone()
     }
+
+    pub fn get(&self, fd: usize) -> (Option<FileClass>, Option<OpenFlags>) {
+        (self.get_file(fd), self.get_flag(fd))
+    }
+
+    pub fn set_cloexec(&self, fd: usize) {
+        let flags = self.get_flag(fd).unwrap() | OpenFlags::O_CLOEXEC;
+        self.get_mut().flags[fd] = Some(flags);
+    }
+
+    pub fn unset_cloexec(&self, fd: usize) {
+        let flags = self.get_flag(fd).unwrap() & !OpenFlags::O_CLOEXEC;
+        self.get_mut().flags[fd] = Some(flags);
+    }
+
+    pub fn contain_cloexec(&self, fd: usize) -> bool {
+        self.get_mut().flags[fd]
+            .as_ref()
+            .unwrap()
+            .contains(OpenFlags::O_CLOEXEC)
+    }
+
+    pub fn set(&self, fd: usize, value: Option<FileClass>, flags: Option<OpenFlags>) {
+        self.get_mut().table[fd] = value;
+        self.get_mut().flags[fd] = flags;
+    }
+
+    pub fn set_flags(&self, fd: usize, flags: Option<OpenFlags>) {
+        self.get_mut().flags[fd] = flags;
+    }
+
     pub fn take(&self, fd: usize) -> Option<FileClass> {
-        self.inner.get_unchecked_mut()[fd].take()
+        self.get_mut().flags[fd].take();
+        self.get_mut().table[fd].take()
+    }
+
+    fn get_mut(&self) -> &mut FdTableInner {
+        self.inner.get_unchecked_mut()
+    }
+
+    fn get_ref(&self) -> &FdTableInner {
+        self.inner.get_unchecked_ref()
     }
 }
 
@@ -133,20 +217,7 @@ impl FsInfo {
 #[derive(Clone)]
 pub enum FileClass {
     File(Arc<OSInode>),
-    Abs(Arc<RFile>),
-}
-
-pub trait File: Send + Sync {
-    fn readable(&self) -> bool;
-    fn writable(&self) -> bool;
-    /// read 指的是从文件中读取数据放到缓冲区中，最多将缓冲区填满，并返回实际读取的字节数
-    fn read(&self, buf: UserBuffer) -> usize;
-    /// 将缓冲区中的数据写入文件，最多将缓冲区中的数据全部写入，并返回直接写入的字节数
-    fn write(&self, buf: UserBuffer) -> usize;
-    /// ioctl处理
-    fn ioctl(&self, cmd: usize, arg: usize) -> isize;
-    /// 获得文件描述符标志
-    fn get_openflags(&self) -> OpenFlags;
+    Abs(Arc<dyn File>),
 }
 
 core::arch::global_asm!(include_str!("preload.S"));

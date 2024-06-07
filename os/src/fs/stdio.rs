@@ -1,4 +1,4 @@
-use super::{Dirent, File, Kstat};
+use super::{Dirent, File, Ioctl, Kstat};
 use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut};
 use crate::task::current_task;
 use crate::{
@@ -89,7 +89,9 @@ impl File for Stdin {
     fn write(&self, _user_buf: UserBuffer) -> usize {
         panic!("Cannot write to stdin!");
     }
+}
 
+impl Ioctl for Stdin {
     fn ioctl(&self, cmd: usize, arg: usize) -> isize {
         let cmd = IoctlCommand::from(cmd);
         let task = current_task().unwrap();
@@ -134,10 +136,6 @@ impl File for Stdin {
                 return -1;
             }
         };
-    }
-
-    fn get_openflags(&self) -> OpenFlags {
-        OpenFlags::O_RDONLY
     }
 }
 
@@ -157,6 +155,9 @@ impl File for Stdout {
         }
         user_buf.len()
     }
+}
+
+impl Ioctl for Stdout {
     fn ioctl(&self, cmd: usize, arg: usize) -> isize {
         let cmd = IoctlCommand::from(cmd);
         let task = current_task().unwrap();
@@ -201,10 +202,6 @@ impl File for Stdout {
                 return -1;
             }
         };
-    }
-
-    fn get_openflags(&self) -> OpenFlags {
-        OpenFlags::O_WRONLY
     }
 }
 

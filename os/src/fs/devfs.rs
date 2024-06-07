@@ -12,7 +12,7 @@ use core::mem::size_of;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-use super::{File, OpenFlags};
+use super::{File, Ioctl, OpenFlags, Stdout};
 
 pub struct DevZero;
 pub struct DevNull;
@@ -37,7 +37,7 @@ pub fn find_device(abs_path: &str) -> bool {
     DEVICES.lock().contains(&abs_path.to_string())
 }
 
-pub fn open_device_file(abs_path: &str) -> Option<Arc<dyn File + Send + Sync>> {
+pub fn open_device_file(abs_path: &str) -> Option<Arc<dyn File>> {
     // warning: just a fake implementation
     if abs_path == "/dev/zero" {
         Some(Arc::new(DevZero::new()))
@@ -74,12 +74,6 @@ impl File for DevZero {
         // do nothing
         user_buf.len()
     }
-    fn ioctl(&self, cmd: usize, arg: usize) -> isize {
-        -1
-    }
-    fn get_openflags(&self) -> OpenFlags {
-        OpenFlags::O_RDWR
-    }
 }
 
 impl DevNull {
@@ -102,12 +96,6 @@ impl File for DevNull {
     fn write(&self, user_buf: UserBuffer) -> usize {
         // do nothing
         user_buf.len()
-    }
-    fn ioctl(&self, cmd: usize, arg: usize) -> isize {
-        -1
-    }
-    fn get_openflags(&self) -> OpenFlags {
-        OpenFlags::O_RDWR
     }
 }
 
@@ -172,6 +160,9 @@ impl File for DevRtc {
         // do nothing
         user_buf.len()
     }
+}
+
+impl Ioctl for DevRtc {
     fn ioctl(&self, cmd: usize, arg: usize) -> isize {
         let cmd = IoctlCommand::from(cmd);
         let task = current_task().unwrap();
@@ -189,9 +180,6 @@ impl File for DevRtc {
             _ => return -1,
         }
         0
-    }
-    fn get_openflags(&self) -> OpenFlags {
-        OpenFlags::O_RDWR
     }
 }
 
@@ -215,12 +203,6 @@ impl File for DevRandom {
         // do nothing
         user_buf.len()
     }
-    fn ioctl(&self, cmd: usize, arg: usize) -> isize {
-        -1
-    }
-    fn get_openflags(&self) -> OpenFlags {
-        OpenFlags::O_RDWR
-    }
 }
 
 impl DevTty {
@@ -237,27 +219,29 @@ impl File for DevTty {
         true
     }
     fn read(&self, mut user_buf: UserBuffer) -> usize {
-        if let Some(FileClass::Abs(tty_device)) = INITPROC.inner_lock().fd_table.get(0) {
+        if let Some(FileClass::Abs(tty_device)) = INITPROC.inner_lock().fd_table.get_file(0) {
             tty_device.read(user_buf)
         } else {
             panic!("get Stdin error!");
         }
     }
     fn write(&self, user_buf: UserBuffer) -> usize {
-        if let Some(FileClass::Abs(tty_device)) = INITPROC.inner_lock().fd_table.get(1) {
+        if let Some(FileClass::Abs(tty_device)) = INITPROC.inner_lock().fd_table.get_file(1) {
             tty_device.write(user_buf)
         } else {
             panic!("get Stdout error!");
         }
     }
+}
+
+impl Ioctl for DevTty {
     fn ioctl(&self, cmd: usize, arg: usize) -> isize {
-        if let Some(FileClass::Abs(tty_device)) = INITPROC.inner_lock().fd_table.get(1) {
+        if let Some(FileClass::Abs(tty_device)) = INITPROC.inner_lock().fd_table.get_file(1) {
+            // tty_device.ioctl(cmd, arg)
+            let tty_device = unsafe { Arc::from_raw(Arc::into_raw(tty_device) as *const Stdout) };
             tty_device.ioctl(cmd, arg)
         } else {
             panic!("get Stdout error!");
         }
-    }
-    fn get_openflags(&self) -> OpenFlags {
-        OpenFlags::O_RDWR
     }
 }

@@ -212,12 +212,4 @@ impl File for Pipe {
             }
         }
     }
-
-    fn ioctl(&self, cmd: usize, arg: usize) -> isize {
-        -1
-    }
-
-    fn get_openflags(&self) -> OpenFlags {
-        OpenFlags::O_RDWR
-    }
 }

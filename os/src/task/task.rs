@@ -160,14 +160,7 @@ impl TaskControlBlock {
                 task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                 task_status: TaskStatus::Ready,
                 memory_set: Arc::new(MemorySet::new(memory_set)),
-                fd_table: Arc::new(FdTable::new(vec![
-                    // 0 -> stdin
-                    Some(FileClass::Abs(Arc::new(Stdin))),
-                    // 1 -> stdout
-                    Some(FileClass::Abs(Arc::new(Stdout))),
-                    // 2 -> stderr
-                    Some(FileClass::Abs(Arc::new(Stdout))),
-                ])),
+                fd_table: Arc::new(FdTable::new_with_stdio()),
                 fs_info: Arc::new(FsInfo::new(String::from("/"))),
                 time_data: TimeData::new(),
                 user_heappoint: user_heapbottom,
@@ -178,6 +171,7 @@ impl TaskControlBlock {
                 timer: Arc::new(Timer::new()),
             }),
         };
+
         let mut task_inner = task.inner_lock();
         task_inner.alloc_user_res();
         // prepare TrapContext in user space
@@ -299,13 +293,7 @@ impl TaskControlBlock {
         //println!("user_sp:{:#X}", user_sp);
 
         //将设置了O_CLOEXEC位的文件描述符关闭
-        for i in 0..inner.fd_table.len() {
-            if let Some(FileClass::File(file)) = inner.fd_table.get(i) {
-                if file.get_openflags().contains(OpenFlags::O_CLOEXEC) {
-                    inner.fd_table.take(i);
-                }
-            }
-        }
+        inner.fd_table.close_on_exec();
 
         let trap_cx = TrapContext::app_init_context(
             entry_point,

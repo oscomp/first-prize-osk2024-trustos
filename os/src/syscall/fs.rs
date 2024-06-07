@@ -47,8 +47,8 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     if fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
     }
-    if let Some(file) = &inner.fd_table.get(fd) {
-        let file: Arc<dyn File + Send + Sync> = match file {
+    if let Some(file) = &inner.fd_table.get_file(fd) {
+        let file: Arc<dyn File> = match file {
             FileClass::File(f) => f.clone(),
             FileClass::Abs(f) => f.clone(),
         };
@@ -78,8 +78,8 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     if fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
     }
-    if let Some(file) = &inner.fd_table.get(fd) {
-        let file: Arc<dyn File + Send + Sync> = match file {
+    if let Some(file) = &inner.fd_table.get_file(fd) {
+        let file: Arc<dyn File> = match file {
             FileClass::File(f) => f.clone(),
             FileClass::Abs(f) => f.clone(),
         };
@@ -105,7 +105,7 @@ pub fn sys_writev(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
     if fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
     }
-    if let Some(file) = &inner.fd_table.get(fd) {
+    if let Some(file) = &inner.fd_table.get_file(fd) {
         let file = match file {
             FileClass::File(f) => f.clone(),
             FileClass::Abs(f) => f.clone(),
@@ -145,7 +145,7 @@ pub fn sys_readv(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
     if fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
     }
-    if let Some(file) = &inner.fd_table.get(fd) {
+    if let Some(file) = &inner.fd_table.get_file(fd) {
         let file = match file {
             FileClass::File(f) => f.clone(),
             FileClass::Abs(f) => f.clone(),
@@ -196,19 +196,19 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> Sysca
         base_path = "/";
     } else if dirfd != AT_FDCWD {
         let dirfd = dirfd as usize;
-        if dirfd >= inner.fd_table.len() || inner.fd_table.get(dirfd).is_none() {
+        if dirfd >= inner.fd_table.len() || inner.fd_table.get_file(dirfd).is_none() {
             return Err(SysErrNo::EINVAL);
         }
-        if let Some(FileClass::File(osfile)) = &inner.fd_table.get(dirfd) {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table.get_file(dirfd) {
             if let Some(inode) = osfile.find(path.as_str(), flags) {
                 let new_fd = inner.fd_table.alloc_fd();
-                inner.fd_table.set(new_fd, Some(inode));
+                inner.fd_table.set(new_fd, Some(inode), Some(flags));
                 return Ok(new_fd);
             } else {
                 if flags.contains(OpenFlags::O_CREATE) {
                     if let Some(inode) = osfile.create(path.as_str(), flags) {
                         let new_fd = inner.fd_table.alloc_fd();
-                        inner.fd_table.set(new_fd, Some(inode));
+                        inner.fd_table.set(new_fd, Some(inode), Some(flags));
                         return Ok(new_fd);
                     }
                 } else {
@@ -221,7 +221,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> Sysca
     }
     if let Some(inode) = open(base_path, path.as_str(), flags) {
         let new_fd = inner.fd_table.alloc_fd();
-        inner.fd_table.set(new_fd, Some(inode));
+        inner.fd_table.set(new_fd, Some(inode), Some(flags));
         return Ok(new_fd);
     } else {
         return Err(SysErrNo::ENOENT);
@@ -234,7 +234,7 @@ pub fn sys_close(fd: usize) -> SyscallRet {
     if fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
     }
-    if inner.fd_table.get(fd).is_none() {
+    if inner.fd_table.get_file(fd).is_none() {
         return Err(SysErrNo::EINVAL);
     }
     inner.fd_table.take(fd);
@@ -255,13 +255,13 @@ pub fn sys_dup(fd: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
 
-    if fd >= inner.fd_table.len() || inner.fd_table.get(fd).is_none() {
+    if fd >= inner.fd_table.len() || inner.fd_table.get_file(fd).is_none() {
         return Err(SysErrNo::EINVAL);
     }
 
-    let inode = inner.fd_table.get(fd);
+    let (inode, flags) = inner.fd_table.get(fd);
     let fd_new = inner.fd_table.alloc_fd();
-    inner.fd_table.set(fd_new, inode);
+    inner.fd_table.set(fd_new, inode, flags);
     Ok(fd_new)
 }
 
@@ -269,7 +269,7 @@ pub fn sys_dup3(old: usize, new: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
 
-    if old >= inner.fd_table.len() || inner.fd_table.get(old).is_none() {
+    if old >= inner.fd_table.len() || inner.fd_table.get_file(old).is_none() {
         return Err(SysErrNo::EINVAL);
     }
 
@@ -277,14 +277,10 @@ pub fn sys_dup3(old: usize, new: usize) -> SyscallRet {
         return Err(SysErrNo::EBADF);
     }
 
-    if (new >= inner.fd_table.len()) {
-        for i in inner.fd_table.len()..(new + 1) {
-            inner.fd_table.push(None);
-        }
-    }
+    inner.fd_table.resize(new + 1);
 
-    let inode = inner.fd_table.get(old);
-    inner.fd_table.set(new, inode);
+    let (inode, flags) = inner.fd_table.get(old);
+    inner.fd_table.set(new, inode, flags);
     Ok(new)
 }
 
@@ -358,16 +354,16 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> SyscallRet {
         base_path = "/";
     } else if dirfd != AT_FDCWD {
         let dirfd = dirfd as usize;
-        if dirfd >= inner.fd_table.len() || inner.fd_table.get(dirfd).is_none() {
+        if dirfd >= inner.fd_table.len() || inner.fd_table.get_file(dirfd).is_none() {
             return Err(SysErrNo::EINVAL);
         }
-        if let Some(FileClass::File(osfile)) = &inner.fd_table.get(dirfd) {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table.get_file(dirfd) {
             if let Some(_) = osfile.find(path.as_str(), OpenFlags::O_DIRECTROY | OpenFlags::O_RDWR)
             {
                 return Err(SysErrNo::EEXIST);
             }
         }
-        if let Some(FileClass::File(osfile)) = &inner.fd_table.get(dirfd) {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table.get_file(dirfd) {
             if let Some(inode) = osfile.create(
                 path.as_str(),
                 OpenFlags::O_DIRECTROY | OpenFlags::O_RDWR | OpenFlags::O_CREATE,
@@ -405,11 +401,11 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let mut buffer =
         UserBuffer::new(safe_translated_byte_buffer(inner.memory_set.clone(), buf, len).unwrap());
 
-    if fd >= inner.fd_table.len() || inner.fd_table.get(fd).is_none() {
+    if fd >= inner.fd_table.len() || inner.fd_table.get_file(fd).is_none() {
         return Err(SysErrNo::EINVAL);
     }
 
-    if let Some(f) = &inner.fd_table.get(fd) {
+    if let Some(f) = &inner.fd_table.get_file(fd) {
         let file;
         if let FileClass::File(t) = f {
             file = t.clone();
@@ -464,10 +460,10 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> SyscallRet {
         base_path = "/";
     } else if dirfd != AT_FDCWD {
         let dirfd = dirfd as usize;
-        if dirfd >= inner.fd_table.len() || inner.fd_table.get(dirfd).is_none() {
+        if dirfd >= inner.fd_table.len() || inner.fd_table.get_file(dirfd).is_none() {
             return Err(SysErrNo::EINVAL);
         }
-        if let Some(FileClass::File(osfile)) = &inner.fd_table.get(dirfd) {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table.get_file(dirfd) {
             if let Some(osfile) = osfile.find(path.as_str(), OpenFlags::empty()) {
                 let osfile = match osfile {
                     FileClass::File(f) => f.clone(),
@@ -555,11 +551,11 @@ pub fn sys_fstat(fd: usize, kst: *const u8) -> SyscallRet {
 
     let mut kst = UserBuffer::new(translated_byte_buffer(token, kst, size_of::<Kstat>()).unwrap());
 
-    if fd >= inner.fd_table.len() || inner.fd_table.get(fd).is_none() {
+    if fd >= inner.fd_table.len() || inner.fd_table.get_file(fd).is_none() {
         return Err(SysErrNo::EINVAL);
     }
 
-    if let Some(file) = &inner.fd_table.get(fd) {
+    if let Some(file) = &inner.fd_table.get_file(fd) {
         let file = match file {
             FileClass::File(f) => f.clone(),
             FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
@@ -581,11 +577,13 @@ pub fn sys_pipe2(fd: *mut u32) -> SyscallRet {
 
     let read_fd = inner.fd_table.alloc_fd();
     let (read_pipe, write_pipe) = make_pipe();
-    inner.fd_table.set(read_fd, Some(FileClass::Abs(read_pipe)));
+    inner
+        .fd_table
+        .set(read_fd, Some(FileClass::Abs(read_pipe)), None);
     let write_fd = inner.fd_table.alloc_fd();
     inner
         .fd_table
-        .set(write_fd, Some(FileClass::Abs(write_pipe)));
+        .set(write_fd, Some(FileClass::Abs(write_pipe)), None);
     *translated_refmut(token, fd) = read_fd as u32;
     *translated_refmut(token, unsafe { fd.add(1) }) = write_fd as u32;
     Ok(0)
@@ -606,10 +604,10 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
         base_path = "/";
     } else if dirfd != AT_FDCWD {
         let dirfd = dirfd as usize;
-        if dirfd >= inner.fd_table.len() || inner.fd_table.get(dirfd).is_none() {
+        if dirfd >= inner.fd_table.len() || inner.fd_table.get_file(dirfd).is_none() {
             return Err(SysErrNo::EINVAL);
         }
-        if let Some(FileClass::File(osfile)) = &inner.fd_table.get(dirfd) {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table.get_file(dirfd) {
             if let Some(osfile) = osfile.find(path.as_str(), OpenFlags::O_RDONLY) {
                 let osfile = match osfile {
                     FileClass::File(f) => f.clone(),
@@ -674,10 +672,10 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
         base_path = "/";
     } else if dirfd != AT_FDCWD {
         let dirfd = dirfd as usize;
-        if dirfd >= inner.fd_table.len() || inner.fd_table.get(dirfd).is_none() {
+        if dirfd >= inner.fd_table.len() || inner.fd_table.get_file(dirfd).is_none() {
             return Err(SysErrNo::EINVAL);
         }
-        if let Some(FileClass::File(osfile)) = &inner.fd_table.get(dirfd) {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table.get_file(dirfd) {
             if let Some(osfile) = osfile.find(path.as_str(), OpenFlags::O_RDWR) {
                 let osfile = match osfile {
                     FileClass::File(f) => f.clone(),
@@ -745,10 +743,10 @@ pub fn sys_utimensat(dirfd: isize, path: *const u8, times: *const u8, _flags: us
         base_path = "/";
     } else if dirfd != AT_FDCWD {
         let dirfd = dirfd as usize;
-        if dirfd >= inner.fd_table.len() || inner.fd_table.get(dirfd).is_none() {
+        if dirfd >= inner.fd_table.len() || inner.fd_table.get_file(dirfd).is_none() {
             return Err(SysErrNo::EINVAL);
         }
-        if let Some(FileClass::File(osfile)) = &inner.fd_table.get(dirfd) {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table.get_file(dirfd) {
             if let Some(osfile) = osfile.find(path.as_str(), OpenFlags::O_RDONLY) {
                 let osfile = match osfile {
                     FileClass::File(f) => f.clone(),
@@ -816,11 +814,11 @@ pub fn sys_lseek(fd: usize, offset: isize, whence: usize) -> SyscallRet {
     let mut inner = task.inner_lock();
     let token = inner.user_token();
 
-    if fd >= inner.fd_table.len() || inner.fd_table.get(fd).is_none() {
+    if fd >= inner.fd_table.len() || inner.fd_table.get_file(fd).is_none() {
         return Err(SysErrNo::EINVAL);
     }
 
-    if let Some(file) = &inner.fd_table.get(fd) {
+    if let Some(file) = &inner.fd_table.get_file(fd) {
         let file = match file {
             FileClass::File(f) => f.clone(),
             FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
@@ -859,16 +857,17 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
 
     debug!("[sys_fcntl] fd is {}, cmd is {}, arg is {}", fd, cmd, arg);
 
-    if fd >= inner.fd_table.len() || inner.fd_table.get(fd).is_none() {
+    if fd >= inner.fd_table.len() || inner.fd_table.get_file(fd).is_none() {
         return Err(SysErrNo::EINVAL);
     }
 
-    if let Some(file) = &inner.fd_table.get(fd) {
+    if let Some(file) = &inner.fd_table.get_file(fd) {
         match cmd {
             F_DUPFD => {
                 let inode = file.clone();
                 let fd_new = inner.fd_table.alloc_fd();
-                inner.fd_table.set(fd_new, Some(inode));
+                let flags = inner.fd_table.get_flag(fd);
+                inner.fd_table.set(fd_new, Some(inode), flags);
                 return Ok(fd_new);
             }
             F_DUPFD_CLOEXEC => {
@@ -877,39 +876,30 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
                     FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
                 };
                 let inode = file.clone();
-                inode.set_cloexec();
+                // inode.set_cloexec();
+                let flags = inner.fd_table.get_flag(fd).unwrap() | OpenFlags::O_CLOEXEC;
                 let fd_new = inner.fd_table.alloc_fd();
-                inner.fd_table.set(fd_new, Some(FileClass::File(inode)));
+                inner
+                    .fd_table
+                    .set(fd_new, Some(FileClass::File(inode)), Some(flags));
                 return Ok(fd_new);
             }
             F_GETFD => {
-                let file = match file {
-                    FileClass::File(f) => f.clone(),
-                    FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
-                };
-                return if file.get_openflags().contains(OpenFlags::O_CLOEXEC) {
+                return if inner.fd_table.contain_cloexec(fd) {
                     Ok(1)
                 } else {
                     Ok(0)
                 };
             }
             F_SETFD => {
-                let file = match file {
-                    FileClass::File(f) => f.clone(),
-                    FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
-                };
                 if arg & FD_CLOEXEC == 0 {
-                    file.unset_cloexec();
+                    inner.fd_table.unset_cloexec(fd);
                 } else {
-                    file.set_cloexec();
+                    inner.fd_table.set_cloexec(fd);
                 }
             }
             F_GETFL => {
-                let file = match file {
-                    FileClass::File(f) => f.clone(),
-                    FileClass::Abs(f) => f.clone(),
-                };
-                return Ok(file.get_openflags().bits() as usize);
+                return Ok(inner.fd_table.get_flag(fd).unwrap().bits() as usize);
             }
             F_SETFL => {
                 let file = match file {
@@ -917,7 +907,7 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
                     FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
                 };
                 let flags = OpenFlags::from_bits_truncate(arg as u32);
-                file.set_openflags(flags);
+                inner.fd_table.set_flags(fd, Some(flags));
             }
             _ => {
                 return Err(SysErrNo::EINVAL);
@@ -930,31 +920,32 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
 }
 
 pub fn sys_ioctl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
-    let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
-    let token = inner.user_token();
+    // let task = current_task().unwrap();
+    // let mut inner = task.inner_lock();
+    // let token = inner.user_token();
 
     debug!("[sys_ioctl] fd is {},cmd is {:x},arg is {:x}", fd, cmd, arg);
+    Ok(0)
 
-    if fd >= inner.fd_table.len() || inner.fd_table.get(fd).is_none() {
-        return Err(SysErrNo::EINVAL);
-    }
+    // if fd >= inner.fd_table.len() || inner.fd_table.get_file(fd).is_none() {
+    //     return Err(SysErrNo::EINVAL);
+    // }
 
-    if let Some(file) = &inner.fd_table.get(fd) {
-        let file = match file {
-            FileClass::File(f) => return Err(SysErrNo::EINVAL),
-            FileClass::Abs(f) => f.clone(),
-        };
-        drop(inner);
-        drop(task);
-        let res = file.ioctl(cmd, arg);
-        if res == -1 {
-            return Err(SysErrNo::EINVAL);
-        }
-        Ok(0)
-    } else {
-        Err(SysErrNo::ENOENT)
-    }
+    // if let Some(file) = &inner.fd_table.get_file(fd) {
+    //     let file = match file {
+    //         FileClass::File(f) => return Err(SysErrNo::EINVAL),
+    //         FileClass::Abs(f) => f.clone(),
+    //     };
+    //     drop(inner);
+    //     drop(task);
+    //     let res = file.ioctl(cmd, arg);
+    //     if res == -1 {
+    //         return Err(SysErrNo::EINVAL);
+    //     }
+    //     Ok(0)
+    // } else {
+    //     Err(SysErrNo::ENOENT)
+    // }
 }
 
 pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) -> SyscallRet {
@@ -963,14 +954,14 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
     let token = inner.user_token();
 
     if outfd >= inner.fd_table.len()
-        || inner.fd_table.get(outfd).is_none()
+        || inner.fd_table.get_file(outfd).is_none()
         || infd >= inner.fd_table.len()
-        || inner.fd_table.get(infd).is_none()
+        || inner.fd_table.get_file(infd).is_none()
     {
         return Err(SysErrNo::EINVAL);
     }
 
-    if let Some(outfile) = &inner.fd_table.get(outfd) {
+    if let Some(outfile) = &inner.fd_table.get_file(outfd) {
         let outfile = match outfile {
             FileClass::File(f) => f.clone(),
             FileClass::Abs(f) => f.clone(),
@@ -979,7 +970,7 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
             return Err(SysErrNo::EACCES);
         }
 
-        if let Some(infile) = &inner.fd_table.get(infd) {
+        if let Some(infile) = &inner.fd_table.get_file(infd) {
             let infile = match infile {
                 FileClass::File(f) => f.clone(),
                 FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
@@ -1038,7 +1029,7 @@ pub fn sys_pwrite64(fd: usize, buf: *const u8, count: usize, offset: isize) -> S
     if offset < 0 || fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
     }
-    if let Some(file) = &inner.fd_table.get(fd) {
+    if let Some(file) = &inner.fd_table.get_file(fd) {
         let file = match file {
             FileClass::File(f) => f.clone(),
             FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
@@ -1070,7 +1061,7 @@ pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: isize) -> Sy
     if offset < 0 || fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
     }
-    if let Some(file) = &inner.fd_table.get(fd) {
+    if let Some(file) = &inner.fd_table.get_file(fd) {
         let file = match file {
             FileClass::File(f) => f.clone(),
             FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
@@ -1098,11 +1089,11 @@ pub fn sys_ftruncate(fd: usize, length: i32) -> SyscallRet {
     let mut inner = task.inner_lock();
     let token = inner.user_token();
 
-    if length < 0 || fd >= inner.fd_table.len() || inner.fd_table.get(fd).is_none() {
+    if length < 0 || fd >= inner.fd_table.len() || inner.fd_table.get_file(fd).is_none() {
         return Err(SysErrNo::EINVAL);
     }
 
-    if let Some(file) = &inner.fd_table.get(fd) {
+    if let Some(file) = &inner.fd_table.get_file(fd) {
         let file = match file {
             FileClass::File(f) => f.clone(),
             FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
@@ -1126,11 +1117,11 @@ pub fn sys_fsync(fd: usize) -> SyscallRet {
     let mut inner = task.inner_lock();
     let token = inner.user_token();
 
-    if fd >= inner.fd_table.len() || inner.fd_table.get(fd).is_none() {
+    if fd >= inner.fd_table.len() || inner.fd_table.get_file(fd).is_none() {
         return Err(SysErrNo::EINVAL);
     }
 
-    if let Some(file) = &inner.fd_table.get(fd) {
+    if let Some(file) = &inner.fd_table.get_file(fd) {
         let file = match file {
             FileClass::File(f) => f.clone(),
             FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
@@ -1159,15 +1150,15 @@ pub fn sys_symlinkat(target: *const u8, dirfd: isize, linkpath: *const u8) -> Sy
         base_path = "/";
     } else if dirfd != AT_FDCWD {
         let dirfd = dirfd as usize;
-        if dirfd >= inner.fd_table.len() || inner.fd_table.get(dirfd).is_none() {
+        if dirfd >= inner.fd_table.len() || inner.fd_table.get_file(dirfd).is_none() {
             return Err(SysErrNo::EINVAL);
         }
-        if let Some(FileClass::File(osfile)) = &inner.fd_table.get(dirfd) {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table.get_file(dirfd) {
             if let Some(_) = osfile.find(linkpath.as_str(), OpenFlags::O_RDWR) {
                 return Err(SysErrNo::EEXIST);
             }
         }
-        if let Some(FileClass::File(osfile)) = &inner.fd_table.get(dirfd) {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table.get_file(dirfd) {
             if let Some(newfile) =
                 osfile.create(linkpath.as_str(), OpenFlags::O_RDWR | OpenFlags::O_CREATE)
             {
@@ -1237,10 +1228,10 @@ pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsiz: usi
         base_path = "/";
     } else if dirfd != AT_FDCWD {
         let dirfd = dirfd as usize;
-        if dirfd >= inner.fd_table.len() || inner.fd_table.get(dirfd).is_none() {
+        if dirfd >= inner.fd_table.len() || inner.fd_table.get_file(dirfd).is_none() {
             return Err(SysErrNo::EINVAL);
         }
-        if let Some(FileClass::File(osfile)) = &inner.fd_table.get(dirfd) {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table.get_file(dirfd) {
             if let Some(osfile) = osfile.find(path.as_str(), OpenFlags::O_RDONLY) {
                 let osfile = match osfile {
                     FileClass::File(f) => f.clone(),
@@ -1310,10 +1301,10 @@ pub fn sys_renameat2(
         base_path = "/";
     } else if olddirfd != AT_FDCWD {
         let olddirfd = olddirfd as usize;
-        if olddirfd >= inner.fd_table.len() || inner.fd_table.get(olddirfd).is_none() {
+        if olddirfd >= inner.fd_table.len() || inner.fd_table.get_file(olddirfd).is_none() {
             return Err(SysErrNo::EINVAL);
         }
-        if let Some(FileClass::File(osfile)) = &inner.fd_table.get(olddirfd) {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table.get_file(olddirfd) {
             if let Some(osfile) = osfile.find(oldpath.as_str(), OpenFlags::O_RDWR) {
                 let osfile = match osfile {
                     FileClass::File(f) => f.clone(),
@@ -1354,10 +1345,10 @@ pub fn sys_renameat2(
         base_path = "/";
     } else if newdirfd != AT_FDCWD {
         let newdirfd = newdirfd as usize;
-        if newdirfd >= inner.fd_table.len() || inner.fd_table.get(newdirfd).is_none() {
+        if newdirfd >= inner.fd_table.len() || inner.fd_table.get_file(newdirfd).is_none() {
             return Err(SysErrNo::EINVAL);
         }
-        if let Some(FileClass::File(osfile)) = &inner.fd_table.get(newdirfd) {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table.get_file(newdirfd) {
             if let Some(osfile) = osfile.find(newpath.as_str(), checkflags) {
                 let osfile = match osfile {
                     FileClass::File(f) => f.clone(),
@@ -1382,7 +1373,7 @@ pub fn sys_renameat2(
                 }
             }
         }
-        if let Some(FileClass::File(osfile)) = &inner.fd_table.get(newdirfd) {
+        if let Some(FileClass::File(osfile)) = &inner.fd_table.get_file(newdirfd) {
             if let Some(osfile) = osfile.create(newpath.as_str(), openflags) {
                 let osfile = match osfile {
                     FileClass::File(f) => f.clone(),
@@ -1466,14 +1457,14 @@ pub fn sys_copy_file_range(
     let token = inner.user_token();
 
     if outfd >= inner.fd_table.len()
-        || inner.fd_table.get(outfd).is_none()
+        || inner.fd_table.get_file(outfd).is_none()
         || infd >= inner.fd_table.len()
-        || inner.fd_table.get(infd).is_none()
+        || inner.fd_table.get_file(infd).is_none()
     {
         return Err(SysErrNo::EINVAL);
     }
 
-    if let Some(outfile) = &inner.fd_table.get(outfd) {
+    if let Some(outfile) = &inner.fd_table.get_file(outfd) {
         let outfile = match outfile {
             FileClass::File(f) => f.clone(),
             FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
@@ -1482,7 +1473,7 @@ pub fn sys_copy_file_range(
             return Err(SysErrNo::EACCES);
         }
 
-        if let Some(infile) = &inner.fd_table.get(infd) {
+        if let Some(infile) = &inner.fd_table.get_file(infd) {
             let infile = match infile {
                 FileClass::File(f) => f.clone(),
                 FileClass::Abs(f) => return Err(SysErrNo::EINVAL),

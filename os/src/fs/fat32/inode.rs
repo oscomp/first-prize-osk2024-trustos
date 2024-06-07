@@ -21,7 +21,6 @@ pub struct OSInode {
 }
 pub struct OSInodeInner {
     offset: usize, // 偏移量
-    openflags: OpenFlags,
 }
 impl OSInode {
     pub fn new(readable: bool, writable: bool, inode: Arc<VFile>) -> Self {
@@ -29,10 +28,7 @@ impl OSInode {
             readable,
             writable,
             inode,
-            inner: Mutex::new(OSInodeInner {
-                offset: 0,
-                openflags: OpenFlags::empty(),
-            }),
+            inner: Mutex::new(OSInodeInner { offset: 0 }),
         }
     }
     #[deprecated]
@@ -138,16 +134,6 @@ impl OSInode {
     }
     pub fn modification_time(&self) -> u64 {
         self.inode.modification_time()
-    }
-
-    pub fn set_openflags(&self, flags: OpenFlags) {
-        self.inner.lock().openflags = flags;
-    }
-    pub fn set_cloexec(&self) {
-        self.inner.lock().openflags |= OpenFlags::O_CLOEXEC;
-    }
-    pub fn unset_cloexec(&self) {
-        self.inner.lock().openflags &= !OpenFlags::O_CLOEXEC;
     }
 
     pub fn sync(&self) {
@@ -436,8 +422,7 @@ fn create_file(
         let (readable, writable) = flags.read_write();
         return parent_dir.create(child_name, attribute).map(|vfile| {
             insert_vfile_idx(abs_path, vfile.clone());
-            let mut osinode = OSInode::new(readable, writable, vfile);
-            osinode.set_openflags(flags);
+            let osinode = OSInode::new(readable, writable, vfile);
             FileClass::File(Arc::new(osinode))
         });
     }
@@ -461,8 +446,7 @@ fn create_file(
         let (readable, writable) = flags.read_write();
         parent_dir.create(child_name, attribute).map(|vfile| {
             insert_vfile_idx(abs_path, vfile.clone());
-            let mut osinode = OSInode::new(readable, writable, vfile);
-            osinode.set_openflags(flags);
+            let osinode = OSInode::new(readable, writable, vfile);
             FileClass::File(Arc::new(osinode))
         })
     } else {
@@ -505,11 +489,10 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
             return create_file(cwd, path, flags, &abs_path, parent_path, child_name);
         }
         let (readable, writable) = flags.read_write();
-        let mut vfile = OSInode::new(readable, writable, inode);
+        let vfile = OSInode::new(readable, writable, inode);
         if flags.contains(OpenFlags::O_APPEND) {
             vfile.set_offset(vfile.file_size());
         }
-        vfile.set_openflags(flags);
         return Some(FileClass::File(Arc::new(vfile)));
     }
 
@@ -530,11 +513,10 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
             }
             insert_vfile_idx(&abs_path, inode.clone());
             let (readable, writable) = flags.read_write();
-            let mut vfile = OSInode::new(readable, writable, inode);
+            let vfile = OSInode::new(readable, writable, inode);
             if flags.contains(OpenFlags::O_APPEND) {
                 vfile.set_offset(vfile.file_size());
             }
-            vfile.set_openflags(flags);
             return Some(FileClass::File(Arc::new(vfile)));
         }
     } else {
@@ -553,11 +535,10 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
             }
             insert_vfile_idx(&abs_path, inode.clone());
             let (readable, writable) = flags.read_write();
-            let mut vfile = OSInode::new(readable, writable, inode);
+            let vfile = OSInode::new(readable, writable, inode);
             if flags.contains(OpenFlags::O_APPEND) {
                 vfile.set_offset(vfile.file_size());
             }
-            vfile.set_openflags(flags);
             return Some(FileClass::File(Arc::new(vfile)));
         }
     }
@@ -604,14 +585,6 @@ impl File for OSInode {
             total_write_size += write_size;
         }
         total_write_size
-    }
-
-    fn ioctl(&self, cmd: usize, arg: usize) -> isize {
-        -1
-    }
-
-    fn get_openflags(&self) -> OpenFlags {
-        self.inner.lock().openflags
     }
 }
 
