@@ -68,7 +68,7 @@ impl File for Stdin {
                     continue;
                 }
                 CR => {
-                    buf.push(CR as u8);
+                    buf.push(LF as u8);
                     count += 1;
                     break;
                 }
