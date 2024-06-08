@@ -1,10 +1,12 @@
 mod error;
 mod hart;
+mod string;
 use core::arch::asm;
 
 pub use error::*;
 pub use hart::hart_id;
 use log::warn;
+pub use string::trim_first_point_slash;
 
 use crate::{config::mm::PAGE_SIZE, mm::VirtAddr};
 

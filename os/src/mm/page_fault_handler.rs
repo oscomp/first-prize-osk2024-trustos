@@ -6,7 +6,7 @@ use log::{debug, info};
 
 use crate::{
     config::mm::{PAGE_SIZE, PAGE_SIZE_BITS},
-    fs::File,
+    fs::{File, OSFile, SEEK_SET},
     mm::flush_tlb,
 };
 
@@ -26,11 +26,17 @@ pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut
     let old_offset = file.offset();
     let start_addr: VirtAddr = vma.vpn_range.start().into();
     let va = va.0;
-    file.set_offset(va - start_addr.0 + vma.mmap_file.offset);
+    // file.set_offset(va - start_addr.0 + vma.mmap_file.offset);
+    file.lseek(
+        (va - start_addr.0 + vma.mmap_file.offset) as isize,
+        SEEK_SET,
+    )
+    .unwrap();
     file.read(UserBuffer {
         buffers: translated_byte_buffer(page_table.token(), va as *const u8, PAGE_SIZE).unwrap(),
     });
-    file.set_offset(old_offset);
+    // file.set_offset(old_offset);
+    file.lseek(old_offset as isize, SEEK_SET).unwrap();
 }
 ///mmap读触发的lazy alocation，查看是否有共享页可直接用，没有再直接分配
 pub fn mmap_read_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapArea) {

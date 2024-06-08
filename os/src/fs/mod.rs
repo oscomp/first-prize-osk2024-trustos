@@ -2,6 +2,7 @@ mod devfs;
 mod dirent;
 mod ext4;
 mod fat32;
+mod fstruct;
 mod mount;
 mod pipe;
 mod stat;
@@ -11,205 +12,72 @@ mod vfs;
 cfg_if::cfg_if! {
     if #[cfg(feature="fat32")]{
         pub use fat32::{
-            create_init_files, is_abs_path, list_apps, open, open_file, path2vec, Mode, OSInode, OpenFlags,
+            create_init_files, is_abs_path, list_apps, open, open_file, path2vec, Mode,
             ROOT_INODE,remove_vfile_idx
         };
         pub use fat32_fs::{sync_all,BlockDevice};
     }
 }
 
-use crate::{mm::UserBuffer, sync::SyncUnsafeCell, utils::SyscallRet};
+use crate::mm::UserBuffer;
+use crate::utils::SysErrNo;
 use alloc::string::String;
 use alloc::{sync::Arc, vec, vec::Vec};
-use core::cell::RefMut;
 pub use devfs::*;
 pub use dirent::Dirent;
-
+pub use fstruct::{FdTable, FdTableInner, FsInfo};
 pub use mount::MNT_TABLE;
 pub use pipe::{make_pipe, Pipe};
 use spin::{Mutex, MutexGuard};
 pub use stat::{Kstat, Statfs};
 pub use stdio::{Stdin, Stdout};
-pub use vfs::{File, Ioctl};
+pub use vfs::*;
 
-pub struct FdTable {
-    inner: SyncUnsafeCell<FdTableInner>,
+// 定义一份打开文件的标志
+bitflags! {
+    pub struct OpenFlags: u32 {
+        // reserve 3 bits for the access mode
+        const O_RDONLY      = 0;
+        const O_WRONLY      = 1;
+        const O_RDWR        = 2;
+        const O_ACCMODE     = 3;
+        const O_CREATE      = 0o100;
+        const O_EXCL        = 0o200;
+        const O_NOCTTY      = 0o400;
+        const O_TRUNC       = 0o1000;
+        const O_APPEND      = 0o2000;
+        const O_NONBLOCK    = 0o4000;
+        const O_DSYNC       = 0o10000;
+        const O_SYNC        = 0o4010000;
+        const O_RSYNC       = 0o4010000;
+        const O_DIRECTORY   = 0o200000;
+        const O_NOFOLLOW    = 0o400000;
+        const O_CLOEXEC     = 0o2000000;    //描述符标志
+
+        const O_ASYNC       = 0o20000;
+        const O_DIRECT      = 0o40000;
+        const O_LARGEFILE   = 0o100000;
+        const O_NOATIME     = 0o1000000;
+        const O_PATH        = 0o10000000;
+        const O_TMPFILE     = 0o20200000;
+    }
 }
 
-pub struct FdTableInner {
-    flags: Vec<Option<OpenFlags>>,
-    table: Vec<Option<FileClass>>,
-}
-
-impl FdTableInner {
-    pub fn empty() -> Self {
-        Self {
-            flags: Vec::new(),
-            table: Vec::new(),
-        }
-    }
-    pub fn new(flags: Vec<Option<OpenFlags>>, table: Vec<Option<FileClass>>) -> Self {
-        FdTableInner { flags, table }
-    }
-}
-
-impl FdTable {
-    pub fn new(fd_table: FdTableInner) -> Self {
-        Self {
-            inner: SyncUnsafeCell::new(fd_table),
-        }
-    }
-    pub fn new_with_stdio() -> Self {
-        FdTable::new(FdTableInner::new(
-            vec![None, None, None],
-            vec![
-                // 0 -> stdin
-                Some(FileClass::Abs(Arc::new(Stdin))),
-                // 1 -> stdout
-                Some(FileClass::Abs(Arc::new(Stdout))),
-                // 2 -> stderr
-                Some(FileClass::Abs(Arc::new(Stdout))),
-            ],
-        ))
-    }
-    pub fn from_another(another: &Arc<FdTable>) -> Self {
-        let mut fd_table: Vec<_> = Vec::new();
-        let other = another.get_ref();
-        for fd in other.table.iter() {
-            if let Some(file) = fd {
-                fd_table.push(Some(file.clone()));
-            } else {
-                fd_table.push(None);
-            }
-        }
-        let mut flags: Vec<Option<OpenFlags>> = Vec::new();
-        flags.extend(&other.flags);
-        Self {
-            inner: SyncUnsafeCell::new(FdTableInner::new(flags, fd_table)),
-        }
-    }
-    pub fn alloc_fd(&self) -> usize {
-        let mut fd_table = &mut self.get_mut().table;
-        let mut flags = &mut self.get_mut().flags;
-        if let Some(fd) = (0..fd_table.len()).find(|fd| fd_table[*fd].is_none()) {
-            fd
+impl OpenFlags {
+    pub fn read_write(&self) -> (bool, bool) {
+        if self.is_empty() {
+            (true, false)
+        } else if self.contains(Self::O_WRONLY) {
+            (false, true)
         } else {
-            fd_table.push(None);
-            flags.push(None);
-            fd_table.len() - 1
+            (true, true)
         }
-    }
-    pub fn close_on_exec(&self) {
-        let mut inner = self.get_mut();
-        for idx in 0..inner.flags.len() {
-            if let Some(flag) = inner.flags[idx] {
-                if (flag.contains(OpenFlags::O_CLOEXEC)) {
-                    inner.flags[idx].take();
-                    inner.table[idx].take();
-                }
-            }
-        }
-    }
-    pub fn len(&self) -> usize {
-        self.get_ref().table.len()
-    }
-
-    pub fn resize(&self, size: usize) {
-        self.get_mut().table.resize(size, None);
-        self.get_mut().flags.resize(size, None);
-    }
-
-    pub fn get_file(&self, fd: usize) -> Option<FileClass> {
-        self.get_mut().table[fd].clone()
-    }
-
-    pub fn get_flag(&self, fd: usize) -> Option<OpenFlags> {
-        self.get_mut().flags[fd].clone()
-    }
-
-    pub fn get(&self, fd: usize) -> (Option<FileClass>, Option<OpenFlags>) {
-        (self.get_file(fd), self.get_flag(fd))
-    }
-
-    pub fn set_cloexec(&self, fd: usize) {
-        let flags = self.get_flag(fd).unwrap() | OpenFlags::O_CLOEXEC;
-        self.get_mut().flags[fd] = Some(flags);
-    }
-
-    pub fn unset_cloexec(&self, fd: usize) {
-        let flags = self.get_flag(fd).unwrap() & !OpenFlags::O_CLOEXEC;
-        self.get_mut().flags[fd] = Some(flags);
-    }
-
-    pub fn contain_cloexec(&self, fd: usize) -> bool {
-        self.get_mut().flags[fd]
-            .as_ref()
-            .unwrap()
-            .contains(OpenFlags::O_CLOEXEC)
-    }
-
-    pub fn set(&self, fd: usize, value: Option<FileClass>, flags: Option<OpenFlags>) {
-        self.get_mut().table[fd] = value;
-        self.get_mut().flags[fd] = flags;
-    }
-
-    pub fn set_flags(&self, fd: usize, flags: Option<OpenFlags>) {
-        self.get_mut().flags[fd] = flags;
-    }
-
-    pub fn take(&self, fd: usize) -> Option<FileClass> {
-        self.get_mut().flags[fd].take();
-        self.get_mut().table[fd].take()
-    }
-
-    fn get_mut(&self) -> &mut FdTableInner {
-        self.inner.get_unchecked_mut()
-    }
-
-    fn get_ref(&self) -> &FdTableInner {
-        self.inner.get_unchecked_ref()
     }
 }
 
-#[derive(Clone)]
-pub struct FsInfoInner {
-    pub cwd: String,
-}
-
-pub struct FsInfo {
-    inner: SyncUnsafeCell<FsInfoInner>,
-}
-
-impl FsInfo {
-    pub fn new(cwd: String) -> Self {
-        Self {
-            inner: SyncUnsafeCell::new(FsInfoInner { cwd }),
-        }
-    }
-    pub fn from_another(another: &Arc<FsInfo>) -> Self {
-        Self {
-            inner: SyncUnsafeCell::new(another.inner.get_unchecked_mut().clone()),
-        }
-    }
-    pub fn get_cwd(&self) -> String {
-        self.inner.get_unchecked_mut().cwd.clone()
-    }
-    pub fn cwd(&self) -> &str {
-        self.inner.get_unchecked_ref().cwd.as_str()
-    }
-    pub fn as_bytes(&self) -> &[u8] {
-        self.inner.get_unchecked_ref().cwd.as_bytes()
-    }
-    pub fn set_cwd(&self, cwd: String) {
-        self.inner.get_unchecked_mut().cwd = cwd;
-    }
-    pub fn get_mut(&self) -> &mut FsInfoInner {
-        self.inner.get_unchecked_mut()
-    }
-    pub fn get_ref(&self) -> &FsInfoInner {
-        self.inner.get_unchecked_ref()
-    }
-}
+pub const SEEK_SET: usize = 0;
+pub const SEEK_CUR: usize = 1;
+pub const SEEK_END: usize = 2;
 
 /// 枚举类型，分为普通文件和抽象文件
 /// 普通文件File，特点是支持更多类型的操作，包含seek, offset等
@@ -218,6 +86,84 @@ impl FsInfo {
 pub enum FileClass {
     File(Arc<OSInode>),
     Abs(Arc<dyn File>),
+}
+
+impl FileClass {
+    pub fn file(&self) -> Result<Arc<OSInode>, SysErrNo> {
+        match self {
+            FileClass::File(f) => Ok(f.clone()),
+            FileClass::Abs(f) => Err(SysErrNo::EINVAL),
+        }
+    }
+    pub fn abs(&self) -> Result<Arc<dyn File>, SysErrNo> {
+        match self {
+            FileClass::File(f) => Err(SysErrNo::EINVAL),
+            FileClass::Abs(f) => Ok(f.clone()),
+        }
+    }
+}
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum InodeType {
+    /// FIFO (named pipe)
+    Fifo = 0o1,
+    /// Character device
+    CharDevice = 0o2,
+    /// Directory
+    Dir = 0o4,
+    /// Block device
+    BlockDevice = 0o6,
+    /// Regular file
+    File = 0o10,
+    /// Symbolic link
+    SymLink = 0o12,
+    /// Socket
+    Socket = 0o14,
+}
+
+impl InodeType {
+    /// Tests whether this node type represents a regular file.
+    pub const fn is_file(self) -> bool {
+        matches!(self, Self::File)
+    }
+    /// Tests whether this node type represents a directory.
+    pub const fn is_dir(self) -> bool {
+        matches!(self, Self::Dir)
+    }
+    /// Tests whether this node type represents a symbolic link.
+    pub const fn is_symlink(self) -> bool {
+        matches!(self, Self::SymLink)
+    }
+    /// Returns `true` if this node type is a block device.
+    pub const fn is_block_device(self) -> bool {
+        matches!(self, Self::BlockDevice)
+    }
+    /// Returns `true` if this node type is a char device.
+    pub const fn is_char_device(self) -> bool {
+        matches!(self, Self::CharDevice)
+    }
+    /// Returns `true` if this node type is a fifo.
+    pub const fn is_fifo(self) -> bool {
+        matches!(self, Self::Fifo)
+    }
+    /// Returns `true` if this node type is a socket.
+    pub const fn is_socket(self) -> bool {
+        matches!(self, Self::Socket)
+    }
+    /// Returns a character representation of the node type.
+    ///
+    /// For example, `d` for directory, `-` for regular file, etc.
+    pub const fn as_char(self) -> char {
+        match self {
+            Self::Fifo => 'p',
+            Self::CharDevice => 'c',
+            Self::Dir => 'd',
+            Self::BlockDevice => 'b',
+            Self::File => '-',
+            Self::SymLink => 'l',
+            Self::Socket => 's',
+        }
+    }
 }
 
 core::arch::global_asm!(include_str!("preload.S"));

@@ -1,6 +1,7 @@
 use super::{Dirent, File, Ioctl, Kstat};
 use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut};
 use crate::task::current_task;
+use crate::utils::SysErrNo;
 use crate::{
     mm::UserBuffer, sbi::console_getchar, syscall::IoctlCommand, task::suspend_current_and_run_next,
 };
@@ -34,7 +35,7 @@ impl File for Stdin {
     fn writable(&self) -> bool {
         false
     }
-    fn read(&self, mut user_buf: UserBuffer) -> usize {
+    fn read(&self, mut user_buf: UserBuffer) -> Result<usize, SysErrNo> {
         /*
         //一次读取单个字符
         assert_eq!(user_buf.len(), 1);
@@ -84,10 +85,11 @@ impl File for Stdin {
             }
         }
         user_buf.write(buf.as_slice());
-        count
+        Ok(count)
     }
-    fn write(&self, _user_buf: UserBuffer) -> usize {
-        panic!("Cannot write to stdin!");
+    fn write(&self, _user_buf: UserBuffer) -> Result<usize, SysErrNo> {
+        Err(SysErrNo::EINVAL)
+        // panic!("Cannot write to stdin!");
     }
 }
 
@@ -146,14 +148,14 @@ impl File for Stdout {
     fn writable(&self) -> bool {
         true
     }
-    fn read(&self, _user_buf: UserBuffer) -> usize {
+    fn read(&self, _user_buf: UserBuffer) -> Result<usize, SysErrNo> {
         panic!("Cannot read from stdout!");
     }
-    fn write(&self, user_buf: UserBuffer) -> usize {
+    fn write(&self, user_buf: UserBuffer) -> Result<usize, SysErrNo> {
         for buffer in user_buf.buffers.iter() {
             print!("{}", core::str::from_utf8(*buffer).unwrap());
         }
-        user_buf.len()
+        Ok(user_buf.len())
     }
 }
 

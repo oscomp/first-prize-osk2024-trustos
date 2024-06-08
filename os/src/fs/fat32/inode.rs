@@ -2,92 +2,61 @@ use super::{find_vfile_idx, insert_vfile_idx, remove_vfile_idx};
 
 use crate::{
     drivers::BLOCK_DEVICE,
-    fs::{find_device, open_device_file, register_device, Dirent, File, FileClass, Kstat},
+    fs::{
+        find_device, open_device_file, register_device, vfs::Inode, Dirent, File, FileClass,
+        InodeType, Kstat, OSFile, OSInode, OpenFlags, SEEK_SET,
+    },
     mm::UserBuffer,
+    utils::{trim_first_point_slash, GeneralRet, SysErrNo},
 };
 use _core::str::FromStr;
 use alloc::{string::String, sync::Arc, vec::Vec};
 use bitflags::*;
-use fat32_fs::{create_root_vfile, FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY};
+use fat32_fs::{
+    create_root_vfile, FAT32Manager, VFile, ATTR_ARCHIVE, ATTR_DIRECTORY, ATTR_SYMLINK,
+};
 use lazy_static::*;
 use log::{debug, info};
 use spin::{Mutex, MutexGuard};
 
-pub struct OSInode {
-    readable: bool, // 该文件是否允许通过 sys_read 进行读
-    writable: bool, // 该文件是否允许通过 sys_write 进行写
-    inode: Arc<VFile>,
-    inner: Mutex<OSInodeInner>,
-}
-pub struct OSInodeInner {
-    offset: usize, // 偏移量
-}
-impl OSInode {
-    pub fn new(readable: bool, writable: bool, inode: Arc<VFile>) -> Self {
-        Self {
-            readable,
-            writable,
-            inode,
-            inner: Mutex::new(OSInodeInner { offset: 0 }),
+type FatInode = VFile;
+
+impl Inode for FatInode {
+    fn name(&self) -> String {
+        self.get_name()
+    }
+    fn size(&self) -> usize {
+        self.get_size() as usize
+    }
+    fn node_type(&self) -> InodeType {
+        let attr = self.get_attribute();
+        if attr == ATTR_DIRECTORY {
+            InodeType::Dir
+        } else if attr == ATTR_SYMLINK {
+            InodeType::SymLink
+        } else {
+            InodeType::File
         }
     }
-    #[deprecated]
-    /// 只有读取elf_data时用到了read_all,但是随后又转为了&[u8],拷贝开销过大
-    /// 使用read_as_elf
-    pub fn read_all(&self) -> Vec<u8> {
-        let mut inner = self.inner.lock();
-        let mut buffer = [0u8; 512];
-        let mut v: Vec<u8> = Vec::new();
-        loop {
-            let len = self.inode.read_at(inner.offset, &mut buffer);
-            if len == 0 {
-                break;
-            }
-            inner.offset += len;
-            v.extend_from_slice(&buffer[..len]);
+    fn read_at(&self, off: usize, buf: &mut [u8]) -> Result<usize, SysErrNo> {
+        Ok(self.read_at(off, buf))
+    }
+    fn write_at(&self, off: usize, buf: &[u8]) -> Result<usize, SysErrNo> {
+        Ok(self.write_at(off, buf))
+    }
+    fn read_dentry(&self, off: usize) -> Option<Dirent> {
+        assert!(self.is_dir());
+        if let Some((name, off, ino, dtype)) = self.dirent_info(off) {
+            let mut dirent = Dirent::new();
+            dirent.init(name.as_str(), off as isize, ino as usize, dtype);
+            Some(dirent)
+        } else {
+            None
         }
-        v
     }
-    /// 将文件指针转换为切片,避免拷贝
-    /// 读取完整的文件也可以用
-    pub unsafe fn read_as_elf(&self) -> &[u8] {
-        self.inode.read_as_elf()
-    }
-
-    pub fn is_dir(&self) -> bool {
-        self.inode.is_dir()
-    }
-
-    pub fn name(&self) -> String {
-        self.inode.get_name()
-    }
-
-    pub fn delete(&self) {
-        self.inode.delete()
-    }
-
-    pub fn remove(&self) -> usize {
-        self.inode.remove()
-    }
-
-    pub fn file_size(&self) -> usize {
-        self.inode.get_size() as usize
-    }
-
-    pub fn set_file_size(&self, size: u32) {
-        self.inode.set_size(size);
-    }
-    pub fn find(&self, path: &str, flags: OpenFlags) -> Option<FileClass> {
-        let pathv = path2vec(path);
-        let (readable, writable) = flags.read_write();
-        self.inode
-            .find_vfile_path(&pathv)
-            .map(|vfile| FileClass::File(Arc::new(OSInode::new(readable, writable, vfile))))
-    }
-
-    pub fn fstat(&self, kstat: &mut Kstat) {
-        let inner = self.inner.lock();
-        let (st_ino, st_size, st_atime, st_mtime, st_ctime, st_blocks, st_mode) = self.inode.stat();
+    fn fstat(&self) -> Kstat {
+        let (st_ino, st_size, st_atime, st_mtime, st_ctime, st_blocks, st_mode) = self.stat();
+        let mut kstat = Kstat::new();
         kstat.init(
             st_ino as u64,
             st_size as u64,
@@ -97,82 +66,201 @@ impl OSInode {
             st_blocks,
             st_mode,
         );
+        kstat
     }
-
-    pub fn dirent(&self, dirent: &mut Dirent) -> isize {
-        if !self.is_dir() {
-            return -1;
-        }
-        let mut inner = self.inner.lock();
-        let offset = inner.offset as u32;
-        if let Some((name, off, ino, dtype)) = self.inode.dirent_info(offset as usize) {
-            dirent.init(name.as_str(), off as isize, ino as usize, dtype);
-            inner.offset = off as usize;
-            let len = dirent.len() as isize;
-            len
+    fn find(&self, name: &str) -> Option<Arc<dyn Inode>> {
+        let pathv = path2vec(name);
+        if let Some(node) = self.find_vfile_path(&pathv) {
+            Some(node)
         } else {
-            -1
+            None
         }
     }
-
-    pub fn set_offset(&self, offset: usize) {
-        let mut inner = self.inner.lock();
-        inner.offset = offset;
-    }
-
-    pub fn offset(&self) -> usize {
-        self.inner.lock().offset
-    }
-    pub fn set_accessed_time(&self, atime: u64) {
-        self.inode.set_accessed_time(atime);
-    }
-    pub fn set_modification_time(&self, mtime: u64) {
-        self.inode.set_modification_time(mtime);
-    }
-    pub fn accessed_time(&self) -> u64 {
-        self.inode.accessed_time()
-    }
-    pub fn modification_time(&self) -> u64 {
-        self.inode.modification_time()
-    }
-
-    pub fn sync(&self) {
-        self.inode.sync();
-    }
-
-    pub fn setsym(&self) {
-        self.inode.setsym();
-    }
-    pub fn sym(&self) -> bool {
-        self.inode.sym()
-    }
-
-    pub fn first_cluster(&self) -> u32 {
-        self.inode.first_cluster()
-    }
-    pub fn set_first_cluster(&self, first_cluster: u32) {
-        self.inode.set_first_cluster(first_cluster);
-    }
-
-    pub fn create(&self, path: &str, flags: OpenFlags) -> Option<FileClass> {
-        let path = if path.starts_with("./") {
-            &path[2..]
+    fn create(&self, name: &str, mode: OpenFlags) -> Option<Arc<dyn Inode>> {
+        let path = trim_first_point_slash(name);
+        let attribute = if mode.contains(OpenFlags::O_DIRECTORY) {
+            ATTR_DIRECTORY
         } else {
-            path
+            ATTR_ARCHIVE
         };
-        let (readable, writable) = flags.read_write();
-        let attribute = {
-            if flags.contains(OpenFlags::O_DIRECTROY) {
-                ATTR_DIRECTORY
-            } else {
-                ATTR_ARCHIVE
-            }
-        };
-        self.inode
-            .create(path, attribute)
-            .map(|vfile| FileClass::File(Arc::new(OSInode::new(readable, writable, vfile))))
+        if let Some(node) = self.create(name, attribute) {
+            Some(node)
+        } else {
+            None
+        }
+    }
+    fn mkdir(&self, name: &str, mode: OpenFlags) -> Result<(), SysErrNo> {
+        todo!()
+    }
+    fn truncate(&self) -> Result<(), SysErrNo> {
+        todo!()
+    }
+    fn sync(&self) {
+        self.sync();
     }
 }
+
+// pub struct OSInode {
+//     readable: bool, // 该文件是否允许通过 sys_read 进行读
+//     writable: bool, // 该文件是否允许通过 sys_write 进行写
+//     inode: Arc<VFile>,
+//     inner: Mutex<OSInodeInner>,
+// }
+// pub struct OSInodeInner {
+//     offset: usize, // 偏移量
+// }
+
+// impl OSInode {
+//     pub fn new(readable: bool, writable: bool, inode: Arc<VFile>) -> Self {
+//         Self {
+//             readable,
+//             writable,
+//             inode,
+//             inner: Mutex::new(OSInodeInner { offset: 0 }),
+//         }
+//     }
+//     #[deprecated]
+//     /// 只有读取elf_data时用到了read_all,但是随后又转为了&[u8],拷贝开销过大
+//     /// 使用read_as_elf
+//     pub fn read_all(&self) -> Vec<u8> {
+//         let mut inner = self.inner.lock();
+//         let mut buffer = [0u8; 512];
+//         let mut v: Vec<u8> = Vec::new();
+//         loop {
+//             let len = self.inode.read_at(inner.offset, &mut buffer);
+//             if len == 0 {
+//                 break;
+//             }
+//             inner.offset += len;
+//             v.extend_from_slice(&buffer[..len]);
+//         }
+//         v
+//     }
+//     /// 将文件指针转换为切片,避免拷贝
+//     /// 读取完整的文件也可以用
+//     pub unsafe fn read_as_elf(&self) -> &[u8] {
+//         self.inode.read_as_elf()
+//     }
+
+//     pub fn is_dir(&self) -> bool {
+//         self.inode.is_dir()
+//     }
+
+//     pub fn name(&self) -> String {
+//         self.inode.get_name()
+//     }
+
+//     pub fn delete(&self) {
+//         self.inode.delete()
+//     }
+
+//     pub fn remove(&self) -> usize {
+//         self.inode.remove()
+//     }
+
+//     pub fn file_size(&self) -> usize {
+//         self.inode.get_size() as usize
+//     }
+
+//     pub fn set_file_size(&self, size: u32) {
+//         self.inode.set_size(size);
+//     }
+//     pub fn find(&self, path: &str, flags: OpenFlags) -> Option<FileClass> {
+//         let pathv = path2vec(path);
+//         let (readable, writable) = flags.read_write();
+//         self.inode
+//             .find_vfile_path(&pathv)
+//             .map(|vfile| FileClass::File(Arc::new(OSInode::new(readable, writable, vfile))))
+//     }
+
+//     pub fn fstat(&self, kstat: &mut Kstat) {
+//         let inner = self.inner.lock();
+//         let (st_ino, st_size, st_atime, st_mtime, st_ctime, st_blocks, st_mode) = self.inode.stat();
+//         kstat.init(
+//             st_ino as u64,
+//             st_size as u64,
+//             st_atime,
+//             st_mtime,
+//             st_ctime,
+//             st_blocks,
+//             st_mode,
+//         );
+//     }
+
+//     pub fn dirent(&self, dirent: &mut Dirent) -> isize {
+//         if !self.is_dir() {
+//             return -1;
+//         }
+//         let mut inner = self.inner.lock();
+//         let offset = inner.offset as u32;
+//         if let Some((name, off, ino, dtype)) = self.inode.dirent_info(offset as usize) {
+//             dirent.init(name.as_str(), off as isize, ino as usize, dtype);
+//             inner.offset = off as usize;
+//             let len = dirent.len() as isize;
+//             len
+//         } else {
+//             -1
+//         }
+//     }
+
+//     pub fn set_offset(&self, offset: usize) {
+//         let mut inner = self.inner.lock();
+//         inner.offset = offset;
+//     }
+
+//     pub fn offset(&self) -> usize {
+//         self.inner.lock().offset
+//     }
+//     pub fn set_accessed_time(&self, atime: u64) {
+//         self.inode.set_accessed_time(atime);
+//     }
+//     pub fn set_modification_time(&self, mtime: u64) {
+//         self.inode.set_modification_time(mtime);
+//     }
+//     pub fn accessed_time(&self) -> u64 {
+//         self.inode.accessed_time()
+//     }
+//     pub fn modification_time(&self) -> u64 {
+//         self.inode.modification_time()
+//     }
+
+//     pub fn sync(&self) {
+//         self.inode.sync();
+//     }
+
+//     pub fn setsym(&self) {
+//         self.inode.setsym();
+//     }
+//     pub fn sym(&self) -> bool {
+//         self.inode.sym()
+//     }
+
+//     pub fn first_cluster(&self) -> u32 {
+//         self.inode.first_cluster()
+//     }
+//     pub fn set_first_cluster(&self, first_cluster: u32) {
+//         self.inode.set_first_cluster(first_cluster);
+//     }
+
+//     pub fn create(&self, path: &str, flags: OpenFlags) -> Option<FileClass> {
+//         let path = if path.starts_with("./") {
+//             &path[2..]
+//         } else {
+//             path
+//         };
+//         let (readable, writable) = flags.read_write();
+//         let attribute = {
+//             if flags.contains(OpenFlags::O_DIRECTORY) {
+//                 ATTR_DIRECTORY
+//             } else {
+//                 ATTR_ARCHIVE
+//             }
+//         };
+//         self.inode
+//             .create(path, attribute)
+//             .map(|vfile| FileClass::File(Arc::new(OSInode::new(readable, writable, vfile))))
+//     }
+// }
 
 lazy_static! {
     pub static ref ROOT_INODE: Arc<VFile> = {
@@ -238,12 +326,12 @@ const ADJTIME: &str = "0.000000 0.000000 UTC\n";
 const LOCALTIME: &str =
     "lrwxrwxrwx 1 root root 33 11月 18  2023 /etc/localtime -> /usr/share/zoneinfo/Asia/Shanghai\n";
 
-pub fn create_init_files() {
+pub fn create_init_files() -> GeneralRet {
     //创建./proc文件夹
     open(
         "/",
         "./proc",
-        OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTROY,
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
     );
     //创建./proc/mounts文件系统使用情况
     if let Some(FileClass::File(mountsfile)) = open(
@@ -261,7 +349,7 @@ pub fn create_init_files() {
             ));
         }
         let mountbuf = UserBuffer::new(mountsvec);
-        let mountssize = mountsfile.write(mountbuf);
+        let mountssize = mountsfile.write(mountbuf)?;
         debug!("create /proc/mounts with {} sizes", mountssize);
     }
     //创建./proc/meminfo系统内存使用情况
@@ -277,14 +365,14 @@ pub fn create_init_files() {
             memvec.push(core::slice::from_raw_parts_mut(mem.as_mut_ptr(), mem.len()));
         }
         let membuf = UserBuffer::new(memvec);
-        let memsize = memfile.write(membuf);
-        debug!("create /proc/meminfo with {} sizes", memsize);
+        let memsize = memfile.write(membuf)?;
+        // debug!("create /proc/meminfo with {} sizes", memsize);
     }
     //创建./dev文件夹
     open(
         "/",
         "./dev",
-        OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTROY,
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
     );
     //注册设备/dev/rtc和/dev/rtc0
     register_device("/dev/rtc");
@@ -299,7 +387,7 @@ pub fn create_init_files() {
     open(
         "./dev",
         "./misc",
-        OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTROY,
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
     );
     //注册设备/dev/misc/rtc
     register_device("/dev/misc/rtc");
@@ -307,7 +395,7 @@ pub fn create_init_files() {
     open(
         "/",
         "./etc",
-        OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTROY,
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
     );
     //创建./etc/adjtime记录时间偏差
     if let Some(FileClass::File(adjtimefile)) = open(
@@ -322,7 +410,7 @@ pub fn create_init_files() {
             adjtimevec.push(core::slice::from_raw_parts_mut(adj.as_mut_ptr(), adj.len()));
         }
         let adjtimebuf = UserBuffer::new(adjtimevec);
-        let adjtimesize = adjtimefile.write(adjtimebuf);
+        let adjtimesize = adjtimefile.write(adjtimebuf)?;
         debug!("create /etc/adjtime with {} sizes", adjtimesize);
     }
     //创建./etc/localtime记录时区
@@ -341,54 +429,13 @@ pub fn create_init_files() {
             ));
         }
         let localtimebuf = UserBuffer::new(localtimevec);
-        let localtimesize = localtimefile.write(localtimebuf);
+        let localtimesize = localtimefile.write(localtimebuf)?;
         debug!("create /etc/localtime with {} sizes", localtimesize);
-    }
-
-    println!("create_init_files success!");
+    };
+    Ok(())
+    // println!("create_init_files success!");
 }
 
-// 定义一份打开文件的标志
-bitflags! {
-    pub struct OpenFlags: u32 {
-        // reserve 3 bits for the access mode
-        const O_RDONLY      = 0;
-        const O_WRONLY      = 1;
-        const O_RDWR        = 2;
-        const O_ACCMODE     = 3;
-        const O_CREATE      = 0o100;
-        const O_EXCL        = 0o200;
-        const O_NOCTTY      = 0o400;
-        const O_TRUNC       = 0o1000;
-        const O_APPEND      = 0o2000;
-        const O_NONBLOCK    = 0o4000;
-        const O_DSYNC       = 0o10000;
-        const O_SYNC        = 0o4010000;
-        const O_RSYNC       = 0o4010000;
-        const O_DIRECTROY   = 0o200000;
-        const O_NOFOLLOW    = 0o400000;
-        const O_CLOEXEC     = 0o2000000;    //描述符标志
-
-        const O_ASYNC       = 0o20000;
-        const O_DIRECT      = 0o40000;
-        const O_LARGEFILE   = 0o100000;
-        const O_NOATIME     = 0o1000000;
-        const O_PATH        = 0o10000000;
-        const O_TMPFILE     = 0o20200000;
-    }
-}
-
-impl OpenFlags {
-    pub fn read_write(&self) -> (bool, bool) {
-        if self.is_empty() {
-            (true, false)
-        } else if self.contains(Self::O_WRONLY) {
-            (false, true)
-        } else {
-            (true, true)
-        }
-    }
-}
 pub fn open_file(path: &str, flags: OpenFlags) -> Option<FileClass> {
     open(&"/", path, flags)
 }
@@ -413,7 +460,7 @@ fn create_file(
 ) -> Option<FileClass> {
     if let Some(parent_dir) = find_vfile_idx(parent_path) {
         let attribute = {
-            if flags.contains(OpenFlags::O_DIRECTROY) {
+            if flags.contains(OpenFlags::O_DIRECTORY) {
                 ATTR_DIRECTORY
             } else {
                 ATTR_ARCHIVE
@@ -437,7 +484,7 @@ fn create_file(
     };
     if let Some(parent_dir) = cur_vfile.find_vfile_path(&pathv) {
         let attribute = {
-            if flags.contains(OpenFlags::O_DIRECTROY) {
+            if flags.contains(OpenFlags::O_DIRECTORY) {
                 ATTR_DIRECTORY
             } else {
                 ATTR_ARCHIVE
@@ -491,7 +538,8 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
         let (readable, writable) = flags.read_write();
         let vfile = OSInode::new(readable, writable, inode);
         if flags.contains(OpenFlags::O_APPEND) {
-            vfile.set_offset(vfile.file_size());
+            // vfile.set_offset(vfile.file_size());
+            vfile.lseek(vfile.inode.size() as isize, SEEK_SET);
         }
         return Some(FileClass::File(Arc::new(vfile)));
     }
@@ -515,7 +563,8 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
             let (readable, writable) = flags.read_write();
             let vfile = OSInode::new(readable, writable, inode);
             if flags.contains(OpenFlags::O_APPEND) {
-                vfile.set_offset(vfile.file_size());
+                // vfile.set_offset(vfile.file_size());
+                vfile.lseek(vfile.inode.size() as isize, SEEK_SET);
             }
             return Some(FileClass::File(Arc::new(vfile)));
         }
@@ -537,7 +586,8 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
             let (readable, writable) = flags.read_write();
             let vfile = OSInode::new(readable, writable, inode);
             if flags.contains(OpenFlags::O_APPEND) {
-                vfile.set_offset(vfile.file_size());
+                // vfile.set_offset(vfile.file_size());
+                vfile.lseek(vfile.inode.size() as isize, SEEK_SET);
             }
             return Some(FileClass::File(Arc::new(vfile)));
         }
@@ -560,31 +610,31 @@ impl File for OSInode {
         self.writable
     }
 
-    fn read(&self, mut buf: UserBuffer) -> usize {
+    fn read(&self, mut buf: UserBuffer) -> Result<usize, SysErrNo> {
         let mut inner = self.inner.lock();
         let mut total_read_size = 0usize;
         // 这边要使用 iter_mut()，因为要将数据写入
         for slice in buf.buffers.iter_mut() {
-            let read_size = self.inode.read_at(inner.offset, *slice);
+            let read_size = self.inode.read_at(inner.offset, *slice)?;
             if read_size == 0 {
                 break;
             }
             inner.offset += read_size;
             total_read_size += read_size;
         }
-        total_read_size
+        Ok(total_read_size)
     }
 
-    fn write(&self, buf: UserBuffer) -> usize {
+    fn write(&self, buf: UserBuffer) -> Result<usize, SysErrNo> {
         let mut inner = self.inner.lock();
         let mut total_write_size = 0usize;
         for slice in buf.buffers.iter() {
-            let write_size = self.inode.write_at(inner.offset, *slice);
+            let write_size = self.inode.write_at(inner.offset, *slice)?;
             assert_eq!(write_size, slice.len());
             inner.offset += write_size;
             total_write_size += write_size;
         }
-        total_write_size
+        Ok(total_write_size)
     }
 }
 

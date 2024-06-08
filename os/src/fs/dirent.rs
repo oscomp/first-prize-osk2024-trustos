@@ -4,11 +4,11 @@ pub const NAME_LIMIT: usize = 253;
 #[repr(C)]
 #[derive(Debug)]
 pub struct Dirent {
-    d_ino: usize,    // 索引节点号
-    d_off: isize,    // 从 0 开始到下一个 dirent 的偏移
-    d_reclen: u16,   // 当前 dirent 的长度
-    d_type: u8,      // 文件类型
-    d_name: [u8; 0], // 文件名
+    d_ino: usize,     // 索引节点号
+    pub d_off: isize, // 从 0 开始到下一个 dirent 的偏移
+    d_reclen: u16,    // 当前 dirent 的长度
+    d_type: u8,       // 文件类型
+    d_name: [u8; 0],  // 文件名
 }
 
 impl Dirent {

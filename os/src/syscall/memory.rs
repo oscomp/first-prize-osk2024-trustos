@@ -40,7 +40,7 @@ pub fn sys_mmap(
     }
     // check fd and map_permission
     let file;
-    if let Some(FileClass::File(f)) = &task_inner.fd_table.get_file(fd) {
+    if let Some(FileClass::File(f)) = &task_inner.fd_table.try_get_file(fd) {
         file = f.clone();
     } else {
         unreachable!();
