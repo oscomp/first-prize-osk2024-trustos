@@ -734,7 +734,7 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
     match cmd {
         F_DUPFD => {
             let inode = file.clone();
-            let fd_new = inner.fd_table.alloc_fd();
+            let fd_new = inner.fd_table.alloc_fd_larger_than(arg);
             let flags = inner.fd_table.try_get_flag(fd);
             inner.fd_table.set(fd_new, Some(inode), flags);
             return Ok(fd_new);
@@ -743,7 +743,7 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
             let file = file.file()?;
             let inode = file.clone();
             let flags = inner.fd_table.get_flag(fd) | OpenFlags::O_CLOEXEC;
-            let fd_new = inner.fd_table.alloc_fd();
+            let fd_new = inner.fd_table.alloc_fd_larger_than(arg);
             inner
                 .fd_table
                 .set(fd_new, Some(FileClass::File(inode)), Some(flags));

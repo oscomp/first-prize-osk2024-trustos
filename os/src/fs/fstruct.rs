@@ -70,6 +70,21 @@ impl FdTable {
             fd_table.len() - 1
         }
     }
+    pub fn alloc_fd_larger_than(&self, arg: usize) -> usize {
+        let mut fd_table = &mut self.get_mut().table;
+        let mut flags = &mut self.get_mut().flags;
+        if fd_table.len() < arg {
+            fd_table.resize(arg, None);
+            flags.resize(arg, None);
+        }
+        if let Some(fd) = (arg..fd_table.len()).find(|fd| fd_table[*fd].is_none()) {
+            fd
+        } else {
+            fd_table.push(None);
+            flags.push(None);
+            fd_table.len() - 1
+        }
+    }
     pub fn close_on_exec(&self) {
         let mut inner = self.get_mut();
         for idx in 0..inner.flags.len() {
