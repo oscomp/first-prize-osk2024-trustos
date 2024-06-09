@@ -2,6 +2,7 @@ mod devfs;
 mod dirent;
 mod ext4;
 mod fat32;
+mod fsidx;
 mod fstruct;
 mod mount;
 mod pipe;
@@ -13,7 +14,7 @@ cfg_if::cfg_if! {
     if #[cfg(feature="fat32")]{
         pub use fat32::{
             create_init_files, is_abs_path, list_apps, open, open_file, path2vec, Mode,
-            ROOT_INODE,remove_vfile_idx
+            ROOT_INODE,
         };
         pub use fat32_fs::{sync_all,BlockDevice};
     }
@@ -25,6 +26,7 @@ use alloc::string::String;
 use alloc::{sync::Arc, vec, vec::Vec};
 pub use devfs::*;
 pub use dirent::Dirent;
+pub use fsidx::*;
 pub use fstruct::{FdTable, FdTableInner, FsInfo};
 pub use mount::MNT_TABLE;
 pub use pipe::{make_pipe, Pipe};

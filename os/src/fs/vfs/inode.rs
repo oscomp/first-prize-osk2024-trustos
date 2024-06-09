@@ -56,7 +56,7 @@ impl OSFile for OSInode {
     fn find(&self, path: &str, flags: OpenFlags) -> Option<FileClass> {
         let (readable, writable) = flags.read_write();
         self.inode
-            .find(path)
+            .find_by_path(path)
             .map(|node| FileClass::File(Arc::new(OSInode::new(readable, writable, node))))
     }
 }

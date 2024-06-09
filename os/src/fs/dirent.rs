@@ -1,14 +1,16 @@
+use alloc::string::String;
+
 pub const NAME_LIMIT: usize = 253;
 
 /// 存储目录中的文件信息
 #[repr(C)]
 #[derive(Debug)]
 pub struct Dirent {
-    d_ino: usize,     // 索引节点号
-    pub d_off: isize, // 从 0 开始到下一个 dirent 的偏移
-    d_reclen: u16,    // 当前 dirent 的长度
-    d_type: u8,       // 文件类型
-    d_name: [u8; 0],  // 文件名
+    d_ino: u64,        // 索引节点号
+    d_off: i64,        // 从 0 开始到下一个 dirent 的偏移
+    d_reclen: u16,     // 当前 dirent 的长度
+    d_type: u8,        // 文件类型
+    d_name: [u8; 256], // 文件名
 }
 
 impl Dirent {
@@ -18,42 +20,40 @@ impl Dirent {
             d_off: 0,
             d_reclen: core::mem::size_of::<Self>() as u16,
             d_type: 0,
-            d_name: [0; 0],
+            d_name: [0; 256],
         }
     }
-
-    pub fn len(&self) -> u16 {
-        self.d_reclen
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.d_reclen as usize
+    }
+    #[inline(always)]
+    pub fn off(&self) -> usize {
+        self.d_off as usize
     }
 
-    pub fn init(&mut self, name: &str, off: isize, ino: usize, dtype: u8) {
-        self.fill_name(name);
+    pub fn init(&mut self, mut name: String, off: i64, ino: u64, dtype: u8) {
+        //对齐 align8
+        name += "\0";
+        let mut len = name.len() + 19;
+        let align = 8 - len % 8;
+        len += align;
+        for _ in 0..align {
+            name.push('\0');
+        }
         self.d_off = off;
         self.d_ino = ino;
         self.d_type = dtype;
-    }
-
-    fn fill_name(&mut self, name: &str) {
-        /*
-        let len = name.len().min(NAME_LIMIT);
-        let name_bytes = name.as_bytes();
-        for i in 0..len {
-            self.d_name[i] = name_bytes[i];
-        }
-        self.d_name[len] = 0;
-        */
-        let name_bytes = name.as_bytes();
-        self.d_reclen = (core::mem::size_of::<Self>() + name_bytes.len() + 1) as u16;
-        let name_vec = unsafe {
-            core::slice::from_raw_parts_mut(self.d_name.as_mut_ptr(), name_bytes.len() + 1)
+        self.d_reclen = len as u16;
+        self.d_name = {
+            let mut tmp: [u8; 256] = [0; 256];
+            tmp[..name.len()].copy_from_slice(name.as_bytes());
+            tmp
         };
-        name_vec[..name_bytes.len()].copy_from_slice(name_bytes);
-        name_vec[name_bytes.len()] = b'\0';
     }
 
     pub fn as_bytes(&self) -> &[u8] {
         //特殊处理，因为名字数组大小不定
-        let size = self.len() as usize;
-        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
+        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, self.len()) }
     }
 }

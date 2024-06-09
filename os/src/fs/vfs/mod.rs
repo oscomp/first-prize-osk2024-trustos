@@ -25,7 +25,9 @@ pub trait Inode: Send + Sync {
     /// 在当前目录下创建目录文件
     fn mkdir(&self, name: &str, mode: OpenFlags) -> Result<(), SysErrNo>;
     /// 在当前目录下查找文件
-    fn find(&self, name: &str) -> Option<Arc<dyn Inode>>;
+    fn find_by_path(&self, path: &str) -> Option<Arc<dyn Inode>>;
+    ///
+    fn find_by_name(&self, name: &str) -> Option<Arc<dyn Inode>>;
     ///
     fn read_at(&self, off: usize, buf: &mut [u8]) -> Result<usize, SysErrNo>;
     ///
@@ -36,13 +38,24 @@ pub trait Inode: Send + Sync {
     fn truncate(&self) -> Result<(), SysErrNo>;
     ///
     fn sync(&self);
+    /// TODO(ZMY) 只保留sec?
+    fn set_timestamps(
+        &self,
+        atime_sec: Option<u64>,
+        atime_nsec: Option<u64>,
+        mtime_sec: Option<u64>,
+        mtime_nsec: Option<u64>,
+    ) -> Result<(), SysErrNo>;
+    fn link(&self);
+    fn unlink(&self) -> Result<(), SysErrNo>;
+    fn rename(&self, file: Arc<dyn Inode>) -> Result<(), SysErrNo>;
+    ///
+    fn delete(&self);
 }
 /// OSInode接口
 pub trait OSFile: Send + Sync {
     /// 设置偏移量
-    fn lseek(&self, offset: isize, whence: usize) -> Result<usize, SysErrNo> {
-        Err(SysErrNo::EINVAL)
-    }
+    fn lseek(&self, offset: isize, whence: usize) -> Result<usize, SysErrNo>;
     fn offset(&self) -> isize;
     fn find(&self, path: &str, flags: OpenFlags) -> Option<FileClass>;
     fn create(&self, path: &str, flags: OpenFlags) -> Option<FileClass>;
