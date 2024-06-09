@@ -1,14 +1,15 @@
 mod inode;
 
-use super::{Dirent, FileClass, InodeType, Kstat, OpenFlags};
+use super::{Dirent, FileClass, InodeType, Kstat, OpenFlags, Statfs};
 use crate::{mm::UserBuffer, utils::SysErrNo};
-use alloc::{string::String, sync::Arc};
+use alloc::{string::String, sync::Arc, vec::Vec};
 
 pub use inode::*;
 ///
 pub trait SuperBlock: Send + Sync {
     fn root_inode(&self) -> Arc<dyn Inode>;
     fn sync(&self);
+    fn fs_stat(&self) -> Statfs;
 }
 /// VfsInode接口
 pub trait Inode: Send + Sync {
@@ -51,6 +52,7 @@ pub trait Inode: Send + Sync {
     fn rename(&self, file: Arc<dyn Inode>) -> Result<(), SysErrNo>;
     ///
     fn delete(&self);
+    fn ls(&self) -> Option<Vec<(String, u8)>>;
 }
 /// OSInode接口
 pub trait OSFile: Send + Sync {

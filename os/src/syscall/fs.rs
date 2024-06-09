@@ -2,9 +2,8 @@
 use crate::{
     console::print,
     fs::{
-        is_abs_path, make_pipe, open, open_device_file, open_file, path2abs, path2vec,
-        remove_vfile_idx, sync_all, Dirent, File, FileClass, Kstat, Mode, OSFile, OpenFlags,
-        Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET,
+        make_pipe, open, open_device_file, open_file, remove_vfile_idx, Dirent, File, FileClass,
+        Kstat, OSFile, OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET, SUPER_BLOCK,
     },
     mm::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
@@ -13,7 +12,7 @@ use crate::{
     syscall::{FaccessatMode, Renameat2Flags},
     task::{current_task, current_token},
     timer::{get_time_ms, Timespec},
-    utils::{trim_first_point_slash, SysErrNo, SyscallRet},
+    utils::{is_abs_path, path2abs, path2vec, trim_first_point_slash, SysErrNo, SyscallRet},
 };
 use alloc::{
     string::{String, ToString},
@@ -587,7 +586,7 @@ pub fn sys_statfs(_path: *const u8, statfs: *const u8) -> SyscallRet {
     let mut statfs =
         UserBuffer::new(translated_byte_buffer(token, statfs, size_of::<Statfs>()).unwrap());
 
-    let ourstatfs = Statfs::new();
+    let ourstatfs = SUPER_BLOCK.fs_stat();
     statfs.write(ourstatfs.as_bytes());
     Ok(0)
 }
@@ -987,7 +986,7 @@ pub fn sys_fsync(fd: usize) -> SyscallRet {
 }
 
 pub fn sys_sync() -> SyscallRet {
-    sync_all();
+    SUPER_BLOCK.sync();
     Ok(0)
 }
 

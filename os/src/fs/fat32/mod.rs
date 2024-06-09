@@ -1,8 +1,16 @@
 mod inode;
+mod sb;
 
 use alloc::sync::Arc;
-use fat32_fs::VFile;
+use fat32_fs::{create_root_vfile, FAT32Manager, VFile};
 pub use inode::*;
+use lazy_static::*;
+pub use sb::*;
+
+use crate::{
+    drivers::BLOCK_DEVICE,
+    fs::{insert_vfile_idx, Inode, SuperBlock},
+};
 
 use super::OSInode;
 
@@ -18,4 +26,17 @@ impl OSInode {
             inode.read_as_elf()
         }
     }
+}
+
+lazy_static! {
+    pub static ref SUPER_BLOCK: Arc<dyn SuperBlock> = {
+        let fat32_manager = FAT32Manager::open(BLOCK_DEVICE.clone());
+        let root = Arc::new(create_root_vfile(&fat32_manager));
+        Arc::new(FATSuperBlock::new(fat32_manager, root))
+    };
+    pub static ref ROOT_INODE: Arc<dyn Inode> = {
+        let root = SUPER_BLOCK.root_inode();
+        insert_vfile_idx("/", root.clone());
+        root
+    };
 }

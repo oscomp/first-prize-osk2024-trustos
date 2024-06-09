@@ -9,7 +9,7 @@ use crate::{
         PAGE_SIZE, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP, USER_TRAP_CONTEXT,
         USER_TRAP_CONTEXT_TOP,
     },
-    fs::{FdTable, FdTableInner, File, FileClass, FsInfo, Mode, OSInode, OpenFlags, Stdin, Stdout},
+    fs::{FdTable, FdTableInner, File, FileClass, FsInfo, OSInode, OpenFlags, Stdin, Stdout},
     mm::{
         flush_tlb, translated_ref, translated_refmut, MapAreaType, MapPermission, MemorySet,
         MemorySetInner, PhysPageNum, VirtAddr,

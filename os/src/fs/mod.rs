@@ -12,22 +12,20 @@ mod vfs;
 
 cfg_if::cfg_if! {
     if #[cfg(feature="fat32")]{
-        pub use fat32::{
-            create_init_files, is_abs_path, list_apps, open, open_file, path2vec, Mode,
-            ROOT_INODE,
-        };
-        pub use fat32_fs::{sync_all,BlockDevice};
+        pub use fat32::{ROOT_INODE,SUPER_BLOCK};
+        pub use fat32_fs::BlockDevice;
     }
 }
 
 use crate::mm::UserBuffer;
-use crate::utils::SysErrNo;
+use crate::utils::{is_abs_path, path2abs, path2vec, GeneralRet, SysErrNo};
 use alloc::string::String;
 use alloc::{sync::Arc, vec, vec::Vec};
 pub use devfs::*;
 pub use dirent::Dirent;
 pub use fsidx::*;
 pub use fstruct::{FdTable, FdTableInner, FsInfo};
+use log::debug;
 pub use mount::MNT_TABLE;
 pub use pipe::{make_pipe, Pipe};
 use spin::{Mutex, MutexGuard};
@@ -203,17 +201,286 @@ pub fn flush_preload() {
     }
 }
 
-pub fn path2abs<'a>(cwdv: &mut Vec<&'a str>, pathv: &Vec<&'a str>) -> String {
-    for &path_element in pathv.iter() {
-        if path_element == "." {
-            continue;
-        } else if path_element == ".." {
-            cwdv.pop();
+pub fn list_apps() {
+    println!("/**** APPS ****");
+    for (app, _) in ROOT_INODE.ls().unwrap() {
+        println!("{}", app);
+    }
+    println!("**************/");
+}
+
+//
+const MOUNTS: &str = " fat32 / fat rw 0 0\n";
+const MEMINFO: &str = r"
+MemTotal:         944564 kB
+MemFree:          835248 kB
+MemAvailable:     873464 kB
+Buffers:            6848 kB
+Cached:            36684 kB
+SwapCached:            0 kB
+Active:            19032 kB
+Inactive:          32676 kB
+Active(anon):        128 kB
+Inactive(anon):     8260 kB
+Active(file):      18904 kB
+Inactive(file):    24416 kB
+Unevictable:           0 kB
+Mlocked:               0 kB
+SwapTotal:             0 kB
+SwapFree:              0 kB
+Dirty:                 0 kB
+Writeback:             0 kB
+AnonPages:          8172 kB
+Mapped:            16376 kB
+Shmem:               216 kB
+KReclaimable:       9960 kB
+Slab:              17868 kB
+SReclaimable:       9960 kB
+SUnreclaim:         7908 kB
+KernelStack:        1072 kB
+PageTables:          600 kB
+NFS_Unstable:          0 kB
+Bounce:                0 kB
+WritebackTmp:          0 kB
+CommitLimit:      472280 kB
+Committed_AS:      64684 kB
+VmallocTotal:   67108863 kB
+VmallocUsed:       15740 kB
+VmallocChunk:          0 kB
+Percpu:              496 kB
+HugePages_Total:       0
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+Hugepagesize:       2048 kB
+Hugetlb:               0 kB
+";
+const ADJTIME: &str = "0.000000 0.000000 UTC\n";
+const LOCALTIME: &str =
+    "lrwxrwxrwx 1 root root 33 11月 18  2023 /etc/localtime -> /usr/share/zoneinfo/Asia/Shanghai\n";
+
+pub fn create_init_files() -> GeneralRet {
+    //创建/proc文件夹
+    open(
+        "/",
+        "proc",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
+    );
+    //创建/proc/mounts文件系统使用情况
+    if let Some(FileClass::File(mountsfile)) =
+        open("/proc", "mounts", OpenFlags::O_CREATE | OpenFlags::O_RDWR)
+    {
+        let mut mountsinfo = String::from(MOUNTS);
+        let mut mountsvec = Vec::new();
+        unsafe {
+            let mut mounts = mountsinfo.as_bytes_mut();
+            mountsvec.push(core::slice::from_raw_parts_mut(
+                mounts.as_mut_ptr(),
+                mounts.len(),
+            ));
+        }
+        let mountbuf = UserBuffer::new(mountsvec);
+        let mountssize = mountsfile.write(mountbuf)?;
+        debug!("create /proc/mounts with {} sizes", mountssize);
+    }
+    //创建/proc/meminfo系统内存使用情况
+    if let Some(FileClass::File(memfile)) =
+        open("/proc", "meminfo", OpenFlags::O_CREATE | OpenFlags::O_RDWR)
+    {
+        let mut meminfo = String::from(MEMINFO);
+        let mut memvec = Vec::new();
+        unsafe {
+            let mut mem = meminfo.as_bytes_mut();
+            memvec.push(core::slice::from_raw_parts_mut(mem.as_mut_ptr(), mem.len()));
+        }
+        let membuf = UserBuffer::new(memvec);
+        let memsize = memfile.write(membuf)?;
+        debug!("create /proc/meminfo with {} sizes", memsize);
+    }
+    //创建/dev文件夹
+    open(
+        "/",
+        "dev",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
+    );
+    //注册设备/dev/rtc和/dev/rtc0
+    register_device("/dev/rtc");
+    register_device("/dev/rtc0");
+    //注册设备/dev/tty
+    register_device("/dev/tty");
+    //注册设备/dev/zero
+    register_device("/dev/zero");
+    //注册设备/dev/numm
+    register_device("/dev/null");
+    //创建./dev/misc文件夹
+    open(
+        "/dev",
+        "misc",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
+    );
+    //注册设备/dev/misc/rtc
+    register_device("/dev/misc/rtc");
+    //创建/etc文件夹
+    open(
+        "/",
+        "etc",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
+    );
+    //创建/etc/adjtime记录时间偏差
+    if let Some(FileClass::File(adjtimefile)) =
+        open("/etc", "adjtime", OpenFlags::O_CREATE | OpenFlags::O_RDWR)
+    {
+        let mut adjtime = String::from(ADJTIME);
+        let mut adjtimevec = Vec::new();
+        unsafe {
+            let mut adj = adjtime.as_bytes_mut();
+            adjtimevec.push(core::slice::from_raw_parts_mut(adj.as_mut_ptr(), adj.len()));
+        }
+        let adjtimebuf = UserBuffer::new(adjtimevec);
+        let adjtimesize = adjtimefile.write(adjtimebuf)?;
+        debug!("create /etc/adjtime with {} sizes", adjtimesize);
+    }
+    //创建./etc/localtime记录时区
+    if let Some(FileClass::File(localtimefile)) =
+        open("/etc", "localtime", OpenFlags::O_CREATE | OpenFlags::O_RDWR)
+    {
+        let mut localtime = String::from(LOCALTIME);
+        let mut localtimevec = Vec::new();
+        unsafe {
+            let mut local = localtime.as_bytes_mut();
+            localtimevec.push(core::slice::from_raw_parts_mut(
+                local.as_mut_ptr(),
+                local.len(),
+            ));
+        }
+        let localtimebuf = UserBuffer::new(localtimevec);
+        let localtimesize = localtimefile.write(localtimebuf)?;
+        debug!("create /etc/localtime with {} sizes", localtimesize);
+    }
+    println!("create_init_files success!");
+    Ok(())
+}
+
+pub fn open_file(path: &str, flags: OpenFlags) -> Option<FileClass> {
+    open(&"/", path, flags)
+}
+
+fn create_file(
+    cwd: &str,
+    path: &str,
+    flags: OpenFlags,
+    abs_path: &str,
+    parent_path: &str,
+    child_name: &str,
+) -> Option<FileClass> {
+    if let Some(parent_dir) = find_vfile_idx(parent_path) {
+        let (readable, writable) = flags.read_write();
+        return parent_dir.create(child_name, flags).map(|vfile| {
+            insert_vfile_idx(abs_path, vfile.clone());
+            let osinode = OSInode::new(readable, writable, vfile);
+            FileClass::File(Arc::new(osinode))
+        });
+    }
+    let cur_vfile = {
+        if cwd == "/" {
+            ROOT_INODE.clone()
         } else {
-            cwdv.push(path_element);
+            ROOT_INODE.find_by_path(&cwd).unwrap()
+        }
+    };
+    if let Some(parent_dir) = cur_vfile.find_by_path(path) {
+        let (readable, writable) = flags.read_write();
+        parent_dir.create(child_name, flags).map(|vfile| {
+            insert_vfile_idx(abs_path, vfile.clone());
+            let osinode = OSInode::new(readable, writable, vfile);
+            FileClass::File(Arc::new(osinode))
+        })
+    } else {
+        None
+    }
+}
+
+pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
+    use alloc::string::ToString;
+    let abs_path = if is_abs_path(path) {
+        path.to_string()
+    } else {
+        let mut wpath = if cwd == "/" {
+            Vec::with_capacity(32)
+        } else {
+            path2vec(cwd)
+        };
+        path2abs(&mut wpath, &path2vec(path))
+    };
+    //判断是否是设备文件
+    if find_device(&abs_path[..]) {
+        if let Some(device) = open_device_file(&abs_path[..]) {
+            return Some(FileClass::Abs(device));
+        }
+        return None;
+    }
+    // 首先在FSIDX中查找文件是否存在
+    if let Some(inode) = find_vfile_idx(&abs_path) {
+        if flags.contains(OpenFlags::O_TRUNC) {
+            let (mut parent_path, child_name) = abs_path.rsplit_once("/").unwrap();
+            if parent_path.is_empty() {
+                parent_path = "/";
+            }
+            remove_vfile_idx(&abs_path);
+            inode.unlink();
+            return create_file(cwd, path, flags, &abs_path, parent_path, child_name);
+        }
+        let (readable, writable) = flags.read_write();
+        let vfile = OSInode::new(readable, writable, inode);
+        if flags.contains(OpenFlags::O_APPEND) {
+            vfile.lseek(0, SEEK_END);
+        }
+        return Some(FileClass::File(Arc::new(vfile)));
+    }
+    // 若在FSIDX中无法找到，尝试在FSIDX寻找父级目录
+    let (mut parent_path, child_name) = abs_path.rsplit_once("/").unwrap();
+    if parent_path.is_empty() {
+        parent_path = "/";
+    }
+    if let Some(parent_inode) = find_vfile_idx(parent_path) {
+        if let Some(inode) = parent_inode.find_by_name(child_name) {
+            if flags.contains(OpenFlags::O_TRUNC) {
+                remove_vfile_idx(&abs_path);
+                inode.unlink();
+                return create_file(cwd, path, flags, &abs_path, parent_path, child_name);
+            }
+            insert_vfile_idx(&abs_path, inode.clone());
+            let (readable, writable) = flags.read_write();
+            let vfile = OSInode::new(readable, writable, inode);
+            if flags.contains(OpenFlags::O_APPEND) {
+                vfile.lseek(vfile.inode.size() as isize, SEEK_SET);
+            }
+            return Some(FileClass::File(Arc::new(vfile)));
+        }
+    } else {
+        let cur_vfile = if cwd == "/" {
+            ROOT_INODE.clone()
+        } else {
+            ROOT_INODE.find_by_path(cwd).unwrap()
+        };
+        if let Some(inode) = cur_vfile.find_by_path(path) {
+            if flags.contains(OpenFlags::O_TRUNC) {
+                remove_vfile_idx(&abs_path);
+                inode.unlink();
+                return create_file(cwd, path, flags, &abs_path, parent_path, child_name);
+            }
+            insert_vfile_idx(&abs_path, inode.clone());
+            let (readable, writable) = flags.read_write();
+            let vfile = OSInode::new(readable, writable, inode);
+            if flags.contains(OpenFlags::O_APPEND) {
+                vfile.lseek(vfile.inode.size() as isize, SEEK_SET);
+            }
+            return Some(FileClass::File(Arc::new(vfile)));
         }
     }
-    let mut abs_path = String::from("/");
-    abs_path.push_str(&cwdv.join("/"));
-    abs_path
+    // 节点不存在
+    if flags.contains(OpenFlags::O_CREATE) {
+        return create_file(cwd, path, flags, &abs_path, parent_path, child_name);
+    }
+    None
 }

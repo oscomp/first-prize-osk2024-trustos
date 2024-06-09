@@ -75,8 +75,6 @@ impl Kstat {
     }
 }
 
-const FAT_SUPER_MAGIC: i64 = 0x4006;
-
 #[repr(C)]
 #[derive(Debug)]
 pub struct Statfs {
@@ -95,22 +93,15 @@ pub struct Statfs {
 }
 
 impl Statfs {
-    pub fn new() -> Self {
-        let fs = ROOT_INODE.get_fs();
-        let fsinfo = fs.get_fsinfo();
-        let fsinfo = fsinfo.read();
-        let bfree = fsinfo.read_free_cluster_count() * fs.sectors_per_cluster();
-        let fat = fs.get_fat();
-        let fat = fat.read();
-        let files = fat.get_max_cluster();
+    pub fn new(f_type: i64, f_bfree: i64, f_bavail: i64, f_files: i64, f_ffree: i64) -> Self {
         Self {
-            f_type: FAT_SUPER_MAGIC,
+            f_type,
             f_bsize: 512,
             f_blocks: 262144,
-            f_bfree: bfree as i64,
-            f_bavail: bfree as i64,
-            f_files: files as i64,
-            f_ffree: files as i64,
+            f_bfree,
+            f_bavail,
+            f_files,
+            f_ffree,
             f_fsid: 0,
             f_name_len: 255,
             f_frsize: 0,

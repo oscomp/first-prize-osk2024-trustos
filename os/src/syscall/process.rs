@@ -1,5 +1,5 @@
 use crate::{
-    fs::{open, open_file, FileClass, Mode, OpenFlags},
+    fs::{open, open_file, FileClass, OpenFlags},
     logger::{change_log_level, clear_log_buf, console_log_off, console_log_on, unread_size},
     mm::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
