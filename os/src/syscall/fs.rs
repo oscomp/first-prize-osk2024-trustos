@@ -212,8 +212,9 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> Sysca
                 inner.fd_table.set(new_fd, Some(inode), Some(flags));
                 return Ok(new_fd);
             }
+        } else {
+            return Err(SysErrNo::EINVAL);
         }
-        return Err(SysErrNo::EINVAL);
     }
 
     if let Some(inode) = open(base_path, path.as_str(), flags) {
@@ -353,8 +354,6 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> SyscallRet {
         {
             return Ok(0);
         }
-
-        return Err(SysErrNo::EINVAL);
     }
     if let Some(_) = open(base_path, path.as_str(), OpenFlags::O_RDWR) {
         return Err(SysErrNo::EEXIST);
