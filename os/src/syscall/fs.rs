@@ -39,6 +39,7 @@ unsafe impl Send for Iovec {}
 unsafe impl Sync for Iovec {}
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
+    debug!("[sys_write] fd is {}", fd);
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
@@ -234,6 +235,7 @@ pub fn sys_close(fd: usize) -> SyscallRet {
     if inner.fd_table.try_get_file(fd).is_none() {
         return Err(SysErrNo::EINVAL);
     }
+    debug!("fd {} closed", fd);
     inner.fd_table.take(fd);
     Ok(0)
 }
@@ -278,6 +280,7 @@ pub fn sys_dup3(old: usize, new: usize) -> SyscallRet {
 
     let (inode, flags) = inner.fd_table.try_get(old);
     inner.fd_table.set(new, inode, flags);
+    debug!("[sys_dup3] old fd={}, new fd={}", old, new);
     Ok(new)
 }
 

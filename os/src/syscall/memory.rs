@@ -62,6 +62,7 @@ pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
     let mut task_inner = task.inner_lock();
     let len = page_round_up(len);
     task_inner.memory_set.get_mut().munmap(addr, len);
+    debug!("[sys_munmap] addr={:#X}, len={}", addr, len);
     Ok(0)
 }
 

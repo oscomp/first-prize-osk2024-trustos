@@ -105,7 +105,6 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
     let token = task_inner.user_token();
     let path = translated_str(token, path);
 
-    debug!("[sys_execve] path is {}", path);
     //处理argv参数
     let mut argv_vec = Vec::<String>::new();
     loop {
@@ -121,6 +120,7 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
             argv = argv.add(1);
         }
     }
+    debug!("[sys_execve] path is {},arg is {:?}", path, argv_vec);
     let mut env = Vec::<String>::new();
     loop {
         if envp.is_null() {
@@ -218,8 +218,8 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, mut options: i32) -> SyscallRet 
             let exit_code = child_inner.sig_pending.get_ref().group_exit_code.unwrap();
             if wstatus as usize != 0x0 {
                 debug!(
-                    "[sys_wait4] child {} exit with code {}, wstatus= {:#x}",
-                    found_pid, exit_code, wstatus as usize
+                    "[sys_wait4] wait pid {}: child {} exit with code {}, wstatus= {:#x}",
+                    pid, found_pid, exit_code, wstatus as usize
                 );
                 *translated_refmut(task_inner.memory_set.token(), wstatus) = exit_code << 8;
             }

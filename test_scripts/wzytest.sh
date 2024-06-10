@@ -1,5 +1,3 @@
-#!/bin/bash
 
-echo "wzy's test\n"
-./busybox echo "114515" | busybos cat
+busybox echo "114515" | busybos cat
 

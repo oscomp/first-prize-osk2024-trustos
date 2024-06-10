@@ -12,6 +12,9 @@ int openat(int dirfd,const char *path, int flags)
 {
     return syscall(SYS_openat, dirfd, path, flags, 0600);
 }
+int fcntl(int fd,int cmd,int arg){
+    return syscall(SYS_fcntl,fd,cmd,arg);
+}
 
 int close(int fd)
 {
