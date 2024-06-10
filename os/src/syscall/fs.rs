@@ -274,7 +274,7 @@ pub fn sys_dup3(old: usize, new: usize) -> SyscallRet {
         return Err(SysErrNo::EBADF);
     }
 
-    inner.fd_table.resize(new + 1);
+    inner.fd_table.resize(new.max(old) + 1);
 
     let (inode, flags) = inner.fd_table.try_get(old);
     inner.fd_table.set(new, inode, flags);
@@ -536,6 +536,7 @@ pub fn sys_pipe2(fd: *mut u32) -> SyscallRet {
     inner
         .fd_table
         .set(write_fd, Some(FileClass::Abs(write_pipe)), None);
+    debug!("pipe read fd is {}, write fd is {}", read_fd, write_fd);
     *translated_refmut(token, fd) = read_fd as u32;
     *translated_refmut(token, unsafe { fd.add(1) }) = write_fd as u32;
     Ok(0)
