@@ -14,13 +14,25 @@ pub struct Dirent {
 }
 
 impl Dirent {
-    pub fn new() -> Self {
+    pub fn new(mut name: String, off: i64, ino: u64, dtype: u8) -> Self {
+        //对齐 align8
+        name += "\0";
+        let mut len = name.len() + 19;
+        let align = 8 - len % 8;
+        len += align;
+        for _ in 0..align {
+            name.push('\0');
+        }
         Self {
-            d_ino: 0,
-            d_off: 0,
-            d_reclen: core::mem::size_of::<Self>() as u16,
-            d_type: 0,
-            d_name: [0; 256],
+            d_ino: ino,
+            d_off: off,
+            d_reclen: len as u16,
+            d_type: dtype,
+            d_name: {
+                let mut tmp: [u8; 256] = [0; 256];
+                tmp[..name.len()].copy_from_slice(name.as_bytes());
+                tmp
+            },
         }
     }
     #[inline(always)]
@@ -30,26 +42,6 @@ impl Dirent {
     #[inline(always)]
     pub fn off(&self) -> usize {
         self.d_off as usize
-    }
-
-    pub fn init(&mut self, mut name: String, off: i64, ino: u64, dtype: u8) {
-        //对齐 align8
-        name += "\0";
-        let mut len = name.len() + 19;
-        let align = 8 - len % 8;
-        len += align;
-        for _ in 0..align {
-            name.push('\0');
-        }
-        self.d_off = off;
-        self.d_ino = ino;
-        self.d_type = dtype;
-        self.d_reclen = len as u16;
-        self.d_name = {
-            let mut tmp: [u8; 256] = [0; 256];
-            tmp[..name.len()].copy_from_slice(name.as_bytes());
-            tmp
-        };
     }
 
     pub fn as_bytes(&self) -> &[u8] {

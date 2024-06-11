@@ -287,7 +287,7 @@ impl VFile {
     }
 
     // 通过name查找当前目录下的文件
-    pub fn find_vfile_name(&self, name: &str) -> Option<VFile> {
+    fn find_vfile_name(&self, name: &str) -> Option<VFile> {
         assert!(self.is_dir());
         let (name_, ext_) = name.rsplit_once(".").unwrap_or((name, ""));
         self.read_short_dirent(|short_ent| {

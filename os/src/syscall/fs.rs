@@ -683,18 +683,14 @@ pub fn sys_utimensat(dirfd: isize, path: *const u8, times: *const u8, _flags: us
         let osfile = inner.fd_table.get_file(dirfd).file()?;
         if let Some(osfile) = osfile.find(path.as_str(), OpenFlags::O_RDONLY) {
             let osfile = osfile.file()?;
-            osfile
-                .inode
-                .set_timestamps(atime_sec, None, mtime_sec, None);
+            osfile.inode.set_timestamps(atime_sec, mtime_sec);
             return Ok(0);
         }
         return Err(SysErrNo::ENOENT);
     }
     if let Some(osfile) = open(base_path, path.as_str(), OpenFlags::O_RDONLY) {
         let osfile = osfile.file()?;
-        osfile
-            .inode
-            .set_timestamps(atime_sec, None, mtime_sec, None);
+        osfile.inode.set_timestamps(atime_sec, mtime_sec);
         return Ok(0);
     }
     Err(SysErrNo::ENOENT)
