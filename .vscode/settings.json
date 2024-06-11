@@ -8,6 +8,8 @@
     "rust-analyzer.cargo.target": "riscv64gc-unknown-none-elf",
     "rust-analyzer.checkOnSave.allTargets": false,
     "rust-analyzer.showUnlinkedFileNotification": false,
+    "rust-analyzer.cargo.runBuildScripts": false,
+    "rust-analyzer.procMacro.enable": false,
     // "rust-analyzer.cargo.features": [
     //     "board_qemu"
     // ]
@@ -64,6 +66,6 @@
     ],
     "[rust]": {
         "editor.defaultFormatter": "rust-lang.rust-analyzer",
-        "editor.formatOnSave": true 
+        "editor.formatOnSave": true
     },
 }

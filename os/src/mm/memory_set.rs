@@ -182,6 +182,21 @@ impl MemorySet {
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.inner.get_unchecked_mut().translate(vpn)
     }
+    #[inline(always)]
+    pub fn insert_framed_area_with_hint(
+        &self,
+        hint: usize,
+        size: usize,
+        map_perm: MapPermission,
+        area_type: MapAreaType,
+    ) -> (usize, usize) {
+        self.get_mut()
+            .insert_framed_area_with_hint(hint, size, map_perm, area_type)
+    }
+    #[inline(always)]
+    pub fn clone_area(&self, start_vpn: VirtPageNum, another: &MemorySetInner) {
+        self.get_mut().clone_area(start_vpn, another)
+    }
 }
 
 /// memory set structure, controls virtual-memory space
