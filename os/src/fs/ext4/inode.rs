@@ -78,12 +78,15 @@ impl Inode for Ext4Inode {
     fn delete(&self) {}
     fn find_by_path(&self, path: &str) -> Option<Arc<dyn Inode>> {
         let mut file = self.file.lock();
-        let r = self.ext4.ext4_open(&mut file, path, "r+", false);
 
-        if let Err(e) = r {
+        let inode = Ext4Inode::new(self.ext4.clone());
+        let mut nfile = inode.file.lock();
+
+        if let Err(_) = self.ext4.ext4_open(&mut nfile, path, "r+", false) {
             None
         } else {
-            todo!()
+            drop(nfile);
+            Some(Arc::new(inode))
         }
     }
     fn fstat(&self) -> Kstat {
@@ -116,20 +119,55 @@ impl Inode for Ext4Inode {
             .map(|de| de.get_name())
             .collect()
     }
-    fn read_dentry(&self, off: usize) -> Option<Dirent> {
-        todo!()
+    fn read_dentry(&self, off: usize, len: usize) -> Option<(Vec<u8>, isize)> {
+        let file = self.file.lock();
+        let entries = self.ext4.read_dir_entry(file.inode as _);
+        let mut de: Vec<u8> = Vec::new();
+        let (mut cur, mut res, mut f_off) = (0usize, 0usize, 0usize);
+        for entry in entries {
+            let name = entry.get_name();
+            let dtype = map_dir_imode(entry.get_de_type()) as u8;
+            let dirent = Dirent::new(name, entry.entry_len as i64, entry.inode as u64, dtype);
+            // 忽略offset之前的Dirent
+            if cur < off {
+                cur += dirent.len();
+                continue;
+            }
+            if res + dirent.len() > len {
+                break;
+            }
+            res += dirent.len();
+            f_off = dirent.off();
+            de.extend_from_slice(dirent.as_bytes());
+        }
+        if res != 0 {
+            Some((de, f_off as isize))
+        } else {
+            None
+        }
     }
     fn rename(&self, file: Arc<dyn Inode>) -> GeneralRet {
         todo!()
     }
     fn set_timestamps(&self, atime_sec: Option<u64>, mtime_sec: Option<u64>) -> GeneralRet {
-        todo!()
+        let file = self.file.lock();
+        let mut inode_ref = Ext4InodeRef::get_inode_ref(Arc::downgrade(&self.ext4), file.inode);
+        if let Some(atime) = atime_sec {
+            inode_ref.inner.inode.atime = atime as u32;
+        }
+        if let Some(mtime) = mtime_sec {
+            inode_ref.inner.inode.mtime = mtime as u32;
+        }
+        Ok(())
     }
     fn sync(&self) {
         todo!()
     }
     fn truncate(&self) -> GeneralRet {
-        todo!()
+        let file = self.file.lock();
+        let mut inode_ref = Ext4InodeRef::get_inode_ref(Arc::downgrade(&self.ext4), file.inode);
+        self.ext4.ext4_trunc_inode(&mut inode_ref, 0);
+        Ok(())
     }
     fn unlink(&self) -> GeneralRet {
         todo!()
@@ -157,5 +195,21 @@ fn as_ext4_type(ty: InodeType) -> DirEntryType {
         InodeType::File => DirEntryType::EXT4_DE_REG_FILE,
         InodeType::SymLink => DirEntryType::EXT4_DE_SYMLINK,
         InodeType::Socket => DirEntryType::EXT4_DE_SOCK,
+    }
+}
+fn map_dir_imode(imode: u8) -> InodeType {
+    let type_code = ext4_rs::DirEntryType::from_bits(imode as u8).unwrap();
+    match type_code {
+        DirEntryType::EXT4_DE_REG_FILE => InodeType::File,
+        DirEntryType::EXT4_DE_DIR => InodeType::Dir,
+        DirEntryType::EXT4_DE_CHRDEV => InodeType::CharDevice,
+        DirEntryType::EXT4_DE_BLKDEV => InodeType::BlockDevice,
+        DirEntryType::EXT4_DE_FIFO => InodeType::Fifo,
+        DirEntryType::EXT4_DE_SOCK => InodeType::Socket,
+        DirEntryType::EXT4_DE_SYMLINK => InodeType::SymLink,
+        _ => {
+            // log::info!("{:x?}", imode);
+            InodeType::File
+        }
     }
 }

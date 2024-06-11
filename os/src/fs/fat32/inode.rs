@@ -20,14 +20,32 @@ impl Inode for FatInode {
     fn write_at(&self, off: usize, buf: &[u8]) -> SyscallRet {
         Ok(self.write_at(off, buf))
     }
-    fn read_dentry(&self, off: usize) -> Option<Dirent> {
-        assert!(self.is_dir());
-        if let Some((name, off, ino, dtype)) = self.dirent_info(off) {
-            Some(Dirent::new(name, off as i64, ino as u64, dtype))
+    fn read_dentry(&self, off: usize, len: usize) -> Option<(Vec<u8>, isize)> {
+        let mut res = 0;
+        let mut vec = Vec::new();
+        while let Some((name, mut off, ino, dtype)) = self.dirent_info(off) {
+            let dirent = Dirent::new(name, off as i64, ino as u64, as_inode_type(dtype) as u8);
+            if res + dirent.len() > len {
+                break;
+            }
+            res += dirent.len();
+            vec.extend_from_slice(dirent.as_bytes());
+            off = dirent.off() as u32;
+        }
+        if res != 0 {
+            Some((vec, off as isize))
         } else {
             None
         }
     }
+    // fn read_dentry(&self, off: usize) -> Option<Dirent> {
+    //     assert!(self.is_dir());
+    //     if let Some((name, off, ino, dtype)) = self.dirent_info(off) {
+    //         Some(Dirent::new(name, off as i64, ino as u64, dtype))
+    //     } else {
+    //         None
+    //     }
+    // }
     fn fstat(&self) -> Kstat {
         let (st_ino, st_size, st_atime_sec, st_mtime_sec, st_ctime_sec, st_blocks, st_mode) =
             self.stat();
@@ -42,17 +60,6 @@ impl Inode for FatInode {
             st_ctime_sec,
             ..Kstat::empty()
         }
-        // let mut kstat = Kstat::new();
-        // kstat.init(
-        //     st_ino as u64,
-        //     st_size as u64,
-        //     st_atime,
-        //     st_mtime,
-        //     st_ctime,
-        //     st_blocks,
-        //     st_mode,
-        // );
-        // kstat
     }
     fn find_by_path(&self, path: &str) -> Option<Arc<dyn Inode>> {
         let pathv = path2vec(path);
@@ -115,8 +122,7 @@ fn as_inode_type(ty: u8) -> InodeType {
     match ty {
         ATTR_DIRECTORY => InodeType::Dir,
         ATTR_SYMLINK => InodeType::SymLink,
-        ATTR_ARCHIVE => InodeType::File,
-        _ => unreachable!(),
+        _ => InodeType::File,
     }
 }
 

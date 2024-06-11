@@ -374,7 +374,7 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> SyscallRet {
 pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
+    // let token = inner.user_token();
 
     debug!(
         "[sys_getdents64] fd is {},buf is {:x}, len is {}",
@@ -389,24 +389,30 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
         UserBuffer::new(safe_translated_byte_buffer(inner.memory_set.clone(), buf, len).unwrap());
 
     let file = inner.fd_table.get_file(fd).file()?;
-    if !file.readable() {
-        return Err(SysErrNo::EACCES);
+    // if !file.readable() {
+    //     return Err(SysErrNo::EACCES);
+    // }
+    let off = file.lseek(0, SEEK_CUR)?;
+    if let Some((de, off)) = file.inode.read_dentry(off, len) {
+        buffer.write(de.as_slice());
+        file.lseek(off as isize, SEEK_SET)?;
+        return Ok(de.len());
     }
-
-    let mut off = file.lseek(0, SEEK_CUR)?;
-    let mut res = 0;
-    let mut vec = Vec::new();
-    while let Some(dirent) = file.inode.read_dentry(off) {
-        if res + dirent.len() > len {
-            break;
-        }
-        res += dirent.len();
-        vec.extend_from_slice(dirent.as_bytes());
-        off = dirent.off();
-    }
-    buffer.write(vec.as_slice());
-    file.lseek(off as isize, SEEK_SET)?;
-    Ok(res)
+    return Err(SysErrNo::EINVAL);
+    // let mut off = file.lseek(0, SEEK_CUR)?;
+    // let mut res = 0;
+    // let mut vec = Vec::new();
+    // while let Some(dirent) = file.inode.read_dentry(off) {
+    //     if res + dirent.len() > len {
+    //         break;
+    //     }
+    //     res += dirent.len();
+    //     vec.extend_from_slice(dirent.as_bytes());
+    //     off = dirent.off();
+    // }
+    // buffer.write(vec.as_slice());
+    // file.lseek(off as isize, SEEK_SET)?;
+    // Ok(res)
 }
 
 pub fn sys_linkat(

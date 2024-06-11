@@ -714,7 +714,7 @@ impl Ext4 {
         let inode_size = inode_ref.inner.inode.inode_get_size();
 
         if inode_size > new_size {
-            let r = inode_ref.truncate_inode(new_size);
+            return inode_ref.truncate_inode(new_size);
         }
 
         return_errno_with_message!(Errnum::ENOTSUP, "not support");

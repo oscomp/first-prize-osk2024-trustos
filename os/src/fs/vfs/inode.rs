@@ -9,8 +9,8 @@ use alloc::sync::Arc;
 use spin::{Mutex, MutexGuard};
 
 pub struct OSInode {
-    pub readable: bool, // 该文件是否允许通过 sys_read 进行读
-    pub writable: bool, // 该文件是否允许通过 sys_write 进行写
+    readable: bool, // 该文件是否允许通过 sys_read 进行读
+    writable: bool, // 该文件是否允许通过 sys_write 进行写
     pub inode: Arc<dyn Inode>,
     pub(crate) inner: Mutex<OSInodeInner>,
 }

@@ -33,8 +33,8 @@ pub trait Inode: Send + Sync {
     ///
     fn write_at(&self, off: usize, buf: &[u8]) -> SyscallRet;
     /// 读取目录项
-    fn read_dentry(&self, off: usize) -> Option<Dirent>;
-    // fn read_dentry(&self, off: usize, len: usize) -> Option<(Vec<Dirent>, usize)>;
+    // fn read_dentry(&self, off: usize) -> Option<Dirent>;
+    fn read_dentry(&self, off: usize, len: usize) -> Option<(Vec<u8>, isize)>;
     ///
     fn truncate(&self) -> GeneralRet;
     ///
@@ -70,42 +70,3 @@ pub trait Ioctl: File {
     /// ioctl处理
     fn ioctl(&self, cmd: usize, arg: usize) -> isize;
 }
-
-// bitflags! {
-//     /// 文件标志位，包含文件的权限以及文件类型
-//     ///
-//     /// 在判断文件类型的时候，请使用 `get_type()` 函数并通过 `match` 匹配判断
-//     pub struct ModeFlags: u32 {
-//         // 权限
-//         const READ = 0o444;
-//         const WRITE = 0o222;
-//         const EXEC = 0o111;
-//         const RW = 0o600;
-//         const RWX = Self::READ.bits | Self::WRITE.bits | Self::EXEC.bits;
-
-//         // 文件类型
-//         // musl libc: include/sys/stat.h
-//         const SOCKET = 0o140000;
-//         const LINK = 0o120000;
-//         const REGULAR = 0o100000;
-//         const BLK = 0o60000;
-//         const DIRECTORY = 0o40000;
-//         const CHAR = 0o20000;
-//         const FIFO = 0o10000;
-//     }
-// }
-
-// impl ModeFlags {
-//     /// 获取文件类型
-//     ///
-//     /// 由于相关的标志位是根据实际库定义的，因此并不符合各个位互斥，
-//     /// 也即可能造成一种文件类型它的二进制其实是包含另一种文件类型，
-//     /// 导致判断失误。所以使用该函数之后通过 `match` 进行全匹配判断，
-//     /// 而不是使用 `contains()`
-//     pub fn get_type(&self) -> Self {
-//         const S_IFMT: u32 = 0o170000;
-//         let file_type = self.bits() & S_IFMT;
-//         assert!(file_type != 0);
-//         Self::from_bits(self.bits() & S_IFMT).unwrap()
-//     }
-// }
