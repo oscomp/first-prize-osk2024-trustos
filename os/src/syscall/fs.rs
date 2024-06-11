@@ -891,7 +891,7 @@ pub fn sys_pwrite64(fd: usize, buf: *const u8, count: usize, offset: isize) -> S
         // release current task TCB manually to avoid multi-borrow
         drop(inner);
         drop(task);
-        let cur_offset = file.offset();
+        let cur_offset = file.lseek(0, SEEK_CUR)? as isize;
         file.lseek(offset, SEEK_SET);
         let ret = file.write(UserBuffer::new(
             translated_byte_buffer(token, buf, count).unwrap(),
@@ -918,7 +918,7 @@ pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: isize) -> Sy
         // release current task TCB manually to avoid multi-borrow
         drop(inner);
         drop(task);
-        let cur_offset = file.offset();
+        let cur_offset = file.lseek(0, SEEK_CUR)? as isize;
         file.lseek(offset, SEEK_SET);
         let ret = file.read(UserBuffer::new(
             translated_byte_buffer(token, buf, count).unwrap(),

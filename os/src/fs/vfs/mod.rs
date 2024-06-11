@@ -34,6 +34,7 @@ pub trait Inode: Send + Sync {
     fn write_at(&self, off: usize, buf: &[u8]) -> SyscallRet;
     /// 读取目录项
     fn read_dentry(&self, off: usize) -> Option<Dirent>;
+    // fn read_dentry(&self, off: usize, len: usize) -> Option<(Vec<Dirent>, usize)>;
     ///
     fn truncate(&self) -> GeneralRet;
     ///
@@ -51,7 +52,6 @@ pub trait Inode: Send + Sync {
 pub trait OSFile: Send + Sync {
     /// 设置偏移量
     fn lseek(&self, offset: isize, whence: usize) -> SyscallRet;
-    fn offset(&self) -> isize;
     fn find(&self, path: &str, flags: OpenFlags) -> Option<FileClass>;
     fn create(&self, path: &str, flags: OpenFlags) -> Option<FileClass>;
 }

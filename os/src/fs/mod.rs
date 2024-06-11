@@ -463,7 +463,8 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
             let (readable, writable) = flags.read_write();
             let vfile = OSInode::new(readable, writable, inode);
             if flags.contains(OpenFlags::O_APPEND) {
-                vfile.lseek(vfile.inode.size() as isize, SEEK_SET);
+                // vfile.lseek(vfile.inode.size() as isize, SEEK_SET);
+                vfile.lseek(0, SEEK_END);
             }
             return Some(FileClass::File(Arc::new(vfile)));
         }
@@ -483,7 +484,8 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
             let (readable, writable) = flags.read_write();
             let vfile = OSInode::new(readable, writable, inode);
             if flags.contains(OpenFlags::O_APPEND) {
-                vfile.lseek(vfile.inode.size() as isize, SEEK_SET);
+                // vfile.lseek(vfile.inode.size() as isize, SEEK_SET);
+                vfile.lseek(0, SEEK_END);
             }
             return Some(FileClass::File(Arc::new(vfile)));
         }

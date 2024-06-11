@@ -6,7 +6,7 @@ use log::{debug, info};
 
 use crate::{
     config::mm::{PAGE_SIZE, PAGE_SIZE_BITS},
-    fs::{File, OSFile, SEEK_SET},
+    fs::{File, OSFile, SEEK_CUR, SEEK_SET},
     mm::flush_tlb,
 };
 
@@ -23,7 +23,7 @@ pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut
         return;
     }
     let file = vma.mmap_file.file.clone().unwrap();
-    let old_offset = file.offset();
+    let old_offset = file.lseek(0, SEEK_CUR).unwrap();
     let start_addr: VirtAddr = vma.vpn_range.start().into();
     let va = va.0;
     // file.set_offset(va - start_addr.0 + vma.mmap_file.offset);

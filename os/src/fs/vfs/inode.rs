@@ -45,9 +45,6 @@ impl OSFile for OSInode {
         }
         Ok(inner.offset)
     }
-    fn offset(&self) -> isize {
-        self.inner.lock().offset as isize
-    }
     fn create(&self, path: &str, flags: OpenFlags) -> Option<FileClass> {
         let (readable, writable) = flags.read_write();
         self.inode
