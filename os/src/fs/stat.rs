@@ -25,7 +25,7 @@ pub struct Kstat {
     pub st_mtime_nsec: i64, // 上次修改时间（纳秒精度）
     pub st_ctime_sec: i64,  // 上次状态变化的时间
     pub st_ctime_nsec: i64, // 上次状态变化的时间（纳秒精度）
-    pub __unused: [u32; 2],
+                            // pub __unused: [u32; 2],
 }
 
 impl Kstat {
@@ -49,28 +49,9 @@ impl Kstat {
             st_mtime_nsec: 0,
             st_ctime_sec: 0,
             st_ctime_nsec: 0,
-            __unused: [0u32; 2],
+            // __unused: [0u32; 2],
         }
     }
-    // pub fn init(
-    //     &mut self,
-    //     st_ino: u64,
-    //     st_size: u64,
-    //     st_atime: i64,
-    //     st_mtime: i64,
-    //     st_ctime: i64,
-    //     st_blocks: u64,
-    //     st_mode: u32,
-    // ) {
-    //     self.st_ino = st_ino;
-    //     self.st_size = st_size;
-    //     self.st_atime_sec = st_atime;
-    //     self.st_mtime_sec = st_mtime;
-    //     self.st_ctime_sec = st_ctime;
-    //     self.st_blocks = st_blocks;
-    //     self.st_mode = st_mode;
-    // }
-
     pub fn as_bytes(&self) -> &[u8] {
         let size = core::mem::size_of::<Self>();
         unsafe { core::slice::from_raw_parts(self as *const _ as *const u8, size) }

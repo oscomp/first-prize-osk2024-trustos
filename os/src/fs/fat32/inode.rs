@@ -24,10 +24,11 @@ impl Inode for FatInode {
         let mut res = 0;
         let mut vec = Vec::new();
         while let Some((name, mut off, ino, dtype)) = self.dirent_info(off) {
-            let dirent = Dirent::new(name, off as i64, ino as u64, as_inode_type(dtype) as u8);
+            let dirent = Dirent::new(name, off as i64, ino as u64, dtype);
             if res + dirent.len() > len {
                 break;
             }
+            println!("{:?}", &dirent);
             res += dirent.len();
             vec.extend_from_slice(dirent.as_bytes());
             off = dirent.off() as u32;
@@ -50,6 +51,7 @@ impl Inode for FatInode {
         let (st_ino, st_size, st_atime_sec, st_mtime_sec, st_ctime_sec, st_blocks, st_mode) =
             self.stat();
         Kstat {
+            st_ino: st_ino as u64,
             st_mode,
             st_nlink: 1,
             st_size,
@@ -106,12 +108,9 @@ impl Inode for FatInode {
             let inode = Arc::from_raw(Arc::into_raw(file) as *const VFile);
             self.set_size(inode.size() as u32);
             self.set_first_cluster(inode.first_cluster());
+            inode.delete();
         }
         Ok(())
-    }
-
-    fn delete(&self) {
-        self.delete();
     }
     fn ls(&self) -> Vec<String> {
         self.ls().unwrap().into_iter().map(|(s, _)| s).collect()

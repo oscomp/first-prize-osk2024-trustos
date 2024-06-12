@@ -27,8 +27,7 @@ num_enum = { version = "0.7.2", default-features = false }
 cfg-if = { version = "1.0.0" }
 
 [features]
-board_qemu = []
-default = ["info", "fat32"]
+default = ["debug", "fat32"]
 error = []
 warn = []
 info = []

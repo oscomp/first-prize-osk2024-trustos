@@ -50,7 +50,7 @@ initproc: initrust
 
 initbusybox: initproc
 	@-rm ../busybox
-	@cd ../busyb0x&&make defconfig&&make -j 2&&cp ./busybox ../busybox
+	@cd ../busyb0x && make defconfig && bear -- make -j 4 && cp ./busybox ../busybox
 
 env:
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)

@@ -75,7 +75,6 @@ impl Inode for Ext4Inode {
 
         Ok(write_size)
     }
-    fn delete(&self) {}
     fn find_by_path(&self, path: &str) -> Option<Arc<dyn Inode>> {
         let mut file = self.file.lock();
 

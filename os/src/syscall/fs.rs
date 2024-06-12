@@ -553,7 +553,7 @@ pub fn sys_pipe2(fd: *mut u32) -> SyscallRet {
 
 pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
+    let inner = task.inner_lock();
     let token = inner.user_token();
     let mut path = translated_str(token, path);
     let mut kst = UserBuffer::new(translated_byte_buffer(token, kst, size_of::<Kstat>()).unwrap());
@@ -578,10 +578,10 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
         }
         return Err(SysErrNo::ENOENT);
     }
-
     if let Some(file) = open(base_path, path.as_str(), OpenFlags::O_RDONLY) {
         let file = file.file()?;
         let kstat = file.inode.fstat();
+        println!("{:?}", &kstat);
         kst.write(kstat.as_bytes());
         return Ok(0);
     }
@@ -1127,14 +1127,13 @@ pub fn sys_renameat2(
     // TODO(ZMY) 暂时不知道在不改变实现的情况下如何支持交换;部分23年内核也不支持该功能;需要再添加
 
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
+    let inner = task.inner_lock();
     let token = inner.user_token();
     let mut oldpath = translated_str(token, oldpath);
     let mut newpath = translated_str(token, newpath);
-    let flags = Renameat2Flags::from_bits(flags).unwrap();
+    // let flags = Renameat2Flags::from_bits(flags).unwrap();
 
     let mut oldfile;
-    // let mut newfile;
 
     //找到旧文件
     let mut base_path = inner.fs_info.cwd();
@@ -1185,43 +1184,9 @@ pub fn sys_renameat2(
         if let Some(osfile) = osfile.create(newpath.as_str(), openflags) {
             let newfile = osfile.file()?;
             newfile.inode.rename(oldfile.inode.clone());
-            oldfile.inode.delete();
             return Ok(0);
         }
         return Err(SysErrNo::ENOENT);
-        // if let Some(osfile) = osfile.find(newpath.as_str(), checkflags) {
-        //     let osfile = osfile.file()?;
-        //     match flags {
-        //         Renameat2Flags::RENAME_NOREPLACE => {
-        //             return Err(SysErrNo::EEXIST);
-        //         }
-        //         Renameat2Flags::RENAME_EXCHANGE => {
-        //             //交换两个文件
-        //             newfile = osfile.clone();
-        //             let tmp_file_size = oldfile.file_size();
-        //             let tmp_first_cluster = oldfile.first_cluster();
-        //             oldfile.set_file_size(newfile.file_size() as u32);
-        //             oldfile.set_first_cluster(newfile.first_cluster());
-        //             newfile.set_file_size(tmp_file_size as u32);
-        //             newfile.set_first_cluster(tmp_first_cluster);
-        //             return Ok(0);
-        //         }
-        //         _ => return Err(SysErrNo::EINVAL),
-        //     }
-        // }
-        // if let Some(osfile) = osfile.create(newpath.as_str(), openflags) {
-        //     let osfile = match osfile {
-        //         FileClass::File(f) => f.clone(),
-        //         FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
-        //     };
-        //     //辞旧迎新
-        //     newfile = osfile.clone();
-        //     newfile.set_file_size(oldfile.file_size() as u32);
-        //     newfile.set_first_cluster(oldfile.first_cluster());
-        //     oldfile.delete();
-        //     return Ok(0);
-        // }
-        // return Err(SysErrNo::ENOENT);
     }
     if let Some(osfile) = open(base_path, newpath.as_str(), openflags) {
         let newfile = osfile.file()?;
@@ -1239,54 +1204,9 @@ pub fn sys_renameat2(
             path2abs(&mut wpath, &path2vec(&oldpath))
         };
         remove_vfile_idx(&abs_path);
-        oldfile.inode.delete();
         return Ok(0);
     }
     return Err(SysErrNo::ENOENT);
-    // if let Some(osfile) = open(base_path, newpath.as_str(), checkflags) {
-    //     let osfile = osfile.file()?;
-    //     match flags {
-    //         Renameat2Flags::RENAME_NOREPLACE => {
-    //             return Err(SysErrNo::EEXIST);
-    //         }
-    //         Renameat2Flags::RENAME_EXCHANGE => {
-    //             //交换两个文件
-    //             newfile = osfile.clone();
-    //             let tmp_file_size = oldfile.file_size();
-    //             let tmp_first_cluster = oldfile.first_cluster();
-    //             oldfile.set_file_size(newfile.file_size() as u32);
-    //             oldfile.set_first_cluster(newfile.first_cluster());
-    //             newfile.set_file_size(tmp_file_size as u32);
-    //             newfile.set_first_cluster(tmp_first_cluster);
-    //             return Ok(0);
-    //         }
-    //         _ => return Err(SysErrNo::EINVAL),
-    //     }
-    // }
-
-    // if let Some(osfile) = open(base_path, newpath.as_str(), openflags) {
-    //     let osfile = osfile.file()?;
-    //     //辞旧迎新
-    //     newfile = osfile.clone();
-    //     newfile.set_file_size(oldfile.file_size() as u32);
-    //     newfile.set_first_cluster(oldfile.first_cluster());
-    //     let abs_path = if is_abs_path(&oldpath) {
-    //         oldpath.to_string()
-    //     } else {
-    //         let mut wpath = {
-    //             if base_path == "/" {
-    //                 Vec::with_capacity(32)
-    //             } else {
-    //                 path2vec(base_path)
-    //             }
-    //         };
-    //         path2abs(&mut wpath, &path2vec(&oldpath))
-    //     };
-    //     remove_vfile_idx(&abs_path);
-    //     oldfile.delete();
-    //     return Ok(0);
-    // }
-    // return Err(SysErrNo::ENOENT);
 }
 
 pub fn sys_copy_file_range(

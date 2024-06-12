@@ -44,8 +44,6 @@ pub trait Inode: Send + Sync {
     fn link(&self);
     fn unlink(&self) -> GeneralRet;
     fn rename(&self, file: Arc<dyn Inode>) -> GeneralRet;
-    ///
-    fn delete(&self);
     fn ls(&self) -> Vec<String>;
 }
 /// OSInode接口

@@ -135,11 +135,14 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
             envp = envp.add(1);
         }
     }
-    if !path.starts_with('/') {
-        path = task_inner.fs_info.get_cwd();
-    }
 
-    if let Some(app_inode) = open_file(path.as_str(), OpenFlags::O_RDONLY) {
+    let cwd = if !path.starts_with('/') {
+        task_inner.fs_info.cwd()
+    } else {
+        "/"
+    };
+
+    if let Some(app_inode) = open(cwd, path.as_str(), OpenFlags::O_RDONLY) {
         let app_inode = app_inode.file()?;
         let elf_data = unsafe { app_inode.read_as_elf() };
         drop(task_inner);
