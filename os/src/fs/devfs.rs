@@ -1,15 +1,18 @@
-use crate::fs::FileClass;
-use crate::mm::{translated_byte_buffer, UserBuffer};
-use crate::syscall::IoctlCommand;
-use crate::task::{current_task, INITPROC};
-use crate::utils::{SysErrNo, SyscallRet};
-use alloc::collections::BTreeSet;
-use alloc::fmt::{Debug, Formatter};
-use alloc::format;
-use alloc::string::{String, ToString};
-use alloc::sync::Arc;
-use core::cmp::min;
-use core::mem::size_of;
+use crate::{
+    fs::FileClass,
+    mm::{translated_byte_buffer, UserBuffer},
+    syscall::{IoctlCommand, PollEvents},
+    task::{current_task, INITPROC},
+    utils::{SysErrNo, SyscallRet},
+};
+use alloc::{
+    collections::BTreeSet,
+    fmt::{Debug, Formatter},
+    format,
+    string::{String, ToString},
+    sync::Arc,
+};
+use core::{cmp::min, mem::size_of};
 use lazy_static::lazy_static;
 use spin::Mutex;
 
@@ -75,6 +78,16 @@ impl File for DevZero {
         // do nothing
         Ok(user_buf.len())
     }
+    fn poll(&self, events: PollEvents) -> PollEvents {
+        let mut revents = PollEvents::empty();
+        if events.contains(PollEvents::IN) {
+            revents |= PollEvents::IN;
+        }
+        if events.contains(PollEvents::OUT) {
+            revents |= PollEvents::OUT;
+        }
+        revents
+    }
 }
 
 impl DevNull {
@@ -97,6 +110,16 @@ impl File for DevNull {
     fn write(&self, user_buf: UserBuffer) -> SyscallRet {
         // do nothing
         Ok(user_buf.len())
+    }
+    fn poll(&self, events: PollEvents) -> PollEvents {
+        let mut revents = PollEvents::empty();
+        if events.contains(PollEvents::IN) {
+            revents |= PollEvents::IN;
+        }
+        if events.contains(PollEvents::OUT) {
+            revents |= PollEvents::OUT;
+        }
+        revents
     }
 }
 
@@ -161,6 +184,16 @@ impl File for DevRtc {
         // do nothing
         Ok(user_buf.len())
     }
+    fn poll(&self, events: PollEvents) -> PollEvents {
+        let mut revents = PollEvents::empty();
+        if events.contains(PollEvents::IN) {
+            revents |= PollEvents::IN;
+        }
+        if events.contains(PollEvents::OUT) {
+            revents |= PollEvents::OUT;
+        }
+        revents
+    }
 }
 
 impl Ioctl for DevRtc {
@@ -204,6 +237,16 @@ impl File for DevRandom {
         // do nothing
         Ok(user_buf.len())
     }
+    fn poll(&self, events: PollEvents) -> PollEvents {
+        let mut revents = PollEvents::empty();
+        if events.contains(PollEvents::IN) {
+            revents |= PollEvents::IN;
+        }
+        if events.contains(PollEvents::OUT) {
+            revents |= PollEvents::OUT;
+        }
+        revents
+    }
 }
 
 impl DevTty {
@@ -232,6 +275,16 @@ impl File for DevTty {
         } else {
             panic!("get Stdout error!");
         }
+    }
+    fn poll(&self, events: PollEvents) -> PollEvents {
+        let mut revents = PollEvents::empty();
+        if events.contains(PollEvents::IN) {
+            revents |= PollEvents::IN;
+        }
+        if events.contains(PollEvents::OUT) {
+            revents |= PollEvents::OUT;
+        }
+        revents
     }
 }
 

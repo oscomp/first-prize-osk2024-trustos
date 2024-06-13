@@ -1,6 +1,7 @@
 use crate::{
     fs::{FileClass, OpenFlags, SEEK_CUR, SEEK_END, SEEK_SET},
     mm::UserBuffer,
+    syscall::PollEvents,
     utils::{SysErrNo, SyscallRet},
 };
 
@@ -94,5 +95,15 @@ impl File for OSInode {
             total_write_size += write_size;
         }
         Ok(total_write_size)
+    }
+    fn poll(&self, events: PollEvents) -> PollEvents {
+        let mut revents = PollEvents::empty();
+        if events.contains(PollEvents::IN) && self.readable {
+            revents |= PollEvents::IN;
+        }
+        if events.contains(PollEvents::OUT) && self.writable {
+            revents |= PollEvents::OUT;
+        }
+        revents
     }
 }

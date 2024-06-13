@@ -3,6 +3,7 @@ mod inode;
 use super::{Dirent, FileClass, InodeType, Kstat, OpenFlags, Statfs};
 use crate::{
     mm::UserBuffer,
+    syscall::PollEvents,
     utils::{GeneralRet, SysErrNo, SyscallRet},
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
@@ -62,6 +63,8 @@ pub trait File: Send + Sync {
     fn read(&self, buf: UserBuffer) -> SyscallRet;
     /// 将缓冲区中的数据写入文件，最多将缓冲区中的数据全部写入，并返回直接写入的字节数
     fn write(&self, buf: UserBuffer) -> SyscallRet;
+    /// ppoll处理
+    fn poll(&self, events: PollEvents) -> PollEvents;
 }
 
 pub trait Ioctl: File {

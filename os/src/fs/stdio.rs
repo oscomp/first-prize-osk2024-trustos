@@ -3,7 +3,10 @@ use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut};
 use crate::task::current_task;
 use crate::utils::{SysErrNo, SyscallRet};
 use crate::{
-    mm::UserBuffer, sbi::console_getchar, syscall::IoctlCommand, task::suspend_current_and_run_next,
+    mm::UserBuffer,
+    sbi::console_getchar,
+    syscall::{IoctlCommand, PollEvents},
+    task::suspend_current_and_run_next,
 };
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -91,6 +94,13 @@ impl File for Stdin {
         Err(SysErrNo::EINVAL)
         // panic!("Cannot write to stdin!");
     }
+    fn poll(&self, events: PollEvents) -> PollEvents {
+        let mut revents = PollEvents::empty();
+        if events.contains(PollEvents::IN) {
+            revents |= PollEvents::IN;
+        }
+        revents
+    }
 }
 
 impl Ioctl for Stdin {
@@ -156,6 +166,13 @@ impl File for Stdout {
             print!("{}", core::str::from_utf8(*buffer).unwrap());
         }
         Ok(user_buf.len())
+    }
+    fn poll(&self, events: PollEvents) -> PollEvents {
+        let mut revents = PollEvents::empty();
+        if events.contains(PollEvents::OUT) {
+            revents |= PollEvents::OUT;
+        }
+        revents
     }
 }
 

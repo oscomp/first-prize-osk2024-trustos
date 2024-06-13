@@ -11,6 +11,7 @@
 use super::{Dirent, File, Kstat};
 use crate::{
     mm::UserBuffer,
+    syscall::PollEvents,
     utils::{SysErrNo, SyscallRet},
 };
 use alloc::{
@@ -90,6 +91,7 @@ pub struct PipeRingBuffer {
     tail: usize,
     status: RingBufferStatus,
     write_end: Option<Weak<Pipe>>,
+    read_end: Option<Weak<Pipe>>,
 }
 
 impl PipeRingBuffer {
@@ -100,10 +102,14 @@ impl PipeRingBuffer {
             tail: 0,
             status: RingBufferStatus::Empty,
             write_end: None,
+            read_end: None,
         }
     }
     pub fn set_write_end(&mut self, write_end: &Arc<Pipe>) {
         self.write_end = Some(Arc::downgrade(write_end));
+    }
+    pub fn set_read_end(&mut self, read_end: &Arc<Pipe>) {
+        self.read_end = Some(Arc::downgrade(read_end));
     }
     /// 写一个字节到管道尾
     pub fn write_byte(&mut self, byte: u8) {
@@ -142,6 +148,10 @@ impl PipeRingBuffer {
             RING_BUFFER_SIZE - self.available_read()
         }
     }
+    /// 通过管道缓冲区读端弱指针判断管道的所有读端都被关闭
+    pub fn all_read_ends_closed(&self) -> bool {
+        self.read_end.as_ref().unwrap().upgrade().is_none()
+    }
     /// 通过管道缓冲区写端弱指针判断管道的所有写端都被关闭
     pub fn all_write_ends_closed(&self) -> bool {
         self.write_end.as_ref().unwrap().upgrade().is_none()
@@ -153,6 +163,7 @@ pub fn make_pipe() -> (Arc<Pipe>, Arc<Pipe>) {
     let buffer = Arc::new(Mutex::new(PipeRingBuffer::new()));
     let read_end = Arc::new(Pipe::read_end_with_buffer(buffer.clone()));
     let write_end = Arc::new(Pipe::write_end_with_buffer(buffer.clone()));
+    buffer.lock().set_read_end(&read_end);
     buffer.lock().set_write_end(&write_end);
     (read_end, write_end)
 }
@@ -214,5 +225,22 @@ impl File for Pipe {
                 }
             }
         }
+    }
+    fn poll(&self, events: PollEvents) -> PollEvents {
+        let mut revents = PollEvents::empty();
+        if events.contains(PollEvents::IN) && self.readable {
+            revents |= PollEvents::IN;
+        }
+        if events.contains(PollEvents::OUT) && self.writable {
+            revents |= PollEvents::OUT;
+        }
+        let ring_buffer = self.inner_lock();
+        if self.readable && ring_buffer.all_write_ends_closed() {
+            revents |= PollEvents::HUP;
+        }
+        if self.writable && ring_buffer.all_read_ends_closed() {
+            revents |= PollEvents::ERR;
+        }
+        revents
     }
 }

@@ -2,15 +2,15 @@
 use crate::{
     console::print,
     fs::{
-        make_pipe, open, open_device_file, open_file, remove_vfile_idx, Dirent, File, FileClass,
-        Kstat, OSFile, OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET, SUPER_BLOCK,
+        make_pipe, open, open_device_file, open_file, remove_vfile_idx, Dirent, FdTable, File,
+        FileClass, Kstat, OSFile, OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET, SUPER_BLOCK,
     },
     mm::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
         translated_str, UserBuffer,
     },
-    syscall::{FaccessatMode, Renameat2Flags},
-    task::{current_task, current_token},
+    syscall::{FaccessatMode, PollEvents, PollFd, Renameat2Flags},
+    task::{current_task, current_token, suspend_current_and_run_next},
     timer::{get_time_ms, Timespec},
     utils::{is_abs_path, path2abs, path2vec, trim_first_point_slash, SysErrNo, SyscallRet},
 };
@@ -1083,9 +1083,12 @@ pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsiz: usi
         let osfile = inner.fd_table.get_file(dirfd).file()?;
         if let Some(osfile) = osfile.find(path.as_str(), OpenFlags::O_RDONLY) {
             let osfile = osfile.file()?;
+            /*
+            //fat32不支持设置sym文件类型
             if !osfile.inode.node_type().is_symlink() {
                 return Err(SysErrNo::EINVAL);
             }
+            */
             // release current task TCB manually to avoid multi-borrow
             drop(inner);
             drop(task);
@@ -1102,9 +1105,12 @@ pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsiz: usi
         if !osfile.readable() {
             return Err(SysErrNo::EACCES);
         }
+        /*
+        //fat32不支持设置sym文件类型
         if !osfile.inode.node_type().is_symlink() {
             return Err(SysErrNo::EINVAL);
         }
+        */
         // release current task TCB manually to avoid multi-borrow
         drop(inner);
         drop(task);
@@ -1309,5 +1315,79 @@ pub fn sys_getrandom(buf_ptr: *const u8, buflen: usize, _flags: u32) -> SyscallR
         Ok(ret)
     } else {
         Err(SysErrNo::ENOENT)
+    }
+}
+
+pub fn sys_ppoll(fds_ptr: usize, nfds: usize, tmo_p: usize, mask: usize) -> SyscallRet {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+
+    debug!(
+        "[sys_ppoll] fds_ptr is {}, nfds is {}, tmo_p is {}, mask is {}",
+        fds_ptr, nfds, tmo_p, mask
+    );
+
+    if fds_ptr == 0 {
+        return Err(SysErrNo::EINVAL);
+    }
+
+    let mut fds = Vec::new();
+    let mut ptr = fds_ptr as *mut PollFd;
+    for i in 0..nfds {
+        fds.push(*translated_refmut(token, unsafe { ptr.add(i) } as *mut PollFd));
+    }
+
+    let waittime = if tmo_p == 0 {
+        //为0则永远等待直到完成
+        -1
+    } else {
+        let timespec = translated_ref(token, tmo_p as *const Timespec);
+        (timespec.tv_sec * 1000 + timespec.tv_nsec / 1000000) as isize
+    };
+    let begin = get_time_ms();
+
+    //由于每次循环结束需要让出cpu，因此需要在每次循环时重新获得锁
+    drop(inner);
+    drop(task);
+
+    loop {
+        let task = current_task().unwrap();
+        let mut inner = task.inner_lock();
+        let mut resnum = 0;
+        for i in 0..nfds {
+            if fds[i].fd < 0 {
+                fds[i].revents = PollEvents::empty();
+                continue;
+            }
+            if let Some(file) = &inner.fd_table.try_get_file(fds[i].fd as usize) {
+                let file: Arc<dyn File> = match file {
+                    FileClass::File(f) => f.clone(),
+                    FileClass::Abs(f) => f.clone(),
+                };
+                let res = file.poll(fds[i].events);
+                if !res.is_empty() {
+                    resnum += 1;
+                }
+                fds[i].revents = res;
+            } else {
+                fds[i].revents = PollEvents::INVAL;
+            }
+        }
+        //有响应了就可以返回
+        if resnum > 0 {
+            let mut resptr = fds_ptr as *mut PollFd;
+            for i in 0..nfds {
+                *translated_refmut(token, unsafe { resptr.add(i) } as *mut PollFd) = fds[i];
+            }
+            return Ok(resnum);
+        }
+        //或者时间到了也可以返回
+        if waittime > 0 && get_time_ms() - begin >= waittime as usize {
+            return Ok(0);
+        }
+        drop(inner);
+        drop(task);
+        suspend_current_and_run_next();
     }
 }
