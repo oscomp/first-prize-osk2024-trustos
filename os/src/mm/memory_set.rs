@@ -456,7 +456,11 @@ impl MemorySetInner {
         let area = self
             .areas
             .iter_mut()
-            .filter(|area| area.area_type == MapAreaType::Elf || area.area_type == MapAreaType::Brk)
+            .filter(|area| {
+                area.area_type == MapAreaType::Elf
+                    || area.area_type == MapAreaType::Brk
+                    || area.area_type == MapAreaType::Mmap
+            })
             .find(|area| {
                 let (start, end) = area.vpn_range.range();
                 start <= vpn && vpn < end
@@ -818,28 +822,28 @@ impl MemorySetInner {
             }
             /// Mmap和brk是lazy allocation
             if area.area_type == MapAreaType::Mmap || area.area_type == MapAreaType::Brk {
-                //已经分配且独占/被写过的部分按cow处理
-                //其余是读共享或未分配部分，直接clone即可
+                //已经分配且独占/被写过的部分以及读共享部分按cow处理
+                //其余是未分配部分，直接clone即可
                 new_area.data_frames = area.data_frames.clone();
                 for (vpn, frame) in area.data_frames.iter() {
                     let vpn = *vpn;
                     let pte = user_space.get_mut().page_table.translate(vpn).unwrap();
                     let mut pte_flags = pte.flags();
                     let src_ppn = pte.ppn();
-                    //说明有共享页，不需要修改为写时复制
-                    if Arc::strong_count(frame) > 2 {
-                        memory_set.page_table.map(vpn, frame.ppn, pte_flags);
-                        continue;
-                    }
                     //清空可写位，设置COW位
                     //下面两步不合起来是因为flags只有8位，全都用掉了
                     //所以Cow位没有放到flags里面
+                    let need_cow = pte_flags.contains(PTEFlags::W) | pte.is_cow();
                     pte_flags &= !PTEFlags::W;
                     user_space.get_mut().page_table.set_flags(vpn, pte_flags);
-                    user_space.get_mut().page_table.set_cow(vpn);
+                    if need_cow {
+                        user_space.get_mut().page_table.set_cow(vpn);
+                    }
                     // 设置新的pagetable
                     memory_set.page_table.map(vpn, src_ppn, pte_flags);
-                    memory_set.page_table.set_cow(vpn);
+                    if need_cow {
+                        memory_set.page_table.set_cow(vpn);
+                    }
                 }
                 memory_set.push_lazily(new_area);
                 continue;

@@ -112,10 +112,11 @@ pub fn trap_handler() {
                 ok = task_inner
                     .memory_set
                     .lazy_page_fault(VirtAddr::from(stval).floor(), scause.cause());
-                ok |= task_inner
-                    .memory_set
-                    .cow_page_fault(VirtAddr::from(stval).floor(), scause.cause());
-
+                if !ok {
+                    ok = task_inner
+                        .memory_set
+                        .cow_page_fault(VirtAddr::from(stval).floor(), scause.cause());
+                }
                 // drop task inner and task to avoid deadlock and exit exception
             }
             if (!ok) {
