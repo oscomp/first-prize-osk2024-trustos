@@ -843,6 +843,9 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
         return Err(SysErrNo::EACCES);
     }
 
+    drop(inner);
+    drop(task);
+
     //构造输入缓冲池
     let mut buf = vec![0u8; count];
     let mut inbufv = Vec::new();
@@ -1247,6 +1250,9 @@ pub fn sys_copy_file_range(
     if !infile.readable() {
         return Err(SysErrNo::EACCES);
     }
+
+    drop(inner);
+    drop(task);
 
     //构造输入缓冲池
     let mut buf = vec![0u8; count];
