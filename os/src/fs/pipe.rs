@@ -9,7 +9,10 @@
 /// ```
 //
 use super::{Dirent, File, Kstat};
-use crate::{mm::UserBuffer, utils::SysErrNo};
+use crate::{
+    mm::UserBuffer,
+    utils::{SysErrNo, SyscallRet},
+};
 use alloc::{
     string::String,
     sync::{Arc, Weak},
@@ -161,7 +164,7 @@ impl File for Pipe {
     fn writable(&self) -> bool {
         self.writable
     }
-    fn read(&self, buf: UserBuffer) -> Result<usize, SysErrNo> {
+    fn read(&self, buf: UserBuffer) -> SyscallRet {
         assert!(self.readable());
         let mut buf_iter = buf.into_iter();
         let mut read_size = 0usize;
@@ -189,7 +192,7 @@ impl File for Pipe {
             }
         }
     }
-    fn write(&self, buf: UserBuffer) -> Result<usize, SysErrNo> {
+    fn write(&self, buf: UserBuffer) -> SyscallRet {
         assert!(self.writable());
         let mut buf_iter = buf.into_iter();
         let mut write_size = 0usize;

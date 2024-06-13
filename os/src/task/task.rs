@@ -75,13 +75,13 @@ impl TaskControlBlockInner {
         self.sig_pending.get_ref().group_exit_code.is_some()
     }
     pub fn alloc_user_res(&mut self) {
-        let (_, ustack_top) = self.memory_set.get_mut().insert_framed_area_with_hint(
+        let (_, ustack_top) = self.memory_set.insert_framed_area_with_hint(
             USER_STACK_TOP,
             USER_STACK_SIZE,
             MapPermission::R | MapPermission::W | MapPermission::U,
             MapAreaType::Stack,
         );
-        let (trap_cx_bottom, _) = self.memory_set.get_mut().insert_framed_area_with_hint(
+        let (trap_cx_bottom, _) = self.memory_set.insert_framed_area_with_hint(
             USER_TRAP_CONTEXT_TOP,
             PAGE_SIZE,
             MapPermission::R | MapPermission::W,
@@ -98,23 +98,22 @@ impl TaskControlBlockInner {
     }
     pub fn clone_user_res(&mut self, another: &TaskControlBlockInner) {
         self.alloc_user_res();
-        self.memory_set.get_mut().clone_area(
+        self.memory_set.clone_area(
             VirtAddr::from(self.user_stack_top - USER_STACK_SIZE).floor(),
             another.memory_set.get_ref(),
         );
-        self.memory_set.get_mut().clone_area(
+        self.memory_set.clone_area(
             VirtAddr::from(self.trap_cx_bottom).floor(),
             another.memory_set.get_ref(),
         );
     }
     pub fn dealloc_user_res(&mut self) {
         if self.user_stack_top != 0 {
-            self.memory_set.get_mut().remove_area_with_start_vpn(
+            self.memory_set.remove_area_with_start_vpn(
                 VirtAddr::from(self.user_stack_top - USER_STACK_SIZE).floor(),
             );
         }
         self.memory_set
-            .get_mut()
             .remove_area_with_start_vpn(VirtAddr::from(self.trap_cx_bottom).floor());
         flush_tlb();
     }

@@ -2,7 +2,7 @@ use crate::fs::FileClass;
 use crate::mm::{translated_byte_buffer, UserBuffer};
 use crate::syscall::IoctlCommand;
 use crate::task::{current_task, INITPROC};
-use crate::utils::SysErrNo;
+use crate::utils::{SysErrNo, SyscallRet};
 use alloc::collections::BTreeSet;
 use alloc::fmt::{Debug, Formatter};
 use alloc::format;
@@ -68,10 +68,10 @@ impl File for DevZero {
     fn writable(&self) -> bool {
         true
     }
-    fn read(&self, mut user_buf: UserBuffer) -> Result<usize, SysErrNo> {
+    fn read(&self, mut user_buf: UserBuffer) -> SyscallRet {
         Ok(user_buf.fill0())
     }
-    fn write(&self, user_buf: UserBuffer) -> Result<usize, SysErrNo> {
+    fn write(&self, user_buf: UserBuffer) -> SyscallRet {
         // do nothing
         Ok(user_buf.len())
     }
@@ -90,11 +90,11 @@ impl File for DevNull {
     fn writable(&self) -> bool {
         true
     }
-    fn read(&self, mut _user_buf: UserBuffer) -> Result<usize, SysErrNo> {
+    fn read(&self, mut _user_buf: UserBuffer) -> SyscallRet {
         // do nothing
         Ok(0)
     }
-    fn write(&self, user_buf: UserBuffer) -> Result<usize, SysErrNo> {
+    fn write(&self, user_buf: UserBuffer) -> SyscallRet {
         // do nothing
         Ok(user_buf.len())
     }
@@ -149,7 +149,7 @@ impl File for DevRtc {
     fn writable(&self) -> bool {
         true
     }
-    fn read(&self, mut user_buf: UserBuffer) -> Result<usize, SysErrNo> {
+    fn read(&self, mut user_buf: UserBuffer) -> SyscallRet {
         let time = RtcTime::new(2000, 1, 1, 0, 0, 0);
         let str = format!("{:?}", time);
         let bytes = str.as_bytes();
@@ -157,7 +157,7 @@ impl File for DevRtc {
         user_buf.write(bytes);
         Ok(len)
     }
-    fn write(&self, user_buf: UserBuffer) -> Result<usize, SysErrNo> {
+    fn write(&self, user_buf: UserBuffer) -> SyscallRet {
         // do nothing
         Ok(user_buf.len())
     }
@@ -197,10 +197,10 @@ impl File for DevRandom {
     fn writable(&self) -> bool {
         true
     }
-    fn read(&self, mut user_buf: UserBuffer) -> Result<usize, SysErrNo> {
+    fn read(&self, mut user_buf: UserBuffer) -> SyscallRet {
         Ok(user_buf.fillrandom())
     }
-    fn write(&self, user_buf: UserBuffer) -> Result<usize, SysErrNo> {
+    fn write(&self, user_buf: UserBuffer) -> SyscallRet {
         // do nothing
         Ok(user_buf.len())
     }
@@ -219,14 +219,14 @@ impl File for DevTty {
     fn writable(&self) -> bool {
         true
     }
-    fn read(&self, mut user_buf: UserBuffer) -> Result<usize, SysErrNo> {
+    fn read(&self, mut user_buf: UserBuffer) -> SyscallRet {
         if let Some(FileClass::Abs(tty_device)) = INITPROC.inner_lock().fd_table.try_get_file(0) {
             tty_device.read(user_buf)
         } else {
             panic!("get Stdin error!");
         }
     }
-    fn write(&self, user_buf: UserBuffer) -> Result<usize, SysErrNo> {
+    fn write(&self, user_buf: UserBuffer) -> SyscallRet {
         if let Some(FileClass::Abs(tty_device)) = INITPROC.inner_lock().fd_table.try_get_file(1) {
             tty_device.write(user_buf)
         } else {

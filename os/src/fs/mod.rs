@@ -18,7 +18,7 @@ cfg_if::cfg_if! {
 }
 
 use crate::mm::UserBuffer;
-use crate::utils::{is_abs_path, path2abs, path2vec, GeneralRet, SysErrNo};
+use crate::utils::{is_abs_path, path2abs, path2vec, rsplit_once, GeneralRet, SysErrNo};
 use alloc::string::String;
 use alloc::{sync::Arc, vec, vec::Vec};
 pub use devfs::*;
@@ -50,7 +50,7 @@ bitflags! {
         const O_DSYNC       = 0o10000;
         const O_SYNC        = 0o4010000;
         const O_RSYNC       = 0o4010000;
-        const O_DIRECTORY   = 0o200000;
+        const O_DIRECTORY   = 0o200000; // 目录
         const O_NOFOLLOW    = 0o400000;
         const O_CLOEXEC     = 0o2000000;    //描述符标志
 
@@ -71,6 +71,14 @@ impl OpenFlags {
             (false, true)
         } else {
             (true, true)
+        }
+    }
+
+    pub fn node_type(&self) -> InodeType {
+        if self.contains(OpenFlags::O_DIRECTORY) {
+            InodeType::Dir
+        } else {
+            InodeType::File
         }
     }
 }
@@ -105,6 +113,7 @@ impl FileClass {
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum InodeType {
+    Unknown = 0o0,
     /// FIFO (named pipe)
     Fifo = 0o1,
     /// Character device
@@ -150,20 +159,20 @@ impl InodeType {
     pub const fn is_socket(self) -> bool {
         matches!(self, Self::Socket)
     }
-    /// Returns a character representation of the node type.
-    ///
-    /// For example, `d` for directory, `-` for regular file, etc.
-    pub const fn as_char(self) -> char {
-        match self {
-            Self::Fifo => 'p',
-            Self::CharDevice => 'c',
-            Self::Dir => 'd',
-            Self::BlockDevice => 'b',
-            Self::File => '-',
-            Self::SymLink => 'l',
-            Self::Socket => 's',
-        }
-    }
+    // Returns a character representation of the node type.
+    //
+    // For example, `d` for directory, `-` for regular file, etc.
+    // pub const fn as_char(self) -> char {
+    //     match self {
+    //         Self::Fifo => 'p',
+    //         Self::CharDevice => 'c',
+    //         Self::Dir => 'd',
+    //         Self::BlockDevice => 'b',
+    //         Self::File => '-',
+    //         Self::SymLink => 'l',
+    //         Self::Socket => 's',
+    //     }
+    // }
 }
 
 core::arch::global_asm!(include_str!("preload.S"));
@@ -203,7 +212,7 @@ pub fn flush_preload() {
 
 pub fn list_apps() {
     println!("/**** APPS ****");
-    for (app, _) in ROOT_INODE.ls().unwrap() {
+    for app in ROOT_INODE.ls() {
         println!("{}", app);
     }
     println!("**************/");
@@ -375,11 +384,13 @@ fn create_file(
 ) -> Option<FileClass> {
     if let Some(parent_dir) = find_vfile_idx(parent_path) {
         let (readable, writable) = flags.read_write();
-        return parent_dir.create(child_name, flags).map(|vfile| {
-            insert_vfile_idx(abs_path, vfile.clone());
-            let osinode = OSInode::new(readable, writable, vfile);
-            FileClass::File(Arc::new(osinode))
-        });
+        return parent_dir
+            .create(child_name, flags.node_type())
+            .map(|vfile| {
+                insert_vfile_idx(abs_path, vfile.clone());
+                let osinode = OSInode::new(readable, writable, vfile);
+                FileClass::File(Arc::new(osinode))
+            });
     }
     let cur_vfile = {
         if cwd == "/" {
@@ -390,11 +401,13 @@ fn create_file(
     };
     if let Some(parent_dir) = cur_vfile.find_by_path(path) {
         let (readable, writable) = flags.read_write();
-        parent_dir.create(child_name, flags).map(|vfile| {
-            insert_vfile_idx(abs_path, vfile.clone());
-            let osinode = OSInode::new(readable, writable, vfile);
-            FileClass::File(Arc::new(osinode))
-        })
+        parent_dir
+            .create(child_name, flags.node_type())
+            .map(|vfile| {
+                insert_vfile_idx(abs_path, vfile.clone());
+                let osinode = OSInode::new(readable, writable, vfile);
+                FileClass::File(Arc::new(osinode))
+            })
     } else {
         None
     }
@@ -438,12 +451,10 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
         return Some(FileClass::File(Arc::new(vfile)));
     }
     // 若在FSIDX中无法找到，尝试在FSIDX寻找父级目录
-    let (mut parent_path, child_name) = abs_path.rsplit_once("/").unwrap();
-    if parent_path.is_empty() {
-        parent_path = "/";
-    }
+    let (parent_path, child_name) = rsplit_once(&abs_path, "/");
     if let Some(parent_inode) = find_vfile_idx(parent_path) {
-        if let Some(inode) = parent_inode.find_by_name(child_name) {
+        // if let Some(inode) = parent_inode.find_by_name(child_name) {
+        if let Some(inode) = parent_inode.find_by_path(child_name) {
             if flags.contains(OpenFlags::O_TRUNC) {
                 remove_vfile_idx(&abs_path);
                 inode.unlink();
@@ -453,7 +464,7 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
             let (readable, writable) = flags.read_write();
             let vfile = OSInode::new(readable, writable, inode);
             if flags.contains(OpenFlags::O_APPEND) {
-                vfile.lseek(vfile.inode.size() as isize, SEEK_SET);
+                vfile.lseek(0, SEEK_END);
             }
             return Some(FileClass::File(Arc::new(vfile)));
         }
@@ -473,7 +484,7 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
             let (readable, writable) = flags.read_write();
             let vfile = OSInode::new(readable, writable, inode);
             if flags.contains(OpenFlags::O_APPEND) {
-                vfile.lseek(vfile.inode.size() as isize, SEEK_SET);
+                vfile.lseek(0, SEEK_END);
             }
             return Some(FileClass::File(Arc::new(vfile)));
         }

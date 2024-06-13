@@ -1,4 +1,4 @@
-use alloc::{string::String, vec::Vec};
+use alloc::{string::String, vec, vec::Vec};
 
 pub fn trim_first_point_slash(path: &str) -> &str {
     if path.starts_with("./") {
@@ -31,4 +31,12 @@ pub fn path2vec(path: &str) -> Vec<&str> {
 #[inline(always)]
 pub fn is_abs_path(path: &str) -> bool {
     unsafe { *path.as_ptr() == '/' as u8 }
+}
+/// 用于路径拆分
+pub fn rsplit_once<'a>(s: &'a String, delimiter: &str) -> (&'a str, &'a str) {
+    let (mut parent_path, child_name) = s.rsplit_once(delimiter).unwrap();
+    if parent_path.is_empty() {
+        parent_path = "/";
+    }
+    (parent_path, child_name)
 }

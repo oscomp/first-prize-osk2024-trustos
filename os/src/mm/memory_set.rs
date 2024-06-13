@@ -182,6 +182,21 @@ impl MemorySet {
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.inner.get_unchecked_mut().translate(vpn)
     }
+    #[inline(always)]
+    pub fn insert_framed_area_with_hint(
+        &self,
+        hint: usize,
+        size: usize,
+        map_perm: MapPermission,
+        area_type: MapAreaType,
+    ) -> (usize, usize) {
+        self.get_mut()
+            .insert_framed_area_with_hint(hint, size, map_perm, area_type)
+    }
+    #[inline(always)]
+    pub fn clone_area(&self, start_vpn: VirtPageNum, another: &MemorySetInner) {
+        self.get_mut().clone_area(start_vpn, another)
+    }
 }
 
 /// memory set structure, controls virtual-memory space
@@ -336,17 +351,7 @@ impl MemorySetInner {
             addr
         } else {
             // 自行选择地址,计算已经使用的MMap地址
-            // let map_size: usize = self
-            //     .areas
-            //     .iter()
-            //     .filter(|area| area.area_type == MapAreaType::Mmap)
-            //     .map(|area| {
-            //         let (start, end) = area.vpn_range.range();
-            //         (VirtAddr::from(end).0 - VirtAddr::from(start).0)
-            //     })
-            //     .sum();
             let addr = self.find_insert_addr(MMAP_TOP, len);
-            // let addr = MMAP_TOP - map_size - len;
             self.push_lazily(MapArea::new_mmap(
                 VirtAddr::from(addr),
                 VirtAddr::from(addr + len),
@@ -365,7 +370,7 @@ impl MemorySetInner {
     pub fn munmap(&mut self, addr: usize, len: usize) {
         let start_vpn = VirtPageNum::from(VirtAddr::from(addr));
         let end_vpn = VirtPageNum::from(VirtAddr::from(addr + len));
-        let area = self
+        if let Some((idx, area)) = self
             .areas
             .iter_mut()
             .enumerate()
@@ -373,19 +378,18 @@ impl MemorySetInner {
             .find(|(idx, area)| {
                 let (start, end) = area.vpn_range.range();
                 start == start_vpn
-            });
-        if area.is_some() {
-            let (idx, area_inner) = area.unwrap();
+            })
+        {
             // 检查是否需要写回
-            if area_inner.mmap_flags.contains(MmapFlags::MAP_SHARED)
-                && area_inner.map_perm.contains(MapPermission::W)
+            if area.mmap_flags.contains(MmapFlags::MAP_SHARED)
+                && area.map_perm.contains(MapPermission::W)
             {
                 let mapped_len: usize = VPNRange::new(start_vpn, end_vpn)
                     .into_iter()
-                    .filter(|vpn| area_inner.data_frames.contains_key(&vpn))
+                    .filter(|vpn| area.data_frames.contains_key(&vpn))
                     .count()
                     * PAGE_SIZE;
-                let file = area_inner.mmap_file.file.clone().unwrap();
+                let file = area.mmap_file.file.clone().unwrap();
                 file.write(UserBuffer {
                     buffers: translated_byte_buffer(
                         self.page_table.token(),
@@ -397,14 +401,14 @@ impl MemorySetInner {
             }
             // 取消映射
             for vpn in VPNRange::new(start_vpn, end_vpn) {
-                area_inner.unmap_one(&mut self.page_table, vpn);
+                area.unmap_one(&mut self.page_table, vpn);
             }
-            let area_end_vpn = area_inner.vpn_range.end();
+            let area_end_vpn = area.vpn_range.end();
             // 是否回收
             if area_end_vpn == end_vpn {
                 self.areas.remove(idx);
             } else {
-                area_inner.vpn_range = VPNRange::new(end_vpn, area_end_vpn);
+                area.vpn_range = VPNRange::new(end_vpn, area_end_vpn);
             }
             flush_tlb();
         }
@@ -415,35 +419,33 @@ impl MemorySetInner {
             return false;
         }
         //mmap
-        let area = self
+        if let Some(area) = self
             .areas
             .iter_mut()
             .filter(|area| area.area_type == MapAreaType::Mmap)
             .find(|area| {
                 let (start, end) = area.vpn_range.range();
                 start <= vpn && vpn < end
-            });
-        if area.is_some() {
-            let area_inner = area.unwrap();
+            })
+        {
             if scause == Trap::Exception(Exception::LoadPageFault) {
-                mmap_read_page_fault(vpn.into(), &mut self.page_table, area_inner);
+                mmap_read_page_fault(vpn.into(), &mut self.page_table, area);
             } else {
-                mmap_write_page_fault(vpn.into(), &mut self.page_table, area_inner);
+                mmap_write_page_fault(vpn.into(), &mut self.page_table, area);
             }
             return true;
         }
         //brk
-        let area = self
+        if let Some(area) = self
             .areas
             .iter_mut()
             .filter(|area| area.area_type == MapAreaType::Brk)
             .find(|area| {
                 let (start, end) = area.vpn_range.range();
                 start <= vpn && vpn < end
-            });
-        if area.is_some() {
-            let area_inner = area.unwrap();
-            brk_page_fault(vpn.into(), &mut self.page_table, area_inner);
+            })
+        {
+            brk_page_fault(vpn.into(), &mut self.page_table, area);
             return true;
         }
         false
@@ -453,7 +455,7 @@ impl MemorySetInner {
             return false;
         }
         //找到触发cow的段
-        let area = self
+        if let Some(area) = self
             .areas
             .iter_mut()
             .filter(|area| {
@@ -464,15 +466,16 @@ impl MemorySetInner {
             .find(|area| {
                 let (start, end) = area.vpn_range.range();
                 start <= vpn && vpn < end
-            });
-        let pte = self.page_table.translate(vpn);
-        if area.is_some() && pte.is_some() && pte.unwrap().is_cow() {
-            let area_inner = area.unwrap();
-            cow_page_fault(vpn.into(), &mut self.page_table, area_inner);
-            true
-        } else {
-            false
+            })
+        {
+            if let Some(pte) = self.page_table.translate(vpn) {
+                if pte.is_cow() {
+                    cow_page_fault(vpn.into(), &mut self.page_table, area);
+                }
+                return true;
+            }
         }
+        false
     }
     pub fn mprotect(
         &mut self,

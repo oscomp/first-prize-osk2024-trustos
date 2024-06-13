@@ -1,7 +1,7 @@
 use crate::{
     fs::{FileClass, OpenFlags, SEEK_CUR, SEEK_END, SEEK_SET},
     mm::UserBuffer,
-    utils::SysErrNo,
+    utils::{SysErrNo, SyscallRet},
 };
 
 use super::{File, Inode, OSFile};
@@ -9,8 +9,8 @@ use alloc::sync::Arc;
 use spin::{Mutex, MutexGuard};
 
 pub struct OSInode {
-    pub readable: bool, // 该文件是否允许通过 sys_read 进行读
-    pub writable: bool, // 该文件是否允许通过 sys_write 进行写
+    readable: bool, // 该文件是否允许通过 sys_read 进行读
+    writable: bool, // 该文件是否允许通过 sys_write 进行写
     pub inode: Arc<dyn Inode>,
     pub(crate) inner: Mutex<OSInodeInner>,
 }
@@ -30,7 +30,7 @@ impl OSInode {
 }
 
 impl OSFile for OSInode {
-    fn lseek(&self, offset: isize, whence: usize) -> Result<usize, SysErrNo> {
+    fn lseek(&self, offset: isize, whence: usize) -> SyscallRet {
         if offset < 0 || whence > 2 {
             return Err(SysErrNo::EINVAL);
         }
@@ -45,13 +45,10 @@ impl OSFile for OSInode {
         }
         Ok(inner.offset)
     }
-    fn offset(&self) -> isize {
-        self.inner.lock().offset as isize
-    }
     fn create(&self, path: &str, flags: OpenFlags) -> Option<FileClass> {
         let (readable, writable) = flags.read_write();
         self.inode
-            .create(path, flags)
+            .create(path, flags.node_type())
             .map(|node| FileClass::File(Arc::new(OSInode::new(readable, writable, node))))
     }
     fn find(&self, path: &str, flags: OpenFlags) -> Option<FileClass> {
@@ -72,7 +69,7 @@ impl File for OSInode {
         self.writable
     }
 
-    fn read(&self, mut buf: UserBuffer) -> Result<usize, SysErrNo> {
+    fn read(&self, mut buf: UserBuffer) -> SyscallRet {
         let mut inner = self.inner.lock();
         let mut total_read_size = 0usize;
         // 这边要使用 iter_mut()，因为要将数据写入
@@ -87,7 +84,7 @@ impl File for OSInode {
         Ok(total_read_size)
     }
 
-    fn write(&self, buf: UserBuffer) -> Result<usize, SysErrNo> {
+    fn write(&self, buf: UserBuffer) -> SyscallRet {
         let mut inner = self.inner.lock();
         let mut total_write_size = 0usize;
         for slice in buf.buffers.iter() {

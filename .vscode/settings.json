@@ -8,6 +8,8 @@
     "rust-analyzer.cargo.target": "riscv64gc-unknown-none-elf",
     "rust-analyzer.checkOnSave.allTargets": false,
     "rust-analyzer.showUnlinkedFileNotification": false,
+    "rust-analyzer.cargo.runBuildScripts": false,
+    "rust-analyzer.procMacro.enable": false,
     // "rust-analyzer.cargo.features": [
     //     "board_qemu"
     // ]
@@ -18,9 +20,9 @@
         "vector": "cpp"
     },
     // 开启粘贴保存自动格式化
-    "editor.formatOnPaste": true,
-    "editor.formatOnSave": true,
-    "editor.formatOnType": true,
+    "editor.formatOnPaste": false,
+    "editor.formatOnSave": false,
+    "editor.formatOnType": false,
     "C_Cpp.errorSquiggles": "disabled",
     "C_Cpp.intelliSenseEngineFallback": "disabled",
     "C_Cpp.intelliSenseEngine": "disabled",
@@ -60,10 +62,10 @@
         // 我选择禁用
         "--function-arg-placeholders=true",
         // compelie_commands.json 文件的目录位置(相对于工作区，由于 CMake 生成的该文件默认在 build 文件夹中，故设置为 build)
-        "--compile-commands-dir=testsuits-for-oskernel/riscv-syscalls-testing/user/build"
+        "--compile-commands-dir=busyb0x"
     ],
     "[rust]": {
         "editor.defaultFormatter": "rust-lang.rust-analyzer",
-        "editor.formatOnSave": true 
+        "editor.formatOnSave": true
     },
 }

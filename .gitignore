@@ -12,3 +12,4 @@ user/build
 user/target/*
 
 fat32_fs/fat32.img
+compile_commands.json

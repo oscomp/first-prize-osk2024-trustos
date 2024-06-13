@@ -1,6 +1,6 @@
 use crate::{
     fs::{vfs::Inode, Dirent, InodeType, Kstat, OpenFlags},
-    utils::{path2vec, trim_first_point_slash, GeneralRet, SysErrNo},
+    utils::{path2vec, trim_first_point_slash, GeneralRet, SysErrNo, SyscallRet},
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
 use fat32_fs::{VFile, ATTR_ARCHIVE, ATTR_DIRECTORY, ATTR_SYMLINK};
@@ -8,51 +8,51 @@ use fat32_fs::{VFile, ATTR_ARCHIVE, ATTR_DIRECTORY, ATTR_SYMLINK};
 type FatInode = VFile;
 
 impl Inode for FatInode {
-    fn name(&self) -> String {
-        self.get_name()
-    }
     fn size(&self) -> usize {
         self.get_size() as usize
     }
     fn node_type(&self) -> InodeType {
-        let attr = self.get_attribute();
-        if attr == ATTR_DIRECTORY {
-            InodeType::Dir
-        } else if attr == ATTR_SYMLINK {
-            InodeType::SymLink
-        } else {
-            InodeType::File
-        }
+        as_inode_type(self.get_attribute())
     }
-    fn read_at(&self, off: usize, buf: &mut [u8]) -> Result<usize, SysErrNo> {
+    fn read_at(&self, off: usize, buf: &mut [u8]) -> SyscallRet {
         Ok(self.read_at(off, buf))
     }
-    fn write_at(&self, off: usize, buf: &[u8]) -> Result<usize, SysErrNo> {
+    fn write_at(&self, off: usize, buf: &[u8]) -> SyscallRet {
         Ok(self.write_at(off, buf))
     }
-    fn read_dentry(&self, off: usize) -> Option<Dirent> {
-        assert!(self.is_dir());
-        if let Some((name, off, ino, dtype)) = self.dirent_info(off) {
-            let mut dirent = Dirent::new();
-            dirent.init(name, off as i64, ino as u64, dtype);
-            Some(dirent)
+    fn read_dentry(&self, off: usize, len: usize) -> Option<(Vec<u8>, isize)> {
+        let mut res = 0;
+        let mut vec = Vec::new();
+        let mut offset = off;
+        while let Some((name, off, ino, dtype)) = self.dirent_info(offset) {
+            let dirent = Dirent::new(name, off as i64, ino as u64, as_inode_type(dtype) as u8);
+            if res + dirent.len() > len {
+                break;
+            }
+            res += dirent.len();
+            vec.extend_from_slice(dirent.as_bytes());
+            offset = dirent.off() as usize;
+        }
+        if res != 0 {
+            Some((vec, offset as isize))
         } else {
             None
         }
     }
     fn fstat(&self) -> Kstat {
         let (st_ino, st_size, st_atime, st_mtime, st_ctime, st_blocks, st_mode) = self.stat();
-        let mut kstat = Kstat::new();
-        kstat.init(
-            st_ino as u64,
-            st_size as u64,
+        Kstat {
+            st_ino,
+            st_mode,
+            st_nlink: 1,
+            st_size,
+            st_blksize: 512,
+            st_blocks,
             st_atime,
             st_mtime,
             st_ctime,
-            st_blocks,
-            st_mode,
-        );
-        kstat
+            ..Kstat::empty()
+        }
     }
     fn find_by_path(&self, path: &str) -> Option<Arc<dyn Inode>> {
         let pathv = path2vec(path);
@@ -62,43 +62,22 @@ impl Inode for FatInode {
             None
         }
     }
-    fn find_by_name(&self, name: &str) -> Option<Arc<dyn Inode>> {
-        if let Some(node) = self.find_vfile_name(name) {
-            Some(Arc::new(node))
-        } else {
-            None
-        }
-    }
-    fn create(&self, name: &str, mode: OpenFlags) -> Option<Arc<dyn Inode>> {
-        let path = trim_first_point_slash(name);
-        let attribute = if mode.contains(OpenFlags::O_DIRECTORY) {
-            ATTR_DIRECTORY
-        } else {
-            ATTR_ARCHIVE
-        };
-        if let Some(node) = self.create(name, attribute) {
+    fn create(&self, path: &str, ty: InodeType) -> Option<Arc<dyn Inode>> {
+        let path = trim_first_point_slash(path);
+        if let Some(node) = self.create(path, as_fat32_type(ty)) {
             Some(node)
         } else {
             None
         }
     }
-    fn mkdir(&self, name: &str, mode: OpenFlags) -> Result<(), SysErrNo> {
-        todo!()
-    }
-    fn truncate(&self) -> Result<(), SysErrNo> {
+    fn truncate(&self) -> GeneralRet {
         self.set_size(0);
         Ok(())
     }
     fn sync(&self) {
         self.sync();
     }
-    fn set_timestamps(
-        &self,
-        atime_sec: Option<u64>,
-        atime_nsec: Option<u64>,
-        mtime_sec: Option<u64>,
-        mtime_nsec: Option<u64>,
-    ) -> Result<(), SysErrNo> {
+    fn set_timestamps(&self, atime_sec: Option<u64>, mtime_sec: Option<u64>) -> GeneralRet {
         if let Some(atime) = atime_sec {
             self.set_accessed_time(atime);
         }
@@ -110,24 +89,45 @@ impl Inode for FatInode {
     fn link(&self) {
         self.setsym();
     }
-    fn unlink(&self) -> Result<(), SysErrNo> {
+    fn unlink(&self) -> GeneralRet {
         self.remove();
         Ok(())
     }
 
-    fn rename(&self, file: Arc<dyn Inode>) -> Result<(), SysErrNo> {
+    fn rename(&self, file: Arc<dyn Inode>) -> GeneralRet {
         unsafe {
             let inode = Arc::from_raw(Arc::into_raw(file) as *const VFile);
             self.set_size(inode.size() as u32);
             self.set_first_cluster(inode.first_cluster());
+            inode.delete();
         }
         Ok(())
     }
-
-    fn delete(&self) {
-        self.delete();
+    fn ls(&self) -> Vec<String> {
+        self.ls().unwrap().into_iter().map(|(s, _)| s).collect()
     }
-    fn ls(&self) -> Option<Vec<(String, u8)>> {
-        self.ls()
+}
+
+fn as_inode_type(ty: u8) -> InodeType {
+    // match ty {
+    //     ATTR_DIRECTORY => InodeType::Dir,
+    //     ATTR_SYMLINK => InodeType::SymLink,
+    //     _ => InodeType::File,
+    // }
+    if ty & ATTR_DIRECTORY != 0 {
+        InodeType::Dir
+    } else if ty & ATTR_ARCHIVE != 0 {
+        InodeType::File
+    } else {
+        InodeType::Unknown
+    }
+}
+
+fn as_fat32_type(ty: InodeType) -> u8 {
+    match ty {
+        InodeType::File => ATTR_ARCHIVE,
+        InodeType::Dir => ATTR_DIRECTORY,
+        InodeType::SymLink => ATTR_SYMLINK,
+        _ => unreachable!(),
     }
 }
