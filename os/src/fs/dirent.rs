@@ -46,6 +46,6 @@ impl Dirent {
 
     pub fn as_bytes(&self) -> &[u8] {
         //特殊处理，因为名字数组大小不定
-        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, self.len()) }
+        unsafe { core::slice::from_raw_parts(self as *const _ as *const u8, self.len()) }
     }
 }

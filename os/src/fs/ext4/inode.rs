@@ -93,17 +93,17 @@ impl Inode for Ext4Inode {
         let inode_ref = Ext4InodeRef::get_inode_ref(Arc::downgrade(&self.ext4), file.inode);
         let inode = &inode_ref.inner.inode;
         Kstat {
-            st_ino: file.inode as u64,
+            st_ino: file.inode as usize,
             st_mode: inode.mode as u32,
             st_nlink: inode.links_count as u32,
             st_uid: inode.uid as u32,
             st_gid: inode.gid as u32,
-            st_size: inode.size as u64,
+            st_size: inode.size as isize,
             st_blksize: 4096,
-            st_blocks: inode.blocks as u64 * 8,
-            st_atime_sec: inode.atime as i64,
-            st_mtime_sec: inode.mtime as i64,
-            st_ctime_sec: inode.ctime as i64,
+            st_blocks: inode.blocks as isize * 8,
+            st_atime: inode.atime as isize,
+            st_mtime: inode.mtime as isize,
+            st_ctime: inode.ctime as isize,
             ..Kstat::empty()
         }
     }
@@ -194,6 +194,7 @@ fn as_ext4_type(ty: InodeType) -> DirEntryType {
         InodeType::File => DirEntryType::EXT4_DE_REG_FILE,
         InodeType::SymLink => DirEntryType::EXT4_DE_SYMLINK,
         InodeType::Socket => DirEntryType::EXT4_DE_SOCK,
+        InodeType::Unknown => DirEntryType::EXT4_DE_REG_FILE,
     }
 }
 fn map_dir_imode(imode: u8) -> InodeType {

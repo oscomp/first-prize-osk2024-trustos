@@ -23,43 +23,34 @@ impl Inode for FatInode {
     fn read_dentry(&self, off: usize, len: usize) -> Option<(Vec<u8>, isize)> {
         let mut res = 0;
         let mut vec = Vec::new();
-        while let Some((name, mut off, ino, dtype)) = self.dirent_info(off) {
-            let dirent = Dirent::new(name, off as i64, ino as u64, dtype);
+        let mut offset = off;
+        while let Some((name, off, ino, dtype)) = self.dirent_info(offset) {
+            let dirent = Dirent::new(name, off as i64, ino as u64, as_inode_type(dtype) as u8);
             if res + dirent.len() > len {
                 break;
             }
-            println!("{:?}", &dirent);
             res += dirent.len();
             vec.extend_from_slice(dirent.as_bytes());
-            off = dirent.off() as u32;
+            offset = dirent.off() as usize;
         }
         if res != 0 {
-            Some((vec, off as isize))
+            Some((vec, offset as isize))
         } else {
             None
         }
     }
-    // fn read_dentry(&self, off: usize) -> Option<Dirent> {
-    //     assert!(self.is_dir());
-    //     if let Some((name, off, ino, dtype)) = self.dirent_info(off) {
-    //         Some(Dirent::new(name, off as i64, ino as u64, dtype))
-    //     } else {
-    //         None
-    //     }
-    // }
     fn fstat(&self) -> Kstat {
-        let (st_ino, st_size, st_atime_sec, st_mtime_sec, st_ctime_sec, st_blocks, st_mode) =
-            self.stat();
+        let (st_ino, st_size, st_atime, st_mtime, st_ctime, st_blocks, st_mode) = self.stat();
         Kstat {
-            st_ino: st_ino as u64,
+            st_ino,
             st_mode,
             st_nlink: 1,
             st_size,
             st_blksize: 512,
             st_blocks,
-            st_atime_sec,
-            st_mtime_sec,
-            st_ctime_sec,
+            st_atime,
+            st_mtime,
+            st_ctime,
             ..Kstat::empty()
         }
     }
@@ -118,10 +109,17 @@ impl Inode for FatInode {
 }
 
 fn as_inode_type(ty: u8) -> InodeType {
-    match ty {
-        ATTR_DIRECTORY => InodeType::Dir,
-        ATTR_SYMLINK => InodeType::SymLink,
-        _ => InodeType::File,
+    // match ty {
+    //     ATTR_DIRECTORY => InodeType::Dir,
+    //     ATTR_SYMLINK => InodeType::SymLink,
+    //     _ => InodeType::File,
+    // }
+    if ty & ATTR_DIRECTORY != 0 {
+        InodeType::Dir
+    } else if ty & ATTR_ARCHIVE != 0 {
+        InodeType::File
+    } else {
+        InodeType::Unknown
     }
 }
 

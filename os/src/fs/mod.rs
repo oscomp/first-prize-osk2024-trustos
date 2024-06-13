@@ -113,6 +113,7 @@ impl FileClass {
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum InodeType {
+    Unknown = 0o0,
     /// FIFO (named pipe)
     Fifo = 0o1,
     /// Character device
@@ -158,20 +159,20 @@ impl InodeType {
     pub const fn is_socket(self) -> bool {
         matches!(self, Self::Socket)
     }
-    /// Returns a character representation of the node type.
-    ///
-    /// For example, `d` for directory, `-` for regular file, etc.
-    pub const fn as_char(self) -> char {
-        match self {
-            Self::Fifo => 'p',
-            Self::CharDevice => 'c',
-            Self::Dir => 'd',
-            Self::BlockDevice => 'b',
-            Self::File => '-',
-            Self::SymLink => 'l',
-            Self::Socket => 's',
-        }
-    }
+    // Returns a character representation of the node type.
+    //
+    // For example, `d` for directory, `-` for regular file, etc.
+    // pub const fn as_char(self) -> char {
+    //     match self {
+    //         Self::Fifo => 'p',
+    //         Self::CharDevice => 'c',
+    //         Self::Dir => 'd',
+    //         Self::BlockDevice => 'b',
+    //         Self::File => '-',
+    //         Self::SymLink => 'l',
+    //         Self::Socket => 's',
+    //     }
+    // }
 }
 
 core::arch::global_asm!(include_str!("preload.S"));
@@ -463,7 +464,6 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
             let (readable, writable) = flags.read_write();
             let vfile = OSInode::new(readable, writable, inode);
             if flags.contains(OpenFlags::O_APPEND) {
-                // vfile.lseek(vfile.inode.size() as isize, SEEK_SET);
                 vfile.lseek(0, SEEK_END);
             }
             return Some(FileClass::File(Arc::new(vfile)));
@@ -484,7 +484,6 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
             let (readable, writable) = flags.read_write();
             let vfile = OSInode::new(readable, writable, inode);
             if flags.contains(OpenFlags::O_APPEND) {
-                // vfile.lseek(vfile.inode.size() as isize, SEEK_SET);
                 vfile.lseek(0, SEEK_END);
             }
             return Some(FileClass::File(Arc::new(vfile)));

@@ -183,7 +183,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> Sysca
     }
 
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
+    let inner = task.inner_lock();
     let token = inner.user_token();
     let mut path = translated_str(token, path);
     let flags = OpenFlags::from_bits(flags).unwrap();
@@ -393,9 +393,11 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     //     return Err(SysErrNo::EACCES);
     // }
     let off = file.lseek(0, SEEK_CUR)?;
+    info!("read_begin off={}", off);
     if let Some((de, off)) = file.inode.read_dentry(off, len) {
         buffer.write(de.as_slice());
-        file.lseek(off as isize, SEEK_SET)?;
+        let t = file.lseek(off as isize, SEEK_SET)?;
+        info!("read_end off={}", t);
         return Ok(de.len());
     }
     return Err(SysErrNo::EINVAL);
@@ -512,7 +514,7 @@ pub fn sys_mount(
 
 pub fn sys_fstat(fd: usize, kst: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
+    let inner = task.inner_lock();
     let token = inner.user_token();
 
     let mut kst = UserBuffer::new(translated_byte_buffer(token, kst, size_of::<Kstat>()).unwrap());
@@ -578,10 +580,11 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
         }
         return Err(SysErrNo::ENOENT);
     }
+    // println!("base_path={},path={}", base_path, path.as_str());
     if let Some(file) = open(base_path, path.as_str(), OpenFlags::O_RDONLY) {
         let file = file.file()?;
         let kstat = file.inode.fstat();
-        println!("{:?}", &kstat);
+        // println!("{:?}", &kstat);
         kst.write(kstat.as_bytes());
         return Ok(0);
     }
