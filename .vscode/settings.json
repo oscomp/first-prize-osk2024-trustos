@@ -68,4 +68,5 @@
         "editor.defaultFormatter": "rust-lang.rust-analyzer",
         "editor.formatOnSave": true
     },
+    "cmake.sourceDirectory": "/home/brightnight/OScompetition/6.13final_main/oskernel2024-trustos/testsuits-for-oskernel/riscv-syscalls-testing/user",
 }

@@ -27,6 +27,7 @@ const SYSCALL_WRITE: usize = 64;
 const SYSCALL_PREAD64: usize = 67;
 const SYSCALL_PWRITE64: usize = 68;
 const SYSCALL_SENDFILE: usize = 71;
+const SYSCALL_PPOLL: usize = 73;
 const SYSCALL_READLINKAT: usize = 78;
 const SYSCALL_FSTATAT: usize = 79;
 const SYSCALL_FSTAT: usize = 80;
@@ -175,7 +176,13 @@ pub fn sys_busyboxsh() -> isize {
         SYSCALL_EXECVE,
         [
             "/busybox\0".as_ptr() as isize,
-            ["busybox\0".as_ptr() as isize, "ls\0".as_ptr() as isize, 0].as_ptr() as isize,
+            [
+                "busybox\0".as_ptr() as isize,
+                "sh\0".as_ptr() as isize,
+                "busybox_testcode.sh\0".as_ptr() as isize,
+                0,
+            ]
+            .as_ptr() as isize,
             0,
             0,
             0,
@@ -553,6 +560,20 @@ pub fn sys_getrandom(buf: &mut [u8], buflen: usize, flags: u32) -> isize {
             buflen as isize,
             flags as isize,
             0,
+            0,
+            0,
+        ],
+    )
+}
+
+pub fn sys_ppoll(fds_ptr: usize, nfds: usize, tmo_p: &[u8], mask: usize) -> isize {
+    syscall(
+        SYSCALL_PPOLL,
+        [
+            fds_ptr as isize,
+            nfds as isize,
+            tmo_p.as_ptr() as isize,
+            mask as isize,
             0,
             0,
         ],

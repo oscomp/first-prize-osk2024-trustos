@@ -143,6 +143,10 @@ impl Timespec {
             tv_nsec: nsec,
         }
     }
+    pub fn as_bytes(&self) -> &[u8] {
+        let size = core::mem::size_of::<Self>();
+        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
+    }
     pub fn as_bytes_mut(&mut self) -> &mut [u8] {
         let size = core::mem::size_of::<Self>();
         unsafe { core::slice::from_raw_parts_mut(self as *mut _ as *mut u8, size) }
@@ -574,4 +578,45 @@ pub fn copy_file_range(
 
 pub fn getrandom(buf: &mut [u8], buflen: usize, flags: u32) -> isize {
     sys_getrandom(buf, buflen, flags)
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct PollFd {
+    /// 等待的 fd
+    pub fd: i32,
+    /// 等待的事件
+    pub events: PollEvents,
+    /// 返回的事件
+    pub revents: PollEvents,
+}
+
+impl PollFd {
+    pub fn new() -> Self {
+        Self {
+            fd: 0,
+            events: PollEvents::empty(),
+            revents: PollEvents::empty(),
+        }
+    }
+}
+
+bitflags! {
+    //表示对应在文件上等待或者发生过的事件
+    pub struct PollEvents: u16 {
+        /// 可读
+        const IN = 0x0001;
+        /// 可写
+        const OUT = 0x0004;
+        /// 报错
+        const ERR = 0x0008;
+        /// 已终止，如 pipe 的另一端已关闭连接的情况
+        const HUP = 0x0010;
+        /// 无效的 fd
+        const INVAL = 0x0020;
+    }
+}
+
+pub fn ppoll(fds_ptr: &mut [PollFd], nfds: usize, tmo_p: &Timespec, mask: usize) -> isize {
+    sys_ppoll(fds_ptr.as_mut_ptr() as usize, nfds, tmo_p.as_bytes(), mask)
 }
