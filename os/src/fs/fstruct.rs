@@ -32,7 +32,11 @@ impl FdTable {
     }
     pub fn new_with_stdio() -> Self {
         FdTable::new(FdTableInner::new(
-            vec![None, None, None],
+            vec![
+                Some(OpenFlags::O_RDONLY),
+                Some(OpenFlags::O_WRONLY),
+                Some(OpenFlags::O_WRONLY),
+            ],
             vec![
                 // 0 -> stdin
                 Some(FileClass::Abs(Arc::new(Stdin))),
