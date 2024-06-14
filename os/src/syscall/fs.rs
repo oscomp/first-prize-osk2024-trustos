@@ -823,6 +823,11 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
     let mut inner = task.inner_lock();
     let token = inner.user_token();
 
+    debug!(
+        "[sys_sendfile] outfd is {}, infd is {}, offset_ptr is {}, count is {}",
+        outfd, infd, offset_ptr, count
+    );
+
     if outfd >= inner.fd_table.len()
         || inner.fd_table.try_get_file(outfd).is_none()
         || infd >= inner.fd_table.len()
@@ -871,6 +876,11 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
         infile.lseek(offset, SEEK_SET);
         readcount = infile.read(inbuffer)?;
     }
+
+    if readcount == 0 {
+        return Ok(0);
+    }
+
     //构造输出缓冲池
     let mut outbufv = Vec::new();
     unsafe {
@@ -1278,6 +1288,10 @@ pub fn sys_copy_file_range(
         }
         infile.lseek(offset, SEEK_SET);
         readcount = infile.read(inbuffer)?;
+    }
+
+    if readcount == 0 {
+        return Ok(0);
     }
 
     //构造输出缓冲池
