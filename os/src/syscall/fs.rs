@@ -2,8 +2,9 @@
 use crate::{
     console::print,
     fs::{
-        make_pipe, open, open_device_file, open_file, remove_vfile_idx, Dirent, File, FileClass,
-        Kstat, OSFile, OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET, SUPER_BLOCK,
+        make_pipe, open, open_device_file, open_file, remove_inode_idx, Dirent, FdTable, File,
+        FileClass, Kstat, OSFile, OSInode, OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET,
+        SUPER_BLOCK,
     },
     mm::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
@@ -12,7 +13,10 @@ use crate::{
     syscall::{FaccessatMode, Renameat2Flags},
     task::{current_task, current_token},
     timer::{get_time_ms, Timespec},
-    utils::{is_abs_path, path2abs, path2vec, trim_first_point_slash, SysErrNo, SyscallRet},
+    utils::{
+        get_abs_path, is_abs_path, path2abs, path2vec, rsplit_once, trim_first_point_slash,
+        SysErrNo, SyscallRet,
+    },
 };
 use alloc::{
     string::{String, ToString},
@@ -127,7 +131,6 @@ pub fn sys_writev(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
                 translated_byte_buffer(token, iovinfo.iov_base as *mut u8, iovinfo.iov_len)
                     .unwrap(),
             );
-            //file.set_offset(ret);
             let write_ret = file.write(buf)?;
             ret += write_ret as usize;
         }
@@ -167,7 +170,6 @@ pub fn sys_readv(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
                 translated_byte_buffer(token, iovinfo.iov_base as *mut u8, iovinfo.iov_len)
                     .unwrap(),
             );
-            //file.set_offset(ret);
             let write_ret = file.read(buf)?;
             ret += write_ret as usize;
         }
@@ -374,7 +376,6 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> SyscallRet {
 pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    // let token = inner.user_token();
 
     debug!(
         "[sys_getdents64] fd is {},buf is {:x}, len is {}",
@@ -389,32 +390,13 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
         UserBuffer::new(safe_translated_byte_buffer(inner.memory_set.clone(), buf, len).unwrap());
 
     let file = inner.fd_table.get_file(fd).file()?;
-    // if !file.readable() {
-    //     return Err(SysErrNo::EACCES);
-    // }
     let off = file.lseek(0, SEEK_CUR)?;
-    info!("read_begin off={}", off);
     if let Some((de, off)) = file.inode.read_dentry(off, len) {
         buffer.write(de.as_slice());
         let t = file.lseek(off as isize, SEEK_SET)?;
-        info!("read_end off={}", t);
         return Ok(de.len());
     }
     return Err(SysErrNo::EINVAL);
-    // let mut off = file.lseek(0, SEEK_CUR)?;
-    // let mut res = 0;
-    // let mut vec = Vec::new();
-    // while let Some(dirent) = file.inode.read_dentry(off) {
-    //     if res + dirent.len() > len {
-    //         break;
-    //     }
-    //     res += dirent.len();
-    //     vec.extend_from_slice(dirent.as_bytes());
-    //     off = dirent.off();
-    // }
-    // buffer.write(vec.as_slice());
-    // file.lseek(off as isize, SEEK_SET)?;
-    // Ok(res)
 }
 
 pub fn sys_linkat(
@@ -427,6 +409,7 @@ pub fn sys_linkat(
     todo!();
 }
 pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> SyscallRet {
+    assert!(flags != AT_REMOVEDIR, "not support yet");
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
@@ -451,19 +434,8 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> SyscallRet {
     }
     if let Some(osfile) = open(base_path, path.as_str(), OpenFlags::empty()) {
         let osfile = osfile.file()?;
-        let abs_path = if is_abs_path(&path) {
-            path.to_string()
-        } else {
-            let mut wpath = {
-                if base_path == "/" {
-                    Vec::with_capacity(32)
-                } else {
-                    path2vec(base_path)
-                }
-            };
-            path2abs(&mut wpath, &path2vec(&path))
-        };
-        remove_vfile_idx(&abs_path);
+        let abs_path = get_abs_path(base_path, &path);
+        remove_inode_idx(&abs_path);
         osfile.inode.unlink();
     }
     Ok(0)
@@ -580,11 +552,9 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
         }
         return Err(SysErrNo::ENOENT);
     }
-    // println!("base_path={},path={}", base_path, path.as_str());
     if let Some(file) = open(base_path, path.as_str(), OpenFlags::O_RDONLY) {
         let file = file.file()?;
         let kstat = file.inode.fstat();
-        // println!("{:?}", &kstat);
         kst.write(kstat.as_bytes());
         return Ok(0);
     }
@@ -942,7 +912,6 @@ pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: isize) -> Sy
 pub fn sys_ftruncate(fd: usize, length: i32) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    // let token = inner.user_token();
     if let Some(file) = inner.fd_table.try_get_file(fd) {
         let file = file.file()?;
         if length == 0 {
@@ -953,31 +922,6 @@ pub fn sys_ftruncate(fd: usize, length: i32) -> SyscallRet {
         return Ok(0);
     }
     Err(SysErrNo::EBADF)
-    // let task = current_task().unwrap();
-    // let mut inner = task.inner_lock();
-    // let token = inner.user_token();
-
-    // if length < 0 || fd >= inner.fd_table.len() || inner.fd_table.get_file(fd).is_none() {
-    //     return Err(SysErrNo::EINVAL);
-    // }
-
-    // if let Some(file) = &inner.fd_table.get_file(fd) {
-    //     let file = match file {
-    //         FileClass::File(f) => f.clone(),
-    //         FileClass::Abs(f) => return Err(SysErrNo::EINVAL),
-    //     };
-    //     if file.is_dir() {
-    //         return Err(SysErrNo::EISDIR);
-    //     }
-    //     if !file.writable() {
-    //         return Err(SysErrNo::EACCES);
-    //     }
-
-    //     file.set_file_size(length as u32);
-    //     Ok(0)
-    // } else {
-    //     Err(SysErrNo::ENOENT)
-    // }
 }
 
 pub fn sys_fsync(fd: usize) -> SyscallRet {
@@ -997,72 +941,72 @@ pub fn sys_sync() -> SyscallRet {
     SUPER_BLOCK.sync();
     Ok(0)
 }
+//TODO(ZMY) 用不上并且影响VFS
+// pub fn sys_symlinkat(target: *const u8, dirfd: isize, linkpath: *const u8) -> SyscallRet {
+//     let task = current_task().unwrap();
+//     let inner = task.inner_lock();
+//     let token = inner.user_token();
+//     let linkpath = translated_str(token, linkpath);
 
-pub fn sys_symlinkat(target: *const u8, dirfd: isize, linkpath: *const u8) -> SyscallRet {
-    let task = current_task().unwrap();
-    let inner = task.inner_lock();
-    let token = inner.user_token();
-    let linkpath = translated_str(token, linkpath);
+//     let mut base_path = inner.fs_info.cwd();
+//     // 如果path是绝对路径，则dirfd被忽略
+//     if is_abs_path(&linkpath) {
+//         base_path = "/";
+//     } else if dirfd != AT_FDCWD {
+//         let dirfd = dirfd as usize;
+//         if dirfd >= inner.fd_table.len() || inner.fd_table.try_get_file(dirfd).is_none() {
+//             return Err(SysErrNo::EINVAL);
+//         }
 
-    let mut base_path = inner.fs_info.cwd();
-    // 如果path是绝对路径，则dirfd被忽略
-    if is_abs_path(&linkpath) {
-        base_path = "/";
-    } else if dirfd != AT_FDCWD {
-        let dirfd = dirfd as usize;
-        if dirfd >= inner.fd_table.len() || inner.fd_table.try_get_file(dirfd).is_none() {
-            return Err(SysErrNo::EINVAL);
-        }
+//         let osfile = inner.fd_table.get_file(dirfd).file()?;
+//         if osfile.find(linkpath.as_str(), OpenFlags::O_RDWR).is_some() {
+//             return Err(SysErrNo::EEXIST);
+//         }
 
-        let osfile = inner.fd_table.get_file(dirfd).file()?;
-        if osfile.find(linkpath.as_str(), OpenFlags::O_RDWR).is_some() {
-            return Err(SysErrNo::EEXIST);
-        }
+//         if let Some(newfile) =
+//             osfile.create(linkpath.as_str(), OpenFlags::O_RDWR | OpenFlags::O_CREATE)
+//         {
+//             let newfile = newfile.file()?;
+//             let mut target = translated_str(token, target);
+//             let mut buf = Vec::new();
+//             unsafe {
+//                 let target_bytes = target.as_bytes_mut();
+//                 let target_buf =
+//                     core::slice::from_raw_parts_mut(target_bytes.as_mut_ptr(), target_bytes.len());
+//                 buf.push(target_buf);
+//             }
+//             let mut buffer = UserBuffer::new(buf); //输入缓冲池
+//             newfile.write(buffer);
+//             newfile.inode.link();
+//             return Ok(0);
+//         }
+//         return Err(SysErrNo::EINVAL);
+//     }
+//     if let Some(_) = open(base_path, linkpath.as_str(), OpenFlags::O_RDWR) {
+//         return Err(SysErrNo::EEXIST);
+//     }
 
-        if let Some(newfile) =
-            osfile.create(linkpath.as_str(), OpenFlags::O_RDWR | OpenFlags::O_CREATE)
-        {
-            let newfile = newfile.file()?;
-            let mut target = translated_str(token, target);
-            let mut buf = Vec::new();
-            unsafe {
-                let target_bytes = target.as_bytes_mut();
-                let target_buf =
-                    core::slice::from_raw_parts_mut(target_bytes.as_mut_ptr(), target_bytes.len());
-                buf.push(target_buf);
-            }
-            let mut buffer = UserBuffer::new(buf); //输入缓冲池
-            newfile.write(buffer);
-            newfile.inode.link();
-            return Ok(0);
-        }
-        return Err(SysErrNo::EINVAL);
-    }
-    if let Some(_) = open(base_path, linkpath.as_str(), OpenFlags::O_RDWR) {
-        return Err(SysErrNo::EEXIST);
-    }
-
-    if let Some(newfile) = open(
-        base_path,
-        linkpath.as_str(),
-        OpenFlags::O_RDWR | OpenFlags::O_CREATE,
-    ) {
-        let newfile = newfile.file()?;
-        let mut target = translated_str(token, target);
-        let mut buf = Vec::new();
-        unsafe {
-            let target_bytes = target.as_bytes_mut();
-            let target_buf =
-                core::slice::from_raw_parts_mut(target_bytes.as_mut_ptr(), target_bytes.len());
-            buf.push(target_buf);
-        }
-        let mut buffer = UserBuffer::new(buf); //输入缓冲池
-        newfile.write(buffer);
-        newfile.inode.link();
-        return Ok(0);
-    }
-    return Err(SysErrNo::ENOENT);
-}
+//     if let Some(newfile) = open(
+//         base_path,
+//         linkpath.as_str(),
+//         OpenFlags::O_RDWR | OpenFlags::O_CREATE,
+//     ) {
+//         let newfile = newfile.file()?;
+//         let mut target = translated_str(token, target);
+//         let mut buf = Vec::new();
+//         unsafe {
+//             let target_bytes = target.as_bytes_mut();
+//             let target_buf =
+//                 core::slice::from_raw_parts_mut(target_bytes.as_mut_ptr(), target_bytes.len());
+//             buf.push(target_buf);
+//         }
+//         let mut buffer = UserBuffer::new(buf); //输入缓冲池
+//         newfile.write(buffer);
+//         newfile.inode.link();
+//         return Ok(0);
+//     }
+//     return Err(SysErrNo::ENOENT);
+// }
 
 pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsiz: usize) -> SyscallRet {
     let task = current_task().unwrap();
@@ -1194,19 +1138,8 @@ pub fn sys_renameat2(
     if let Some(osfile) = open(base_path, newpath.as_str(), openflags) {
         let newfile = osfile.file()?;
         newfile.inode.rename(oldfile.inode.clone());
-        let abs_path = if is_abs_path(&oldpath) {
-            oldpath.to_string()
-        } else {
-            let mut wpath = {
-                if base_path == "/" {
-                    Vec::with_capacity(32)
-                } else {
-                    path2vec(base_path)
-                }
-            };
-            path2abs(&mut wpath, &path2vec(&oldpath))
-        };
-        remove_vfile_idx(&abs_path);
+        let abs_path = get_abs_path(base_path, &oldpath);
+        remove_inode_idx(&abs_path);
         return Ok(0);
     }
     return Err(SysErrNo::ENOENT);

@@ -5,7 +5,7 @@ use crate::{
     mm::UserBuffer,
     utils::{GeneralRet, SysErrNo, SyscallRet},
 };
-use alloc::{string::String, sync::Arc, vec::Vec};
+use alloc::{rc::Weak, string::String, sync::Arc, vec::Vec};
 
 pub use inode::*;
 ///
@@ -27,8 +27,6 @@ pub trait Inode: Send + Sync {
     /// 在当前目录下查找文件
     fn find_by_path(&self, path: &str) -> Option<Arc<dyn Inode>>;
     ///
-    // fn find_by_name(&self, name: &str) -> Option<Arc<dyn Inode>>;
-    ///
     fn read_at(&self, off: usize, buf: &mut [u8]) -> SyscallRet;
     ///
     fn write_at(&self, off: usize, buf: &[u8]) -> SyscallRet;
@@ -41,7 +39,7 @@ pub trait Inode: Send + Sync {
     fn sync(&self);
     ///
     fn set_timestamps(&self, atime_sec: Option<u64>, mtime_sec: Option<u64>) -> GeneralRet;
-    fn link(&self);
+    // fn link(&self);
     fn unlink(&self) -> GeneralRet;
     fn rename(&self, file: Arc<dyn Inode>) -> GeneralRet;
     fn ls(&self) -> Vec<String>;

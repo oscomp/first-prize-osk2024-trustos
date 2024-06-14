@@ -168,7 +168,6 @@ pub fn trap_handler() {
             // jump to next instruction anyway
             let mut cx = current_trap_cx();
             cx.sepc += 2;
-            // process::yield_now().await
         }
         _ => {
             panic!(

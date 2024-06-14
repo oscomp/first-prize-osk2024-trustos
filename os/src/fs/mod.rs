@@ -18,7 +18,9 @@ cfg_if::cfg_if! {
 }
 
 use crate::mm::UserBuffer;
-use crate::utils::{is_abs_path, path2abs, path2vec, rsplit_once, GeneralRet, SysErrNo};
+use crate::utils::{
+    get_abs_path, is_abs_path, path2abs, path2vec, rsplit_once, GeneralRet, SysErrNo,
+};
 use alloc::string::String;
 use alloc::{sync::Arc, vec, vec::Vec};
 pub use devfs::*;
@@ -210,6 +212,12 @@ pub fn flush_preload() {
     }
 }
 
+pub fn init() {
+    insert_inode_idx("/", ROOT_INODE.clone());
+    flush_preload();
+    create_init_files();
+}
+
 pub fn list_apps() {
     println!("/**** APPS ****");
     for app in ROOT_INODE.ls() {
@@ -382,112 +390,56 @@ fn create_file(
     parent_path: &str,
     child_name: &str,
 ) -> Option<FileClass> {
-    if let Some(parent_dir) = find_vfile_idx(parent_path) {
-        let (readable, writable) = flags.read_write();
-        return parent_dir
-            .create(child_name, flags.node_type())
-            .map(|vfile| {
-                insert_vfile_idx(abs_path, vfile.clone());
-                let osinode = OSInode::new(readable, writable, vfile);
-                FileClass::File(Arc::new(osinode))
-            });
-    }
-    let cur_vfile = {
-        if cwd == "/" {
-            ROOT_INODE.clone()
-        } else {
-            ROOT_INODE.find_by_path(&cwd).unwrap()
-        }
-    };
-    if let Some(parent_dir) = cur_vfile.find_by_path(path) {
-        let (readable, writable) = flags.read_write();
-        parent_dir
-            .create(child_name, flags.node_type())
-            .map(|vfile| {
-                insert_vfile_idx(abs_path, vfile.clone());
-                let osinode = OSInode::new(readable, writable, vfile);
-                FileClass::File(Arc::new(osinode))
-            })
-    } else {
-        None
-    }
+    debug!(
+        "[create_file],cwd={},path={},flags={:?},abs_path={},parent_path={},child_name={}",
+        cwd, path, flags, abs_path, parent_path, child_name
+    );
+
+    // 一定能找到,因为除了RootInode外都有父结点
+    let parent_dir = find_inode_idx(parent_path).unwrap();
+    let (readable, writable) = flags.read_write();
+    return parent_dir
+        .create(child_name, flags.node_type())
+        .map(|vfile| {
+            insert_inode_idx(abs_path, vfile.clone());
+            let osinode =
+                OSInode::new(readable, writable, vfile, Some(Arc::downgrade(&parent_dir)));
+            FileClass::File(Arc::new(osinode))
+        });
 }
 
 pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
-    use alloc::string::ToString;
-    let abs_path = if is_abs_path(path) {
-        path.to_string()
-    } else {
-        let mut wpath = if cwd == "/" {
-            Vec::with_capacity(32)
-        } else {
-            path2vec(cwd)
-        };
-        path2abs(&mut wpath, &path2vec(path))
-    };
+    let abs_path = get_abs_path(cwd, path);
     //判断是否是设备文件
-    if find_device(&abs_path[..]) {
-        if let Some(device) = open_device_file(&abs_path[..]) {
+    if find_device(&abs_path) {
+        if let Some(device) = open_device_file(&abs_path) {
             return Some(FileClass::Abs(device));
         }
         return None;
     }
-    // 首先在FSIDX中查找文件是否存在
-    if let Some(inode) = find_vfile_idx(&abs_path) {
+
+    // 若在FSIDX中无法找到，尝试在FSIDX寻找父级目录
+    // !父节点必须能找到
+    let (parent_path, child_name) = rsplit_once(&abs_path, "/");
+    let parent_inode = find_inode_idx(parent_path).unwrap();
+    if let Some(inode) = parent_inode.find_by_path(child_name) {
         if flags.contains(OpenFlags::O_TRUNC) {
-            let (mut parent_path, child_name) = abs_path.rsplit_once("/").unwrap();
-            if parent_path.is_empty() {
-                parent_path = "/";
-            }
-            remove_vfile_idx(&abs_path);
+            remove_inode_idx(&abs_path);
             inode.unlink();
             return create_file(cwd, path, flags, &abs_path, parent_path, child_name);
         }
+        insert_inode_idx(&abs_path, inode.clone());
         let (readable, writable) = flags.read_write();
-        let vfile = OSInode::new(readable, writable, inode);
+        let vfile = OSInode::new(
+            readable,
+            writable,
+            inode,
+            Some(Arc::downgrade(&parent_inode)),
+        );
         if flags.contains(OpenFlags::O_APPEND) {
             vfile.lseek(0, SEEK_END);
         }
         return Some(FileClass::File(Arc::new(vfile)));
-    }
-    // 若在FSIDX中无法找到，尝试在FSIDX寻找父级目录
-    let (parent_path, child_name) = rsplit_once(&abs_path, "/");
-    if let Some(parent_inode) = find_vfile_idx(parent_path) {
-        // if let Some(inode) = parent_inode.find_by_name(child_name) {
-        if let Some(inode) = parent_inode.find_by_path(child_name) {
-            if flags.contains(OpenFlags::O_TRUNC) {
-                remove_vfile_idx(&abs_path);
-                inode.unlink();
-                return create_file(cwd, path, flags, &abs_path, parent_path, child_name);
-            }
-            insert_vfile_idx(&abs_path, inode.clone());
-            let (readable, writable) = flags.read_write();
-            let vfile = OSInode::new(readable, writable, inode);
-            if flags.contains(OpenFlags::O_APPEND) {
-                vfile.lseek(0, SEEK_END);
-            }
-            return Some(FileClass::File(Arc::new(vfile)));
-        }
-    } else {
-        let cur_vfile = if cwd == "/" {
-            ROOT_INODE.clone()
-        } else {
-            ROOT_INODE.find_by_path(cwd).unwrap()
-        };
-        if let Some(inode) = cur_vfile.find_by_path(path) {
-            if flags.contains(OpenFlags::O_TRUNC) {
-                remove_vfile_idx(&abs_path);
-                inode.unlink();
-                return create_file(cwd, path, flags, &abs_path, parent_path, child_name);
-            }
-            insert_vfile_idx(&abs_path, inode.clone());
-            let (readable, writable) = flags.read_write();
-            let vfile = OSInode::new(readable, writable, inode);
-            if flags.contains(OpenFlags::O_APPEND) {
-                vfile.lseek(0, SEEK_END);
-            }
-            return Some(FileClass::File(Arc::new(vfile)));
-        }
     }
     // 节点不存在
     if flags.contains(OpenFlags::O_CREATE) {

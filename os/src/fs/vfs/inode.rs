@@ -5,13 +5,14 @@ use crate::{
 };
 
 use super::{File, Inode, OSFile};
-use alloc::sync::Arc;
+use alloc::sync::{Arc, Weak};
 use spin::{Mutex, MutexGuard};
 
 pub struct OSInode {
     readable: bool, // 该文件是否允许通过 sys_read 进行读
     writable: bool, // 该文件是否允许通过 sys_write 进行写
     pub inode: Arc<dyn Inode>,
+    pub parent: Option<Weak<dyn Inode>>,
     pub(crate) inner: Mutex<OSInodeInner>,
 }
 pub struct OSInodeInner {
@@ -19,11 +20,17 @@ pub struct OSInodeInner {
 }
 
 impl OSInode {
-    pub fn new(readable: bool, writable: bool, inode: Arc<dyn Inode>) -> Self {
+    pub fn new(
+        readable: bool,
+        writable: bool,
+        inode: Arc<dyn Inode>,
+        parent: Option<Weak<dyn Inode>>,
+    ) -> Self {
         Self {
             readable,
             writable,
             inode,
+            parent,
             inner: Mutex::new(OSInodeInner { offset: 0 }),
         }
     }
@@ -47,15 +54,25 @@ impl OSFile for OSInode {
     }
     fn create(&self, path: &str, flags: OpenFlags) -> Option<FileClass> {
         let (readable, writable) = flags.read_write();
-        self.inode
-            .create(path, flags.node_type())
-            .map(|node| FileClass::File(Arc::new(OSInode::new(readable, writable, node))))
+        self.inode.create(path, flags.node_type()).map(|node| {
+            FileClass::File(Arc::new(OSInode::new(
+                readable,
+                writable,
+                node,
+                Some(Arc::downgrade(&self.inode)),
+            )))
+        })
     }
     fn find(&self, path: &str, flags: OpenFlags) -> Option<FileClass> {
         let (readable, writable) = flags.read_write();
-        self.inode
-            .find_by_path(path)
-            .map(|node| FileClass::File(Arc::new(OSInode::new(readable, writable, node))))
+        self.inode.find_by_path(path).map(|node| {
+            FileClass::File(Arc::new(OSInode::new(
+                readable,
+                writable,
+                node,
+                Some(Arc::downgrade(&self.inode)),
+            )))
+        })
     }
 }
 
