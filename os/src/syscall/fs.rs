@@ -413,7 +413,7 @@ pub fn sys_linkat(
     todo!();
 }
 pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> SyscallRet {
-    assert!(flags != AT_REMOVEDIR, "not support yet");
+    // assert!(flags != AT_REMOVEDIR, "not support yet");
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
