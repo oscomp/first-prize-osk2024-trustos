@@ -11,7 +11,7 @@ pub use sb::*;
 
 use crate::{
     drivers::{BlockDeviceImpl, Disk},
-    fs::{insert_vfile_idx, Inode, SuperBlock},
+    fs::{insert_inode_idx, Inode, SuperBlock},
     sync::SyncUnsafeCell,
 };
 
@@ -60,7 +60,6 @@ lazy_static! {
     };
     pub static ref ROOT_INODE: Arc<dyn Inode> = {
         let root = SUPER_BLOCK.root_inode();
-        insert_vfile_idx("/", root.clone());
         root
     };
 }

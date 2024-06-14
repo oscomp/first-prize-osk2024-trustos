@@ -12,15 +12,15 @@ lazy_static! {
     pub static ref FSIDX: RwLock<HashMap<String, Arc<dyn Inode>>> = { RwLock::new(HashMap::new()) };
 }
 
-pub fn find_vfile_idx(path: &str) -> Option<Arc<dyn Inode>> {
+pub fn find_inode_idx(path: &str) -> Option<Arc<dyn Inode>> {
     FSIDX.read().get(path).map(|vfile| Arc::clone(vfile))
 }
 
-pub fn insert_vfile_idx(path: &str, vfile: Arc<dyn Inode>) {
+pub fn insert_inode_idx(path: &str, vfile: Arc<dyn Inode>) {
     FSIDX.write().insert(path.to_string(), vfile);
 }
 
-pub fn remove_vfile_idx(path: &str) {
+pub fn remove_inode_idx(path: &str) {
     FSIDX.write().remove(path);
 }
 

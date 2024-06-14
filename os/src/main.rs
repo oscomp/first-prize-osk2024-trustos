@@ -123,7 +123,7 @@ pub fn rust_main(hartid: usize) -> ! {
         logger::init();
         trap::init();
         task::init();
-        fs::flush_preload();
+        fs::init();
         task::add_initproc();
         INIT_FINISHED.store(true, Ordering::SeqCst);
         START_HART_ID.store(hartid, Ordering::SeqCst);
@@ -145,7 +145,6 @@ pub fn rust_main(hartid: usize) -> ! {
         timer::set_next_trigger();
     }
     if hart_id() == START_HART_ID.load(Ordering::SeqCst) {
-        fs::create_init_files();
         fs::list_apps();
     }
     task::run_tasks();

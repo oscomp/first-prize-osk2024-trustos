@@ -107,9 +107,9 @@ impl Inode for Ext4Inode {
             ..Kstat::empty()
         }
     }
-    fn link(&self) {
-        todo!()
-    }
+    // fn link(&self) {
+    //     todo!()
+    // }
     fn ls(&self) -> Vec<String> {
         let file = self.file.lock();
         self.ext4

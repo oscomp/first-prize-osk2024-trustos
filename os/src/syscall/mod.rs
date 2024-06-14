@@ -20,7 +20,7 @@ pub enum Syscall {
     Ioctl = 29,
     Mkdirat = 34,
     Unlinkat = 35,
-    Symlinkat = 36,
+    // Symlinkat = 36,
     Linkat = 37,
     Umount2 = 39,
     Mount = 40,
@@ -130,9 +130,9 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Fcntl => sys_fcntl(args[0] as usize, args[1] as usize, args[2] as usize),
         Syscall::Ioctl => sys_ioctl(args[0] as usize, args[1] as usize, args[2] as usize),
         Syscall::Mkdirat => sys_mkdirat(args[0] as isize, args[1] as *const u8, args[2] as u32),
-        Syscall::Symlinkat => {
-            sys_symlinkat(args[0] as *const u8, args[1] as isize, args[2] as *const u8)
-        }
+        // Syscall::Symlinkat => {
+        //     sys_symlinkat(args[0] as *const u8, args[1] as isize, args[2] as *const u8)
+        // }
         Syscall::Unlinkat => sys_unlinkat(args[0] as isize, args[1] as *const u8, args[2] as u32),
         Syscall::Linkat => sys_linkat(
             args[0] as isize,
