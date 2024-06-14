@@ -212,7 +212,6 @@ impl File for Pipe {
             let mut ring_buffer = self.inner_lock();
             let loop_write = ring_buffer.available_write();
             if loop_write == 0 {
-                debug!("work here");
                 drop(ring_buffer);
                 suspend_current_and_run_next();
                 continue;

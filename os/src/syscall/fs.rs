@@ -237,6 +237,7 @@ pub fn sys_close(fd: usize) -> SyscallRet {
     }
     debug!("fd {} closed", fd);
     inner.fd_table.take(fd);
+    debug!("len is {}", inner.fd_table.len());
     Ok(0)
 }
 
@@ -268,6 +269,8 @@ pub fn sys_dup3(old: usize, new: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
 
+    debug!("[sys_dup3] oldfd is {}, newfd is {}", old, new);
+
     if old >= inner.fd_table.len() || inner.fd_table.try_get_file(old).is_none() {
         return Err(SysErrNo::EINVAL);
     }
@@ -276,11 +279,12 @@ pub fn sys_dup3(old: usize, new: usize) -> SyscallRet {
         return Err(SysErrNo::EBADF);
     }
 
-    inner.fd_table.resize(new.max(old) + 1);
+    if inner.fd_table.len() < new {
+        inner.fd_table.resize(new);
+    }
 
     let (inode, flags) = inner.fd_table.try_get(old);
     inner.fd_table.set(new, inode, flags);
-    debug!("[sys_dup3] old fd={}, new fd={}", old, new);
     Ok(new)
 }
 
@@ -748,13 +752,10 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
             return Ok(fd_new);
         }
         F_DUPFD_CLOEXEC => {
-            let file = file.file()?;
             let inode = file.clone();
             let flags = inner.fd_table.get_flag(fd) | OpenFlags::O_CLOEXEC;
             let fd_new = inner.fd_table.alloc_fd_larger_than(arg);
-            inner
-                .fd_table
-                .set(fd_new, Some(FileClass::File(inode)), Some(flags));
+            inner.fd_table.set(fd_new, Some(inode), Some(flags));
             return Ok(fd_new);
         }
         F_GETFD => {
