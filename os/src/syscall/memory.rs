@@ -88,3 +88,12 @@ pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> SyscallRet {
     flush_tlb();
     Ok(0)
 }
+
+pub fn sys_madvise(addr: usize, len: usize, advice: usize) -> SyscallRet {
+    //伪实现，该系统调用用于给内存提建议
+    debug!(
+        "[sys_madvise] addr is {}, len is {}, advice is {}",
+        addr, len, advice
+    );
+    Ok(0)
+}

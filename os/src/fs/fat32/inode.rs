@@ -71,6 +71,7 @@ impl Inode for FatInode {
         }
     }
     fn truncate(&self) -> GeneralRet {
+        self.clear();
         self.set_size(0);
         Ok(())
     }

@@ -451,6 +451,24 @@ impl UserBuffer {
         self.len()
     }
 
+    pub fn printbuf(&mut self, size: usize) {
+        if size == 0 {
+            return;
+        }
+        let mut count: usize = 0;
+        for sub_buff in self.buffers.iter_mut() {
+            let sblen = (*sub_buff).len();
+            for j in 0..sblen {
+                print!("{} ", (*sub_buff)[j]);
+                count += 1;
+                if count == size {
+                    println!("");
+                    return;
+                }
+            }
+        }
+    }
+
     pub fn clear(&mut self) -> usize {
         self.buffers.clear();
         self.len()

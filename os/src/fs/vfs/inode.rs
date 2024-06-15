@@ -90,6 +90,12 @@ impl File for OSInode {
     fn read(&self, mut buf: UserBuffer) -> SyscallRet {
         let mut inner = self.inner.lock();
         let mut total_read_size = 0usize;
+
+        if self.inode.size() <= inner.offset {
+            //读取位置超过文件大小，返回结果为EOF
+            return Ok(0);
+        }
+
         // 这边要使用 iter_mut()，因为要将数据写入
         for slice in buf.buffers.iter_mut() {
             let read_size = self.inode.read_at(inner.offset, *slice)?;
