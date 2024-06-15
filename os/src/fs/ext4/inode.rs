@@ -197,6 +197,24 @@ impl Inode for Ext4Inode {
             .ext4_unlink(&mut parent_ref, &mut child_ref, child, child.len() as u32);
         Ok(())
     }
+
+    fn read_all(&self) -> Result<Vec<u8>, SysErrNo> {
+        let mut file = self.file.lock();
+        let mut buf: Vec<u8> = Vec::with_capacity(file.fsize as usize);
+        let mut read_cnt: usize = 0;
+        let size = file.fsize as usize;
+        if let Ok(_) = self
+            .ext4
+            .ext4_file_read(&mut file, buf.as_mut_slice(), size, &mut read_cnt)
+        {
+            if read_cnt != size as usize {
+                return Err(SysErrNo::EIO);
+            }
+            return Ok(buf);
+        } else {
+            Err(SysErrNo::EIO)
+        }
+    }
 }
 
 fn as_inode_type(ty: u16) -> InodeType {

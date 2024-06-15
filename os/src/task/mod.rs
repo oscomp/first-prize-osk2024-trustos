@@ -123,9 +123,17 @@ lazy_static! {
     ///Globle process that init user shell
     pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new({
         if let Some(FileClass::File(inode)) = open_file("initproc", OpenFlags::O_RDONLY) {
-            let elf_data = unsafe {inode.read_as_elf()};
-            let mut res=TaskControlBlock::new(elf_data);
-            res
+            cfg_if::cfg_if!{
+                if #[cfg(feature="fat32")]{
+                    let elf_data = unsafe {inode.read_as_elf()};
+                    let res=TaskControlBlock::new(elf_data);
+                    res
+                } else if #[cfg(feature="ext4")]{
+                    let elf_data = inode.inode.read_all().unwrap();
+                    let res=TaskControlBlock::new(&elf_data);
+                    res
+                }
+            }
         } else {
             panic!("error: initproc from Abs File!");
         }

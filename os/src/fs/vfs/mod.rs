@@ -46,7 +46,7 @@ pub trait Inode: Send + Sync {
     }
     fn rename(&self, file: Arc<dyn Inode>) -> GeneralRet;
     fn ls(&self) -> Vec<String>;
-    fn read_all(&self) -> Vec<u8> {
+    fn read_all(&self) -> Result<Vec<u8>, SysErrNo> {
         unimplemented!();
     }
 }

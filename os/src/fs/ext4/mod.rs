@@ -99,12 +99,3 @@ pub fn sync() {
 pub fn fs_stat() -> Statfs {
     SUPER_BLOCK.fs_stat()
 }
-
-#[cfg(feature = "ext4")]
-impl OSInode {
-    /// 将文件指针转换为切片,避免拷贝
-    /// 读取完整的文件也可以用
-    pub unsafe fn read_as_elf(&self) -> &[u8] {
-        todo!()
-    }
-}
