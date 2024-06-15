@@ -1,0 +1,12 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/root/oskernel2024-trustos/pre_ctests/lib/arch/riscv/crt.S
+
+/root/oskernel2024-trustos/pre_ctests/src/oscomp/clone.s
+

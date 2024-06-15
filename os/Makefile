@@ -40,13 +40,16 @@ DISASM ?= -x
 # Run usertests or usershell
 TEST ?=
 
+build_all: build
+	@cd ../final_tests&&make build_all
+
 build: env initrust $(KERNEL_BIN)
 
 initrust: 
 	@cd ../user && cargo clean && make build
 
 initproc: initrust
-	@cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean && ./build-oscomp.sh
+	@cd ../pre_ctests && make clean && ./build-oscomp.sh
 
 initbusybox: initproc
 	@-rm ../busybox
