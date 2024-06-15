@@ -7,7 +7,6 @@ MODE := release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 DISASM_TMP := target/$(TARGET)/$(MODE)/asm
-# FS := simple-fat32
 FS := fat32_fs
 FS_IMG := ../$(FS)/fat32.img
 APPS := ../user/src/bin/*
@@ -51,9 +50,9 @@ initrust:
 initproc: initrust
 	@cd ../pre_ctests && make clean && ./build-oscomp.sh
 
-initbusybox: initproc
-	@-rm ../busybox
-	@cd ../busyb0x && sudo make defconfig && sudo bear -- make -j 4 && cp ./busybox ../busybox
+# initbusybox: initproc
+# 	@-rm ../busybox
+# 	@cd ../busyb0x && sudo make defconfig && sudo bear -- make -j 4 && cp ./busybox ../busybox
 
 env:
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
@@ -78,7 +77,7 @@ clean:
 	@cargo clean
 	@cd ../$(FS)&& rm fat32.img
 	@cd ../user && cargo clean
-	@cd ../testsuits-for-oskernel/riscv-syscalls-testing/user && make clean
+	@cd ../pre_ctests && make clean
 
 disasm: kernel
 	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) | less
@@ -92,7 +91,7 @@ run: initproc run-inner
 
 srun: initrust run-inner
 
-brun: initbusybox run-inner
+# brun: initbusybox run-inner
 
 QEMU_ARGS := -machine virt \
 			 -nographic \
@@ -119,4 +118,5 @@ gdbserver: build
 gdbclient:
 	@riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'
 
-.PHONY: build env kernel clean disasm disasm-vim run-inner copy-to-fs procinit gdbserver gdbclient srun ssrun initrust initbusybox brun
+.PHONY: build env kernel clean disasm disasm-vim run-inner copy-to-fs procinit gdbserver gdbclient srun ssrun initrust 
+# initbusybox brun
