@@ -86,10 +86,7 @@ impl Inode for FatInode {
         }
         Ok(())
     }
-    // fn link(&self) {
-    //     self.setsym();
-    // }
-    fn unlink(&self) -> GeneralRet {
+    fn unlink(&self, name: &str) -> GeneralRet {
         self.remove();
         Ok(())
     }

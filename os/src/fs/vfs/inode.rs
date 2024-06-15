@@ -5,8 +5,11 @@ use crate::{
     utils::{SysErrNo, SyscallRet},
 };
 
-use super::{File, Inode, OSFile};
-use alloc::sync::{Arc, Weak};
+use super::{File, Inode};
+use alloc::{
+    string::String,
+    sync::{Arc, Weak},
+};
 use spin::{Mutex, MutexGuard};
 
 pub struct OSInode {
@@ -14,6 +17,7 @@ pub struct OSInode {
     writable: bool, // 该文件是否允许通过 sys_write 进行写
     pub inode: Arc<dyn Inode>,
     pub parent: Option<Weak<dyn Inode>>,
+    pub path: String,
     pub(crate) inner: Mutex<OSInodeInner>,
 }
 pub struct OSInodeInner {
@@ -26,54 +30,16 @@ impl OSInode {
         writable: bool,
         inode: Arc<dyn Inode>,
         parent: Option<Weak<dyn Inode>>,
+        path: String,
     ) -> Self {
         Self {
             readable,
             writable,
             inode,
             parent,
+            path,
             inner: Mutex::new(OSInodeInner { offset: 0 }),
         }
-    }
-}
-
-impl OSFile for OSInode {
-    fn lseek(&self, offset: isize, whence: usize) -> SyscallRet {
-        if offset < 0 || whence > 2 {
-            return Err(SysErrNo::EINVAL);
-        }
-        let offset: usize = offset as usize;
-        let mut inner = self.inner.lock();
-        if whence == SEEK_SET {
-            inner.offset = offset;
-        } else if whence == SEEK_CUR {
-            inner.offset += offset;
-        } else if whence == SEEK_END {
-            inner.offset = self.inode.size() + offset;
-        }
-        Ok(inner.offset)
-    }
-    fn create(&self, path: &str, flags: OpenFlags) -> Option<FileClass> {
-        let (readable, writable) = flags.read_write();
-        self.inode.create(path, flags.node_type()).map(|node| {
-            FileClass::File(Arc::new(OSInode::new(
-                readable,
-                writable,
-                node,
-                Some(Arc::downgrade(&self.inode)),
-            )))
-        })
-    }
-    fn find(&self, path: &str, flags: OpenFlags) -> Option<FileClass> {
-        let (readable, writable) = flags.read_write();
-        self.inode.find_by_path(path).map(|node| {
-            FileClass::File(Arc::new(OSInode::new(
-                readable,
-                writable,
-                node,
-                Some(Arc::downgrade(&self.inode)),
-            )))
-        })
     }
 }
 
@@ -122,5 +88,20 @@ impl File for OSInode {
             revents |= PollEvents::OUT;
         }
         revents
+    }
+    fn lseek(&self, offset: isize, whence: usize) -> SyscallRet {
+        if offset < 0 || whence > 2 {
+            return Err(SysErrNo::EINVAL);
+        }
+        let offset: usize = offset as usize;
+        let mut inner = self.inner.lock();
+        if whence == SEEK_SET {
+            inner.offset = offset;
+        } else if whence == SEEK_CUR {
+            inner.offset += offset;
+        } else if whence == SEEK_END {
+            inner.offset = self.inode.size() + offset;
+        }
+        Ok(inner.offset)
     }
 }

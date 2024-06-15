@@ -6,7 +6,7 @@ use log::{debug, info};
 
 use crate::{
     config::mm::{PAGE_SIZE, PAGE_SIZE_BITS},
-    fs::{File, OSFile, SEEK_CUR, SEEK_SET},
+    fs::{File, SEEK_CUR, SEEK_SET},
     mm::flush_tlb,
 };
 

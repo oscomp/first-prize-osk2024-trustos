@@ -383,16 +383,14 @@ pub fn open_file(path: &str, flags: OpenFlags) -> Option<FileClass> {
 }
 
 fn create_file(
-    cwd: &str,
-    path: &str,
-    flags: OpenFlags,
-    abs_path: &str,
+    abs_path: String,
     parent_path: &str,
     child_name: &str,
+    flags: OpenFlags,
 ) -> Option<FileClass> {
     debug!(
-        "[create_file],cwd={},path={},flags={:?},abs_path={},parent_path={},child_name={}",
-        cwd, path, flags, abs_path, parent_path, child_name
+        "[create_file],flags={:?},abs_path={},parent_path={},child_name={}",
+        flags, abs_path, parent_path, child_name
     );
 
     // 一定能找到,因为除了RootInode外都有父结点
@@ -401,9 +399,14 @@ fn create_file(
     return parent_dir
         .create(child_name, flags.node_type())
         .map(|vfile| {
-            insert_inode_idx(abs_path, vfile.clone());
-            let osinode =
-                OSInode::new(readable, writable, vfile, Some(Arc::downgrade(&parent_dir)));
+            insert_inode_idx(&abs_path, vfile.clone());
+            let osinode = OSInode::new(
+                readable,
+                writable,
+                vfile,
+                Some(Arc::downgrade(&parent_dir)),
+                abs_path,
+            );
             FileClass::File(Arc::new(osinode))
         });
 }
@@ -438,8 +441,8 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
     if let Some(inode) = parent_inode.find_by_path(child) {
         if flags.contains(OpenFlags::O_TRUNC) {
             remove_inode_idx(&abs_path);
-            inode.unlink();
-            return create_file(cwd, path, flags, &abs_path, parent_path, child);
+            inode.unlink("");
+            return create_file(abs_path.clone(), parent_path, child, flags);
         }
         insert_inode_idx(&abs_path, inode.clone());
         let (readable, writable) = flags.read_write();
@@ -448,6 +451,7 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
             writable,
             inode,
             Some(Arc::downgrade(&parent_inode)),
+            abs_path,
         );
         if flags.contains(OpenFlags::O_APPEND) {
             vfile.lseek(0, SEEK_END);
@@ -457,7 +461,7 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
 
     // 节点不存在
     if flags.contains(OpenFlags::O_CREATE) {
-        return create_file(cwd, path, flags, &abs_path, parent_path, child_name);
+        return create_file(abs_path.clone(), parent_path, child_name, flags);
     }
     None
 }

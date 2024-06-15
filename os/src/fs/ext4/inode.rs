@@ -168,7 +168,7 @@ impl Inode for Ext4Inode {
         self.ext4.ext4_trunc_inode(&mut inode_ref, 0);
         Ok(())
     }
-    fn unlink(&self) -> GeneralRet {
+    fn unlink(&self, name: &str) -> GeneralRet {
         todo!()
     }
 }

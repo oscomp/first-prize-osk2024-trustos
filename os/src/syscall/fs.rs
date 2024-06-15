@@ -3,8 +3,7 @@ use crate::{
     console::print,
     fs::{
         make_pipe, open, open_device_file, open_file, remove_inode_idx, Dirent, FdTable, File,
-        FileClass, Kstat, OSFile, OSInode, OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET,
-        SUPER_BLOCK,
+        FileClass, Kstat, OSInode, OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET, SUPER_BLOCK,
     },
     mm::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
@@ -187,40 +186,12 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> Sysca
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
-    let mut path = translated_str(token, path);
+    let path = translated_str(token, path);
     let flags = OpenFlags::from_bits(flags).unwrap();
 
-    debug!("[sys_openat], path is {}", path);
+    let base_path = inner.get_cwd(dirfd, &path)?;
 
-    let mut base_path = inner.fs_info.cwd();
-    // 如果path是绝对路径，则dirfd被忽略
-    if is_abs_path(&path) {
-        base_path = "/";
-    } else if dirfd != AT_FDCWD {
-        let dirfd = dirfd as usize;
-        if dirfd >= inner.fd_table.len() || inner.fd_table.try_get_file(dirfd).is_none() {
-            return Err(SysErrNo::EINVAL);
-        }
-
-        let osfile = inner.fd_table.get_file(dirfd).file()?;
-        if let Some(inode) = osfile.find(path.as_str(), flags) {
-            let new_fd = inner.fd_table.alloc_fd();
-            inner.fd_table.set(new_fd, Some(inode), Some(flags));
-            return Ok(new_fd);
-        }
-
-        if flags.contains(OpenFlags::O_CREATE) {
-            if let Some(inode) = osfile.create(path.as_str(), flags) {
-                let new_fd = inner.fd_table.alloc_fd();
-                inner.fd_table.set(new_fd, Some(inode), Some(flags));
-                return Ok(new_fd);
-            }
-        } else {
-            return Err(SysErrNo::EINVAL);
-        }
-    }
-
-    if let Some(inode) = open(base_path, path.as_str(), flags) {
+    if let Some(inode) = open(&base_path, path.as_str(), flags) {
         let new_fd = inner.fd_table.alloc_fd();
         inner.fd_table.set(new_fd, Some(inode), Some(flags));
         return Ok(new_fd);
@@ -231,15 +202,10 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> Sysca
 pub fn sys_close(fd: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
-    if fd >= inner.fd_table.len() {
+    if fd >= inner.fd_table.len() || inner.fd_table.try_get_file(fd).is_none() {
         return Err(SysErrNo::EINVAL);
     }
-    if inner.fd_table.try_get_file(fd).is_none() {
-        return Err(SysErrNo::EINVAL);
-    }
-    debug!("fd {} closed", fd);
     inner.fd_table.take(fd);
-    debug!("len is {}", inner.fd_table.len());
     Ok(0)
 }
 
@@ -336,39 +302,12 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> SyscallRet {
     let token = inner.user_token();
     let path = translated_str(token, path);
 
-    let mut base_path = inner.fs_info.cwd();
-    // 如果path是绝对路径，则dirfd被忽略
-    if is_abs_path(&path) {
-        base_path = "/";
-    } else if dirfd != AT_FDCWD {
-        let dirfd = dirfd as usize;
-        if dirfd >= inner.fd_table.len() || inner.fd_table.try_get_file(dirfd).is_none() {
-            return Err(SysErrNo::EINVAL);
-        }
-
-        let osfile = inner.fd_table.get_file(dirfd).file()?;
-        if osfile
-            .find(path.as_str(), OpenFlags::O_DIRECTORY | OpenFlags::O_RDWR)
-            .is_some()
-        {
-            return Err(SysErrNo::EEXIST);
-        }
-
-        if osfile
-            .create(
-                path.as_str(),
-                OpenFlags::O_DIRECTORY | OpenFlags::O_RDWR | OpenFlags::O_CREATE,
-            )
-            .is_some()
-        {
-            return Ok(0);
-        }
-    }
-    if let Some(_) = open(base_path, path.as_str(), OpenFlags::O_RDWR) {
+    let base_path = inner.get_cwd(dirfd, &path)?;
+    if let Some(_) = open(&base_path, path.as_str(), OpenFlags::O_RDWR) {
         return Err(SysErrNo::EEXIST);
     }
     if let Some(newfile) = open(
-        base_path,
+        &base_path,
         path.as_str(),
         OpenFlags::O_RDWR | OpenFlags::O_CREATE,
     ) {
@@ -419,28 +358,13 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> SyscallRet {
     let token = inner.user_token();
 
     let path = translated_str(token, path);
-    let mut base_path = inner.fs_info.cwd();
 
-    // 如果path是绝对路径，则dirfd被忽略
-    if is_abs_path(&path) {
-        base_path = "/";
-    } else if dirfd != AT_FDCWD {
-        let dirfd = dirfd as usize;
-        if dirfd >= inner.fd_table.len() || inner.fd_table.try_get_file(dirfd).is_none() {
-            return Err(SysErrNo::EINVAL);
-        }
-        let osfile = inner.fd_table.get_file(dirfd).file()?;
-        if let Some(osfile) = osfile.find(path.as_str(), OpenFlags::empty()) {
-            let osfile = osfile.file()?;
-            osfile.inode.unlink();
-        }
-        return Ok(0);
-    }
-    if let Some(osfile) = open(base_path, path.as_str(), OpenFlags::empty()) {
+    let base_path = inner.get_cwd(dirfd, &path)?;
+    if let Some(osfile) = open(&base_path, path.as_str(), OpenFlags::empty()) {
         let osfile = osfile.file()?;
-        let abs_path = get_abs_path(base_path, &path);
+        let abs_path = get_abs_path(&base_path, &path);
         remove_inode_idx(&abs_path);
-        osfile.inode.unlink();
+        osfile.inode.unlink("");
     }
     Ok(0)
 }
@@ -538,25 +462,8 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
 
     debug!("[sys_fstatat] dirfd is {}, path is {}", dirfd, path);
 
-    let mut base_path = inner.fs_info.cwd();
-    // 如果path是绝对路径，则dirfd被忽略
-    if is_abs_path(&path) {
-        base_path = "/";
-    } else if dirfd != AT_FDCWD {
-        let dirfd = dirfd as usize;
-        if dirfd >= inner.fd_table.len() || inner.fd_table.try_get_file(dirfd).is_none() {
-            return Err(SysErrNo::EINVAL);
-        }
-        let file = inner.fd_table.get_file(dirfd).file()?;
-        if let Some(osfile) = file.find(path.as_str(), OpenFlags::O_RDONLY) {
-            let osfile = osfile.file()?;
-            let kstat = file.inode.fstat();
-            kst.write(kstat.as_bytes());
-            return Ok(0);
-        }
-        return Err(SysErrNo::ENOENT);
-    }
-    if let Some(file) = open(base_path, path.as_str(), OpenFlags::O_RDONLY) {
+    let base_path = inner.get_cwd(dirfd, &path)?;
+    if let Some(file) = open(&base_path, path.as_str(), OpenFlags::O_RDONLY) {
         let file = file.file()?;
         let kstat = file.inode.fstat();
         kst.write(kstat.as_bytes());
@@ -581,7 +488,7 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
-    let mut path = translated_str(token, path);
+    let path = translated_str(token, path);
 
     debug!(
         "[sys_faccessat] dirfd is {} and path is {} and mode is {}",
@@ -589,30 +496,8 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
     );
 
     let mode = FaccessatMode::from_bits(mode).unwrap();
-
-    let mut base_path = inner.fs_info.cwd();
-    // 如果path是绝对路径，则dirfd被忽略
-    if is_abs_path(&path) {
-        base_path = "/";
-    } else if dirfd != AT_FDCWD {
-        let dirfd = dirfd as usize;
-        if dirfd >= inner.fd_table.len() || inner.fd_table.try_get_file(dirfd).is_none() {
-            return Err(SysErrNo::EINVAL);
-        }
-        if let Some(FileClass::File(osfile)) = &inner.fd_table.try_get_file(dirfd) {
-            if osfile.find(path.as_str(), OpenFlags::O_RDWR).is_some() {
-                return Ok(0);
-            }
-            return Err(SysErrNo::ENOENT);
-        } else {
-            if mode.contains(FaccessatMode::F_OK) {
-                //println!("This file doesn't exist!");
-                return Ok(usize::MAX);
-            }
-            return Err(SysErrNo::EINVAL);
-        }
-    }
-    if open(base_path, path.as_str(), OpenFlags::O_RDWR).is_some() {
+    let base_path = inner.get_cwd(dirfd, &path)?;
+    if open(&base_path, path.as_str(), OpenFlags::O_RDWR).is_some() {
         return Ok(0);
     } else {
         if mode.contains(FaccessatMode::F_OK) {
@@ -629,11 +514,10 @@ pub fn sys_utimensat(dirfd: isize, path: *const u8, times: *const u8, _flags: us
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
-    let mut path = translated_str(token, path);
+    let path = translated_str(token, path);
 
     let nowtime = (get_time_ms() / 1000) as u64;
 
-    let mut base_path = inner.fs_info.cwd();
     let (mut atime_sec, mut mtime_sec) = (None, None);
 
     if times as usize == 0 {
@@ -654,24 +538,8 @@ pub fn sys_utimensat(dirfd: isize, path: *const u8, times: *const u8, _flags: us
         };
     }
 
-    // 如果path是绝对路径，则dirfd被忽略
-    if is_abs_path(&path) {
-        base_path = "/";
-    } else if dirfd != AT_FDCWD {
-        let dirfd = dirfd as usize;
-        if dirfd >= inner.fd_table.len() || inner.fd_table.try_get_file(dirfd).is_none() {
-            return Err(SysErrNo::EINVAL);
-        }
-
-        let osfile = inner.fd_table.get_file(dirfd).file()?;
-        if let Some(osfile) = osfile.find(path.as_str(), OpenFlags::O_RDONLY) {
-            let osfile = osfile.file()?;
-            osfile.inode.set_timestamps(atime_sec, mtime_sec);
-            return Ok(0);
-        }
-        return Err(SysErrNo::ENOENT);
-    }
-    if let Some(osfile) = open(base_path, path.as_str(), OpenFlags::O_RDONLY) {
+    let base_path = inner.get_cwd(dirfd, &path)?;
+    if let Some(osfile) = open(&base_path, path.as_str(), OpenFlags::O_RDONLY) {
         let osfile = osfile.file()?;
         osfile.inode.set_timestamps(atime_sec, mtime_sec);
         return Ok(0);
@@ -955,120 +823,19 @@ pub fn sys_sync() -> SyscallRet {
     SUPER_BLOCK.sync();
     Ok(0)
 }
-//TODO(ZMY) 用不上并且影响VFS
-// pub fn sys_symlinkat(target: *const u8, dirfd: isize, linkpath: *const u8) -> SyscallRet {
-//     let task = current_task().unwrap();
-//     let inner = task.inner_lock();
-//     let token = inner.user_token();
-//     let linkpath = translated_str(token, linkpath);
-
-//     let mut base_path = inner.fs_info.cwd();
-//     // 如果path是绝对路径，则dirfd被忽略
-//     if is_abs_path(&linkpath) {
-//         base_path = "/";
-//     } else if dirfd != AT_FDCWD {
-//         let dirfd = dirfd as usize;
-//         if dirfd >= inner.fd_table.len() || inner.fd_table.try_get_file(dirfd).is_none() {
-//             return Err(SysErrNo::EINVAL);
-//         }
-
-//         let osfile = inner.fd_table.get_file(dirfd).file()?;
-//         if osfile.find(linkpath.as_str(), OpenFlags::O_RDWR).is_some() {
-//             return Err(SysErrNo::EEXIST);
-//         }
-
-//         if let Some(newfile) =
-//             osfile.create(linkpath.as_str(), OpenFlags::O_RDWR | OpenFlags::O_CREATE)
-//         {
-//             let newfile = newfile.file()?;
-//             let mut target = translated_str(token, target);
-//             let mut buf = Vec::new();
-//             unsafe {
-//                 let target_bytes = target.as_bytes_mut();
-//                 let target_buf =
-//                     core::slice::from_raw_parts_mut(target_bytes.as_mut_ptr(), target_bytes.len());
-//                 buf.push(target_buf);
-//             }
-//             let mut buffer = UserBuffer::new(buf); //输入缓冲池
-//             newfile.write(buffer);
-//             newfile.inode.link();
-//             return Ok(0);
-//         }
-//         return Err(SysErrNo::EINVAL);
-//     }
-//     if let Some(_) = open(base_path, linkpath.as_str(), OpenFlags::O_RDWR) {
-//         return Err(SysErrNo::EEXIST);
-//     }
-
-//     if let Some(newfile) = open(
-//         base_path,
-//         linkpath.as_str(),
-//         OpenFlags::O_RDWR | OpenFlags::O_CREATE,
-//     ) {
-//         let newfile = newfile.file()?;
-//         let mut target = translated_str(token, target);
-//         let mut buf = Vec::new();
-//         unsafe {
-//             let target_bytes = target.as_bytes_mut();
-//             let target_buf =
-//                 core::slice::from_raw_parts_mut(target_bytes.as_mut_ptr(), target_bytes.len());
-//             buf.push(target_buf);
-//         }
-//         let mut buffer = UserBuffer::new(buf); //输入缓冲池
-//         newfile.write(buffer);
-//         newfile.inode.link();
-//         return Ok(0);
-//     }
-//     return Err(SysErrNo::ENOENT);
-// }
 
 pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsiz: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
-    let mut path = translated_str(token, path);
+    let path = translated_str(token, path);
 
-    let mut base_path = inner.fs_info.cwd();
-    // 如果path是绝对路径，则dirfd被忽略
-    if is_abs_path(&path) {
-        base_path = "/";
-    } else if dirfd != AT_FDCWD {
-        let dirfd = dirfd as usize;
-        if dirfd >= inner.fd_table.len() || inner.fd_table.try_get_file(dirfd).is_none() {
-            return Err(SysErrNo::EINVAL);
-        }
-
-        let osfile = inner.fd_table.get_file(dirfd).file()?;
-        if let Some(osfile) = osfile.find(path.as_str(), OpenFlags::O_RDONLY) {
-            let osfile = osfile.file()?;
-            /*
-            //fat32不支持设置sym文件类型
-            if !osfile.inode.node_type().is_symlink() {
-                return Err(SysErrNo::EINVAL);
-            }
-            */
-            // release current task TCB manually to avoid multi-borrow
-            drop(inner);
-            drop(task);
-            let ret = osfile.read(UserBuffer::new(
-                translated_byte_buffer(token, buf, bufsiz).unwrap(),
-            ))?;
-            return Ok(ret);
-        }
-        return Err(SysErrNo::ENOENT);
-    }
-
-    if let Some(osfile) = open(base_path, path.as_str(), OpenFlags::O_RDONLY) {
+    let base_path = inner.get_cwd(dirfd, &path)?;
+    if let Some(osfile) = open(&base_path, path.as_str(), OpenFlags::O_RDONLY) {
         let osfile = osfile.file()?;
         if !osfile.readable() {
             return Err(SysErrNo::EACCES);
         }
-        /*
-        //fat32不支持设置sym文件类型
-        if !osfile.inode.node_type().is_symlink() {
-            return Err(SysErrNo::EINVAL);
-        }
-        */
         // release current task TCB manually to avoid multi-borrow
         drop(inner);
         drop(task);
@@ -1100,30 +867,11 @@ pub fn sys_renameat2(
     let mut newpath = translated_str(token, newpath);
     // let flags = Renameat2Flags::from_bits(flags).unwrap();
 
-    let mut oldfile;
-
     //找到旧文件
-    let mut base_path = inner.fs_info.cwd();
-    // 如果path是绝对路径，则dirfd被忽略
-    if is_abs_path(&oldpath) {
-        base_path = "/";
-    } else if olddirfd != AT_FDCWD {
-        let olddirfd = olddirfd as usize;
-        if olddirfd >= inner.fd_table.len() || inner.fd_table.try_get_file(olddirfd).is_none() {
-            return Err(SysErrNo::EINVAL);
-        }
-
-        let osfile = inner.fd_table.get_file(olddirfd).file()?;
-        if let Some(osfile) = osfile.find(oldpath.as_str(), OpenFlags::O_RDWR) {
-            let osfile = osfile.file()?;
-            oldfile = osfile.clone();
-        } else {
-            return Err(SysErrNo::EBADF);
-        }
-    }
-    if let Some(osfile) = open(base_path, oldpath.as_str(), OpenFlags::O_RDWR) {
-        let osfile = osfile.file()?;
-        oldfile = osfile.clone();
+    let mut oldfile;
+    let base_path = inner.get_cwd(olddirfd, &oldpath)?;
+    if let Some(osfile) = open(&base_path, oldpath.as_str(), OpenFlags::O_RDWR) {
+        oldfile = osfile.file()?;
     } else {
         return Err(SysErrNo::ENOENT);
     }
@@ -1137,28 +885,11 @@ pub fn sys_renameat2(
         openflags = OpenFlags::O_CREATE | OpenFlags::O_RDWR;
     }
 
-    let mut base_path = inner.fs_info.cwd();
-    // 如果path是绝对路径，则dirfd被忽略
-    if is_abs_path(&newpath) {
-        base_path = "/";
-    } else if newdirfd != AT_FDCWD {
-        let newdirfd = newdirfd as usize;
-        if newdirfd >= inner.fd_table.len() || inner.fd_table.try_get_file(newdirfd).is_none() {
-            return Err(SysErrNo::EINVAL);
-        }
-
-        let osfile = inner.fd_table.get_file(newdirfd).file()?;
-        if let Some(osfile) = osfile.create(newpath.as_str(), openflags) {
-            let newfile = osfile.file()?;
-            newfile.inode.rename(oldfile.inode.clone());
-            return Ok(0);
-        }
-        return Err(SysErrNo::ENOENT);
-    }
-    if let Some(osfile) = open(base_path, newpath.as_str(), openflags) {
+    let base_path = inner.get_cwd(newdirfd, &newpath)?;
+    if let Some(osfile) = open(&base_path, newpath.as_str(), openflags) {
         let newfile = osfile.file()?;
         newfile.inode.rename(oldfile.inode.clone());
-        let abs_path = get_abs_path(base_path, &oldpath);
+        let abs_path = get_abs_path(&base_path, &oldpath);
         remove_inode_idx(&abs_path);
         return Ok(0);
     }

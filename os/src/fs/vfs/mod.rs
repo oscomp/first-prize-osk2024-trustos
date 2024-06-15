@@ -41,16 +41,9 @@ pub trait Inode: Send + Sync {
     ///
     fn set_timestamps(&self, atime_sec: Option<u64>, mtime_sec: Option<u64>) -> GeneralRet;
     // fn link(&self);
-    fn unlink(&self) -> GeneralRet;
+    fn unlink(&self, name: &str) -> GeneralRet;
     fn rename(&self, file: Arc<dyn Inode>) -> GeneralRet;
     fn ls(&self) -> Vec<String>;
-}
-/// OSInode接口
-pub trait OSFile: Send + Sync {
-    /// 设置偏移量
-    fn lseek(&self, offset: isize, whence: usize) -> SyscallRet;
-    fn find(&self, path: &str, flags: OpenFlags) -> Option<FileClass>;
-    fn create(&self, path: &str, flags: OpenFlags) -> Option<FileClass>;
 }
 
 /// 文件接口
@@ -63,6 +56,10 @@ pub trait File: Send + Sync {
     fn write(&self, buf: UserBuffer) -> SyscallRet;
     /// ppoll处理
     fn poll(&self, events: PollEvents) -> PollEvents;
+    /// 设置偏移量,并非所有文件都支持
+    fn lseek(&self, offset: isize, whence: usize) -> SyscallRet {
+        unimplemented!("not support!");
+    }
 }
 
 pub trait Ioctl: File {

@@ -19,6 +19,7 @@ use crate::{
     task::insert_into_thread_group,
     timer::{TimeData, Timer, ITIMER_REAL},
     trap::{trap_handler, TrapContext},
+    utils::{is_abs_path, SysErrNo},
 };
 use alloc::{
     string::String,
@@ -116,6 +117,22 @@ impl TaskControlBlockInner {
         self.memory_set
             .remove_area_with_start_vpn(VirtAddr::from(self.trap_cx_bottom).floor());
         flush_tlb();
+    }
+    pub fn get_cwd(&self, dirfd: isize, path: &str) -> Result<String, SysErrNo> {
+        if is_abs_path(path) {
+            Ok(String::from("/"))
+        } else if dirfd != -100 {
+            // AT_FDCWD=-100
+            let dirfd = dirfd as usize;
+            if let Some(file) = self.fd_table.try_get_file(dirfd) {
+                let file = file.file()?;
+                Ok(file.path.clone())
+            } else {
+                Err(SysErrNo::EINVAL)
+            }
+        } else {
+            Ok(self.fs_info.get_cwd())
+        }
     }
 }
 
