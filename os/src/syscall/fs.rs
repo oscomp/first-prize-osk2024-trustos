@@ -362,19 +362,10 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> SyscallRet {
     let base_path = inner.get_cwd(dirfd, &path)?;
     if let Some(parent_file) = open(&base_path, &path, OpenFlags::empty()) {
         let file = parent_file.file()?;
-        let (_, child) = path.rsplit_once("/").unwrap();
+        let abs_path = get_abs_path(&base_path, &path);
+        let (_, child) = abs_path.rsplit_once("/").unwrap();
         file.inode.unlink(child)?;
     }
-    // if let Some(osfile) = open(&base_path, path.as_str(), OpenFlags::empty()) {
-    //     let abs_path = get_abs_path(&base_path, &path);
-    //     let (parent, child) = rsplit_once(&abs_path, "/");
-
-    //     let osfile = osfile.file()?;
-    //     let abs_path = get_abs_path(&base_path, &path);
-    //     let (_, name) = abs_path.rsplit_once("/").unwrap();
-    //     remove_inode_idx(&abs_path);
-    //     osfile.inode.unlink(name);
-    // }
     Ok(0)
 }
 
