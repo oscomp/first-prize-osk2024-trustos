@@ -1,5 +1,5 @@
 # 制作一个全0的镜像文件
-dd if=/dev/zero of=fat32.img bs=4M count=32
+dd if=/dev/zero of=fat32.img bs=4M count=128
 
 DIR=fat32_fs
 
