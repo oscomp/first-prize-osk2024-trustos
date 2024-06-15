@@ -74,7 +74,8 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
 pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
+    //let token = inner.user_token();
+    let memory_set = inner.memory_set.clone();
 
     debug!("[sys_read] fd is {}, len is {}", fd, len);
 
@@ -93,7 +94,7 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
         drop(inner);
         drop(task);
         let ret = file.read(UserBuffer::new(
-            translated_byte_buffer(token, buf, len).unwrap(),
+            safe_translated_byte_buffer(memory_set, buf, len).unwrap(),
         ))?;
         Ok(ret)
     } else {
@@ -190,6 +191,11 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> Sysca
     let flags = OpenFlags::from_bits(flags).unwrap();
 
     let base_path = inner.get_cwd(dirfd, &path)?;
+
+    debug!(
+        "[sys_openat] dirfd is {}, path is {}, flags is {:?}, mode is {}",
+        dirfd, path, flags, mode
+    );
 
     if let Some(inode) = open(&base_path, path.as_str(), flags) {
         let new_fd = inner.fd_table.alloc_fd();
@@ -552,6 +558,11 @@ pub fn sys_lseek(fd: usize, offset: isize, whence: usize) -> SyscallRet {
     let mut inner = task.inner_lock();
     let token = inner.user_token();
 
+    debug!(
+        "[sys_lseek] fd is {}, offset is {}, whence is {}",
+        fd, offset, whence
+    );
+
     if fd >= inner.fd_table.len() || inner.fd_table.try_get_file(fd).is_none() {
         return Err(SysErrNo::EINVAL);
     }
@@ -766,7 +777,8 @@ pub fn sys_pwrite64(fd: usize, buf: *const u8, count: usize, offset: isize) -> S
 pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: isize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
+    //let token = inner.user_token();
+    let memory_set = inner.memory_set.clone();
 
     if offset < 0 || fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
@@ -782,7 +794,7 @@ pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: isize) -> Sy
         let cur_offset = file.lseek(0, SEEK_CUR)? as isize;
         file.lseek(offset, SEEK_SET);
         let ret = file.read(UserBuffer::new(
-            translated_byte_buffer(token, buf, count).unwrap(),
+            safe_translated_byte_buffer(memory_set, buf, count).unwrap(),
         ))?;
         file.lseek(cur_offset, SEEK_SET);
         Ok(ret)
@@ -903,11 +915,13 @@ pub fn sys_copy_file_range(
     outfd: usize,
     off_out: usize,
     count: usize,
-    _flags: u32,
+    flags: u32,
 ) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
+
+    debug!("[sys_copy_file_range] infd is {}, off_in is {}, outfd is {}, off_out is {},count is {}, flags is {}", infd, off_in, outfd, off_out, count, flags);
 
     if outfd >= inner.fd_table.len()
         || inner.fd_table.try_get_file(outfd).is_none()
@@ -951,8 +965,10 @@ pub fn sys_copy_file_range(
         if offset < 0 {
             return Err(SysErrNo::EINVAL);
         }
+        let in_offset = infile.lseek(0, SEEK_CUR)?;
         infile.lseek(offset, SEEK_SET);
         readcount = infile.read(inbuffer)?;
+        infile.lseek(in_offset as isize, SEEK_SET);
     }
 
     if readcount == 0 {
@@ -979,9 +995,19 @@ pub fn sys_copy_file_range(
         if offset < 0 {
             return Err(SysErrNo::EINVAL);
         }
+        let out_offset = outfile.lseek(0, SEEK_CUR)?;
         outfile.lseek(offset, SEEK_SET);
         writecount = outfile.write(outbuffer)?;
+        outfile.lseek(out_offset as isize, SEEK_SET);
     }
+    //如果系统调用执行成功，*off_in和*off_out将会增加复制的长度
+    if off_in != 0 {
+        *translated_refmut(token, off_in as *mut isize) += writecount as isize;
+    }
+    if off_out != 0 {
+        *translated_refmut(token, off_out as *mut isize) += writecount as isize;
+    }
+
     Ok(writecount)
 }
 

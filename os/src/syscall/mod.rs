@@ -84,6 +84,7 @@ pub enum Syscall {
     Mmap = 222,
     Execve = 221,
     Mprotect = 226,
+    Madvise = 233,
     Wait4 = 260,
     Renameat2 = 276,
     Getrandom = 278,
@@ -274,6 +275,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         ),
         Syscall::Munmap => sys_munmap(args[0], args[1]),
         Syscall::Mprotect => sys_mprotect(args[0], args[1], args[2] as u32),
+        Syscall::Madvise => sys_madvise(args[0] as usize, args[1] as usize, args[2] as usize),
         Syscall::Wait4 => sys_wait4(args[0] as isize, args[1] as *mut i32, args[2] as i32),
         Syscall::Renameat2 => sys_renameat2(
             args[0] as isize,
