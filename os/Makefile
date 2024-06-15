@@ -7,10 +7,10 @@ MODE := release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 DISASM_TMP := target/$(TARGET)/$(MODE)/asm
-# FS := fat32_fs
-# IMG := fat32.img
-FS := ext4_rs
-IMG := ext4.img
+FS := fat32_fs
+IMG := fat32.img
+# FS := ext4_rs
+# IMG := ext4.img
 FS_IMG := ../$(FS)/$(IMG)
 APPS := ../user/src/bin/*
 
