@@ -418,15 +418,28 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
         return None;
     }
 
-    // 若在FSIDX中无法找到，尝试在FSIDX寻找父级目录
-    // !父节点必须能找到
+    // !必须要知道父结点
     let (parent_path, child_name) = rsplit_once(&abs_path, "/");
-    let parent_inode = find_inode_idx(parent_path).unwrap();
-    if let Some(inode) = parent_inode.find_by_path(child_name) {
+    // println!(
+    //     "[open] cwd={},path={},parent={},child={},abs={}",
+    //     cwd, path, parent_path, child_name, &abs_path
+    // );
+
+    let (parent_inode, child) = if has_inode(parent_path) {
+        (find_inode_idx(parent_path).unwrap(), child_name)
+    } else {
+        if cwd == "/" {
+            (ROOT_INODE.clone(), path)
+        } else {
+            (ROOT_INODE.find_by_path(cwd).unwrap(), path)
+        }
+    };
+
+    if let Some(inode) = parent_inode.find_by_path(child) {
         if flags.contains(OpenFlags::O_TRUNC) {
             remove_inode_idx(&abs_path);
             inode.unlink();
-            return create_file(cwd, path, flags, &abs_path, parent_path, child_name);
+            return create_file(cwd, path, flags, &abs_path, parent_path, child);
         }
         insert_inode_idx(&abs_path, inode.clone());
         let (readable, writable) = flags.read_write();
@@ -441,6 +454,7 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
         }
         return Some(FileClass::File(Arc::new(vfile)));
     }
+
     // 节点不存在
     if flags.contains(OpenFlags::O_CREATE) {
         return create_file(cwd, path, flags, &abs_path, parent_path, child_name);

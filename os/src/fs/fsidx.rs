@@ -12,6 +12,10 @@ lazy_static! {
     pub static ref FSIDX: RwLock<HashMap<String, Arc<dyn Inode>>> = { RwLock::new(HashMap::new()) };
 }
 
+pub fn has_inode(path: &str) -> bool {
+    FSIDX.read().contains_key(path)
+}
+
 pub fn find_inode_idx(path: &str) -> Option<Arc<dyn Inode>> {
     FSIDX.read().get(path).map(|vfile| Arc::clone(vfile))
 }

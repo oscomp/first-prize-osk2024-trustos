@@ -281,8 +281,8 @@ pub fn sys_dup3(old: usize, new: usize) -> SyscallRet {
         return Err(SysErrNo::EBADF);
     }
 
-    if inner.fd_table.len() < new {
-        inner.fd_table.resize(new);
+    if inner.fd_table.len() <= new {
+        inner.fd_table.resize(new + 1);
     }
 
     let (inode, flags) = inner.fd_table.try_get(old);
