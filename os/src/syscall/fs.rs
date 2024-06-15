@@ -2,8 +2,8 @@
 use crate::{
     console::print,
     fs::{
-        make_pipe, open, open_device_file, open_file, remove_inode_idx, Dirent, FdTable, File,
-        FileClass, Kstat, OSInode, OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET, SUPER_BLOCK,
+        fs_stat, make_pipe, open, open_device_file, open_file, remove_inode_idx, sync, Dirent,
+        FdTable, File, FileClass, Kstat, OSInode, OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET,
     },
     mm::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
@@ -358,14 +358,23 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> SyscallRet {
     let token = inner.user_token();
 
     let path = translated_str(token, path);
-
+    // 打开Parent,从Parent中unlink
     let base_path = inner.get_cwd(dirfd, &path)?;
-    if let Some(osfile) = open(&base_path, path.as_str(), OpenFlags::empty()) {
-        let osfile = osfile.file()?;
-        let abs_path = get_abs_path(&base_path, &path);
-        remove_inode_idx(&abs_path);
-        osfile.inode.unlink("");
+    if let Some(parent_file) = open(&base_path, &path, OpenFlags::empty()) {
+        let file = parent_file.file()?;
+        let (_, child) = path.rsplit_once("/").unwrap();
+        file.inode.unlink(child)?;
     }
+    // if let Some(osfile) = open(&base_path, path.as_str(), OpenFlags::empty()) {
+    //     let abs_path = get_abs_path(&base_path, &path);
+    //     let (parent, child) = rsplit_once(&abs_path, "/");
+
+    //     let osfile = osfile.file()?;
+    //     let abs_path = get_abs_path(&base_path, &path);
+    //     let (_, name) = abs_path.rsplit_once("/").unwrap();
+    //     remove_inode_idx(&abs_path);
+    //     osfile.inode.unlink(name);
+    // }
     Ok(0)
 }
 
@@ -479,7 +488,7 @@ pub fn sys_statfs(_path: *const u8, statfs: *const u8) -> SyscallRet {
     let mut statfs =
         UserBuffer::new(translated_byte_buffer(token, statfs, size_of::<Statfs>()).unwrap());
 
-    let ourstatfs = SUPER_BLOCK.fs_stat();
+    let ourstatfs = fs_stat();
     statfs.write(ourstatfs.as_bytes());
     Ok(0)
 }
@@ -820,31 +829,32 @@ pub fn sys_fsync(fd: usize) -> SyscallRet {
 }
 
 pub fn sys_sync() -> SyscallRet {
-    SUPER_BLOCK.sync();
+    sync();
     Ok(0)
 }
 
 pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsiz: usize) -> SyscallRet {
-    let task = current_task().unwrap();
-    let inner = task.inner_lock();
-    let token = inner.user_token();
-    let path = translated_str(token, path);
+    Ok(0)
+    // let task = current_task().unwrap();
+    // let inner = task.inner_lock();
+    // let token = inner.user_token();
+    // let path = translated_str(token, path);
 
-    let base_path = inner.get_cwd(dirfd, &path)?;
-    if let Some(osfile) = open(&base_path, path.as_str(), OpenFlags::O_RDONLY) {
-        let osfile = osfile.file()?;
-        if !osfile.readable() {
-            return Err(SysErrNo::EACCES);
-        }
-        // release current task TCB manually to avoid multi-borrow
-        drop(inner);
-        drop(task);
-        let ret = osfile.read(UserBuffer::new(
-            translated_byte_buffer(token, buf, bufsiz).unwrap(),
-        ))?;
-        return Ok(ret);
-    }
-    Err(SysErrNo::ENOENT)
+    // let base_path = inner.get_cwd(dirfd, &path)?;
+    // if let Some(osfile) = open(&base_path, path.as_str(), OpenFlags::O_RDONLY) {
+    //     let osfile = osfile.file()?;
+    //     if !osfile.readable() {
+    //         return Err(SysErrNo::EACCES);
+    //     }
+    //     // release current task TCB manually to avoid multi-borrow
+    //     drop(inner);
+    //     drop(task);
+    //     let ret = osfile.read(UserBuffer::new(
+    //         translated_byte_buffer(token, buf, bufsiz).unwrap(),
+    //     ))?;
+    //     return Ok(ret);
+    // }
+    // Err(SysErrNo::ENOENT)
 }
 
 /// If newpath already exists, replace it.

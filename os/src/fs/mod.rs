@@ -1,7 +1,5 @@
 mod devfs;
 mod dirent;
-mod ext4;
-mod fat32;
 mod fsidx;
 mod fstruct;
 mod mount;
@@ -12,8 +10,11 @@ mod vfs;
 
 cfg_if::cfg_if! {
     if #[cfg(feature="fat32")]{
-        pub use fat32::{ROOT_INODE,SUPER_BLOCK};
-        pub use fat32_fs::BlockDevice;
+        mod fat32;
+        pub use fat32::{sync,fs_stat,root_inode};
+    } else if #[cfg(feature="ext4")]{
+        mod ext4;
+        pub use ext4::{sync,fs_stat,root_inode};
     }
 }
 
@@ -213,14 +214,14 @@ pub fn flush_preload() {
 }
 
 pub fn init() {
-    insert_inode_idx("/", ROOT_INODE.clone());
+    insert_inode_idx("/", root_inode());
     flush_preload();
     create_init_files();
 }
 
 pub fn list_apps() {
     println!("/**** APPS ****");
-    for app in ROOT_INODE.ls() {
+    for app in root_inode().ls() {
         println!("{}", app);
     }
     println!("**************/");
@@ -432,18 +433,20 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
         (find_inode_idx(parent_path).unwrap(), child_name)
     } else {
         if cwd == "/" {
-            (ROOT_INODE.clone(), path)
+            (root_inode(), path)
         } else {
-            (ROOT_INODE.find_by_path(cwd).unwrap(), path)
+            (root_inode().find_by_path(cwd).unwrap(), path)
         }
     };
 
     if let Some(inode) = parent_inode.find_by_path(child) {
-        if flags.contains(OpenFlags::O_TRUNC) {
-            remove_inode_idx(&abs_path);
-            inode.unlink("");
-            return create_file(abs_path.clone(), parent_path, child, flags);
-        }
+        // if flags.contains(OpenFlags::O_TRUNC) {
+        //     remove_inode_idx(&abs_path);
+        //     let abs_path_clone = abs_path.clone();
+        //     let (_, name) = abs_path.rsplit_once("/").unwrap();
+        //     inode.unlink(name);
+        //     return create_file(abs_path_clone, parent_path, child, flags);
+        // }
         insert_inode_idx(&abs_path, inode.clone());
         let (readable, writable) = flags.read_write();
         let vfile = OSInode::new(
@@ -455,6 +458,9 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
         );
         if flags.contains(OpenFlags::O_APPEND) {
             vfile.lseek(0, SEEK_END);
+        }
+        if flags.contains(OpenFlags::O_TRUNC) {
+            vfile.inode.truncate();
         }
         return Some(FileClass::File(Arc::new(vfile)));
     }

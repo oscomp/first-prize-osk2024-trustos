@@ -15,7 +15,7 @@ use crate::{
     sync::SyncUnsafeCell,
 };
 
-use super::OSInode;
+use super::{OSInode, Statfs};
 
 //TODO(ZMY) 临时做一下类型体操;与VFS冲突,后续需修改
 #[cfg(feature = "fat32")]
@@ -53,13 +53,25 @@ lazy_static! {
     static ref DISK_ADAPTER: Arc<DiskAdapter> = Arc::new(DiskAdapter {
         inner: SyncUnsafeCell::new(Disk::new(BlockDeviceImpl::new_device())),
     });
-    pub static ref SUPER_BLOCK: Arc<dyn SuperBlock> = {
+    static ref SUPER_BLOCK: Arc<dyn SuperBlock> = {
         let fat32_manager = FAT32Manager::open(DISK_ADAPTER.clone());
         let root = Arc::new(create_root_vfile(&fat32_manager));
         Arc::new(FATSuperBlock::new(fat32_manager, root))
     };
-    pub static ref ROOT_INODE: Arc<dyn Inode> = {
+    static ref ROOT_INODE: Arc<dyn Inode> = {
         let root = SUPER_BLOCK.root_inode();
         root
     };
+}
+
+pub fn root_inode() -> Arc<dyn Inode> {
+    SUPER_BLOCK.root_inode()
+}
+
+pub fn sync() {
+    SUPER_BLOCK.sync()
+}
+
+pub fn fs_stat() -> Statfs {
+    SUPER_BLOCK.fs_stat()
 }

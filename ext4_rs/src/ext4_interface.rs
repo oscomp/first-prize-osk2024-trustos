@@ -114,6 +114,12 @@ impl Ext4 {
         self.super_block = super_block;
     }
 
+    pub fn create_root_file(&self) -> Ext4File {
+        let mut file = Ext4File::new();
+        self.ext4_open(&mut file, "/", "w+", false);
+        file
+    }
+
     #[allow(unused)]
     pub fn ext4_open(
         &self,

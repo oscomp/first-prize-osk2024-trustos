@@ -41,9 +41,14 @@ pub trait Inode: Send + Sync {
     ///
     fn set_timestamps(&self, atime_sec: Option<u64>, mtime_sec: Option<u64>) -> GeneralRet;
     // fn link(&self);
-    fn unlink(&self, name: &str) -> GeneralRet;
+    fn unlink(&self, child: &str) -> GeneralRet {
+        unimplemented!();
+    }
     fn rename(&self, file: Arc<dyn Inode>) -> GeneralRet;
     fn ls(&self) -> Vec<String>;
+    fn read_all(&self) -> Vec<u8> {
+        unimplemented!();
+    }
 }
 
 /// 文件接口

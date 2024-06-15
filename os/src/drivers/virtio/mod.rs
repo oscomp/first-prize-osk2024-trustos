@@ -8,7 +8,6 @@ use virtio_drivers::Hal;
 use crate::{
     config::mm::KERNEL_ADDR_OFFSET,
     drivers::DevError,
-    fs::BlockDevice,
     mm::{
         frame_alloc, frame_dealloc, FrameTracker, KernelAddr, PageTable, PhysAddr, PhysPageNum,
         StepByOne, VirtAddr,

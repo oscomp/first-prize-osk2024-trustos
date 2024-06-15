@@ -10,15 +10,21 @@ use crate::{
     utils::{GeneralRet, SysErrNo, SyscallRet},
 };
 
-struct Ext4Inode {
+pub struct Ext4Inode {
     file: Mutex<Ext4File>,
     ext4: Arc<Ext4>,
 }
 
 impl Ext4Inode {
-    fn new(ext4: Arc<Ext4>) -> Self {
+    pub fn empty(ext4: Arc<Ext4>) -> Self {
         Self {
             file: Mutex::new(Ext4File::new()),
+            ext4,
+        }
+    }
+    pub fn new(ext4: Arc<Ext4>, file: Ext4File) -> Self {
+        Self {
+            file: Mutex::new(file),
             ext4,
         }
     }
@@ -39,7 +45,7 @@ impl Inode for Ext4Inode {
         let file = self.file.lock();
         let types = as_ext4_type(ty);
 
-        let inode = Ext4Inode::new(self.ext4.clone());
+        let inode = Ext4Inode::empty(self.ext4.clone());
         let mut nfile = inode.file.lock();
 
         if types == DirEntryType::EXT4_DE_DIR {
@@ -78,7 +84,7 @@ impl Inode for Ext4Inode {
     fn find_by_path(&self, path: &str) -> Option<Arc<dyn Inode>> {
         let mut file = self.file.lock();
 
-        let inode = Ext4Inode::new(self.ext4.clone());
+        let inode = Ext4Inode::empty(self.ext4.clone());
         let mut nfile = inode.file.lock();
 
         if let Err(_) = self.ext4.ext4_open(&mut nfile, path, "r+", false) {
@@ -107,9 +113,6 @@ impl Inode for Ext4Inode {
             ..Kstat::empty()
         }
     }
-    // fn link(&self) {
-    //     todo!()
-    // }
     fn ls(&self) -> Vec<String> {
         let file = self.file.lock();
         self.ext4
@@ -146,7 +149,18 @@ impl Inode for Ext4Inode {
         }
     }
     fn rename(&self, file: Arc<dyn Inode>) -> GeneralRet {
-        todo!()
+        unsafe {
+            let inode = Arc::from_raw(Arc::into_raw(file) as *const Ext4Inode);
+            let mut other = inode.file.lock();
+            let mut this = self.file.lock();
+            this.flags = other.flags;
+            this.fpos = other.fpos;
+            this.fsize = other.fsize;
+            this.inode = other.inode;
+            this.mp = other.mp.clone();
+            inode.ext4.ext4_file_close(&mut other);
+        }
+        Ok(())
     }
     fn set_timestamps(&self, atime_sec: Option<u64>, mtime_sec: Option<u64>) -> GeneralRet {
         let file = self.file.lock();
@@ -168,8 +182,20 @@ impl Inode for Ext4Inode {
         self.ext4.ext4_trunc_inode(&mut inode_ref, 0);
         Ok(())
     }
-    fn unlink(&self, name: &str) -> GeneralRet {
-        todo!()
+    fn unlink(&self, child: &str) -> GeneralRet {
+        let file = self.file.lock();
+        let inode = Ext4Inode::empty(self.ext4.clone());
+        let mut nfile = inode.file.lock();
+
+        if let Err(_) = self.ext4.ext4_open(&mut nfile, child, "w+", false) {
+            return Err(SysErrNo::EINVAL);
+        }
+
+        let mut parent_ref = Ext4InodeRef::get_inode_ref(Arc::downgrade(&self.ext4), file.inode);
+        let mut child_ref = Ext4InodeRef::get_inode_ref(Arc::downgrade(&self.ext4), nfile.inode);
+        self.ext4
+            .ext4_unlink(&mut parent_ref, &mut child_ref, child, child.len() as u32);
+        Ok(())
     }
 }
 
