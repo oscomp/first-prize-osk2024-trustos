@@ -85,7 +85,6 @@ lazy_static! {
         let root = Arc::new(Ext4Inode::new(ext4.clone(), root_file));
         Arc::new(Ext4SuperBlock::new(ext4, root))
     };
-    static ref ROOT_INODE: Arc<dyn Inode> = { SUPER_BLOCK.root_inode() };
 }
 
 pub fn root_inode() -> Arc<dyn Inode> {

@@ -127,9 +127,10 @@ impl Ext4 {
             child.inode_num,
             name
         );
+        log::info!("in_add");
         /* Add entry to parent directory */
         let r = self.ext4_dir_add_entry(parent, child, name, name_len);
-
+        log::info!("in_b");
         /* Fill new dir -> add '.' and '..' entries.
          * Also newly allocated inode should have 0 link count.
          */

@@ -1,4 +1,4 @@
-use alloc::{string::String, sync::Arc, vec::Vec};
+use alloc::{ffi::CString, string::String, sync::Arc, vec, vec::Vec};
 use ext4_rs::{
     DirEntryType, Errnum, Ext4, Ext4File, Ext4InodeRef, EXT4_INODE_MODE_DIRECTORY,
     EXT4_INODE_MODE_FILE, EXT4_INODE_MODE_SOFTLINK, EXT4_INODE_MODE_TYPE_MASK,
@@ -49,9 +49,15 @@ impl Inode for Ext4Inode {
         let mut nfile = inode.file.lock();
 
         if types == DirEntryType::EXT4_DE_DIR {
-            inode.ext4.ext4_dir_mk(&mut nfile, path);
+            // inode.ext4.ext4_dir_mk(&mut nfile, &abs_path);
+            inode
+                .ext4
+                .ext4_open_from(file.inode, &mut nfile, path, "w+", false);
         } else {
-            inode.ext4.ext4_open(&mut nfile, path, "w+", true);
+            inode
+                .ext4
+                .ext4_open_from(file.inode, &mut nfile, path, "w+", true);
+            // inode.ext4.ext4_open(&mut nfile, &abs_path, "w+", true);
         }
         drop(nfile);
 
@@ -76,7 +82,6 @@ impl Inode for Ext4Inode {
         file.fpos = off as usize;
 
         let write_size = buf.len();
-
         self.ext4.ext4_file_write(&mut file, &buf, write_size);
 
         Ok(write_size)
@@ -200,7 +205,8 @@ impl Inode for Ext4Inode {
 
     fn read_all(&self) -> Result<Vec<u8>, SysErrNo> {
         let mut file = self.file.lock();
-        let mut buf: Vec<u8> = Vec::with_capacity(file.fsize as usize);
+
+        let mut buf: Vec<u8> = vec![0; file.fsize as usize];
         let mut read_cnt: usize = 0;
         let size = file.fsize as usize;
         if let Ok(_) = self
