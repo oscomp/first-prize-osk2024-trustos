@@ -1,5 +1,6 @@
 mod devfs;
 mod dirent;
+mod ext4_re;
 mod fsidx;
 mod fstruct;
 mod mount;

@@ -114,24 +114,24 @@ impl FileAttr {
 
 #[repr(C)]
 pub struct LinuxStat {
-    st_dev: u32,        // ID of device containing file
-    st_ino: u32,        // Inode number
-    st_mode: u16,       // File type and mode
-    st_nlink: u16,      // Number of hard links
-    st_uid: u16,        // User ID of owner
-    st_gid: u16,        // Group ID of owner
-    st_rdev: u32,       // Device ID (if special file)
-    st_size: u32,       // Total size, in bytes
-    st_blksize: u32,    // Block size for filesystem I/O
-    st_blocks: u32,     // Number of 512B blocks allocated
-    st_atime: u32,      // Time of last access
-    st_atime_nsec: u32, // Nanoseconds part of last access time
-    st_mtime: u32,      // Time of last modification
-    st_mtime_nsec: u32, // Nanoseconds part of last modification time
-    st_ctime: u32,      // Time of last status change
-    st_ctime_nsec: u32, // Nanoseconds part of last status change time
-    __unused4: u32,     // Unused field
-    __unused5: u32,     // Unused field
+    pub st_dev: u32,        // ID of device containing file
+    pub st_ino: u32,        // Inode number
+    pub st_mode: u16,       // File type and mode
+    pub st_nlink: u16,      // Number of hard links
+    pub st_uid: u16,        // User ID of owner
+    pub st_gid: u16,        // Group ID of owner
+    pub st_rdev: u32,       // Device ID (if special file)
+    pub st_size: u32,       // Total size, in bytes
+    pub st_blksize: u32,    // Block size for filesystem I/O
+    pub st_blocks: u32,     // Number of 512B blocks allocated
+    pub st_atime: u32,      // Time of last access
+    pub st_atime_nsec: u32, // Nanoseconds part of last access time
+    pub st_mtime: u32,      // Time of last modification
+    pub st_mtime_nsec: u32, // Nanoseconds part of last modification time
+    pub st_ctime: u32,      // Time of last status change
+    pub st_ctime_nsec: u32, // Nanoseconds part of last status change time
+    pub __unused4: u32,     // Unused field
+    pub __unused5: u32,     // Unused field
 }
 
 impl LinuxStat {

@@ -1,15 +1,16 @@
 use crate::prelude::*;
 
-use crate::ext4_defs::*;
+pub use crate::ext4_defs::*;
 use crate::return_errno;
 use crate::return_errno_with_message;
 use crate::utils::path_check;
 
 // export some definitions
-pub use crate::ext4_defs::Ext4;
-pub use crate::ext4_defs::BLOCK_SIZE;
-pub use crate::ext4_defs::BlockDevice;
-pub use crate::ext4_defs::InodeFileType;
+// pub use crate::ext4_defs::*;
+// pub use crate::ext4_defs::Ext4;
+// pub use crate::ext4_defs::Ext4InodeRef;
+// pub use crate::ext4_defs::InodeFileType;
+// pub use crate::ext4_defs::BLOCK_SIZE;
 
 /// fuser interface for ext4
 impl Ext4 {
@@ -117,7 +118,6 @@ impl Ext4 {
         Ok(read_buf)
     }
 
-
     /// Create a regular file, character device, block device, fifo or socket node.
     pub fn fuse_mknod(
         &self,
@@ -136,7 +136,6 @@ impl Ext4 {
         Ok(inode_ref)
     }
 
-
     /// Create a regular file, character device, block device, fifo or socket node.
     pub fn fuse_mknod_with_attr(
         &self,
@@ -145,7 +144,7 @@ impl Ext4 {
         mode: u32,
         umask: u32,
         rdev: u32,
-        uid: u32, 
+        uid: u32,
         gid: u32,
     ) -> Result<Ext4InodeRef> {
         let mut search_result = Ext4DirSearchResult::new(Ext4DirEntry::default());
@@ -153,7 +152,8 @@ impl Ext4 {
         if r.is_ok() {
             return_errno!(Errno::EEXIST);
         }
-        let inode_ref = self.create_with_attr(parent as u32, name, mode as u16, uid as u16, gid as u16)?;
+        let inode_ref =
+            self.create_with_attr(parent as u32, name, mode as u16, uid as u16, gid as u16)?;
         Ok(inode_ref)
     }
 
@@ -174,8 +174,15 @@ impl Ext4 {
     }
 
     /// Create a directory.
-    pub fn fuse_mkdir_with_attr(&mut self, parent: u64, name: &str, mode: u32, umask: u32, uid:u32, gid:u32) -> Result<Ext4InodeRef> {
-
+    pub fn fuse_mkdir_with_attr(
+        &mut self,
+        parent: u64,
+        name: &str,
+        mode: u32,
+        umask: u32,
+        uid: u32,
+        gid: u32,
+    ) -> Result<Ext4InodeRef> {
         let mut search_result = Ext4DirSearchResult::new(Ext4DirEntry::default());
         let r = self.dir_find_entry(parent as u32, name, &mut search_result);
         if r.is_ok() {
@@ -188,7 +195,8 @@ impl Ext4 {
             None => InodeFileType::S_IFDIR,
         };
         let mode = file_type.bits();
-        let inode_ref = self.create_with_attr(parent as u32, name, mode as u16, uid as u16, gid as u16)?;
+        let inode_ref =
+            self.create_with_attr(parent as u32, name, mode as u16, uid as u16, gid as u16)?;
 
         Ok(inode_ref)
     }
@@ -339,7 +347,7 @@ impl Ext4 {
         size: u32,
         flags: i32,
         lock_owner: Option<u64>,
-        ) -> Result<Vec<u8>> {
+    ) -> Result<Vec<u8>> {
         let mut data = vec![0u8; size as usize];
         let read_size = self.read_at(ino as u32, offset as usize, &mut data)?;
         let r = data[..read_size].to_vec();
@@ -475,7 +483,7 @@ impl Ext4 {
     /// under Linux kernel versions 2.4.x
     /// int access(const char *pathname, int mode);
     /// int faccessat(int dirfd, const char *pathname, int mode, int flags);
-    /// 
+    ///
     /// uid and gid come from request
     pub fn fuse_access(&mut self, ino: u64, uid: u16, gid: u16, mode: u16, mask: i32) -> bool {
         let inode_ref = self.get_inode_ref(ino as u32);

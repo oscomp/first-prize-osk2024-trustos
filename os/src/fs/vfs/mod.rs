@@ -18,34 +18,60 @@ pub trait SuperBlock: Send + Sync {
 /// VfsInode接口
 pub trait Inode: Send + Sync {
     ///
-    fn size(&self) -> usize;
+    fn size(&self) -> usize {
+        unimplemented!()
+    }
     ///
-    fn node_type(&self) -> InodeType;
+    fn node_type(&self) -> InodeType {
+        unimplemented!()
+    }
     ///
-    fn fstat(&self) -> Kstat;
+    fn fstat(&self) -> Kstat {
+        unimplemented!()
+    }
     /// 在当前目录下创建文件或目录
-    fn create(&self, path: &str, ty: InodeType) -> Option<Arc<dyn Inode>>;
+    fn create(&self, path: &str, ty: InodeType) -> Option<Arc<dyn Inode>> {
+        unimplemented!()
+    }
     /// 在当前目录下查找文件
-    fn find_by_path(&self, path: &str) -> Option<Arc<dyn Inode>>;
+    fn find_by_path(&self, path: &str) -> Option<Arc<dyn Inode>> {
+        unimplemented!()
+    }
     ///
-    fn read_at(&self, off: usize, buf: &mut [u8]) -> SyscallRet;
+    fn read_at(&self, off: usize, buf: &mut [u8]) -> SyscallRet {
+        unimplemented!()
+    }
     ///
-    fn write_at(&self, off: usize, buf: &[u8]) -> SyscallRet;
+    fn write_at(&self, off: usize, buf: &[u8]) -> SyscallRet {
+        unimplemented!()
+    }
     /// 读取目录项
     // fn read_dentry(&self, off: usize) -> Option<Dirent>;
-    fn read_dentry(&self, off: usize, len: usize) -> Option<(Vec<u8>, isize)>;
+    fn read_dentry(&self, off: usize, len: usize) -> Option<(Vec<u8>, isize)> {
+        unimplemented!()
+    }
     ///
-    fn truncate(&self) -> GeneralRet;
+    fn truncate(&self) -> GeneralRet {
+        unimplemented!()
+    }
     ///
-    fn sync(&self);
+    fn sync(&self) {
+        unimplemented!()
+    }
     ///
-    fn set_timestamps(&self, atime_sec: Option<u64>, mtime_sec: Option<u64>) -> GeneralRet;
+    fn set_timestamps(&self, atime_sec: Option<u64>, mtime_sec: Option<u64>) -> GeneralRet {
+        unimplemented!()
+    }
     // fn link(&self);
     fn unlink(&self, child: &str) -> GeneralRet {
         unimplemented!();
     }
-    fn rename(&self, file: Arc<dyn Inode>) -> GeneralRet;
-    fn ls(&self) -> Vec<String>;
+    fn rename(&self, file: Arc<dyn Inode>) -> GeneralRet {
+        unimplemented!()
+    }
+    fn ls(&self) -> Vec<String> {
+        unimplemented!()
+    }
     fn read_all(&self) -> Result<Vec<u8>, SysErrNo> {
         unimplemented!();
     }
