@@ -106,6 +106,11 @@ pub fn sys_writev(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
     let inner = task.inner_lock();
     let token = inner.user_token();
 
+    debug!(
+        "[sys_writev] fd is {}, iov is {:x}, iovcnt is {}",
+        fd, iov as usize, iovcnt
+    );
+
     if fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
     }
@@ -208,6 +213,9 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> Sysca
 pub fn sys_close(fd: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
+
+    debug!("[sys_close] fd is {}", fd);
+
     if fd >= inner.fd_table.len() || inner.fd_table.try_get_file(fd).is_none() {
         return Err(SysErrNo::EINVAL);
     }
@@ -236,14 +244,18 @@ pub fn sys_dup(fd: usize) -> SyscallRet {
     let (inode, flags) = inner.fd_table.try_get(fd);
     let fd_new = inner.fd_table.alloc_fd();
     inner.fd_table.set(fd_new, inode, flags);
+    inner.fd_table.unset_cloexec(fd_new);
     Ok(fd_new)
 }
 
-pub fn sys_dup3(old: usize, new: usize) -> SyscallRet {
+pub fn sys_dup3(old: usize, new: usize, flags: u32) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
 
-    debug!("[sys_dup3] oldfd is {}, newfd is {}", old, new);
+    debug!(
+        "[sys_dup3] oldfd is {}, newfd is {}, flags is {}",
+        old, new, flags
+    );
 
     if old >= inner.fd_table.len() || inner.fd_table.try_get_file(old).is_none() {
         return Err(SysErrNo::EINVAL);
@@ -257,8 +269,14 @@ pub fn sys_dup3(old: usize, new: usize) -> SyscallRet {
         inner.fd_table.resize(new + 1);
     }
 
-    let (inode, flags) = inner.fd_table.try_get(old);
-    inner.fd_table.set(new, inode, flags);
+    let (inode, oldflags) = inner.fd_table.try_get(old);
+    inner.fd_table.set(new, inode, oldflags);
+    if flags == 0x800000 {
+        //flags包含O_CLOEXEC,为新的fd设置该标志，否则不设置
+        inner.fd_table.set_cloexec(new);
+    } else {
+        inner.fd_table.unset_cloexec(new);
+    }
     Ok(new)
 }
 
@@ -446,13 +464,17 @@ pub fn sys_pipe2(fd: *mut u32) -> SyscallRet {
 
     let read_fd = inner.fd_table.alloc_fd();
     let (read_pipe, write_pipe) = make_pipe();
-    inner
-        .fd_table
-        .set(read_fd, Some(FileClass::Abs(read_pipe)), None);
+    inner.fd_table.set(
+        read_fd,
+        Some(FileClass::Abs(read_pipe)),
+        Some(OpenFlags::O_RDONLY),
+    );
     let write_fd = inner.fd_table.alloc_fd();
-    inner
-        .fd_table
-        .set(write_fd, Some(FileClass::Abs(write_pipe)), None);
+    inner.fd_table.set(
+        write_fd,
+        Some(FileClass::Abs(write_pipe)),
+        Some(OpenFlags::O_WRONLY),
+    );
     debug!("pipe read fd is {}, write fd is {}", read_fd, write_fd);
     *translated_refmut(token, fd) = read_fd as u32;
     *translated_refmut(token, unsafe { fd.add(1) }) = write_fd as u32;

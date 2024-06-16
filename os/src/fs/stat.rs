@@ -78,7 +78,7 @@ impl Statfs {
         Self {
             f_type,
             f_bsize: 512,
-            f_blocks: 262144,
+            f_blocks: 262144 * 4,
             f_bfree,
             f_bavail,
             f_files,

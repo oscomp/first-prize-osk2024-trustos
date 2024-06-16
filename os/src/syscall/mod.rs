@@ -127,7 +127,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
     match syscall_id {
         Syscall::Getcwd => sys_getcwd(args[0] as *const u8, args[1]),
         Syscall::Dup => sys_dup(args[0]),
-        Syscall::Dup3 => sys_dup3(args[0], args[1]),
+        Syscall::Dup3 => sys_dup3(args[0], args[1], args[2] as u32),
         Syscall::Fcntl => sys_fcntl(args[0] as usize, args[1] as usize, args[2] as usize),
         Syscall::Ioctl => sys_ioctl(args[0] as usize, args[1] as usize, args[2] as usize),
         Syscall::Mkdirat => sys_mkdirat(args[0] as isize, args[1] as *const u8, args[2] as u32),
