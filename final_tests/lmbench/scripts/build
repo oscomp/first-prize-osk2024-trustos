@@ -20,10 +20,6 @@ trap 'rm -f ${BASE}$$.s ${BASE}$$.c ${BASE}$$.o ${BASE}$$; exit 1' 1 2 15
 
 LDLIBS=-lm
 
-CFLAGS="${CFLAGS} -I/usr/include/tirpc"
-LDLIBS="${LDLIBS} -ltirpc"
-LDFLAGS="${LDFLAGS} -ltirpc"
-
 # check for HP-UX's ANSI compiler
 echo "main(int ac, char *av[]) { int i; }" > ${BASE}$$.c
 if ${CC} ${CFLAGS} -o ${BASE}$$ ${BASE}$$.c 1>${NULL} 2>${NULL}
@@ -289,4 +285,4 @@ rm -f ${BASE}$$ ${BASE}$$.o ${BASE}$$.c
 if [ ! -d ${BINDIR} ]; then mkdir -p ${BINDIR}; fi
 
 # now go ahead and build everything!
-${MAKE} OS="${OS}" CC="${CC}" CFLAGS="${CFLAGS}" LDLIBS="${LDLIBS}"  O="${BINDIR}" $*
+${MAKE} OS="${OS}" CC="${CC}" CFLAGS="${CFLAGS}" LDLIBS="${LDLIBS}" O="${BINDIR}" $*

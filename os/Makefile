@@ -43,7 +43,7 @@ DISASM ?= -x
 TEST ?=
 
 build_all: build
-	@cd ../final_tests&&make build_all
+	@cd ../final_tests&&docker run --rm -it -v $(pwd):/code --privileged --entrypoint make alphamj/os-contest:v7.7 -C /code sdcard
 
 build: env initrust $(KERNEL_BIN)
 

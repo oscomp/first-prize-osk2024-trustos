@@ -1241,6 +1241,7 @@ int ls_main(int argc UNUSED_PARAM, char **argv)
 		dnf = splitdnarray(dnp, SPLIT_FILE);
 		dndirs = count_dirs(dnp, SPLIT_DIR);
 		dnfiles = nfiles - dndirs;
+        printf("!!!(file:%d,dir:%d)!!!\n\n\n",dnfiles,dndirs);
 		if (dnfiles > 0) {
 			sort_and_display_files(dnf, dnfiles);
 			if (ENABLE_FEATURE_CLEAN_UP)
