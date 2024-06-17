@@ -34,9 +34,7 @@ int main(void) {
    ULL t2 = now_ns();
    ULL dur_ns = t2 - t1;
    ULL dur_ms = dur_ns / (NS_PER_SEC / MS_PER_SEC);
-
    double per = (double)n / (double)dur_ns;
-
    printf("time-test: time/iteration: %.3fns total time: %llums\n", per, dur_ms);
    return 0;
 }
