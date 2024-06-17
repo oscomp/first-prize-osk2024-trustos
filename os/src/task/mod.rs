@@ -128,7 +128,7 @@ lazy_static! {
                     let elf_data = unsafe {inode.read_as_elf()};
                     let res=TaskControlBlock::new(elf_data);
                     res
-                } else if #[cfg(feature="ext4")]{
+                } else if #[cfg(not(feature="fat32"))]{
                     let elf_data = inode.inode.read_all().unwrap();
                     let res=TaskControlBlock::new(&elf_data);
                     res

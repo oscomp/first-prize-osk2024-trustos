@@ -181,25 +181,29 @@ impl Inode for Ext4Inode {
     fn sync(&self) {
         todo!()
     }
-    fn truncate(&self) -> GeneralRet {
+    fn truncate(&self, size: usize) -> GeneralRet {
         let file = self.file.lock();
         let mut inode_ref = Ext4InodeRef::get_inode_ref(Arc::downgrade(&self.ext4), file.inode);
         self.ext4.ext4_trunc_inode(&mut inode_ref, 0);
         Ok(())
     }
-    fn unlink(&self, child: &str) -> GeneralRet {
+    fn unlink(&self, child_name: &str) -> GeneralRet {
         let file = self.file.lock();
         let inode = Ext4Inode::empty(self.ext4.clone());
         let mut nfile = inode.file.lock();
 
-        if let Err(_) = self.ext4.ext4_open(&mut nfile, child, "w+", false) {
+        if let Err(_) = self.ext4.ext4_open(&mut nfile, child_name, "w+", false) {
             return Err(SysErrNo::EINVAL);
         }
 
         let mut parent_ref = Ext4InodeRef::get_inode_ref(Arc::downgrade(&self.ext4), file.inode);
         let mut child_ref = Ext4InodeRef::get_inode_ref(Arc::downgrade(&self.ext4), nfile.inode);
-        self.ext4
-            .ext4_unlink(&mut parent_ref, &mut child_ref, child, child.len() as u32);
+        self.ext4.ext4_unlink(
+            &mut parent_ref,
+            &mut child_ref,
+            child_name,
+            child_name.len() as u32,
+        );
         Ok(())
     }
 

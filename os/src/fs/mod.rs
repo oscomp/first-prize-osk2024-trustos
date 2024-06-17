@@ -1,6 +1,5 @@
 mod devfs;
 mod dirent;
-mod ext4_re;
 mod fsidx;
 mod fstruct;
 mod mount;
@@ -16,6 +15,9 @@ cfg_if::cfg_if! {
     } else if #[cfg(feature="ext4")]{
         mod ext4;
         pub use ext4::{sync,fs_stat,root_inode};
+    } else if #[cfg(feature="ext4_re")]{
+        mod ext4_re;
+        pub use ext4_re::{sync,fs_stat,root_inode};
     }
 }
 
@@ -461,7 +463,7 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
             vfile.lseek(0, SEEK_END);
         }
         if flags.contains(OpenFlags::O_TRUNC) {
-            vfile.inode.truncate();
+            vfile.inode.truncate(0);
         }
         return Some(FileClass::File(Arc::new(vfile)));
     }

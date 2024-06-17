@@ -1,7 +1,7 @@
+use crate::ext4_defs::*;
 use crate::prelude::*;
 use crate::return_errno_with_message;
 use crate::utils::path_check;
-use crate::ext4_defs::*;
 
 impl Ext4 {
     /// Link a child inode to a parent directory
@@ -80,7 +80,6 @@ impl Ext4 {
     }
 
     pub fn create_inode(&self, inode_mode: u16) -> Result<Ext4InodeRef> {
-
         let inode_file_type = match InodeFileType::from_bits(inode_mode) {
             Some(file_type) => file_type,
             None => InodeFileType::S_IFREG,
@@ -117,7 +116,6 @@ impl Ext4 {
         Ok(inode_ref)
     }
 
-
     /// create a new inode and link it to the parent directory
     ///
     /// Params:
@@ -128,7 +126,14 @@ impl Ext4 {
     /// gid: u32 - group id
     ///
     /// Returns:
-    pub fn create_with_attr(&self, parent: u32, name: &str, inode_mode: u16, uid:u16, gid: u16) -> Result<Ext4InodeRef> {
+    pub fn create_with_attr(
+        &self,
+        parent: u32,
+        name: &str,
+        inode_mode: u16,
+        uid: u16,
+        gid: u16,
+    ) -> Result<Ext4InodeRef> {
         let mut parent_inode_ref = self.get_inode_ref(parent);
 
         // let mut child_inode_ref = self.create_inode(inode_mode)?;
@@ -298,7 +303,6 @@ impl Ext4 {
             block.sync_blk_to_disk(self.block_device.clone());
             drop(block);
 
-
             written += len;
             iblk_idx += 1;
         }
@@ -330,10 +334,7 @@ impl Ext4 {
             }
 
             // Write contiguous blocks at once
-            let len = min(
-                fblock_count as usize * BLOCK_SIZE,
-                write_buf_len - written,
-            );
+            let len = min(fblock_count as usize * BLOCK_SIZE, write_buf_len - written);
 
             for i in 0..fblock_count {
                 let block_offset = fblock_start as usize * BLOCK_SIZE + i as usize * BLOCK_SIZE;
@@ -372,9 +373,7 @@ impl Ext4 {
         // Update file size if necessary
         if offset + write_buf_len > file_size as usize {
             log::trace!("set file size {:x}", offset + write_buf_len);
-            inode_ref
-                .inode
-                .set_size((offset + write_buf_len) as u64);
+            inode_ref.inode.set_size((offset + write_buf_len) as u64);
 
             self.write_back_inode(&mut inode_ref);
         }
@@ -416,7 +415,6 @@ impl Ext4 {
             &p[..len as usize],
         )?;
 
-
         Ok(EOK)
     }
 
@@ -442,7 +440,7 @@ impl Ext4 {
         let old_blocks_cnt = ((old_size + block_size - 1) / block_size) as u32;
         let diff_blocks_cnt = old_blocks_cnt - new_blocks_cnt;
 
-        if diff_blocks_cnt > 0{
+        if diff_blocks_cnt > 0 {
             self.extent_remove_space(inode_ref, new_blocks_cnt, EXT_MAX_BLOCKS as u32)?;
         }
 
@@ -450,5 +448,9 @@ impl Ext4 {
         self.write_back_inode(inode_ref);
 
         Ok(EOK)
+    }
+
+    pub fn create_root_file(&self) -> Ext4InodeRef {
+        self.get_inode_ref(ROOT_INODE)
     }
 }

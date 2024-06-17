@@ -546,7 +546,7 @@ pub fn sys_utimensat(dirfd: isize, path: *const u8, times: *const u8, _flags: us
 
     let base_path = inner.get_cwd(dirfd, &path)?;
     if let Some(osfile) = open(&base_path, path.as_str(), OpenFlags::O_RDONLY) {
-        let osfile = osfile.file()?;
+        let mut osfile = osfile.file()?;
         osfile.inode.set_timestamps(atime_sec, mtime_sec);
         return Ok(0);
     }
@@ -809,7 +809,7 @@ pub fn sys_ftruncate(fd: usize, length: i32) -> SyscallRet {
     if let Some(file) = inner.fd_table.try_get_file(fd) {
         let file = file.file()?;
         if length == 0 {
-            file.inode.truncate()?;
+            file.inode.truncate(0)?;
         } else {
             panic!("[sys_ftruncate] unimplement truncate length > 0")
         }

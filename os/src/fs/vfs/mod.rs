@@ -51,7 +51,7 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     ///
-    fn truncate(&self) -> GeneralRet {
+    fn truncate(&self, size: usize) -> GeneralRet {
         unimplemented!()
     }
     ///
@@ -63,7 +63,7 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     // fn link(&self);
-    fn unlink(&self, child: &str) -> GeneralRet {
+    fn unlink(&self, child_name: &str) -> GeneralRet {
         unimplemented!();
     }
     fn rename(&self, file: Arc<dyn Inode>) -> GeneralRet {
