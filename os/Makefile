@@ -41,9 +41,20 @@ DISASM ?= -x
 
 # Run usertests or usershell
 TEST ?=
+# 定义目录变量
+FINAL_DIR := $(shell cd ../final_tests && pwd)
 
-build_all: build
-	@cd ../final_tests&&docker run --rm -it -v $(pwd):/code --privileged --entrypoint make alphamj/os-contest:v7.7 -C /code sdcard
+# 定义需要跳转到final_tests执行的目标列表
+FINAL_TARGETS := build_all busybox lua lmbench libctest iozone libc-bench netperf iperf unix-bench cyclictest time-test test_all true copy-file-range-test interrupts-test
+
+%:
+	@if echo "$(FINAL_TARGETS)" | grep -wq $@; then \
+		echo "Target $@ exists in $(FINAL_DIR), running there."&& \
+		cd ../final_tests&&docker run --rm -it -v $(FINAL_DIR):/code --privileged --entrypoint make alphamj/os-contest:v7.7 -C /code $@;\
+	fi
+# WORK_DIR := $(shell cd ../final_tests && pwd)
+# build_all: build
+# 	@cd ../final_tests&&docker run --rm -it -v $(WORK_DIR):/code --privileged --entrypoint make alphamj/os-contest:v7.7 -C /code sdcard
 
 build: env initrust $(KERNEL_BIN)
 
