@@ -423,50 +423,41 @@ impl TaskControlBlock {
             }),
         });
 
-        // 检查是否需要使用传入的用户栈
-        let user_stack_top = if stack != 0 {
-            stack
-        } else {
-            parent_inner.user_stack_top
-        };
-
         let mut child_inner = child.inner_lock();
         if flags.contains(CloneFlags::CLONE_THREAD) {
             // 线程
             child_inner.alloc_user_res();
             *child_inner.trap_cx() = *parent_inner.trap_cx();
-            let mut trap_cx = child_inner.trap_cx();
+        } else {
+            // fork
+            child_inner.clone_user_res(&parent_inner);
+            // for child process, fork returns 0
+            child_inner.trap_cx().x[10] = 0;
+        }
+
+        let trap_cx = child_inner.trap_cx();
+        trap_cx.kernel_sp = kernel_stack_top;
+        if stack != 0 {
+            // 移除分配的stack
+            let ustack = child_inner.user_stack_top;
+            child_inner
+                .memory_set
+                .remove_area_with_start_vpn(VirtAddr::from(ustack - USER_STACK_SIZE).floor());
+            child_inner.user_stack_top = 0;
+            // trap_cx.set_sp(ustack);
+            // 设置运行的起始地址和参数以及stack
             let token = parent_inner.user_token();
-            // 如果创建线程,一定会设置stack
-            assert!(stack != 0);
             let entry_point = *translated_ref(token, stack as *const usize);
             let arg = {
                 let arg_addr = stack + core::mem::size_of::<usize>();
                 *translated_ref(token, arg_addr as *const usize)
             };
+            // sepc/entry
             trap_cx.sepc = entry_point;
             //sp
             trap_cx.x[2] = stack;
             //a0
             trap_cx.x[10] = arg;
-            // tp/tls
-            trap_cx.x[4] = tls;
-        } else {
-            // fork
-            child_inner.clone_user_res(&parent_inner);
-            // for child process, fork returns 0
-            let mut trap_cx = child_inner.trap_cx();
-            trap_cx.x[10] = 0;
-        }
-        let trap_cx = child_inner.trap_cx();
-        trap_cx.kernel_sp = kernel_stack_top;
-        if stack != 0 {
-            let ustack = child_inner.user_stack_top;
-            child_inner
-                .memory_set
-                .remove_area_with_start_vpn((user_stack_top - USER_STACK_SIZE).into());
-            child_inner.user_stack_top = 0;
-            trap_cx.set_sp(user_stack_top);
         }
         if flags.contains(CloneFlags::CLONE_SETTLS) {
             // tp

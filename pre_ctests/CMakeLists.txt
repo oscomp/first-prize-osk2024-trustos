@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.13)
 project(user)
 enable_language(ASM)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Path
 if (${ARCH} STREQUAL riscv32 OR ${ARCH} STREQUAL riscv64)
