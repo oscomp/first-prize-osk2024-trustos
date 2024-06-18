@@ -5,7 +5,7 @@ use crate::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
         translated_str, UserBuffer, VirtAddr,
     },
-    syscall::CloneFlags,
+    syscall::{CloneFlags, Utsname},
     task::{
         add_task, current_task, current_token, exit_current_and_run_next,
         exit_current_group_and_run_next, move_child_process_to_init, remove_all_from_thread_group,
@@ -256,14 +256,6 @@ pub fn sys_nanosleep(req: *const u8, _rem: *const u8) -> SyscallRet {
     Ok(0)
 }
 
-pub struct Utsname {
-    sysname: [u8; 65],
-    nodename: [u8; 65],
-    release: [u8; 65],
-    version: [u8; 65],
-    machine: [u8; 65],
-    domainname: [u8; 65],
-}
 pub fn sys_uname(buf: *mut u8) -> SyscallRet {
     fn str2u8(s: &str) -> [u8; 65] {
         let mut b = [0; 65];
@@ -273,20 +265,15 @@ pub fn sys_uname(buf: *mut u8) -> SyscallRet {
     let uname = Utsname {
         sysname: str2u8("TrustOS"),
         nodename: str2u8("TrustOS"),
-        release: str2u8("Alpha"),
-        version: str2u8("v1.0"),
+        release: str2u8("1.0.0"),
+        version: str2u8("1.0.0"),
         machine: str2u8("RISC-V64"),
         domainname: str2u8("TrustOS"),
     };
     let token = current_token();
     let mut buf_vec = translated_byte_buffer(token, buf, size_of::<Utsname>()).unwrap();
     let mut userbuf = UserBuffer::new(buf_vec);
-    userbuf.write(unsafe {
-        core::slice::from_raw_parts(
-            &uname as *const _ as usize as *const u8,
-            size_of::<Utsname>(),
-        )
-    });
+    userbuf.write(uname.as_bytes());
     Ok(0)
 }
 

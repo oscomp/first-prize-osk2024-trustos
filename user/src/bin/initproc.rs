@@ -12,8 +12,8 @@ use user_lib::{close, exec, fork, openat, run_busyboxsh, shutdown, sleep, wait, 
 fn main() -> i32 {
     println!("initproc running...");
     if fork() == 0 {
-        // exec("user_shell\0");
-        exec("onlinetests\0");
+        exec("user_shell\0");
+        //exec("onlinetests\0");
         // run_busyboxsh();
     } else {
         loop {

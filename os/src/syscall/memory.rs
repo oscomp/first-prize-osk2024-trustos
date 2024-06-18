@@ -66,6 +66,10 @@ pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
 
 pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> SyscallRet {
     println!("此调用尚未验证正确性，验证后会删除此条输出！");
+    debug!(
+        "[sys_mprotect] addr is {}, len is {}, prot is {}",
+        addr, len, prot
+    );
     if (addr % PAGE_SIZE != 0) || (len % PAGE_SIZE != 0) {
         println!("sys_mprotect: not align");
         return Err(SysErrNo::EINVAL);

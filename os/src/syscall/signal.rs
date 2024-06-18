@@ -19,7 +19,10 @@ pub fn sys_rt_sigaction(
     if signo > SIG_MAX_NUM {
         return Err(SysErrNo::EINVAL);
     }
-    debug!("[sys_rt_sigaction] start");
+    debug!(
+        "[sys_rt_sigaction] signo is {}, act is {:x}, old_act is {:x}",
+        signo, act as usize, old_act as usize
+    );
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
     let token = task_inner.user_token();

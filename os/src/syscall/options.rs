@@ -238,3 +238,19 @@ bitflags! {
         const INVAL = 0x0020;
     }
 }
+
+pub struct Utsname {
+    pub sysname: [u8; 65],
+    pub nodename: [u8; 65],
+    pub release: [u8; 65],
+    pub version: [u8; 65],
+    pub machine: [u8; 65],
+    pub domainname: [u8; 65],
+}
+
+impl Utsname {
+    pub fn as_bytes(&self) -> &[u8] {
+        let size = core::mem::size_of::<Self>();
+        unsafe { core::slice::from_raw_parts(self as *const _ as *const u8, size) }
+    }
+}

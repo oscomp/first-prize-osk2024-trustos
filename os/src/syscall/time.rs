@@ -76,7 +76,7 @@ pub fn sys_clock_gettime(clockid: usize, tp: *const u8) -> SyscallRet {
     let token = inner.user_token();
 
     debug!(
-        "[sys_clock_gettime] clockid is {}, tp is {}",
+        "[sys_clock_gettime] clockid is {}, tp is {:x}",
         clockid, tp as usize
     );
 
@@ -121,6 +121,31 @@ pub fn sys_getrusage(who: isize, usage: *const u8) -> SyscallRet {
                 inner.time_data.cstime as usize,
             );
             usage.write(gotusage.as_bytes());
+            Ok(0)
+        }
+        _ => return Err(SysErrNo::EINVAL),
+    }
+}
+
+pub fn sys_clock_getres(clockid: usize, res: *const u8) -> SyscallRet {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+
+    debug!(
+        "[sys_clock_getres] clockid is {}, res is {:x}",
+        clockid, res as usize
+    );
+
+    let clockid = Clockid::from_bits(clockid as u32).unwrap();
+    let mut res =
+        UserBuffer::new(translated_byte_buffer(token, res, size_of::<Timespec>()).unwrap());
+
+    match clockid {
+        //当前可匹配实时时钟，单调时钟，进程CPU时钟，且三者返回值相同
+        Clockid::CLOCK_REALTIME | Clockid::CLOCK_MONOTONIC | Clockid::CLOCK_PROCESS_CPUTIME_ID => {
+            let mut timespec = Timespec::new(0, 1);
+            res.write(timespec.as_bytes());
             Ok(0)
         }
         _ => return Err(SysErrNo::EINVAL),

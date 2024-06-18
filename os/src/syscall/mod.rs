@@ -52,6 +52,7 @@ pub enum Syscall {
     Settidaddress = 96,
     Nanosleep = 101,
     ClockGettime = 113,
+    ClockGetres = 114,
     Syslog = 116,
     SchedSetScheduler = 119,
     SchedGetScheduler = 120,
@@ -225,6 +226,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Settidaddress => sys_settidaddress(args[0]),
         Syscall::Nanosleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
         Syscall::ClockGettime => sys_clock_gettime(args[0], args[1] as *const u8),
+        Syscall::ClockGetres => sys_clock_getres(args[0] as usize, args[1] as *const u8),
         Syscall::Syslog => sys_syslog(args[0] as isize, args[1] as *const u8, args[2] as usize),
         Syscall::SchedSetScheduler => {
             sys_sched_setscheduler(args[0] as usize, args[1] as usize, args[2] as *const u8)
