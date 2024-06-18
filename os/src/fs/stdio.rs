@@ -94,6 +94,9 @@ impl File for Stdin {
         Err(SysErrNo::EINVAL)
         // panic!("Cannot write to stdin!");
     }
+    fn fstat(&self) -> Kstat {
+        Kstat::empty()
+    }
     fn poll(&self, events: PollEvents) -> PollEvents {
         let mut revents = PollEvents::empty();
         if events.contains(PollEvents::IN) {
@@ -166,6 +169,9 @@ impl File for Stdout {
             print!("{}", core::str::from_utf8(*buffer).unwrap());
         }
         Ok(user_buf.len())
+    }
+    fn fstat(&self) -> Kstat {
+        Kstat::empty()
     }
     fn poll(&self, events: PollEvents) -> PollEvents {
         let mut revents = PollEvents::empty();

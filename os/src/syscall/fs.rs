@@ -448,8 +448,11 @@ pub fn sys_fstat(fd: usize, kst: *const u8) -> SyscallRet {
     }
 
     if let Some(file) = &inner.fd_table.try_get_file(fd) {
-        let file = file.file()?;
-        let kstat = file.inode.fstat();
+        let file: Arc<dyn File> = match file {
+            FileClass::File(f) => f.clone(),
+            FileClass::Abs(f) => f.clone(),
+        };
+        let kstat = file.fstat();
         kst.write(kstat.as_bytes());
         Ok(0)
     } else {
@@ -492,8 +495,11 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
 
     let base_path = inner.get_cwd(dirfd, &path)?;
     if let Some(file) = open(&base_path, path.as_str(), OpenFlags::O_RDONLY) {
-        let file = file.file()?;
-        let kstat = file.inode.fstat();
+        let file: Arc<dyn File> = match file {
+            FileClass::File(f) => f.clone(),
+            FileClass::Abs(f) => f.clone(),
+        };
+        let kstat = file.fstat();
         kst.write(kstat.as_bytes());
         return Ok(0);
     }

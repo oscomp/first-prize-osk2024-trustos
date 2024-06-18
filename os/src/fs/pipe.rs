@@ -227,6 +227,9 @@ impl File for Pipe {
             }
         }
     }
+    fn fstat(&self) -> Kstat {
+        Kstat::empty()
+    }
     fn poll(&self, events: PollEvents) -> PollEvents {
         let mut revents = PollEvents::empty();
         if events.contains(PollEvents::IN) && self.readable {

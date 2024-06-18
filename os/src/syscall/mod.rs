@@ -53,6 +53,9 @@ pub enum Syscall {
     Nanosleep = 101,
     ClockGettime = 113,
     Syslog = 116,
+    SchedSetScheduler = 119,
+    SchedGetScheduler = 120,
+    SchedGetParam = 121,
     SchedSetaffinity = 122,
     SchedGetaffinity = 123,
     SchedYield = 124,
@@ -223,6 +226,17 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Nanosleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
         Syscall::ClockGettime => sys_clock_gettime(args[0], args[1] as *const u8),
         Syscall::Syslog => sys_syslog(args[0] as isize, args[1] as *const u8, args[2] as usize),
+        Syscall::SchedSetScheduler => {
+            sys_sched_setscheduler(args[0] as usize, args[1] as usize, args[2] as *const u8)
+        }
+        Syscall::SchedGetScheduler => sys_sched_getscheduler(args[0] as usize),
+        Syscall::SchedGetParam => sys_sched_getparam(args[0] as usize, args[1] as *const u8),
+        Syscall::SchedSetaffinity => {
+            sys_sched_setaffinity(args[0] as usize, args[1] as usize, args[2] as usize)
+        }
+        Syscall::SchedGetaffinity => {
+            sys_sched_getaffinity(args[0] as usize, args[1] as usize, args[2] as usize)
+        }
         Syscall::SchedYield => sys_sched_yield(),
         Syscall::SigKill => sys_kill(args[0] as isize, args[0]),
         Syscall::Tkill => sys_tkill(args[0] as usize, args[1] as usize),

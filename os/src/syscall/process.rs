@@ -380,3 +380,42 @@ pub fn sys_syslog(logtype: isize, bufp: *const u8, len: usize) -> SyscallRet {
         _ => return Err(SysErrNo::EINVAL),
     }
 }
+
+pub fn sys_sched_setaffinity(pid: usize, cpusetsize: usize, mask: usize) -> SyscallRet {
+    debug!(
+        "[sys_sched_setaffinity] pid is {}, cpusetsize is {}, mask is {}",
+        pid, cpusetsize, mask
+    );
+    Ok(0)
+}
+
+pub fn sys_sched_getaffinity(pid: usize, cpusetsize: usize, mask: usize) -> SyscallRet {
+    debug!(
+        "[sys_sched_getaffinity] pid is {}, cpusetsize is {}, mask is {}",
+        pid, cpusetsize, mask
+    );
+    Ok(0)
+}
+
+pub fn sys_sched_setscheduler(pid: usize, policy: usize, param: *const u8) -> SyscallRet {
+    debug!(
+        "[sys_sched_setscheduler] pid is {}, policy is {}, param is {:x}",
+        pid, policy, param as usize
+    );
+    Ok(0)
+}
+
+pub fn sys_sched_getscheduler(pid: usize) -> SyscallRet {
+    debug!("[sys_sched_getscheduler] pid is {}", pid);
+    //由于使用的是标准的时间片调度算法，直接返回SCHED_OHTER = 0
+    Ok(0)
+}
+
+pub fn sys_sched_getparam(pid: usize, param: *const u8) -> SyscallRet {
+    debug!(
+        "[sys_sched_getparam] pid is {}, param is {:x}",
+        pid, param as usize
+    );
+    //由于使用的是标准的时间片调度算法，param参数需要被忽略
+    Ok(0)
+}

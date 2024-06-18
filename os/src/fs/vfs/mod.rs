@@ -21,7 +21,7 @@ pub trait Inode: Send + Sync {
     fn size(&self) -> usize;
     ///
     fn node_type(&self) -> InodeType;
-    ///
+    /// 获得文件信息
     fn fstat(&self) -> Kstat;
     /// 在当前目录下创建文件或目录
     fn create(&self, path: &str, ty: InodeType) -> Option<Arc<dyn Inode>>;
@@ -59,6 +59,8 @@ pub trait File: Send + Sync {
     fn read(&self, buf: UserBuffer) -> SyscallRet;
     /// 将缓冲区中的数据写入文件，最多将缓冲区中的数据全部写入，并返回直接写入的字节数
     fn write(&self, buf: UserBuffer) -> SyscallRet;
+    /// 获得文件信息
+    fn fstat(&self) -> Kstat;
     /// ppoll处理
     fn poll(&self, events: PollEvents) -> PollEvents;
     /// 设置偏移量,并非所有文件都支持
