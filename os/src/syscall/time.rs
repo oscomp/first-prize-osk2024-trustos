@@ -74,6 +74,11 @@ pub fn sys_clock_gettime(clockid: usize, tp: *const u8) -> SyscallRet {
     let mut inner = task.inner_lock();
     let token = inner.user_token();
 
+    debug!(
+        "[sys_clock_gettime] clockid is {}, tp is {}",
+        clockid, tp as usize
+    );
+
     let clockid = Clockid::from_bits(clockid as u32).unwrap();
     let mut tp = UserBuffer::new(translated_byte_buffer(token, tp, size_of::<Timespec>()).unwrap());
 
