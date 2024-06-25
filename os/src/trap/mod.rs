@@ -23,8 +23,8 @@ use crate::{
     timer::set_next_trigger,
     utils::{backtrace, hart_id},
 };
-use core::arch::{asm, global_asm};
-use log::{debug, info, warn};
+use core::arch::global_asm;
+use log::{debug, warn};
 use riscv::register::{
     mtvec::TrapMode,
     scause::{self, Exception, Interrupt, Trap},
@@ -220,7 +220,6 @@ pub fn trap_return_for_new_task_once() {
 
 #[no_mangle]
 pub fn trap_from_kernel() -> ! {
-    use riscv::register::sepc;
     backtrace();
     let stval = stval::read();
     let sepc = sepc::read();

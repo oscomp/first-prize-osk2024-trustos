@@ -1,4 +1,4 @@
-use super::{Dirent, File, Ioctl, Kstat};
+use super::{File, Ioctl};
 use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut};
 use crate::task::current_task;
 use crate::utils::{SysErrNo, SyscallRet};
@@ -8,7 +8,6 @@ use crate::{
     syscall::{IoctlCommand, PollEvents},
     task::suspend_current_and_run_next,
 };
-use alloc::string::String;
 use alloc::vec::Vec;
 use core::mem::size_of;
 /// # 标准输入输出接口
@@ -19,10 +18,7 @@ use core::mem::size_of;
 /// ```
 //
 use lazy_static::lazy_static;
-use log::info;
 use spin::Mutex;
-
-pub use super::{list_apps, open, OSInode, OpenFlags};
 
 const LF: usize = 0x0a;
 const CR: usize = 0x0d;

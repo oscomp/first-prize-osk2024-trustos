@@ -27,14 +27,12 @@ mod tid;
 
 use crate::{
     fs::{open_file, FileClass, OpenFlags},
-    mm::kernel_token,
-    sbi::shutdown,
     signal::{send_signal_to_thread_group, SigSet},
 };
 use alloc::{boxed::Box, sync::Arc};
 pub use context::TaskContext;
 use lazy_static::*;
-use log::{debug, info};
+use log::debug;
 pub use manager::*;
 use switch::__switch;
 pub use sysinfo::Sysinfo;

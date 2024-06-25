@@ -25,11 +25,9 @@ cfg_if::cfg_if! {
 }
 
 use crate::mm::UserBuffer;
-use crate::utils::{
-    get_abs_path, is_abs_path, path2abs, path2vec, rsplit_once, GeneralRet, SysErrNo,
-};
+use crate::utils::{get_abs_path, rsplit_once, GeneralRet, SysErrNo};
 use alloc::string::String;
-use alloc::{sync::Arc, vec, vec::Vec};
+use alloc::{sync::Arc, vec::Vec};
 pub use devfs::*;
 pub use dirent::Dirent;
 pub use fsidx::*;
@@ -37,7 +35,6 @@ pub use fstruct::{FdTable, FdTableInner, FsInfo};
 use log::debug;
 pub use mount::MNT_TABLE;
 pub use pipe::{make_pipe, Pipe};
-use spin::{Mutex, MutexGuard};
 pub use stat::{Kstat, Statfs};
 pub use stdio::{Stdin, Stdout};
 pub use vfs::*;

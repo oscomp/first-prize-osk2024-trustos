@@ -1,12 +1,12 @@
-use log::{debug, info};
+use log::debug;
 
 use crate::{
     mm::{translated_ref, translated_refmut},
     signal::{
-        add_signal, restore_frame, send_access_signal, send_signal_to_thread,
-        send_signal_to_thread_group, KSigAction, SigAction, SigOp, SigSet, SIG_MAX_NUM,
+        restore_frame, send_access_signal, send_signal_to_thread, send_signal_to_thread_group,
+        KSigAction, SigAction, SigOp, SigSet, SIG_MAX_NUM,
     },
-    task::{current_task, current_token, suspend_current_and_run_next, tid2task},
+    task::{current_task, current_token, suspend_current_and_run_next},
     timer::{get_time_spec, Timespec},
     utils::{SysErrNo, SyscallRet},
 };

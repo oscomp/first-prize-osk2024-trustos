@@ -1,6 +1,6 @@
 use alloc::{
     string::{String, ToString},
-    vec::{self, Vec},
+    vec::Vec,
 };
 
 pub fn trim_first_point_slash(path: &str) -> &str {

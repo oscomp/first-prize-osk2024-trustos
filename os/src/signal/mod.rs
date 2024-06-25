@@ -2,7 +2,7 @@ pub mod pending;
 pub mod signal;
 
 use alloc::sync::Arc;
-use log::{debug, info};
+use log::debug;
 pub use pending::*;
 pub use signal::*;
 

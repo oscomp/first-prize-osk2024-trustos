@@ -1,8 +1,8 @@
-use alloc::{collections::VecDeque, sync::Arc};
+use alloc::sync::Arc;
 
 use crate::sync::SyncUnsafeCell;
 
-use super::{KSigAction, SigAction, SigSet, SIG_MAX_NUM};
+use super::{KSigAction, SigSet, SIG_MAX_NUM};
 // struct task_struct {
 //  int sigpending;
 //  struct signal_struct *sig;

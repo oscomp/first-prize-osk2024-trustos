@@ -22,7 +22,7 @@
 //#![deny(missing_docs)]
 #![allow(unused)]
 #![deny(warnings)]
-#![allow(unused_imports)]
+#![deny(unused_imports)]
 #![no_std]
 #![no_main]
 #![feature(panic_info_message)]
@@ -63,7 +63,6 @@ use core::{
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     usize,
 };
-use log::info;
 
 global_asm!(include_str!("entry.asm"));
 /// clear BSS segment

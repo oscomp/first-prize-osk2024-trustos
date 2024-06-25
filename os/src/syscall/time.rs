@@ -1,16 +1,10 @@
-use crate::mm::{
-    translated_byte_buffer, translated_ref, translated_refmut, translated_str, UserBuffer, VirtAddr,
-};
+use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, UserBuffer};
 use crate::task::{current_task, current_token};
 use crate::timer::{
     get_time_ms, get_time_spec, Clockid, Itimerval, Rusage, Timespec, Tms, ITIMER_REAL,
 };
 use crate::utils::{SysErrNo, SyscallRet};
-use alloc::string::String;
-use alloc::sync::Arc;
-use alloc::vec::Vec;
 use core::mem::size_of;
-use log::{debug, info};
 
 pub fn sys_gettimeofday(ts: *const u8) -> SyscallRet {
     let token = current_token();

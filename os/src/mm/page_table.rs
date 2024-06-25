@@ -1,17 +1,12 @@
 //! Implementation of [`PageTableEntry`] and [`PageTable`].
-use crate::{
-    config::mm::{KERNEL_ADDR_OFFSET, KERNEL_PGNUM_OFFSET},
-    mm::KernelAddr,
-    timer::get_time,
-};
+use crate::{config::mm::KERNEL_PGNUM_OFFSET, mm::KernelAddr, timer::get_time};
 
 use super::{
-    frame_alloc, FrameTracker, MemorySet, MemorySetInner, PhysAddr, PhysPageNum, StepByOne,
-    VirtAddr, VirtPageNum, KERNEL_SPACE,
+    frame_alloc, FrameTracker, MemorySet, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum,
+    KERNEL_SPACE,
 };
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use bitflags::*;
-use log::info;
 use riscv::register::scause::{Exception, Trap};
 
 use core::arch::asm;

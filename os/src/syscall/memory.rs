@@ -4,8 +4,8 @@ use log::debug;
 
 use crate::{
     config::mm::PAGE_SIZE,
-    fs::{flush_preload, File, FileClass},
-    mm::{flush_tlb, MapPermission, VirtAddr},
+    fs::File,
+    mm::{flush_tlb, MapPermission},
     task::current_task,
     utils::{page_round_up, SysErrNo, SyscallRet},
 };

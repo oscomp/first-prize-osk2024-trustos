@@ -3,7 +3,7 @@ use crate::{
     mm::{translated_byte_buffer, UserBuffer},
     syscall::{IoctlCommand, PollEvents},
     task::{current_task, INITPROC},
-    utils::{SysErrNo, SyscallRet},
+    utils::SyscallRet,
 };
 use alloc::{
     collections::BTreeSet,
@@ -16,7 +16,7 @@ use core::{cmp::min, mem::size_of};
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-use super::{File, Ioctl, OpenFlags, Stdout};
+use super::{File, Ioctl, Stdout};
 
 pub struct DevZero;
 pub struct DevNull;

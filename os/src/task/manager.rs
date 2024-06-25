@@ -1,11 +1,10 @@
 //!Implementation of [`TaskManager`]
-use super::{tid, TaskControlBlock, INITPROC};
+use super::{TaskControlBlock, INITPROC};
 use alloc::collections::{BTreeMap, VecDeque};
-use alloc::sync::{Arc, Weak};
+use alloc::sync::Arc;
 use alloc::vec::Vec;
-use hashbrown::HashMap;
 use lazy_static::*;
-use spin::{Mutex, MutexGuard, RwLock};
+use spin::{Mutex, MutexGuard};
 ///A array of `TaskControlBlock` that is thread-safe
 pub struct TaskManager {
     ready_queue: VecDeque<Arc<TaskControlBlock>>,
