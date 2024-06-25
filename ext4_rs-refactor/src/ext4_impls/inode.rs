@@ -36,11 +36,11 @@ impl Ext4 {
 
         let mut ext4block = Block::load(self.block_device.clone(), offset);
 
-        let inode: &mut Ext4Inode = ext4block.read_as_mut();
+        let inode: Ext4Inode = ext4block.read_as();
 
         Ext4InodeRef {
             inode_num: inode_num,
-            inode: *inode,
+            inode: inode,
         }
     }
 

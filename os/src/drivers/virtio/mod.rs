@@ -58,6 +58,7 @@ impl Hal for VirtIoHalImpl {
             .translate_va(VirtAddr::from(vaddr))
             .unwrap()
             .0
+        // PhysAddr::from(vaddr - KERNEL_ADDR_OFFSET).0
     }
 }
 

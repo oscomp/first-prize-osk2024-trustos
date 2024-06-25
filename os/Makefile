@@ -48,10 +48,10 @@ build_all: build
 build: env initrust $(KERNEL_BIN)
 
 initrust: 
-	@cd ../user && cargo clean && make build
+	@cd ../user && make build
 
 initproc: initrust
-	@cd ../pre_ctests && make clean && ./build-oscomp.sh
+	@cd ../pre_ctests && ./build-oscomp.sh
 
 # initbusybox: initproc
 # 	@-rm ../busybox
@@ -78,7 +78,7 @@ kernel:
 
 clean:
 	@cargo clean
-	@cd ../$(FS)&& rm fat32.img
+	@cd ../$(FS) && cargo clean && rm *.img
 	@cd ../user && cargo clean
 	@cd ../pre_ctests && make clean
 

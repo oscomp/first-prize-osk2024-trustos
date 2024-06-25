@@ -155,12 +155,15 @@ impl Ext4 {
     pub fn dir_set_csum(&self, dst_blk: &mut Block, ino_gen: u32) {
         let parent_de: Ext4DirEntry = dst_blk.read_offset_as(0);
 
+        let csum = parent_de.ext4_dir_get_csum(&self.super_block, &dst_blk.data, ino_gen);
+
         let tail_offset = BLOCK_SIZE - size_of::<Ext4DirEntryTail>();
-        let mut tail: Ext4DirEntryTail = *dst_blk.read_offset_as_mut(tail_offset);
+        let mut tail: &mut Ext4DirEntryTail = dst_blk.read_offset_as_mut(tail_offset);
+        tail.checksum = csum;
 
-        tail.tail_set_csum(&self.super_block, &parent_de, &dst_blk.data[..], ino_gen);
+        // tail.tail_set_csum(&self.super_block, &parent_de, &dst_blk.data[..], ino_gen);
 
-        tail.copy_to_slice(&mut dst_blk.data);
+        // tail.copy_to_slice(&mut dst_blk.data);
     }
 
     /// Add a new entry to a directory
@@ -338,11 +341,11 @@ impl Ext4 {
         // prev entry
         let pde: &mut Ext4DirEntry = ext4block.read_offset_as_mut(result.prev_offset);
 
-        (*pde).entry_len += de_del_entry_len;
+        pde.entry_len += de_del_entry_len;
 
         let de_del: &mut Ext4DirEntry = ext4block.read_offset_as_mut(result.offset);
 
-        (*de_del).inode = 0;
+        de_del.inode = 0;
 
         self.dir_set_csum(&mut ext4block, parent.inode.generation());
         ext4block.sync_blk_to_disk(self.block_device.clone());
@@ -409,10 +412,10 @@ impl Ext4 {
         let mut parent_inode_ref = self.get_inode_ref(parent);
         let mut child_inode_ref = self.get_inode_ref(search_result.dentry.inode);
 
-        if self.dir_has_entry(child_inode_ref.inode_num){
+        if self.dir_has_entry(child_inode_ref.inode_num) {
             return_errno_with_message!(Errno::ENOTSUP, "rm dir with children not supported")
         }
-        
+
         self.truncate_inode(&mut child_inode_ref, 0)?;
 
         self.unlink(&mut parent_inode_ref, &mut child_inode_ref, path)?;
