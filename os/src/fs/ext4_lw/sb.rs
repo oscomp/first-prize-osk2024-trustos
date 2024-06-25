@@ -1,5 +1,5 @@
 #![allow(non_snake_case)]
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use lwext4_rust::{Ext4BlockWrapper, InodeTypes, KernelDevOp};
 
 use crate::{
@@ -90,12 +90,14 @@ impl KernelDevOp for Disk {
             whence
         );
         let new_pos = match whence as u32 {
-            SEEK_SET => Some(off),
-            SEEK_CUR => dev
+            lwext4_rust::bindings::SEEK_SET => Some(off),
+            lwext4_rust::bindings::SEEK_CUR => dev
                 .position()
                 .checked_add_signed(off as isize)
                 .map(|v| v as i64),
-            SEEK_END => size.checked_add_signed(off as isize).map(|v| v as i64),
+            lwext4_rust::bindings::SEEK_END => {
+                size.checked_add_signed(off as isize).map(|v| v as i64)
+            }
             _ => {
                 error!("invalid seek() whence: {}", whence);
                 Some(off)
@@ -107,6 +109,7 @@ impl KernelDevOp for Disk {
             warn!("Seek beyond the end of the block device");
         }
         dev.set_position(new_pos as usize);
+        // debug!("new_pos={}", new_pos);
         Ok(new_pos)
     }
 }

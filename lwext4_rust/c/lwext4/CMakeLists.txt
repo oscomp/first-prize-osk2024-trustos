@@ -1,6 +1,7 @@
 project(lwext4 C)
 cmake_minimum_required(VERSION 3.4)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include_directories(include)
 include_directories(${PROJECT_BINARY_DIR}/include)

@@ -1,10 +1,12 @@
 use crate::bindings::*;
 use alloc::boxed::Box;
 use alloc::ffi::CString;
+use alloc::format;
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::ffi::{c_char, c_void};
 use core::ptr::null_mut;
 use core::slice::{from_raw_parts, from_raw_parts_mut};
-use core::str;
 
 /// Device block size.
 const EXT4_DEV_BSIZE: u32 = 512;
@@ -101,7 +103,7 @@ impl<K: KernelDevOp> Ext4BlockWrapper<K> {
                 .expect("Failed to mount the ext4 file system, perhaps the disk is not an EXT4 file system.");
         }
 
-        ext4bd.lwext4_dir_ls();
+        // ext4bd.lwext4_dir_ls();
         ext4bd.print_lwext4_mp_stats();
         ext4bd.print_lwext4_block_stats();
 
@@ -133,6 +135,7 @@ impl<K: KernelDevOp> Ext4BlockWrapper<K> {
         (*bdev).part_offset = 0;
         (*bdev).part_size = cur as u64; //ftello()
         (*(*bdev).bdif).ph_bcnt = (*bdev).part_size / (*(*bdev).bdif).ph_bsize as u64;
+        // debug!("part_size={}", (*bdev).part_size);
         EOK as _
     }
     pub unsafe extern "C" fn dev_bread(
@@ -250,7 +253,7 @@ impl<K: KernelDevOp> Ext4BlockWrapper<K> {
         ext4_cache_write_back(c_mountpoint, true);
         // ext4_bcache
 
-        info!("lwext4 mount Okay");
+        debug!("lwext4 mount Okay");
         Ok(0)
     }
 
@@ -281,28 +284,30 @@ impl<K: KernelDevOp> Ext4BlockWrapper<K> {
             }
         }
 
-        info!("lwext4 umount Okay");
+        debug!("lwext4 umount Okay");
         Ok(0)
     }
 
-    pub fn lwext4_dir_ls(&self) {
+    pub fn lwext4_dir_ls(&self) -> Vec<String> {
         let path = &self.mount_point;
         let mut sss: [u8; 255] = [0; 255];
         let mut d: ext4_dir = unsafe { core::mem::zeroed() };
 
         let entry_to_str = |entry_type| match entry_type {
             EXT4_DE_UNKNOWN => "[unk] ",
-            EXT4_DE_REG_FILE => "[fil] ",
+            EXT4_DE_REG_FILE => "[file] ",
             EXT4_DE_DIR => "[dir] ",
-            EXT4_DE_CHRDEV => "[cha] ",
+            EXT4_DE_CHRDEV => "[chardev] ",
             EXT4_DE_BLKDEV => "[blk] ",
-            EXT4_DE_FIFO => "[fif] ",
-            EXT4_DE_SOCK => "[soc] ",
+            EXT4_DE_FIFO => "[fifo] ",
+            EXT4_DE_SOCK => "[sock] ",
             EXT4_DE_SYMLINK => "[sym] ",
             _ => "[???] ",
         };
 
-        info!("ls {}", str::from_utf8(path).unwrap());
+        let mut res: Vec<String> = Vec::new();
+
+        // info!("ls {}", str::from_utf8(path).unwrap());
         unsafe {
             ext4_dir_open(&mut d, path as *const _ as *const c_char);
             let mut de = ext4_dir_entry_next(&mut d);
@@ -311,16 +316,22 @@ impl<K: KernelDevOp> Ext4BlockWrapper<K> {
                 sss.copy_from_slice(&dentry.name);
                 sss[dentry.name_length as usize] = 0;
 
-                info!(
-                    "  {}{}",
+                // info!(
+                //     "  {}{}",
+                //     entry_to_str(dentry.inode_type as u32),
+                //     str::from_utf8(&sss).unwrap()
+                // );
+                res.push(format!(
+                    "{} {}",
                     entry_to_str(dentry.inode_type as u32),
-                    str::from_utf8(&sss).unwrap()
-                );
+                    core::str::from_utf8(&sss).unwrap()
+                ));
                 de = ext4_dir_entry_next(&mut d);
             }
             ext4_dir_close(&mut d);
         }
-        info!("");
+        res
+        // info!("");
     }
 
     pub fn ext4_set_debug(&self) {
@@ -339,40 +350,40 @@ impl<K: KernelDevOp> Ext4BlockWrapper<K> {
             ext4_mount_point_stats(c_mountpoint, &mut stats);
         }
 
-        info!("********************");
-        info!("ext4_mount_point_stats");
-        info!("inodes_count = {:x?}", stats.inodes_count);
-        info!("free_inodes_count = {:x?}", stats.free_inodes_count);
-        info!("blocks_count = {:x?}", stats.blocks_count);
-        info!("free_blocks_count = {:x?}", stats.free_blocks_count);
-        info!("block_size = {:x?}", stats.block_size);
-        info!("block_group_count = {:x?}", stats.block_group_count);
-        info!("blocks_per_group= {:x?}", stats.blocks_per_group);
-        info!("inodes_per_group = {:x?}", stats.inodes_per_group);
+        debug!("********************");
+        debug!("ext4_mount_point_stats");
+        debug!("inodes_count = {:x?}", stats.inodes_count);
+        debug!("free_inodes_count = {:x?}", stats.free_inodes_count);
+        debug!("blocks_count = {:x?}", stats.blocks_count);
+        debug!("free_blocks_count = {:x?}", stats.free_blocks_count);
+        debug!("block_size = {:x?}", stats.block_size);
+        debug!("block_group_count = {:x?}", stats.block_group_count);
+        debug!("blocks_per_group= {:x?}", stats.blocks_per_group);
+        debug!("inodes_per_group = {:x?}", stats.inodes_per_group);
 
         let vol_name = unsafe { core::ffi::CStr::from_ptr(&stats.volume_name as _) };
-        info!("volume_name = {:?}", vol_name);
-        info!("********************\n");
+        debug!("volume_name = {:?}", vol_name);
+        debug!("********************\n");
     }
 
     pub fn print_lwext4_block_stats(&self) {
         let ext4dev = &(self.value);
         //if ext4dev.is_null { return; }
 
-        info!("********************");
-        info!("ext4 blockdev stats");
+        debug!("********************");
+        debug!("ext4 blockdev stats");
         unsafe {
-            info!("bdev->bread_ctr = {:?}", (*ext4dev.bdif).bread_ctr);
-            info!("bdev->bwrite_ctr = {:?}", (*ext4dev.bdif).bwrite_ctr);
+            debug!("bdev->bread_ctr = {:?}", (*ext4dev.bdif).bread_ctr);
+            debug!("bdev->bwrite_ctr = {:?}", (*ext4dev.bdif).bwrite_ctr);
 
-            info!("bcache->ref_blocks = {:?}", (*ext4dev.bc).ref_blocks);
-            info!(
+            debug!("bcache->ref_blocks = {:?}", (*ext4dev.bc).ref_blocks);
+            debug!(
                 "bcache->max_ref_blocks = {:?}",
                 (*ext4dev.bc).max_ref_blocks
             );
-            info!("bcache->lru_ctr = {:?}", (*ext4dev.bc).lru_ctr);
+            debug!("bcache->lru_ctr = {:?}", (*ext4dev.bc).lru_ctr);
         }
-        info!("********************\n");
+        debug!("********************\n");
     }
 }
 

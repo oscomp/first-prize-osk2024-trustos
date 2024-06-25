@@ -34,8 +34,6 @@ impl<H: Hal> BlockDriver for VirtIoBlkDev<H> {
     #[inline]
     fn num_blocks(&self) -> usize {
         self.inner.lock().capacity()
-        // TODO(ZMY)暂时不修改软件包,防止分析内容过多导致Rust Analyzer卡死
-        // todo!()
     }
 
     #[inline]
