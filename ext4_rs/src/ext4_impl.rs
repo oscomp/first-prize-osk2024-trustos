@@ -200,7 +200,7 @@ impl Ext4 {
             };
 
             let r = self.dir_try_insert_entry(parent, &mut ext4_block, child, path, len);
-
+            log::info!("a");
             if r == EOK {
                 return EOK;
             }

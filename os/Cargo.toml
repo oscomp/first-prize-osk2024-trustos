@@ -16,10 +16,11 @@ lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
 buddy_system_allocator = "0.6"
 bitflags = "1.2.1"
 xmas-elf = "0.7.0"
-virtio-drivers = { git = "https://github.com/rcore-os/virtio-drivers", rev = "4ee80e5" }
-fat32_fs = { path = "../fat32_fs" }
-ext4_rs = { path = "../ext4_rs" }
-ext4= {path = "../ext4_rs-refactor"}
+# virtio-drivers = { git = "https://github.com/rcore-os/virtio-drivers", rev = "4ee80e5" }
+virtio-drivers= {path = "./vendor/virtio-drivers"}
+# fat32_fs = { path = "../fat32_fs" }
+# ext4_rs = { path = "../ext4_rs" }
+# ext4= {path = "../ext4_rs-refactor"}
 lwext4_rust= {path = "../lwext4_rust"}
 log = "0.4"
 sbi-rt = { version = "0.0.2", features = ["legacy"] }
@@ -30,7 +31,7 @@ cfg-if = { version = "1.0.0" }
 
 
 [features]
-default = ["info", "ext4_re"]
+default = ["info", "ext4_lw"]
 # default = ["info", "fat32"]
 error = []
 warn = []
@@ -40,5 +41,6 @@ debug = []
 fat32 = []
 ext4 = []
 ext4_re = []
+ext4_lw=[]
 [profile.release]
 debug = true

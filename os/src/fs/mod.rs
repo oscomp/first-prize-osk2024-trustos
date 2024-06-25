@@ -18,6 +18,9 @@ cfg_if::cfg_if! {
     } else if #[cfg(feature="ext4_re")]{
         mod ext4_re;
         pub use ext4_re::{sync,fs_stat,root_inode};
+    } else if #[cfg(feature="ext4_lw")]{
+        mod ext4_lw;
+        pub use ext4_lw::{sync,fs_stat,root_inode};
     }
 }
 

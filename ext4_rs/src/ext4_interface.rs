@@ -257,14 +257,12 @@ impl Ext4 {
                 len as u32,
                 &mut dir_search_result,
             );
-            log::info!("a");
 
             // log::info!("dir_search_result.dentry {:?} r {:?}", dir_search_result.dentry, r);
             if let Err(e) = r {
                 if e.error() != Errnum::ENOENT.into() || (iflags & O_CREAT) == 0 {
                     return_errno_with_message!(Errnum::ENOENT, "file not found and not create");
                 }
-                log::info!("b");
 
                 let mut child_inode_ref = Ext4InodeRef::new(self.self_ref.clone());
 
@@ -277,7 +275,6 @@ impl Ext4 {
                     r = child_inode_ref.ext4_fs_alloc_inode(DirEntryType::EXT4_DE_DIR.bits());
                     // r = ext4_fs_alloc_inode(&mut child_inode_ref, DirEntryType::EXT4_DE_DIR.bits())
                 }
-                log::info!("bb");
                 if r != EOK {
                     return_errno_with_message!(Errnum::EALLOCFIAL, "alloc inode fail");
                     // break;
@@ -285,7 +282,6 @@ impl Ext4 {
 
                 child_inode_ref.ext4_fs_inode_blocks_init();
                 // ext4_fs_inode_blocks_init(&mut child_inode_ref);
-                log::info!("bbb");
                 let r = self.ext4_link(
                     &mut search_parent,
                     &mut child_inode_ref,
@@ -297,14 +293,12 @@ impl Ext4 {
                     /*Fail. Free new inode.*/
                     return_errno_with_message!(Errnum::ELINKFIAL, "link fail");
                 }
-                log::info!("bbbb");
                 self.ext4_fs_put_inode_ref_csum(&mut search_parent);
                 self.ext4_fs_put_inode_ref_csum(&mut child_inode_ref);
                 self.ext4_fs_put_inode_ref_csum(parent_inode);
 
                 continue;
             }
-            log::info!("c");
 
             let name = get_name(
                 dir_search_result.dentry.name,
