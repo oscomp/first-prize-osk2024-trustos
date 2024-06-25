@@ -14,3 +14,5 @@ fat32_fs/fat32.img
 compile_commands.json
 pre_ctests/build/*
 ext4_rs/ext4.img
+*.a
+build-musl-generic
