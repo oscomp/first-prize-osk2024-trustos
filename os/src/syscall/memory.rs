@@ -5,7 +5,10 @@ use log::debug;
 use crate::{
     config::mm::PAGE_SIZE,
     fs::{flush_preload, File, FileClass},
-    mm::{flush_tlb, frame_alloc, frames_alloc_much, FrameTracker, MapPermission, VirtAddr},
+    mm::{
+        flush_tlb, frame_alloc, frames_alloc_much, FrameTracker, MapArea, MapAreaType,
+        MapPermission, MapType, VirtAddr,
+    },
     syscall::MapedSharedMemory,
     task::current_task,
     utils::{page_round_up, SysErrNo, SyscallRet},
@@ -149,33 +152,31 @@ pub fn sys_shmat(shmid: usize, shmaddr: usize, shmflag: u32) -> SyscallRet {
         return Err(SysErrNo::ENOENT);
     }
     //映射frames
-    let mut resaddr = 0;
-    trackers
-        .as_ref()
-        .unwrap()
-        .trackers
-        .iter()
-        .rev()
-        .enumerate()
-        .for_each(|(i, x)| {
-            resaddr = task_inner.memory_set.mmap(
-                0,
-                x.len(),
-                MapPermission::all(),
-                MmapFlags::MAP_SHARED,
-                None,
-                0,
-            );
-        });
-    //将共享内存段存入task中
     let size = trackers.as_ref().unwrap().trackers.len() * PAGE_SIZE;
+    let (start_va, end_va) = if shmaddr == 0 {
+        task_inner.memory_set.alloc_addr_va(size)
+    } else {
+        (VirtAddr::from(shmaddr), VirtAddr::from(shmaddr + size))
+    };
+    task_inner.memory_set.map_given_frames(
+        MapArea::new(
+            start_va,
+            end_va,
+            MapType::Framed,
+            MapPermission::all(),
+            MapAreaType::Shm,
+        ),
+        trackers.as_ref().unwrap().trackers.clone(),
+    );
+    //将共享内存段存入task中
     task_inner.shms.push(MapedSharedMemory {
         key: shmid,
         mem: trackers.unwrap(),
-        start: resaddr,
+        start: start_va.into(),
+        end: end_va.into(),
         size,
     });
-    Ok(resaddr)
+    Ok(start_va.into())
 }
 
 const IPCRMID: usize = 0;

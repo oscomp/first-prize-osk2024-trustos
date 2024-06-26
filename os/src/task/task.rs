@@ -11,8 +11,8 @@ use crate::{
     },
     fs::{FdTable, FdTableInner, File, FileClass, FsInfo, OSInode, OpenFlags, Stdin, Stdout},
     mm::{
-        flush_tlb, translated_ref, translated_refmut, MapAreaType, MapPermission, MemorySet,
-        MemorySetInner, PhysPageNum, VirtAddr,
+        flush_tlb, translated_ref, translated_refmut, MapArea, MapAreaType, MapPermission, MapType,
+        MemorySet, MemorySetInner, PhysPageNum, VirtAddr,
     },
     signal::{SigPending, SigPendingInner},
     syscall::{CloneFlags, MapedSharedMemory, MmapFlags},
@@ -474,16 +474,16 @@ impl TaskControlBlock {
 
         //子进程映射共享内存
         parent_inner.shms.iter().for_each(|x| {
-            x.mem.trackers.iter().enumerate().for_each(|(i, tracker)| {
-                child_inner.memory_set.mmap(
-                    0,
-                    tracker.len(),
+            child_inner.memory_set.map_given_frames(
+                MapArea::new(
+                    VirtAddr::from(x.start),
+                    VirtAddr::from(x.end),
+                    MapType::Framed,
                     MapPermission::all(),
-                    MmapFlags::MAP_SHARED,
-                    None,
-                    0,
-                );
-            });
+                    MapAreaType::Shm,
+                ),
+                x.mem.trackers.clone(),
+            );
         });
 
         drop(child_inner);

@@ -278,6 +278,7 @@ pub struct MapedSharedMemory {
     pub key: usize,
     pub mem: Arc<SharedMemory>,
     pub start: usize,
+    pub end: usize,
     pub size: usize,
 }
 

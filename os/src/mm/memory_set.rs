@@ -78,6 +78,9 @@ impl MemorySet {
     pub fn token(&self) -> usize {
         self.inner.get_unchecked_mut().token()
     }
+    pub fn alloc_addr_va(&self, len: usize) -> (VirtAddr, VirtAddr) {
+        self.inner.get_unchecked_mut().alloc_addr_va(len)
+    }
     #[inline(always)]
     pub fn insert_framed_area(
         &self,
@@ -166,6 +169,11 @@ impl MemorySet {
             .get_unchecked_mut()
             .push_with_given_frames(map_area, frames)
     }
+    pub fn map_given_frames(&self, mut map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
+        self.inner
+            .get_unchecked_mut()
+            .map_given_frames(map_area, frames);
+    }
     #[inline(always)]
     fn push_lazily(&self, map_area: MapArea) {
         self.inner.get_unchecked_mut().push_lazily(map_area)
@@ -226,6 +234,11 @@ impl MemorySetInner {
     }
     pub fn page_table_mut(self: &mut MemorySetInner) -> &mut PageTable {
         &mut self.page_table
+    }
+    ///分配一块合适的内存段
+    pub fn alloc_addr_va(&self, len: usize) -> (VirtAddr, VirtAddr) {
+        let addr = self.find_insert_addr(MMAP_TOP, len);
+        (VirtAddr::from(addr), VirtAddr::from(addr + len))
     }
     /// Assume that no conflicts.
     pub fn insert_framed_area(
@@ -586,6 +599,9 @@ impl MemorySetInner {
     fn push_with_given_frames(&mut self, mut map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
         map_area.map_given_frames(&mut self.page_table, frames);
         self.areas.push(map_area);
+    }
+    fn map_given_frames(&mut self, mut map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
+        map_area.map_given_frames(&mut self.page_table, frames);
     }
     /// 不映射MapArea里的虚拟页面
     fn push_lazily(&mut self, map_area: MapArea) {
