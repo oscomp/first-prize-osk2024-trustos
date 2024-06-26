@@ -1,3 +1,4 @@
+use log::info;
 use lwext4_rust::{
     bindings::{O_CREAT, O_RDONLY, O_RDWR, O_TRUNC, O_WRONLY, SEEK_SET},
     Ext4File, InodeTypes,
@@ -9,7 +10,7 @@ use crate::{
     utils::{GeneralRet, SysErrNo, SyscallRet},
 };
 
-use alloc::{string::String, sync::Arc, vec, vec::Vec};
+use alloc::{sync::Arc, vec, vec::Vec};
 
 pub struct Ext4Inode(SyncUnsafeCell<Ext4File>);
 
@@ -37,7 +38,7 @@ impl Inode for Ext4Inode {
             0
         }
     }
-
+    /// Ext4Inode创建必须使用绝对路径
     fn create(&self, path: &str, ty: InodeType) -> Option<Arc<dyn Inode>> {
         let types = as_ext4_de_type(ty);
         let file = self.0.get_unchecked_mut();
@@ -45,9 +46,11 @@ impl Inode for Ext4Inode {
 
         if !file.check_inode_exist(path, types.clone()) {
             let nfile = nf.0.get_unchecked_mut();
-            if types == InodeTypes::EXT4_DE_DIR && nfile.dir_mk(path).is_err() {
-                return None;
-            } else if nfile.file_open(path, O_WRONLY | O_CREAT | O_TRUNC).is_err() {
+            if types == InodeTypes::EXT4_DE_DIR {
+                if nfile.dir_mk(path).is_err() {
+                    return None;
+                }
+            } else if nfile.file_open(path, O_RDWR | O_CREAT | O_TRUNC).is_err() {
                 return None;
             } else {
                 nfile.file_close();
@@ -76,7 +79,7 @@ impl Inode for Ext4Inode {
         let mut file = self.0.get_unchecked_mut();
         let path = file.get_path();
         let path = path.to_str().unwrap();
-        file.file_open(path, O_RDONLY).map_err(|_| SysErrNo::EIO)?;
+        file.file_open(path, O_RDWR).map_err(|_| SysErrNo::EIO)?;
         file.file_seek(off as i64, SEEK_SET)
             .map_err(|_| SysErrNo::EIO)?;
         let r = file.file_write(buf);
@@ -113,16 +116,12 @@ impl Inode for Ext4Inode {
         todo!()
     }
 
-    fn ls(&self) -> Vec<String> {
-        todo!()
-    }
-
     fn read_all(&self) -> Result<Vec<u8>, SysErrNo> {
         let mut file = self.0.get_unchecked_mut();
-        let mut buf: Vec<u8> = vec![0; file.file_size() as usize];
         let path = file.get_path();
         let path = path.to_str().unwrap();
         file.file_open(path, O_RDONLY).map_err(|_| SysErrNo::EIO)?;
+        let mut buf: Vec<u8> = vec![0; file.file_size() as usize];
         file.file_seek(0, SEEK_SET).map_err(|_| SysErrNo::EIO)?;
         let r = file.file_read(buf.as_mut_slice());
         let _ = file.file_close();
@@ -139,7 +138,7 @@ impl Inode for Ext4Inode {
             // debug!("lookup new DIR FileWrapper");
             Some(Arc::new(Ext4Inode::new(path, InodeTypes::EXT4_DE_DIR)))
         } else if file.check_inode_exist(path, InodeTypes::EXT4_DE_REG_FILE) {
-            // debug!("lookup new FILE FileWrapper");
+            // info!("lookup new FILE FileWrapper");
             Some(Arc::new(Ext4Inode::new(path, InodeTypes::EXT4_DE_REG_FILE)))
         } else {
             None

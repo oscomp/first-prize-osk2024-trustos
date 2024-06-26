@@ -20,7 +20,7 @@ cfg_if::cfg_if! {
         pub use ext4_re::{sync,fs_stat,root_inode};
     } else if #[cfg(feature="ext4_lw")]{
         mod ext4_lw;
-        pub use ext4_lw::{sync,fs_stat,root_inode};
+        pub use ext4_lw::{sync,fs_stat,root_inode,ls};
     }
 }
 
@@ -32,7 +32,7 @@ pub use devfs::*;
 pub use dirent::Dirent;
 pub use fsidx::*;
 pub use fstruct::{FdTable, FdTableInner, FsInfo};
-use log::debug;
+use log::{debug, info};
 pub use mount::MNT_TABLE;
 pub use pipe::{make_pipe, Pipe};
 pub use stat::{Kstat, Statfs};
@@ -224,9 +224,12 @@ pub fn init() {
 
 pub fn list_apps() {
     println!("/**** APPS ****");
+    #[cfg(feature = "fat32")]
     for app in root_inode().ls() {
         println!("{}", app);
     }
+    #[cfg(feature = "ext4_lw")]
+    ls();
     println!("**************/");
 }
 
@@ -401,7 +404,7 @@ fn create_file(
     let parent_dir = find_inode_idx(parent_path).unwrap();
     let (readable, writable) = flags.read_write();
     return parent_dir
-        .create(child_name, flags.node_type())
+        .create(&abs_path, flags.node_type())
         .map(|vfile| {
             insert_inode_idx(&abs_path, vfile.clone());
             let osinode = OSInode::new(
@@ -427,10 +430,11 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
 
     // !必须要知道父结点
     let (parent_path, child_name) = rsplit_once(&abs_path, "/");
-    // println!(
-    //     "[open] cwd={},path={},parent={},child={},abs={}",
-    //     cwd, path, parent_path, child_name, &abs_path
-    // );
+
+    debug!(
+        "[open] cwd={},path={},parent={},child={},abs={}",
+        cwd, path, parent_path, child_name, &abs_path
+    );
 
     let (parent_inode, child) = if has_inode(parent_path) {
         (find_inode_idx(parent_path).unwrap(), child_name)
@@ -441,8 +445,9 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
             (root_inode().find_by_path(cwd).unwrap(), path)
         }
     };
-
-    if let Some(inode) = parent_inode.find_by_path(child) {
+    // println!("find by parent!");
+    if let Some(inode) = parent_inode.find_by_path(&abs_path) {
+        // println!("find");
         // if flags.contains(OpenFlags::O_TRUNC) {
         //     remove_inode_idx(&abs_path);
         //     let abs_path_clone = abs_path.clone();

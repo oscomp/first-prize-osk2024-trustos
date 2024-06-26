@@ -29,6 +29,12 @@ impl SuperBlock for Ext4SuperBlock {
     fn sync(&self) {
         todo!()
     }
+    fn ls(&self) {
+        self.inner
+            .lwext4_dir_ls()
+            .into_iter()
+            .for_each(|s| println!("{}", s));
+    }
 }
 
 impl Ext4SuperBlock {

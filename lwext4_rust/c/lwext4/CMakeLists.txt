@@ -45,7 +45,7 @@ else()
     endif()
     set (INSTALL_LIB 1)
 
-    add_definitions(-DCONFIG_DEBUG_PRINTF=1)
+    add_definitions(-DCONFIG_DEBUG_PRINTF=0)
     add_definitions(-DCONFIG_DEBUG_ASSERT=1)
 
     add_definitions(-DCONFIG_HAVE_OWN_OFLAGS=1)

@@ -6,7 +6,7 @@ use crate::{
     syscall::PollEvents,
     utils::{GeneralRet, SysErrNo, SyscallRet},
 };
-use alloc::{string::String, sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec::Vec};
 
 pub use inode::*;
 ///
@@ -14,6 +14,7 @@ pub trait SuperBlock: Send + Sync {
     fn root_inode(&self) -> Arc<dyn Inode>;
     fn sync(&self);
     fn fs_stat(&self) -> Statfs;
+    fn ls(&self);
 }
 /// VfsInode接口
 pub trait Inode: Send + Sync {
@@ -69,11 +70,12 @@ pub trait Inode: Send + Sync {
     fn rename(&self, file: Arc<dyn Inode>) -> GeneralRet {
         unimplemented!()
     }
-    fn ls(&self) -> Vec<String> {
-        unimplemented!()
-    }
     fn read_all(&self) -> Result<Vec<u8>, SysErrNo> {
         unimplemented!();
+    }
+    #[cfg(feature = "fat32")]
+    fn ls(&self) -> Vec<String> {
+        unimplemented!()
     }
 }
 

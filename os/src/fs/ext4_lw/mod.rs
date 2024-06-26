@@ -33,3 +33,7 @@ pub fn sync() {
 pub fn fs_stat() -> Statfs {
     SUPER_BLOCK.fs_stat()
 }
+
+pub fn ls() {
+    SUPER_BLOCK.ls()
+}
