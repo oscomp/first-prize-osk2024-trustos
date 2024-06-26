@@ -15,7 +15,7 @@ mod page_fault_handler;
 mod page_table;
 
 pub use address::{KernelAddr, PhysAddr, PhysPageNum, StepByOne, VPNRange, VirtAddr, VirtPageNum};
-pub use frame_allocator::{frame_alloc, frame_dealloc, FrameTracker};
+pub use frame_allocator::{frame_alloc, frame_dealloc, frames_alloc_much, FrameTracker};
 pub use group::*;
 pub use map_area::{MapArea, MapAreaType, MapPermission, MapType};
 pub use memory_set::{kernel_token, remap_test, MemorySet, MemorySetInner, KERNEL_SPACE};

@@ -57,6 +57,12 @@ pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) ->
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
     let token = task_inner.user_token();
+
+    debug!(
+        "[sys_sigprocmask] how is {}, set is {:x}, old_set is {:x}",
+        how, set as usize, old_set as usize
+    );
+
     if old_set as usize != 0 {
         *translated_refmut(token, old_set) = task_inner.sig_pending.get_ref().blocked;
     }

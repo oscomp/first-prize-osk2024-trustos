@@ -101,17 +101,24 @@ impl File for OSInode {
         revents
     }
     fn lseek(&self, offset: isize, whence: usize) -> SyscallRet {
-        if offset < 0 || whence > 2 {
+        if whence > 2 {
             return Err(SysErrNo::EINVAL);
         }
-        let offset: usize = offset as usize;
         let mut inner = self.inner.lock();
         if whence == SEEK_SET {
-            inner.offset = offset;
+            inner.offset = offset as usize;
         } else if whence == SEEK_CUR {
-            inner.offset += offset;
+            let newoff = inner.offset as isize + offset;
+            if newoff < 0 {
+                return Err(SysErrNo::EINVAL);
+            }
+            inner.offset = newoff as usize;
         } else if whence == SEEK_END {
-            inner.offset = self.inode.size() + offset;
+            let newoff = self.inode.size() as isize + offset;
+            if newoff < 0 {
+                return Err(SysErrNo::EINVAL);
+            }
+            inner.offset = newoff as usize;
         }
         Ok(inner.offset)
     }
