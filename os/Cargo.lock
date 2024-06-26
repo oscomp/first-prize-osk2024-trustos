@@ -87,6 +87,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3dca9240753cf90908d7e4aac30f630662b02aebaa1b58a3cadabdb23385b58b"
 
 [[package]]
+name = "fat32_fs"
+version = "0.1.0"
+dependencies = [
+ "hashbrown",
+ "lazy_static",
+ "spin 0.9.8",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -193,6 +202,7 @@ dependencies = [
  "bitflags",
  "buddy_system_allocator",
  "cfg-if",
+ "fat32_fs",
  "hashbrown",
  "lazy_static",
  "log",

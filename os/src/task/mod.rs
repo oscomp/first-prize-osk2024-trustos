@@ -128,7 +128,6 @@ lazy_static! {
                     res
                 } else if #[cfg(not(feature="fat32"))]{
                     let elf_data = inode.inode.read_all().unwrap();
-                    // println!("elf_data.size={}")
                     let res=TaskControlBlock::new(&elf_data);
                     res
                 }
