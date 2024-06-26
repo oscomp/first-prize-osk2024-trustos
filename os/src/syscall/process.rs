@@ -247,10 +247,10 @@ pub fn sys_nanosleep(req: *const u8, _rem: *const u8) -> SyscallRet {
     let token = current_token();
     let req = translated_ref(token, req as *const Timespec);
 
-    let begin = get_time_ms();
-    let waittime = req.tv_sec * 1000 + req.tv_nsec / 1000000;
+    let begin = get_time_ms() * 1000000;
+    let waittime = req.tv_sec * 1000000000 + req.tv_nsec;
 
-    while get_time_ms() - begin < waittime {
+    while get_time_ms() * 1000000 - begin < waittime {
         suspend_current_and_run_next();
     }
     Ok(0)

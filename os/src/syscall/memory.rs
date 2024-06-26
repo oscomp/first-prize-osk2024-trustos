@@ -6,6 +6,7 @@ use crate::{
     config::mm::PAGE_SIZE,
     fs::{flush_preload, File, FileClass},
     mm::{flush_tlb, frame_alloc, frames_alloc_much, FrameTracker, MapPermission, VirtAddr},
+    syscall::MapedSharedMemory,
     task::current_task,
     utils::{page_round_up, SysErrNo, SyscallRet},
 };
@@ -147,15 +148,17 @@ pub fn sys_shmat(shmid: usize, shmaddr: usize, shmflag: u32) -> SyscallRet {
     if trackers.is_none() {
         return Err(SysErrNo::ENOENT);
     }
+    //映射frames
     let mut resaddr = 0;
     trackers
         .as_ref()
         .unwrap()
         .trackers
         .iter()
+        .rev()
         .enumerate()
         .for_each(|(i, x)| {
-            let addr = task_inner.memory_set.mmap(
+            resaddr = task_inner.memory_set.mmap(
                 0,
                 x.len(),
                 MapPermission::all(),
@@ -163,11 +166,15 @@ pub fn sys_shmat(shmid: usize, shmaddr: usize, shmflag: u32) -> SyscallRet {
                 None,
                 0,
             );
-            if i == 0 {
-                resaddr = addr;
-            }
         });
-    //println!("resaddr is {}", resaddr);
+    //将共享内存段存入task中
+    let size = trackers.as_ref().unwrap().trackers.len() * PAGE_SIZE;
+    task_inner.shms.push(MapedSharedMemory {
+        key: shmid,
+        mem: trackers.unwrap(),
+        start: resaddr,
+        size,
+    });
     Ok(resaddr)
 }
 

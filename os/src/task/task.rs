@@ -15,7 +15,7 @@ use crate::{
         MemorySetInner, PhysPageNum, VirtAddr,
     },
     signal::{SigPending, SigPendingInner},
-    syscall::CloneFlags,
+    syscall::{CloneFlags, MapedSharedMemory, MmapFlags},
     task::insert_into_thread_group,
     timer::{TimeData, Timer, ITIMER_REAL},
     trap::{trap_handler, TrapContext},
@@ -48,6 +48,7 @@ pub struct TaskControlBlockInner {
     pub task_cx: TaskContext,
     pub task_status: TaskStatus,
     pub memory_set: Arc<MemorySet>,
+    pub shms: Vec<MapedSharedMemory>,
     pub fd_table: Arc<FdTable>,
     pub fs_info: Arc<FsInfo>,
     pub time_data: TimeData,
@@ -176,6 +177,7 @@ impl TaskControlBlock {
                 task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                 task_status: TaskStatus::Ready,
                 memory_set: Arc::new(MemorySet::new(memory_set)),
+                shms: Vec::new(),
                 fd_table: Arc::new(FdTable::new_with_stdio()),
                 fs_info: Arc::new(FsInfo::new(String::from("/"))),
                 time_data: TimeData::new(),
@@ -411,6 +413,7 @@ impl TaskControlBlock {
                 task_cx: TaskContext::goto_trap_return(kernel_stack_top),
                 task_status: TaskStatus::Ready,
                 memory_set,
+                shms: parent_inner.shms.clone(),
                 fd_table,
                 fs_info,
                 time_data: TimeData::new(),
@@ -468,6 +471,21 @@ impl TaskControlBlock {
             let child_token = child_inner.user_token();
             *translated_refmut(child_token, child_tid) = child.tid() as u32;
         }
+
+        //子进程映射共享内存
+        parent_inner.shms.iter().for_each(|x| {
+            x.mem.trackers.iter().enumerate().for_each(|(i, tracker)| {
+                child_inner.memory_set.mmap(
+                    0,
+                    tracker.len(),
+                    MapPermission::all(),
+                    MmapFlags::MAP_SHARED,
+                    None,
+                    0,
+                );
+            });
+        });
+
         drop(child_inner);
         drop(parent_inner);
         insert_into_tid2task(child.tid(), &child);

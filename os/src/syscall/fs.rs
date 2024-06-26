@@ -9,7 +9,7 @@ use crate::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
         translated_str, UserBuffer,
     },
-    syscall::{FaccessatMode, PollEvents, PollFd, Renameat2Flags},
+    syscall::{FaccessatMode, PollEvents, PollFd, Renameat2Flags, SigSet},
     task::{current_task, current_token, suspend_current_and_run_next},
     timer::{get_time_ms, Timespec},
     utils::{
@@ -23,6 +23,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
+use core::cmp::min;
 use core::mem::size_of;
 use log::{debug, info};
 
@@ -1083,9 +1084,13 @@ pub fn sys_ppoll(fds_ptr: usize, nfds: usize, tmo_p: usize, mask: usize) -> Sysc
         -1
     } else {
         let timespec = translated_ref(token, tmo_p as *const Timespec);
-        (timespec.tv_sec * 1000 + timespec.tv_nsec / 1000000) as isize
+        (timespec.tv_sec * 1000000000 + timespec.tv_nsec) as isize
     };
-    let begin = get_time_ms();
+    if waittime == 0 {
+        return Ok(0);
+    }
+
+    let begin = get_time_ms() * 1000000;
 
     //由于每次循环结束需要让出cpu，因此需要在每次循环时重新获得锁
     drop(inner);
@@ -1123,7 +1128,175 @@ pub fn sys_ppoll(fds_ptr: usize, nfds: usize, tmo_p: usize, mask: usize) -> Sysc
             return Ok(resnum);
         }
         //或者时间到了也可以返回
-        if waittime > 0 && get_time_ms() - begin >= waittime as usize {
+        if waittime > 0 && get_time_ms() * 1000000 - begin >= waittime as usize {
+            return Ok(0);
+        }
+        drop(inner);
+        drop(task);
+        suspend_current_and_run_next();
+    }
+}
+
+pub fn sys_pselect6(
+    nfds: usize,
+    readfds: usize,
+    writefds: usize,
+    exceptfds: usize,
+    timeout: usize,
+    sigmask: usize,
+) -> SyscallRet {
+    let task = current_task().unwrap();
+    let mut inner = task.inner_lock();
+    let token = inner.user_token();
+
+    debug!("[sys_pselect6] nfds is {}, readfds is {}, writefds is {}, exceptfds is {}, timeout is {}, sigmask is {}",nfds,readfds,writefds,exceptfds,timeout,sigmask);
+
+    let old_mask = inner.sig_pending.get_ref().blocked;
+    if sigmask != 0 {
+        inner.sig_pending.get_mut().blocked = *translated_ref(token, sigmask as *const SigSet);
+    }
+
+    let nfds = min(nfds, FD_LIMIT);
+
+    let mut using_readfds = if readfds != 0 {
+        *translated_refmut(token, readfds as *mut usize)
+    } else {
+        0
+    };
+    let mut using_writefds = if writefds != 0 {
+        *translated_refmut(token, writefds as *mut usize)
+    } else {
+        0
+    };
+    let mut using_exceptfds = if exceptfds != 0 {
+        *translated_refmut(token, exceptfds as *mut usize)
+    } else {
+        0
+    };
+
+    // pselect 不会更新 timeout 的值，而 select 会
+    let waittime = if timeout == 0 {
+        //为0则永远等待直到完成
+        -1
+    } else {
+        let timespec = translated_ref(token, timeout as *const Timespec);
+        (timespec.tv_sec * 1000000000 + timespec.tv_nsec) as isize
+    };
+    if waittime == 0 {
+        if sigmask != 0 {
+            inner.sig_pending.get_mut().blocked = old_mask;
+        }
+        return Ok(0);
+    }
+
+    let begin = get_time_ms() * 1000000;
+
+    //由于每次循环结束需要让出cpu，因此需要在每次循环时重新获得锁
+    drop(inner);
+    drop(task);
+
+    loop {
+        let task = current_task().unwrap();
+        let mut inner = task.inner_lock();
+        let mut num = 0;
+
+        // 如果设置了监视是否可读的 fd
+        if using_readfds != 0 {
+            for i in 0..nfds {
+                if using_readfds & (1 << i) != 0 {
+                    if let Some(file) = &inner.fd_table.try_get_file(i) {
+                        let file: Arc<dyn File> = match file {
+                            FileClass::File(f) => f.clone(),
+                            FileClass::Abs(f) => f.clone(),
+                        };
+                        let event = file.poll(PollEvents::IN);
+                        if event.contains(PollEvents::IN) {
+                            using_readfds |= 1 << i;
+                            num += 1;
+                        } else {
+                            using_readfds &= !(1 << i);
+                        }
+                    } else {
+                        using_readfds &= !(1 << i);
+                    }
+                } else {
+                    using_readfds &= !(1 << i);
+                }
+            }
+        }
+
+        // 如果设置了监视是否可写的 fd
+        if using_writefds != 0 {
+            for i in 0..nfds {
+                if using_writefds & (1 << i) != 0 {
+                    if let Some(file) = &inner.fd_table.try_get_file(i) {
+                        let file: Arc<dyn File> = match file {
+                            FileClass::File(f) => f.clone(),
+                            FileClass::Abs(f) => f.clone(),
+                        };
+                        let event = file.poll(PollEvents::OUT);
+                        if event.contains(PollEvents::OUT) {
+                            using_writefds |= 1 << i;
+                            num += 1;
+                        } else {
+                            using_writefds &= !(1 << i);
+                        }
+                    } else {
+                        using_writefds &= !(1 << i);
+                    }
+                } else {
+                    using_writefds &= !(1 << i);
+                }
+            }
+        }
+
+        // 如果设置了监视异常的 fd
+        if using_exceptfds != 0 {
+            for i in 0..nfds {
+                if using_exceptfds & (1 << i) != 0 {
+                    if let Some(file) = &inner.fd_table.try_get_file(i) {
+                        let file: Arc<dyn File> = match file {
+                            FileClass::File(f) => f.clone(),
+                            FileClass::Abs(f) => f.clone(),
+                        };
+                        let event = file.poll(PollEvents::ERR);
+                        if event.contains(PollEvents::ERR) {
+                            using_exceptfds |= 1 << i;
+                            num += 1;
+                        } else {
+                            using_exceptfds &= !(1 << i);
+                        }
+                    } else {
+                        using_exceptfds &= !(1 << i);
+                    }
+                } else {
+                    using_exceptfds &= !(1 << i);
+                }
+            }
+        }
+
+        //如果有响应了则返回
+        if num > 0 {
+            if using_readfds != 0 {
+                *translated_refmut(token, readfds as *mut usize) = using_readfds;
+            }
+            if using_writefds != 0 {
+                *translated_refmut(token, writefds as *mut usize) = using_writefds;
+            }
+            if using_exceptfds != 0 {
+                *translated_refmut(token, exceptfds as *mut usize) = using_exceptfds;
+            }
+            if sigmask != 0 {
+                inner.sig_pending.get_mut().blocked = old_mask;
+            }
+            return Ok(num);
+        }
+
+        //或者时间到了也可以返回
+        if waittime > 0 && get_time_ms() * 1000000 - begin >= waittime as usize {
+            if sigmask != 0 {
+                inner.sig_pending.get_mut().blocked = old_mask;
+            }
             return Ok(0);
         }
         drop(inner);

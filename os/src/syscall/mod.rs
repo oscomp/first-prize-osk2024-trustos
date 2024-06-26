@@ -40,6 +40,7 @@ pub enum Syscall {
     Pread64 = 67,
     Pwrite64 = 68,
     Sendfile = 71,
+    Pselect6 = 72,
     Ppoll = 73,
     Readlinkat = 78,
     Fstatat = 79,
@@ -196,6 +197,14 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[1] as usize,
             args[2] as usize,
             args[3] as usize,
+        ),
+        Syscall::Pselect6 => sys_pselect6(
+            args[0] as usize,
+            args[1] as usize,
+            args[2] as usize,
+            args[3] as usize,
+            args[4] as usize,
+            args[5] as usize,
         ),
         Syscall::Ppoll => sys_ppoll(
             args[0] as usize,
