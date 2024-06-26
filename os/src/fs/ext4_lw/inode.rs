@@ -153,8 +153,13 @@ impl Inode for Ext4Inode {
         todo!()
     }
 
-    fn unlink(&self, child_name: &str) -> GeneralRet {
-        todo!()
+    fn unlink(&self, path: &str) -> GeneralRet {
+        let mut file = self.0.get_unchecked_mut();
+        if let Err(_) = file.file_remove(path) {
+            Err(SysErrNo::EIO)
+        } else {
+            Ok(())
+        }
     }
 }
 

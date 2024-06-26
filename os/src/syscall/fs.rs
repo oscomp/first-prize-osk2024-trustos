@@ -355,13 +355,11 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> SyscallRet {
     let token = inner.user_token();
 
     let path = translated_str(token, path);
-    // 打开Parent,从Parent中unlink
     let base_path = inner.get_cwd(dirfd, &path)?;
-    if let Some(parent_file) = open(&base_path, &path, OpenFlags::empty()) {
-        let file = parent_file.file()?;
-        let abs_path = get_abs_path(&base_path, &path);
-        let (_, child) = abs_path.rsplit_once("/").unwrap();
-        file.inode.unlink(child)?;
+    let abs_path = get_abs_path(&base_path, &path);
+    if let Some(target) = open(&base_path, &path, OpenFlags::empty()) {
+        let file = target.file()?;
+        file.inode.unlink(&abs_path);
     }
     Ok(0)
 }
