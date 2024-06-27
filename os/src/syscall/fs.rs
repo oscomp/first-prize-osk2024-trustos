@@ -16,7 +16,7 @@ use crate::{
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use core::cmp::min;
 use core::mem::size_of;
-use log::debug;
+use log::{debug, info};
 
 pub const AT_FDCWD: isize = -100;
 pub const FD_LIMIT: usize = 128;
@@ -856,26 +856,6 @@ pub fn sys_sync() -> SyscallRet {
 
 pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsiz: usize) -> SyscallRet {
     Ok(0)
-    // let task = current_task().unwrap();
-    // let inner = task.inner_lock();
-    // let token = inner.user_token();
-    // let path = translated_str(token, path);
-
-    // let base_path = inner.get_cwd(dirfd, &path)?;
-    // if let Some(osfile) = open(&base_path, path.as_str(), OpenFlags::O_RDONLY) {
-    //     let osfile = osfile.file()?;
-    //     if !osfile.readable() {
-    //         return Err(SysErrNo::EACCES);
-    //     }
-    //     // release current task TCB manually to avoid multi-borrow
-    //     drop(inner);
-    //     drop(task);
-    //     let ret = osfile.read(UserBuffer::new(
-    //         translated_byte_buffer(token, buf, bufsiz).unwrap(),
-    //     ))?;
-    //     return Ok(ret);
-    // }
-    // Err(SysErrNo::ENOENT)
 }
 
 /// If newpath already exists, replace it.
@@ -892,45 +872,20 @@ pub fn sys_renameat2(
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
-    let mut oldpath = translated_str(token, oldpath);
-    let mut newpath = translated_str(token, newpath);
+    let oldpath = translated_str(token, oldpath);
+    let newpath = translated_str(token, newpath);
 
-    // let flags = Renameat2Flags::from_bits(flags).unwrap();
-    let base_path = inner.get_cwd(olddirfd, &oldpath)?;
-    if let Some(osfile) = open(&base_path, oldpath.as_str(), OpenFlags::O_RDWR) {
+    let old_base_path = inner.get_cwd(olddirfd, &oldpath)?;
+    if let Some(osfile) = open(&old_base_path, oldpath.as_str(), OpenFlags::O_RDWR) {
         let file = osfile.file()?;
-        file.inode.rename(&oldpath, &newpath)?;
+        let new_base_path = inner.get_cwd(newdirfd, &newpath)?;
+        let old_abs_path = get_abs_path(&old_base_path, &oldpath);
+        let new_abs_path = get_abs_path(&new_base_path, &newpath);
+        file.inode.rename(&old_abs_path, &new_abs_path)?;
         Ok(0)
     } else {
         Err(SysErrNo::ENOENT)
     }
-    //找到旧文件
-    // let mut oldfile;
-    // let base_path = inner.get_cwd(olddirfd, &oldpath)?;
-    // if let Some(osfile) = open(&base_path, oldpath.as_str(), OpenFlags::O_RDWR) {
-    //     oldfile = osfile.file()?;
-    // } else {
-    //     return Err(SysErrNo::ENOENT);
-    // }
-    // //创建新文件
-    // let (checkflags, openflags);
-    // if oldfile.inode.node_type().is_dir() {
-    //     checkflags = OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY;
-    //     openflags = OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY;
-    // } else {
-    //     checkflags = OpenFlags::O_RDWR;
-    //     openflags = OpenFlags::O_CREATE | OpenFlags::O_RDWR;
-    // }
-
-    // let base_path = inner.get_cwd(newdirfd, &newpath)?;
-    // if let Some(osfile) = open(&base_path, newpath.as_str(), openflags) {
-    //     let newfile = osfile.file()?;
-    //     newfile.inode.rename(oldfile.inode.clone());
-    //     let abs_path = get_abs_path(&base_path, &oldpath);
-    //     remove_inode_idx(&abs_path);
-    //     return Ok(0);
-    // }
-    // return Err(SysErrNo::ENOENT);
 }
 
 pub fn sys_copy_file_range(

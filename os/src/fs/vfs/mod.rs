@@ -47,7 +47,6 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     /// 读取目录项
-    // fn read_dentry(&self, off: usize) -> Option<Dirent>;
     fn read_dentry(&self, off: usize, len: usize) -> Option<(Vec<u8>, isize)> {
         unimplemented!()
     }

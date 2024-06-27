@@ -385,19 +385,9 @@ pub fn open_file(path: &str, flags: OpenFlags) -> Option<FileClass> {
     open(&"/", path, flags)
 }
 
-fn create_file(
-    abs_path: String,
-    parent_path: &str,
-    child_name: &str,
-    flags: OpenFlags,
-) -> Option<FileClass> {
-    debug!(
-        "[create_file],flags={:?},abs_path={},parent_path={},child_name={}",
-        flags, abs_path, parent_path, child_name
-    );
-
+fn create_file(abs_path: String, flags: OpenFlags) -> Option<FileClass> {
     // 一定能找到,因为除了RootInode外都有父结点
-    let parent_dir = find_inode_idx(parent_path).unwrap();
+    let parent_dir = root_inode();
     let (readable, writable) = flags.read_write();
     return parent_dir
         .create(&abs_path, flags.node_type())
@@ -423,34 +413,8 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
         }
         return None;
     }
-
-    // !必须要知道父结点
-    let (parent_path, child_name) = rsplit_once(&abs_path, "/");
-
-    debug!(
-        "[open] cwd={},path={},parent={},child={},abs={}",
-        cwd, path, parent_path, child_name, &abs_path
-    );
-
-    let (parent_inode, child) = if has_inode(parent_path) {
-        (find_inode_idx(parent_path).unwrap(), child_name)
-    } else {
-        if cwd == "/" {
-            (root_inode(), path)
-        } else {
-            (root_inode().find_by_path(cwd).unwrap(), path)
-        }
-    };
-    // println!("find by parent!");
+    let parent_inode = root_inode();
     if let Some(inode) = parent_inode.find_by_path(&abs_path) {
-        // println!("find");
-        // if flags.contains(OpenFlags::O_TRUNC) {
-        //     remove_inode_idx(&abs_path);
-        //     let abs_path_clone = abs_path.clone();
-        //     let (_, name) = abs_path.rsplit_once("/").unwrap();
-        //     inode.unlink(name);
-        //     return create_file(abs_path_clone, parent_path, child, flags);
-        // }
         insert_inode_idx(&abs_path, inode.clone());
         let (readable, writable) = flags.read_write();
         let vfile = OSInode::new(
@@ -471,7 +435,7 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
 
     // 节点不存在
     if flags.contains(OpenFlags::O_CREATE) {
-        return create_file(abs_path.clone(), parent_path, child_name, flags);
+        return create_file(abs_path.clone(), flags);
     }
     None
 }
