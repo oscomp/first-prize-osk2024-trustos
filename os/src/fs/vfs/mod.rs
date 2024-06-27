@@ -1,12 +1,12 @@
 mod inode;
 
-use super::{Dirent, FileClass, InodeType, Kstat, OpenFlags, Statfs};
+use super::{InodeType, Kstat, Statfs};
 use crate::{
     mm::UserBuffer,
     syscall::PollEvents,
     utils::{GeneralRet, SysErrNo, SyscallRet},
 };
-use alloc::{rc::Weak, string::String, sync::Arc, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
 
 pub use inode::*;
 ///

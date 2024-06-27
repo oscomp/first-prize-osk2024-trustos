@@ -1,33 +1,28 @@
 //! Implementation of [`MapArea`] and [`MemorySet`].
 use super::{
     brk_page_fault, cow_page_fault, frame_alloc, mmap_read_page_fault, mmap_write_page_fault,
-    translated_byte_buffer, FrameTracker, KernelAddr, MapArea, MapAreaType, MapPermission, MapType,
-    PTEFlags, PageTable, PageTableEntry, PhysAddr, PhysPageNum, StepByOne, UserBuffer, VPNRange,
-    VirtAddr, VirtPageNum, GROUP_SHARE,
+    translated_byte_buffer, FrameTracker, MapArea, MapAreaType, MapPermission, MapType, PTEFlags,
+    PageTable, PageTableEntry, UserBuffer, VPNRange, VirtAddr, VirtPageNum, GROUP_SHARE,
 };
 use crate::{
     config::{
         board::{MEMORY_END, MMIO},
-        mm::{
-            KERNEL_ADDR_OFFSET, KERNEL_PGNUM_OFFSET, MMAP_TOP, PAGE_SIZE, USER_HEAP_SIZE,
-            USER_SPACE_SIZE, USER_STACK_SIZE, USER_TRAP_CONTEXT,
-        },
+        mm::{KERNEL_ADDR_OFFSET, MMAP_TOP, PAGE_SIZE, USER_HEAP_SIZE},
     },
-    fs::{open_file, File, OSInode, OpenFlags},
+    fs::{File, OSInode},
     mm::flush_tlb,
     sync::SyncUnsafeCell,
     syscall::MmapFlags,
-    task::{current_task, Aux, AuxType},
+    task::{Aux, AuxType},
 };
-use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec::Vec};
 use core::arch::asm;
 use lazy_static::*;
-use log::{debug, info};
 use riscv::register::{
     satp,
     scause::{Exception, Trap},
 };
-use spin::{Mutex, MutexGuard};
+use spin::Mutex;
 
 extern "C" {
     fn stext();

@@ -1,16 +1,7 @@
 //!Implementation of [`Processor`] and Intersection of control flow
-use core::arch::asm;
-
 use super::{__switch, add_task, fetch_task, TaskContext, TaskControlBlock, TaskStatus};
-use crate::{
-    config::sync::HART_NUM,
-    mm::{activate_kernel_space, VirtAddr},
-    trap::TrapContext,
-    utils::hart_id,
-};
+use crate::{config::sync::HART_NUM, trap::TrapContext, utils::hart_id};
 use alloc::{boxed::Box, sync::Arc};
-use lazy_static::*;
-use log::{debug, info};
 ///Processor management structure
 pub struct Processor {
     ///The task currently executing on the current processor

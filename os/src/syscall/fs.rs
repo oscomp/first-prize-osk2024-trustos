@@ -1,31 +1,22 @@
 //! File and filesystem-related syscalls
 use crate::{
-    console::print,
     fs::{
-        fs_stat, make_pipe, open, open_device_file, open_file, remove_inode_idx, sync, Dirent,
-        FdTable, File, FileClass, Kstat, OSInode, OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET,
+        fs_stat, make_pipe, open, open_device_file, open_file, remove_inode_idx, sync, File,
+        FileClass, Kstat, OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET,
     },
     mm::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
         translated_str, UserBuffer,
     },
-    syscall::{FaccessatMode, PollEvents, PollFd, Renameat2Flags, SigSet},
+    syscall::{FaccessatMode, PollEvents, PollFd, SigSet},
     task::{current_task, current_token, suspend_current_and_run_next},
     timer::{get_time_ms, Timespec},
-    utils::{
-        get_abs_path, is_abs_path, path2abs, path2vec, rsplit_once, trim_first_point_slash,
-        SysErrNo, SyscallRet,
-    },
+    utils::{get_abs_path, trim_first_point_slash, SysErrNo, SyscallRet},
 };
-use alloc::{
-    string::{String, ToString},
-    sync::Arc,
-    vec,
-    vec::Vec,
-};
+use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use core::cmp::min;
 use core::mem::size_of;
-use log::{debug, info};
+use log::debug;
 
 pub const AT_FDCWD: isize = -100;
 pub const FD_LIMIT: usize = 128;

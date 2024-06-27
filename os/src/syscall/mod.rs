@@ -118,13 +118,12 @@ use signal::*;
 use time::*;
 
 use crate::{
-    console::print,
     sbi::shutdown,
     signal::{SigAction, SigSet},
     timer::Timespec,
     utils::SyscallRet,
 };
-use log::{debug, info};
+use log::debug;
 
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {

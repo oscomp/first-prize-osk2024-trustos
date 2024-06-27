@@ -1,13 +1,8 @@
-use alloc::{
-    collections::{btree_map::BTreeMap, btree_set::BTreeSet},
-    sync::Arc,
-    vec::Vec,
-};
-use core::fmt::{self, Debug, Formatter};
+use alloc::{collections::btree_map::BTreeMap, sync::Arc, vec::Vec};
 use lazy_static::*;
 use spin::Mutex;
 
-use super::{FrameTracker, MapArea, MapAreaType, MapType, VirtPageNum};
+use super::{FrameTracker, VirtPageNum};
 pub const GROUP_SIZE: usize = 0x1000;
 
 lazy_static! {

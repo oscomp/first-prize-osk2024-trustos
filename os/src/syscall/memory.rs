@@ -4,10 +4,10 @@ use log::debug;
 
 use crate::{
     config::mm::PAGE_SIZE,
-    fs::{flush_preload, File, FileClass},
+    fs::File,
     mm::{
-        flush_tlb, frame_alloc, frames_alloc_much, FrameTracker, MapArea, MapAreaType,
-        MapPermission, MapType, VirtAddr,
+        flush_tlb, frames_alloc_much, FrameTracker, MapArea, MapAreaType, MapPermission, MapType,
+        VirtAddr,
     },
     syscall::MapedSharedMemory,
     task::current_task,

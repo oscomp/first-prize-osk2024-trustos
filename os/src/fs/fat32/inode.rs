@@ -1,6 +1,6 @@
 use crate::{
-    fs::{vfs::Inode, Dirent, InodeType, Kstat, OpenFlags},
-    utils::{path2vec, trim_first_point_slash, GeneralRet, SysErrNo, SyscallRet},
+    fs::{vfs::Inode, Dirent, InodeType, Kstat},
+    utils::{path2vec, trim_first_point_slash, GeneralRet, SyscallRet},
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
 use fat32_fs::{VFile, ATTR_ARCHIVE, ATTR_DIRECTORY, ATTR_SYMLINK};

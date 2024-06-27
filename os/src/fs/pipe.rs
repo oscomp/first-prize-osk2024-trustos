@@ -8,21 +8,11 @@
 /// pub fn make_pipe()
 /// ```
 //
-use super::{Dirent, File, Kstat};
-use crate::{
-    mm::UserBuffer,
-    syscall::PollEvents,
-    utils::{SysErrNo, SyscallRet},
-};
-use alloc::{
-    string::String,
-    sync::{Arc, Weak},
-};
-use log::debug;
-//use riscv::interrupt::Mutex;
+use super::{File, Kstat};
+use crate::{mm::UserBuffer, syscall::PollEvents, utils::SyscallRet};
+use alloc::sync::{Arc, Weak};
 use spin::{Mutex, MutexGuard};
 
-pub use super::{list_apps, open, OSInode, OpenFlags};
 use crate::task::suspend_current_and_run_next;
 
 /// ### 管道

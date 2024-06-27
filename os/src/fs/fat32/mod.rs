@@ -1,17 +1,14 @@
 mod inode;
 mod sb;
 
-use core::cell::RefCell;
-
 use alloc::sync::Arc;
 use fat32_fs::{create_root_vfile, BlockDevice, FAT32Manager, VFile, BLOCK_SZ};
-pub use inode::*;
 use lazy_static::*;
 pub use sb::*;
 
 use crate::{
     drivers::{BlockDeviceImpl, Disk},
-    fs::{insert_inode_idx, Inode, SuperBlock},
+    fs::{Inode, SuperBlock},
     sync::SyncUnsafeCell,
 };
 

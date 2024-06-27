@@ -1,5 +1,5 @@
 use crate::{
-    fs::{FileClass, Kstat, OpenFlags, SEEK_CUR, SEEK_END, SEEK_SET},
+    fs::{Kstat, SEEK_CUR, SEEK_END, SEEK_SET},
     mm::UserBuffer,
     syscall::PollEvents,
     utils::{SysErrNo, SyscallRet},
@@ -10,7 +10,7 @@ use alloc::{
     string::String,
     sync::{Arc, Weak},
 };
-use spin::{Mutex, MutexGuard};
+use spin::Mutex;
 
 pub struct OSInode {
     readable: bool, // 该文件是否允许通过 sys_read 进行读

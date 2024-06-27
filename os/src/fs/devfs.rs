@@ -1,9 +1,9 @@
 use crate::{
-    fs::{FileClass, Vec},
+    fs::FileClass,
     mm::{translated_byte_buffer, UserBuffer},
     syscall::{IoctlCommand, PollEvents},
     task::{current_task, INITPROC},
-    utils::{SysErrNo, SyscallRet},
+    utils::SyscallRet,
 };
 use alloc::{
     collections::BTreeMap,
@@ -16,7 +16,7 @@ use core::{cmp::min, mem::size_of};
 use lazy_static::lazy_static;
 use spin::{Mutex, RwLock};
 
-use super::{File, Ioctl, Kstat, OpenFlags, Stdout};
+use super::{File, Ioctl, Kstat, Stdout};
 
 pub struct DevZero;
 pub struct DevNull;

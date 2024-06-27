@@ -4,7 +4,7 @@ use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use num_enum::FromPrimitive;
-use spin::{Mutex, MutexGuard};
+use spin::Mutex;
 
 bitflags! {
     pub struct WaitOption:u8{

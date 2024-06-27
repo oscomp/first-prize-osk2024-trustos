@@ -6,29 +6,23 @@ use super::{
 };
 use crate::{
     config::mm::{
-        PAGE_SIZE, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP, USER_TRAP_CONTEXT,
-        USER_TRAP_CONTEXT_TOP,
+        PAGE_SIZE, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP, USER_TRAP_CONTEXT_TOP,
     },
-    fs::{FdTable, FdTableInner, File, FileClass, FsInfo, OSInode, OpenFlags, Stdin, Stdout},
+    fs::{FdTable, FsInfo},
     mm::{
         flush_tlb, translated_ref, translated_refmut, MapArea, MapAreaType, MapPermission, MapType,
         MemorySet, MemorySetInner, PhysPageNum, VirtAddr,
     },
-    signal::{SigPending, SigPendingInner},
-    syscall::{CloneFlags, MapedSharedMemory, MmapFlags},
+    signal::SigPending,
+    syscall::{CloneFlags, MapedSharedMemory},
     task::insert_into_thread_group,
-    timer::{TimeData, Timer, ITIMER_REAL},
+    timer::{TimeData, Timer},
     trap::{trap_handler, TrapContext},
     utils::{is_abs_path, SysErrNo},
 };
-use alloc::{
-    string::String,
-    sync::{Arc, Weak},
-    vec,
-    vec::Vec,
-};
-use core::{mem::size_of, ptr};
-use log::{debug, info};
+use alloc::{string::String, sync::Arc, vec::Vec};
+use core::mem::size_of;
+use log::debug;
 use spin::{Mutex, MutexGuard};
 
 pub struct TaskControlBlock {

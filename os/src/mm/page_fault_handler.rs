@@ -1,19 +1,15 @@
 // Page Fault Handler 回调
 
 use alloc::sync::Arc;
-use core::arch::asm;
-use log::{debug, info};
+use log::debug;
 
 use crate::{
-    config::mm::{PAGE_SIZE, PAGE_SIZE_BITS},
+    config::mm::PAGE_SIZE,
     fs::{File, SEEK_CUR, SEEK_SET},
     mm::flush_tlb,
 };
 
-use super::{
-    memory_set, translated_byte_buffer, MapArea, MemorySetInner, PTEFlags, PageTable, UserBuffer,
-    VirtAddr, GROUP_SHARE,
-};
+use super::{translated_byte_buffer, MapArea, PageTable, UserBuffer, VirtAddr, GROUP_SHARE};
 
 ///mmap写触发的lazy alocation，直接新分配帧
 pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapArea) {

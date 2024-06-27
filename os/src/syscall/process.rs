@@ -1,9 +1,9 @@
 use crate::{
-    fs::{open, open_file, FileClass, OpenFlags},
+    fs::{open, OpenFlags},
     logger::{change_log_level, clear_log_buf, console_log_off, console_log_on, unread_size},
     mm::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
-        translated_str, UserBuffer, VirtAddr,
+        translated_str, UserBuffer,
     },
     syscall::{CloneFlags, Utsname},
     task::{
@@ -11,20 +11,15 @@ use crate::{
         exit_current_group_and_run_next, move_child_process_to_init, remove_all_from_thread_group,
         suspend_current_and_run_next, task_num, Sysinfo, PROCESS_GROUP,
     },
-    timer::{get_time_ms, Timespec, Tms},
+    timer::{get_time_ms, Timespec},
     utils::{SysErrNo, SyscallRet},
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
 
 use super::SyslogType;
-use crate::config::sync::HART_NUM;
-use crate::console::print;
 use crate::logger::{read_all_log_buf, read_clear_log_buf, read_log_buf, LOG_BUF_LEN};
-use crate::task::manager::ready_procs_num;
-use crate::task::processor::get_proc_by_hartid;
-use crate::utils::hart_id;
-use log::{debug, info};
+use log::debug;
 
 pub fn sys_exit(exit_code: i32) -> ! {
     exit_current_and_run_next(exit_code);
