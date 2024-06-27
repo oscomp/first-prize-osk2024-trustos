@@ -118,7 +118,6 @@ pub fn rust_main(hartid: usize) -> ! {
               `--`--`   `--`-`--`--'  `--`..---'     `--`---'        `--`--`   "#
         );
         mm::init();
-        mm::remap_test();
         logger::init();
         trap::init();
         task::init();

@@ -2,7 +2,6 @@ use crate::classify;
 use crate::expr::Expr;
 use crate::precedence::Precedence;
 
-#[derive(Copy, Clone, Debug)]
 pub(crate) struct FixupContext {
     // Print expression such that it can be parsed back as a statement
     // consisting of the original expression.
@@ -88,27 +87,23 @@ pub(crate) struct FixupContext {
     parenthesize_exterior_struct_lit: bool,
 }
 
-/// The default amount of fixing is minimal fixing. Fixups should be turned on
-/// in a targeted fashion where needed.
-impl Default for FixupContext {
-    fn default() -> Self {
-        FixupContext {
-            stmt: false,
-            leftmost_subexpression_in_stmt: false,
-            match_arm: false,
-            leftmost_subexpression_in_match_arm: false,
-            parenthesize_exterior_struct_lit: false,
-        }
-    }
-}
-
 impl FixupContext {
+    /// The default amount of fixing is minimal fixing. Fixups should be turned
+    /// on in a targeted fashion where needed.
+    pub const NONE: Self = FixupContext {
+        stmt: false,
+        leftmost_subexpression_in_stmt: false,
+        match_arm: false,
+        leftmost_subexpression_in_match_arm: false,
+        parenthesize_exterior_struct_lit: false,
+    };
+
     /// Create the initial fixup for printing an expression in statement
     /// position.
     pub fn new_stmt() -> Self {
         FixupContext {
             stmt: true,
-            ..FixupContext::default()
+            ..FixupContext::NONE
         }
     }
 
@@ -117,7 +112,7 @@ impl FixupContext {
     pub fn new_match_arm() -> Self {
         FixupContext {
             match_arm: true,
-            ..FixupContext::default()
+            ..FixupContext::NONE
         }
     }
 
@@ -128,7 +123,7 @@ impl FixupContext {
     pub fn new_condition() -> Self {
         FixupContext {
             parenthesize_exterior_struct_lit: true,
-            ..FixupContext::default()
+            ..FixupContext::NONE
         }
     }
 
@@ -211,5 +206,13 @@ impl FixupContext {
     pub fn needs_group_as_let_scrutinee(self, expr: &Expr) -> bool {
         self.parenthesize_exterior_struct_lit && classify::confusable_with_adjacent_block(expr)
             || Precedence::of_rhs(expr) <= Precedence::And
+    }
+}
+
+impl Copy for FixupContext {}
+
+impl Clone for FixupContext {
+    fn clone(&self) -> Self {
+        *self
     }
 }

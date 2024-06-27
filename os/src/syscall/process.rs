@@ -145,6 +145,10 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
                 let elf_data = unsafe { app_inode.read_as_elf() };
                 drop(task_inner);
                 task.exec(elf_data, &argv_vec, &mut env);
+            }else if #[cfg(not(feature="fat32"))]{
+                let elf_data = app_inode.inode.read_all()?;
+                drop(task_inner);
+                task.exec(&elf_data, &argv_vec, &mut env);
             }
         }
         task.inner_lock().memory_set.activate();

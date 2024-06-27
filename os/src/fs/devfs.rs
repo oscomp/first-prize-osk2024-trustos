@@ -109,7 +109,7 @@ impl File for DevZero {
         Kstat {
             st_dev: devno,
             st_rdev: devno,
-            ..Kstat::empty()
+            ..Kstat::default()
         }
     }
     fn poll(&self, events: PollEvents) -> PollEvents {
@@ -150,7 +150,7 @@ impl File for DevNull {
         Kstat {
             st_dev: devno,
             st_rdev: devno,
-            ..Kstat::empty()
+            ..Kstat::default()
         }
     }
     fn poll(&self, events: PollEvents) -> PollEvents {
@@ -231,7 +231,7 @@ impl File for DevRtc {
         Kstat {
             st_dev: devno,
             st_rdev: devno,
-            ..Kstat::empty()
+            ..Kstat::default()
         }
     }
     fn poll(&self, events: PollEvents) -> PollEvents {
@@ -292,7 +292,7 @@ impl File for DevRandom {
         Kstat {
             st_dev: devno,
             st_rdev: devno,
-            ..Kstat::empty()
+            ..Kstat::default()
         }
     }
     fn poll(&self, events: PollEvents) -> PollEvents {
@@ -339,7 +339,7 @@ impl File for DevTty {
         Kstat {
             st_dev: devno,
             st_rdev: devno,
-            ..Kstat::empty()
+            ..Kstat::default()
         }
     }
     fn poll(&self, events: PollEvents) -> PollEvents {
@@ -413,7 +413,7 @@ impl File for DevCpuDmaLatency {
         Kstat {
             st_dev: devno,
             st_rdev: devno,
-            ..Kstat::empty()
+            ..Kstat::default()
         }
     }
     fn poll(&self, events: PollEvents) -> PollEvents {

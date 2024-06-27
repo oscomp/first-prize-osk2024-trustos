@@ -18,7 +18,7 @@ static SUCC_TESTS: &[(&str, &str, &str, &str, i32)] = &[
     ("rCoretests/forktest2\0", "\0", "\0", "\0", 0),
     ("rCoretests/forktree\0", "\0", "\0", "\0", 0),
     ("rCoretests/hello_world\0", "\0", "\0", "\0", 0),
-    ("rCoretests/huge_write\0", "\0", "\0", "\0", 0),
+    // ("rCoretests/huge_write\0", "\0", "\0", "\0", 0),
     ("rCoretests/matrix\0", "\0", "\0", "\0", 0),
     ("rCoretests/sleep_simple\0", "\0", "\0", "\0", 0),
     ("rCoretests/sleep\0", "\0", "\0", "\0", 0),

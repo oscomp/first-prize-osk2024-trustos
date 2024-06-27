@@ -13,7 +13,6 @@ sudo cp ../user/target/riscv64gc-unknown-none-elf/release/user_shell ../${DIR}/f
 sudo mkdir ../${DIR}/fs/rCoretests
 sudo rm ../user/target/riscv64gc-unknown-none-elf/release/*.*
 sudo cp ../user/target/riscv64gc-unknown-none-elf/release/* ../${DIR}/fs/rCoretests/ 
-sudo cp ../user/target/riscv64gc-unknown-none-elf/release/initproc ../${DIR}/fs/
 sudo rm ../${DIR}/fs/rCoretests/initproc 
 
 sudo cp ../user/target/riscv64gc-unknown-none-elf/release/usertests ../${DIR}/fs

@@ -8,12 +8,11 @@
 /// pub fn make_pipe()
 /// ```
 //
-use super::{File, Kstat};
+use super::File;
+use crate::task::suspend_current_and_run_next;
 use crate::{mm::UserBuffer, syscall::PollEvents, utils::SyscallRet};
 use alloc::sync::{Arc, Weak};
 use spin::{Mutex, MutexGuard};
-
-use crate::task::suspend_current_and_run_next;
 
 /// ### 管道
 /// 由 读 `readable` / 写 `writable` 权限和 缓冲区 `buffer` 组成，用以分别表示管道的写端和读端
@@ -216,9 +215,6 @@ impl File for Pipe {
                 }
             }
         }
-    }
-    fn fstat(&self) -> Kstat {
-        Kstat::empty()
     }
     fn poll(&self, events: PollEvents) -> PollEvents {
         let mut revents = PollEvents::empty();

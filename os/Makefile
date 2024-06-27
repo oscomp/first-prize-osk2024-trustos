@@ -7,10 +7,10 @@ MODE := release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 DISASM_TMP := target/$(TARGET)/$(MODE)/asm
-FS := fat32_fs
-IMG := fat32.img
-# FS := ext4_rs
-# IMG := ext4.img
+# FS := fat32_fs
+# IMG := fat32.img
+FS := lwext4_rust
+IMG := ext4.img
 FS_IMG := ../$(FS)/$(IMG)
 APPS := ../user/src/bin/*
 
@@ -59,10 +59,10 @@ FINAL_TARGETS := build_all busybox lua lmbench libctest iozone libc-bench netper
 build: env initrust $(KERNEL_BIN)
 
 initrust: 
-	@cd ../user && cargo clean && make build
+	@cd ../user && make build
 
 initproc: initrust
-	@cd ../pre_ctests && make clean && ./build-oscomp.sh
+	@cd ../pre_ctests && ./build-oscomp.sh
 
 # initbusybox: initproc
 # 	@-rm ../busybox
@@ -89,7 +89,7 @@ kernel:
 
 clean:
 	@cargo clean
-	@cd ../$(FS)&& rm fat32.img
+	@cd ../$(FS) && cargo clean && rm *.img
 	@cd ../user && cargo clean
 	@cd ../pre_ctests && make clean
 

@@ -183,6 +183,10 @@ impl<H: Hal> VirtIOBlk<'_, H> {
     pub fn virt_queue_size(&self) -> u16 {
         self.queue.size()
     }
+    ///
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
 }
 
 #[repr(C)]

@@ -1,4 +1,4 @@
-use super::{File, Ioctl, Kstat};
+use super::{File, Ioctl};
 use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut};
 use crate::task::current_task;
 use crate::utils::{SysErrNo, SyscallRet};
@@ -90,9 +90,6 @@ impl File for Stdin {
         Err(SysErrNo::EINVAL)
         // panic!("Cannot write to stdin!");
     }
-    fn fstat(&self) -> Kstat {
-        Kstat::empty()
-    }
     fn poll(&self, events: PollEvents) -> PollEvents {
         let mut revents = PollEvents::empty();
         if events.contains(PollEvents::IN) {
@@ -165,9 +162,6 @@ impl File for Stdout {
             print!("{}", core::str::from_utf8(*buffer).unwrap());
         }
         Ok(user_buf.len())
-    }
-    fn fstat(&self) -> Kstat {
-        Kstat::empty()
     }
     fn poll(&self, events: PollEvents) -> PollEvents {
         let mut revents = PollEvents::empty();
