@@ -12,9 +12,6 @@ cfg_if::cfg_if! {
     if #[cfg(feature="fat32")]{
         mod fat32;
         pub use fat32::{sync,fs_stat,root_inode};
-    } else if #[cfg(feature="ext4")]{
-        mod ext4;
-        pub use ext4::{sync,fs_stat,root_inode};
     }
 }
 

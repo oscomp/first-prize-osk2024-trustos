@@ -18,7 +18,6 @@ bitflags = "1.2.1"
 xmas-elf = "0.7.0"
 virtio-drivers = { git = "https://github.com/rcore-os/virtio-drivers", rev = "4ee80e5" }
 fat32_fs = { path = "../fat32_fs" }
-ext4_rs = { "path" = "../ext4_rs" }
 log = "0.4"
 sbi-rt = { version = "0.0.2", features = ["legacy"] }
 spin = "0.9.8"
@@ -34,7 +33,6 @@ info = []
 debug = []
 
 fat32 = []
-ext4 = []
 
 [profile.release]
 debug = true
