@@ -270,6 +270,67 @@ impl Ext4File {
         Ok(0)
     }
 
+    pub fn set_time(
+        &mut self,
+        atime: Option<u32>,
+        mtime: Option<u32>,
+        ctime: Option<u32>,
+    ) -> Result<usize, i32> {
+        let c_path = self.file_path.clone();
+        let c_path = c_path.into_raw();
+        let mut r = 0;
+        if let Some(atime) = atime {
+            r = unsafe { ext4_atime_set(c_path, atime) }
+        }
+        if let Some(mtime) = mtime {
+            r = unsafe { ext4_mtime_set(c_path, mtime) }
+        }
+        if let Some(ctime) = ctime {
+            r = unsafe { ext4_ctime_set(c_path, ctime) }
+        }
+        // unsafe { ext4_mode_set(c_path, mode) };
+        unsafe {
+            drop(CString::from_raw(c_path));
+        }
+        if r != EOK as i32 {
+            error!("ext4_time_set: rc = {}", r);
+            return Err(r);
+        }
+        Ok(EOK as usize)
+    }
+    // Ok(atime,mtime,ctime)
+    pub fn get_time(&mut self) -> Result<(u32, u32, u32), i32> {
+        let (mut atime, mut mtime, mut ctime) = (0, 0, 0);
+        let c_path = self.file_path.clone();
+        let c_path = c_path.into_raw();
+        let r = unsafe {
+            ext4_atime_get(c_path, &mut atime)
+                | ext4_mtime_get(c_path, &mut mtime)
+                | ext4_ctime_get(c_path, &mut ctime)
+        };
+        unsafe {
+            drop(CString::from_raw(c_path));
+        }
+        if r != EOK as i32 {
+            error!("ext4_mode_get: rc = {}", r);
+            return Err(r);
+        }
+        Ok((atime, mtime, ctime))
+    }
+    pub fn fstat(&mut self) -> Result<ext4_inode_stat, i32> {
+        let c_path = self.file_path.clone();
+        let c_path = c_path.into_raw();
+        let mut stat = ext4_inode_stat::default();
+        let r = unsafe { ext4_stat_get(c_path, &mut stat) };
+        unsafe {
+            drop(CString::from_raw(c_path));
+        }
+        if r != EOK as i32 {
+            error!("ext4_stat_get: rc = {}", r);
+            return Err(r);
+        }
+        Ok(stat)
+    }
     pub fn file_mode_get(&mut self) -> Result<u32, i32> {
         // 0o777 (octal) == rwxrwxrwx
         let mut mode: u32 = 0o777;
@@ -388,6 +449,44 @@ impl Ext4File {
         Ok(EOK as usize)
     }
 
+    pub fn read_dir(&self) -> Result<Vec<OsDirent>, i32> {
+        if self.this_type != InodeTypes::EXT4_DE_DIR {
+            return Err(22);
+        }
+        let c_path = self.file_path.clone();
+        let c_path = c_path.into_raw();
+        let mut d: ext4_dir = unsafe { core::mem::zeroed() };
+        let mut entries: Vec<_> = Vec::new();
+
+        unsafe {
+            ext4_dir_open(&mut d, c_path);
+            drop(CString::from_raw(c_path));
+
+            let mut de = ext4_dir_entry_next(&mut d);
+            while !de.is_null() {
+                let dentry = &(*de);
+                //对齐 align8
+                let mut name = [0u8; 256];
+                let name_len = dentry.name_length as usize;
+                name[0..name_len].copy_from_slice(&dentry.name[0..name_len]);
+                let mut len = name_len + 19;
+                let align = 8 - len % 8;
+                len += align;
+                entries.push(OsDirent {
+                    d_ino: dentry.inode as u64,
+                    d_off: d.next_off as i64,
+                    d_reclen: len as u16,
+                    d_type: dentry.inode_type,
+                    d_name: name,
+                });
+                de = ext4_dir_entry_next(&mut d);
+            }
+            ext4_dir_close(&mut d);
+        }
+        Ok(entries)
+    }
+
+    #[deprecated]
     pub fn lwext4_dir_entries(&self) -> Result<(Vec<Vec<u8>>, Vec<InodeTypes>), i32> {
         if self.this_type != InodeTypes::EXT4_DE_DIR {
             return Err(-1);
@@ -494,4 +593,13 @@ impl From<usize> for InodeTypes {
             }
         }
     }
+}
+#[repr(C)]
+#[derive(Debug)]
+pub struct OsDirent {
+    pub d_ino: u64,        // 索引节点号
+    pub d_off: i64,        // 从 0 开始到下一个 dirent 的偏移
+    pub d_reclen: u16,     // 当前 dirent 的长度
+    pub d_type: u8,        // 文件类型
+    pub d_name: [u8; 256], // 文件名
 }

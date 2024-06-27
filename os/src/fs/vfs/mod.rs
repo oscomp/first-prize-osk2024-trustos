@@ -60,14 +60,14 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     ///
-    fn set_timestamps(&self, atime_sec: Option<u64>, mtime_sec: Option<u64>) -> GeneralRet {
+    fn set_timestamps(&self, atime: Option<u32>, mtime: Option<u32>) -> GeneralRet {
         unimplemented!()
     }
     // fn link(&self);
     fn unlink(&self, path: &str) -> GeneralRet {
         unimplemented!();
     }
-    fn rename(&self, file: Arc<dyn Inode>) -> GeneralRet {
+    fn rename(&self, path: &str, new_path: &str) -> GeneralRet {
         unimplemented!()
     }
     fn read_all(&self) -> Result<Vec<u8>, SysErrNo> {

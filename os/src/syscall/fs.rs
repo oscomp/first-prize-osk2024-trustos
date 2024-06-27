@@ -511,7 +511,7 @@ pub fn sys_utimensat(dirfd: isize, path: *const u8, times: *const u8, _flags: us
     let token = inner.user_token();
     let path = translated_str(token, path);
 
-    let nowtime = (get_time_ms() / 1000) as u64;
+    let nowtime = (get_time_ms() / 1000) as u32;
 
     let (mut atime_sec, mut mtime_sec) = (None, None);
 
@@ -524,12 +524,12 @@ pub fn sys_utimensat(dirfd: isize, path: *const u8, times: *const u8, _flags: us
         match atime.tv_nsec {
             UTIME_NOW => atime_sec = Some(nowtime),
             UTIME_OMIT => (),
-            _ => atime_sec = Some(atime.tv_sec as u64),
+            _ => atime_sec = Some(atime.tv_sec as u32),
         };
         match mtime.tv_nsec {
             UTIME_NOW => mtime_sec = Some(nowtime),
             UTIME_OMIT => (),
-            _ => mtime_sec = Some(mtime.tv_sec as u64),
+            _ => mtime_sec = Some(mtime.tv_sec as u32),
         };
     }
 
@@ -860,42 +860,48 @@ pub fn sys_renameat2(
     newpath: *const u8,
     flags: u32,
 ) -> SyscallRet {
-    // TODO(ZMY) 暂时不知道在不改变实现的情况下如何支持交换;部分23年内核也不支持该功能;需要再添加
-
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
     let mut oldpath = translated_str(token, oldpath);
     let mut newpath = translated_str(token, newpath);
-    // let flags = Renameat2Flags::from_bits(flags).unwrap();
 
-    //找到旧文件
-    let mut oldfile;
+    // let flags = Renameat2Flags::from_bits(flags).unwrap();
     let base_path = inner.get_cwd(olddirfd, &oldpath)?;
     if let Some(osfile) = open(&base_path, oldpath.as_str(), OpenFlags::O_RDWR) {
-        oldfile = osfile.file()?;
+        let file = osfile.file()?;
+        file.inode.rename(&oldpath, &newpath)?;
+        Ok(0)
     } else {
-        return Err(SysErrNo::ENOENT);
+        Err(SysErrNo::ENOENT)
     }
-    //创建新文件
-    let (checkflags, openflags);
-    if oldfile.inode.node_type().is_dir() {
-        checkflags = OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY;
-        openflags = OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY;
-    } else {
-        checkflags = OpenFlags::O_RDWR;
-        openflags = OpenFlags::O_CREATE | OpenFlags::O_RDWR;
-    }
+    //找到旧文件
+    // let mut oldfile;
+    // let base_path = inner.get_cwd(olddirfd, &oldpath)?;
+    // if let Some(osfile) = open(&base_path, oldpath.as_str(), OpenFlags::O_RDWR) {
+    //     oldfile = osfile.file()?;
+    // } else {
+    //     return Err(SysErrNo::ENOENT);
+    // }
+    // //创建新文件
+    // let (checkflags, openflags);
+    // if oldfile.inode.node_type().is_dir() {
+    //     checkflags = OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY;
+    //     openflags = OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY;
+    // } else {
+    //     checkflags = OpenFlags::O_RDWR;
+    //     openflags = OpenFlags::O_CREATE | OpenFlags::O_RDWR;
+    // }
 
-    let base_path = inner.get_cwd(newdirfd, &newpath)?;
-    if let Some(osfile) = open(&base_path, newpath.as_str(), openflags) {
-        let newfile = osfile.file()?;
-        newfile.inode.rename(oldfile.inode.clone());
-        let abs_path = get_abs_path(&base_path, &oldpath);
-        remove_inode_idx(&abs_path);
-        return Ok(0);
-    }
-    return Err(SysErrNo::ENOENT);
+    // let base_path = inner.get_cwd(newdirfd, &newpath)?;
+    // if let Some(osfile) = open(&base_path, newpath.as_str(), openflags) {
+    //     let newfile = osfile.file()?;
+    //     newfile.inode.rename(oldfile.inode.clone());
+    //     let abs_path = get_abs_path(&base_path, &oldpath);
+    //     remove_inode_idx(&abs_path);
+    //     return Ok(0);
+    // }
+    // return Err(SysErrNo::ENOENT);
 }
 
 pub fn sys_copy_file_range(

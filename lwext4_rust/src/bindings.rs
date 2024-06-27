@@ -1016,6 +1016,14 @@ pub union ext4_inode__bindgen_ty_1 {
     pub linux2: ext4_inode__bindgen_ty_1__bindgen_ty_1,
     pub hurd2: ext4_inode__bindgen_ty_1__bindgen_ty_2,
 }
+// impl Default for ext4_inode__bindgen_ty_1 {
+//     fn default() -> Self {
+//         Self {
+//             hurd2: ext4_inode__bindgen_ty_1__bindgen_ty_2::default(),
+//         }
+//     }
+// }
+
 #[repr(C, packed)]
 #[derive(Debug, Copy, Clone)]
 pub struct ext4_inode__bindgen_ty_1__bindgen_ty_1 {
@@ -1740,6 +1748,23 @@ pub struct ext4_mount_stats {
     pub inodes_per_group: u32,
     pub volume_name: [::core::ffi::c_char; 16usize],
 }
+#[doc = "@brief Some of the inode stats."]
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+pub struct ext4_inode_stat {
+    pub st_dev: usize,    // 包含文件的设备 ID
+    pub st_ino: usize,    // 索引节点号
+    pub st_mode: u32,     // 文件类型和模式
+    pub st_nlink: u32,    // 硬链接数
+    pub st_uid: u32,      // 所有者的用户 ID
+    pub st_gid: u32,      // 所有者的组 ID
+    pub st_size: isize,   // 总大小，以字节为单位
+    pub st_blksize: i32,  // 文件系统 I/O 的块大小
+    pub st_blocks: isize, // 分配的 512B 块数
+    pub st_atime: isize,  // 上次访问时间
+    pub st_mtime: isize,  // 上次修改时间
+    pub st_ctime: isize,  // 上次状态变化的时间
+}
 extern "C" {
     #[doc = "@brief   Get file mount point stats.\n\n @param   mount_point Mount point.\n @param   stats Filesystem stats.\n\n @return Standard error code."]
     pub fn ext4_mount_point_stats(
@@ -1849,6 +1874,14 @@ extern "C" {
         inode: *mut ext4_inode,
     ) -> ::core::ffi::c_int;
 }
+// 获取 stat
+extern "C" {
+    pub fn ext4_stat_get(
+        path: *const ::core::ffi::c_char,
+        stat: *mut ext4_inode_stat,
+    ) -> ::core::ffi::c_int;
+}
+
 extern "C" {
     #[doc = "@brief Check if inode exists.\n\n @param path    Parh to file/dir/link.\n @param type    Inode type.\n                @ref EXT4_DIRENTRY_UNKNOWN\n                @ref EXT4_DE_REG_FILE\n                @ref EXT4_DE_DIR\n                @ref EXT4_DE_CHRDEV\n                @ref EXT4_DE_BLKDEV\n                @ref EXT4_DE_FIFO\n                @ref EXT4_DE_SOCK\n                @ref EXT4_DE_SYMLINK\n\n @return  Standard error code."]
     pub fn ext4_inode_exist(

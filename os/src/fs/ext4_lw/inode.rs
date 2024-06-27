@@ -5,7 +5,7 @@ use lwext4_rust::{
 };
 
 use crate::{
-    fs::{Inode, InodeType, Kstat},
+    fs::{Dirent, Inode, InodeType, Kstat},
     sync::SyncUnsafeCell,
     utils::{GeneralRet, SysErrNo, SyscallRet},
 };
@@ -104,16 +104,22 @@ impl Inode for Ext4Inode {
         }
     }
 
-    fn rename(&self, file: Arc<dyn Inode>) -> GeneralRet {
-        todo!()
+    fn rename(&self, path: &str, new_path: &str) -> GeneralRet {
+        let mut file = self.0.get_unchecked_mut();
+        if let Err(_) = file.file_rename(path, new_path) {
+            Err(SysErrNo::EIO)
+        } else {
+            Ok(())
+        }
     }
 
-    fn set_timestamps(&self, atime_sec: Option<u64>, mtime_sec: Option<u64>) -> GeneralRet {
-        todo!()
+    fn set_timestamps(&self, atime: Option<u32>, mtime: Option<u32>) -> GeneralRet {
+        let mut file = self.0.get_unchecked_mut();
+        file.set_time(atime, mtime, None).unwrap();
+        Ok(())
     }
-
     fn sync(&self) {
-        todo!()
+        self.0.get_unchecked_mut().file_cache_flush();
     }
 
     fn read_all(&self) -> Result<Vec<u8>, SysErrNo> {
@@ -146,11 +152,54 @@ impl Inode for Ext4Inode {
     }
 
     fn fstat(&self) -> Kstat {
-        todo!()
+        let mut file = self.0.get_unchecked_mut();
+        let stat = file.fstat().unwrap();
+        Kstat {
+            st_dev: stat.st_dev,
+            st_ino: stat.st_ino,
+            st_mode: stat.st_mode,
+            st_nlink: stat.st_nlink,
+            st_uid: stat.st_uid,
+            st_gid: stat.st_gid,
+            st_size: stat.st_size,
+            st_blksize: stat.st_blksize,
+            st_blocks: stat.st_blocks,
+            st_atime: stat.st_atime,
+            st_ctime: stat.st_ctime,
+            st_mtime: stat.st_mtime,
+            ..Kstat::default()
+        }
     }
-
     fn read_dentry(&self, off: usize, len: usize) -> Option<(Vec<u8>, isize)> {
-        todo!()
+        let mut file = self.0.get_unchecked_mut();
+        let entries = file.read_dir().unwrap();
+        let mut de: Vec<u8> = Vec::new();
+        let (mut cur, mut res, mut f_off) = (0usize, 0usize, 0usize);
+        for entry in entries {
+            let dirent = Dirent {
+                d_ino: entry.d_ino,
+                d_off: entry.d_off,
+                d_reclen: entry.d_reclen,
+                d_type: entry.d_type,
+                d_name: entry.d_name,
+            };
+            // 忽略offset之前的Dirent
+            if cur < off {
+                cur += dirent.len();
+                continue;
+            }
+            if res + dirent.len() > len {
+                break;
+            }
+            res += dirent.len();
+            f_off = dirent.off();
+            de.extend_from_slice(dirent.as_bytes());
+        }
+        if res != 0 {
+            Some((de, f_off as isize))
+        } else {
+            None
+        }
     }
 
     fn unlink(&self, path: &str) -> GeneralRet {

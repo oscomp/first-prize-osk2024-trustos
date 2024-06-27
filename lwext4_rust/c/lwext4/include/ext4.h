@@ -107,6 +107,22 @@ typedef struct ext4_dir {
 	uint64_t next_off;
 } ext4_dir;
 
+// 用于 rust fstat
+typedef struct ext4_inode_stat{
+    uint64_t st_dev;
+    uint64_t st_ino;
+    uint32_t st_mode;
+    uint32_t st_nlinks;
+    uint32_t st_uid;
+    uint32_t st_gid;
+    int64_t st_size;
+    int32_t st_blksize;
+    int64_t st_blocks;
+    int64_t st_atime;
+    int64_t st_mtime;
+    int64_t st_ctime;
+} ext4_inode_stat;
+
 /********************************MOUNT OPERATIONS****************************/
 
 /**@brief   Register block device.

@@ -340,6 +340,15 @@ impl<K: KernelDevOp> Ext4BlockWrapper<K> {
         }
     }
 
+    pub fn get_lwext4_mp_stats(&self) -> ext4_mount_stats {
+        let mut stats: ext4_mount_stats = unsafe { core::mem::zeroed() };
+        let c_mountpoint = &self.mount_point as *const _ as *const c_char;
+        unsafe {
+            ext4_mount_point_stats(c_mountpoint, &mut stats);
+        }
+        stats
+    }
+
     pub fn print_lwext4_mp_stats(&self) {
         //struct ext4_mount_stats stats;
         let mut stats: ext4_mount_stats = unsafe { core::mem::zeroed() };
