@@ -22,7 +22,7 @@
 //#![deny(missing_docs)]
 #![allow(unused)]
 #![deny(warnings)]
-#![deny(unused_imports)]
+#![allow(unused_imports)]
 #![no_std]
 #![no_main]
 #![feature(panic_info_message)]
