@@ -10,7 +10,7 @@ use crate::{
     mm::{translated_ref, translated_refmut},
     task::{current_task, TaskControlBlock, THREAD_GROUP, TID_TO_TASK},
     trap::TrapContext,
-    utils::SysErrNo,
+    utils::{SysErrNo, SyscallRet},
 };
 
 pub const SIG_MAX_NUM: usize = 33;
@@ -87,7 +87,7 @@ pub fn setup_frame(_signo: usize, sig_action: KSigAction) {
     trap_cx.x[10] = -(SysErrNo::EINTR as isize) as usize;
 }
 /// 恢复栈帧
-pub fn restore_frame() {
+pub fn restore_frame() -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
@@ -103,6 +103,8 @@ pub fn restore_frame() {
     user_sp += core::mem::size_of::<SigSet>();
     // Trap cx
     *trap_cx = *translated_ref(token, user_sp as *const TrapContext);
+
+    Ok(trap_cx.x[10])
     // user_sp += core::mem::size_of::<TrapContext>();
 }
 

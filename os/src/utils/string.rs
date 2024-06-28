@@ -13,7 +13,11 @@ pub fn trim_first_point_slash(path: &str) -> &str {
 }
 #[inline(always)]
 pub fn trim_start_slash(s: String) -> String {
-    format!("/{}", s.trim_start_matches('/'))
+    if s.chars().take_while(|c| *c == '/').count() >= 2 {
+        format!("/{}", s.trim_start_matches('/'))
+    } else {
+        s
+    }
 }
 
 pub fn path2abs<'a>(cwdv: &mut Vec<&'a str>, pathv: &Vec<&'a str>) -> String {
