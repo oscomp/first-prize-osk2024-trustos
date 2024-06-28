@@ -29,7 +29,7 @@ cfg-if = { version = "1.0.0" }
 
 
 [features]
-default = ["debug", "ext4_lw"]
+default = ["info", "ext4_lw"]
 # default = ["info", "fat32"]
 error = []
 warn = []

@@ -237,7 +237,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Exitgroup => sys_exit_group(args[0] as i32),
         Syscall::Settidaddress => sys_settidaddress(args[0]),
         Syscall::Nanosleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
-        Syscall::Setitimer => sys_setitimer(args[0] as usize, args[1] as usize, args[2] as usize),
+        Syscall::Setitimer => sys_settimer(args[0] as usize, args[1] as usize, args[2] as usize),
         Syscall::ClockGettime => sys_clock_gettime(args[0], args[1] as *const u8),
         Syscall::ClockGetres => sys_clock_getres(args[0] as usize, args[1] as *const u8),
         Syscall::Syslog => sys_syslog(args[0] as isize, args[1] as *const u8, args[2] as usize),

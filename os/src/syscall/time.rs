@@ -28,14 +28,14 @@ pub fn sys_times(tms: *const u8) -> SyscallRet {
     Ok(0)
 }
 
-pub fn sys_setitimer(which: usize, new_value: usize, old_value: usize) -> SyscallRet {
+pub fn sys_settimer(which: usize, new_value: usize, old_value: usize) -> SyscallRet {
     assert!(which == ITIMER_REAL, "only support Itimer Real");
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
 
     debug!(
-        "[sys_setitimer] which is {}, new_value is {},old_value is {}",
+        "[sys_settimer] which is {}, new_value is {},old_value is {}",
         which, new_value, old_value
     );
 
