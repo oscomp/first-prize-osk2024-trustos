@@ -195,7 +195,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> Sysca
     );
 
     if let Some(inode) = open(&base_path, path.as_str(), flags) {
-        let new_fd = inner.fd_table.alloc_fd();
+        let new_fd = inner.fd_table.alloc_fd()?;
         inner.fd_table.set(new_fd, Some(inode), Some(flags));
         return Ok(new_fd);
     }
@@ -234,7 +234,7 @@ pub fn sys_dup(fd: usize) -> SyscallRet {
     }
 
     let (inode, flags) = inner.fd_table.try_get(fd);
-    let fd_new = inner.fd_table.alloc_fd();
+    let fd_new = inner.fd_table.alloc_fd()?;
     inner.fd_table.set(fd_new, inode, flags);
     inner.fd_table.unset_cloexec(fd_new);
     Ok(fd_new)
@@ -458,13 +458,13 @@ pub fn sys_pipe2(fd: *mut u32) -> SyscallRet {
     let token = inner.user_token();
 
     let (read_pipe, write_pipe) = make_pipe();
-    let read_fd = inner.fd_table.alloc_fd();
+    let read_fd = inner.fd_table.alloc_fd()?;
     inner.fd_table.set(
         read_fd,
         Some(FileClass::Abs(read_pipe)),
         Some(OpenFlags::O_RDONLY),
     );
-    let write_fd = inner.fd_table.alloc_fd();
+    let write_fd = inner.fd_table.alloc_fd()?;
     inner.fd_table.set(
         write_fd,
         Some(FileClass::Abs(write_pipe)),
@@ -612,7 +612,7 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
     match cmd {
         F_DUPFD => {
             let inode = file.clone();
-            let fd_new = inner.fd_table.alloc_fd_larger_than(arg);
+            let fd_new = inner.fd_table.alloc_fd_larger_than(arg)?;
             let flags = inner.fd_table.try_get_flag(fd);
             inner.fd_table.set(fd_new, Some(inode), flags);
             return Ok(fd_new);
@@ -620,7 +620,7 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
         F_DUPFD_CLOEXEC => {
             let inode = file.clone();
             let flags = inner.fd_table.get_flag(fd) | OpenFlags::O_CLOEXEC;
-            let fd_new = inner.fd_table.alloc_fd_larger_than(arg);
+            let fd_new = inner.fd_table.alloc_fd_larger_than(arg)?;
             inner.fd_table.set(fd_new, Some(inode), Some(flags));
             return Ok(fd_new);
         }
@@ -849,6 +849,48 @@ pub fn sys_fsync(fd: usize) -> SyscallRet {
 
 pub fn sys_sync() -> SyscallRet {
     sync();
+    Ok(0)
+}
+
+#[allow(unused)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct RLimit {
+    pub rlim_cur: usize, /* Soft limit */
+    pub rlim_max: usize, /* Hard limit (ceiling for rlim_cur) */
+}
+
+pub fn sys_prlimit(
+    pid: usize,
+    resource: u32,
+    new_limit: *const RLimit,
+    old_limit: *mut RLimit,
+) -> SyscallRet {
+    const RLIMIT_NOFILE: u32 = 7;
+    if resource != RLIMIT_NOFILE {
+        return Ok(0);
+    }
+
+    if pid == 0 {
+        let task = current_task().unwrap();
+        let mut inner = task.inner_lock();
+        let token = inner.user_token();
+        let fd_table = &mut inner.fd_table;
+        if !old_limit.is_null() {
+            // 说明是get
+            let limit = translated_refmut(token, old_limit);
+            limit.rlim_cur = fd_table.get_soft_limit();
+            limit.rlim_max = fd_table.get_hard_limit();
+        }
+        if !new_limit.is_null() {
+            // 说明是set
+            let limit: &RLimit = translated_ref(token, new_limit);
+            fd_table.set_limit(limit.rlim_cur, limit.rlim_max);
+        }
+    } else {
+        unimplemented!("未实现的非0 pid");
+    }
+
     Ok(0)
 }
 

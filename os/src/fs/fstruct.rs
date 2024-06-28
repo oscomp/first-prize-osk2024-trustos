@@ -1,5 +1,7 @@
-use crate::sync::SyncUnsafeCell;
-// use core::alloc::vec::Vec;
+use crate::{
+    sync::SyncUnsafeCell,
+    utils::{GeneralRet, SysErrNo, SyscallRet},
+};
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
 
 use super::{FileClass, OpenFlags, Stdin, Stdout};
@@ -8,6 +10,8 @@ pub struct FdTable {
 }
 
 pub struct FdTableInner {
+    soft_limit: usize,
+    hard_limit: usize,
     flags: Vec<Option<OpenFlags>>,
     table: Vec<Option<FileClass>>,
 }
@@ -15,12 +19,24 @@ pub struct FdTableInner {
 impl FdTableInner {
     pub fn empty() -> Self {
         Self {
+            soft_limit: 64,
+            hard_limit: 256,
             flags: Vec::new(),
             table: Vec::new(),
         }
     }
-    pub fn new(flags: Vec<Option<OpenFlags>>, table: Vec<Option<FileClass>>) -> Self {
-        FdTableInner { flags, table }
+    pub fn new(
+        flags: Vec<Option<OpenFlags>>,
+        table: Vec<Option<FileClass>>,
+        soft_limit: usize,
+        hard_limit: usize,
+    ) -> Self {
+        FdTableInner {
+            flags,
+            table,
+            soft_limit,
+            hard_limit,
+        }
     }
 }
 
@@ -45,48 +61,60 @@ impl FdTable {
                 // 2 -> stderr
                 Some(FileClass::Abs(Arc::new(Stdout))),
             ],
+            64,
+            256,
         ))
     }
     pub fn from_another(another: &Arc<FdTable>) -> Self {
-        let mut fd_table: Vec<_> = Vec::new();
         let other = another.get_ref();
-        for fd in other.table.iter() {
-            if let Some(file) = fd {
-                fd_table.push(Some(file.clone()));
-            } else {
-                fd_table.push(None);
-            }
-        }
-        let mut flags: Vec<Option<OpenFlags>> = Vec::new();
-        flags.extend(&other.flags);
+        // let mut fd_table: Vec<_> = Vec::new();
+        // for fd in other.table.iter() {
+        //     if let Some(file) = fd {
+        //         fd_table.push(Some(file.clone()));
+        //     } else {
+        //         fd_table.push(None);
+        //     }
+        // }
+        // let mut flags: Vec<Option<OpenFlags>> = Vec::new();
+        // flags.extend(&other.flags);
         Self {
-            inner: SyncUnsafeCell::new(FdTableInner::new(flags, fd_table)),
+            inner: SyncUnsafeCell::new(FdTableInner::new(
+                other.flags.clone(),
+                other.table.clone(),
+                other.soft_limit,
+                other.hard_limit,
+            )),
         }
     }
-    pub fn alloc_fd(&self) -> usize {
+    pub fn alloc_fd(&self) -> SyscallRet {
         let fd_table = &mut self.get_mut().table;
         let flags = &mut self.get_mut().flags;
         if let Some(fd) = (0..fd_table.len()).find(|fd| fd_table[*fd].is_none()) {
-            fd
-        } else {
-            fd_table.push(None);
-            flags.push(None);
-            fd_table.len() - 1
+            return Ok(fd);
         }
+        if fd_table.len() >= self.get_soft_limit() {
+            return Err(SysErrNo::EMFILE);
+        }
+        fd_table.push(None);
+        flags.push(None);
+        Ok(fd_table.len() - 1)
     }
-    pub fn alloc_fd_larger_than(&self, arg: usize) -> usize {
+    pub fn alloc_fd_larger_than(&self, arg: usize) -> SyscallRet {
         let fd_table = &mut self.get_mut().table;
         let flags = &mut self.get_mut().flags;
+        if arg >= self.get_soft_limit() {
+            return Err(SysErrNo::EMFILE);
+        }
         if fd_table.len() < arg {
             fd_table.resize(arg, None);
             flags.resize(arg, None);
         }
         if let Some(fd) = (arg..fd_table.len()).find(|fd| fd_table[*fd].is_none()) {
-            fd
+            Ok(fd)
         } else {
             fd_table.push(None);
             flags.push(None);
-            fd_table.len() - 1
+            Ok(fd_table.len() - 1)
         }
     }
     pub fn close_on_exec(&self) {
@@ -104,9 +132,13 @@ impl FdTable {
         self.get_ref().table.len()
     }
 
-    pub fn resize(&self, size: usize) {
+    pub fn resize(&self, size: usize) -> GeneralRet {
+        if size >= self.get_soft_limit() {
+            return Err(SysErrNo::EMFILE);
+        }
         self.get_mut().table.resize(size, None);
         self.get_mut().flags.resize(size, None);
+        Ok(())
     }
 
     pub fn try_get_file(&self, fd: usize) -> Option<FileClass> {
@@ -144,6 +176,20 @@ impl FdTable {
             .as_ref()
             .unwrap()
             .contains(OpenFlags::O_CLOEXEC)
+    }
+
+    pub fn get_hard_limit(&self) -> usize {
+        self.get_ref().hard_limit
+    }
+
+    pub fn get_soft_limit(&self) -> usize {
+        self.get_ref().soft_limit
+    }
+
+    pub fn set_limit(&self, soft_limit: usize, hard_limit: usize) {
+        let inner = self.get_mut();
+        inner.soft_limit = soft_limit;
+        inner.hard_limit = hard_limit;
     }
 
     pub fn set(&self, fd: usize, value: Option<FileClass>, flags: Option<OpenFlags>) {

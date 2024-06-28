@@ -170,6 +170,7 @@ pub fn sys_execve(args: &[&str]) -> isize {
         ],
     )
 }
+// "busybox_testcode.sh\0".as_ptr() as isize,
 
 pub fn sys_busyboxsh() -> isize {
     syscall(
@@ -179,7 +180,7 @@ pub fn sys_busyboxsh() -> isize {
             [
                 "busybox\0".as_ptr() as isize,
                 "sh\0".as_ptr() as isize,
-                "unixbench_testcode.sh\0".as_ptr() as isize,
+                "run-static.sh\0".as_ptr() as isize,
                 0,
             ]
             .as_ptr() as isize,
