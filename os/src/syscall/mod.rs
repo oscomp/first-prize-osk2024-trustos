@@ -95,6 +95,7 @@ pub enum Syscall {
     Mprotect = 226,
     Madvise = 233,
     Wait4 = 260,
+    Prlimit = 261,
     Renameat2 = 276,
     Getrandom = 278,
     CopyFileRange = 285,
@@ -309,6 +310,12 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Mprotect => sys_mprotect(args[0], args[1], args[2] as u32),
         Syscall::Madvise => sys_madvise(args[0] as usize, args[1] as usize, args[2] as usize),
         Syscall::Wait4 => sys_wait4(args[0] as isize, args[1] as *mut i32, args[2] as i32),
+        Syscall::Prlimit => sys_prlimit(
+            args[0] as usize,
+            args[1] as u32,
+            args[2] as *const RLimit,
+            args[3] as *mut RLimit,
+        ),
         Syscall::Renameat2 => sys_renameat2(
             args[0] as isize,
             args[1] as *const u8,
