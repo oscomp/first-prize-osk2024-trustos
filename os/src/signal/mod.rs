@@ -10,6 +10,7 @@ use crate::{
     mm::{translated_ref, translated_refmut},
     task::{current_task, TaskControlBlock, THREAD_GROUP, TID_TO_TASK},
     trap::TrapContext,
+    utils::SysErrNo,
 };
 
 pub const SIG_MAX_NUM: usize = 33;
@@ -56,7 +57,7 @@ pub fn handle_signal(signo: usize, sig_action: KSigAction) {
 /// 在用户态栈空间构建一个 Frame
 /// 构建这个帧的目的就是为了执行完信号处理程序后返回到内核态，
 /// 并恢复原来内核栈的内容
-pub fn setup_frame(signo: usize, sig_action: KSigAction) {
+pub fn setup_frame(_signo: usize, sig_action: KSigAction) {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
@@ -83,7 +84,7 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
     // sp
     trap_cx.x[2] = user_sp;
     // a0
-    trap_cx.x[10] = signo;
+    trap_cx.x[10] = -(SysErrNo::EINTR as isize) as usize;
 }
 /// 恢复栈帧
 pub fn restore_frame() {

@@ -5,6 +5,7 @@ use crate::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
         translated_str, UserBuffer,
     },
+    signal::check_signal_for_current_task,
     syscall::{CloneFlags, Utsname},
     task::{
         add_task, current_task, current_token, exit_current_and_run_next,
@@ -249,6 +250,7 @@ pub fn sys_nanosleep(req: *const u8, _rem: *const u8) -> SyscallRet {
     let waittime = req.tv_sec * 1000000000 + req.tv_nsec;
 
     while get_time_ms() * 1000000 - begin < waittime {
+        check_signal_for_current_task();
         suspend_current_and_run_next();
     }
     Ok(0)

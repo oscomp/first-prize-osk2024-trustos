@@ -44,7 +44,7 @@ impl<H: Hal, T: Transport> VfsOps for Ext4FileSystem<H, T> {
     }
 
     fn root_dir(&self) -> Arc<dyn VfsNodeOps> {
-        debug!("Get root_dir");
+        //debug!("Get root_dir");
         //let root_dir = unsafe { (*self.root.get()).as_ref().unwrap() };
         Arc::clone(&self.root)
     }
@@ -93,7 +93,6 @@ impl FileWrapper {
 
 /// The [`VfsNodeOps`] trait provides operations on a file or a directory.
 impl VfsNodeOps for FileWrapper {
-
     /*
     fn get_attr(&self) -> Result<usize, i32> {
         let mut file = self.0.lock();
@@ -259,7 +258,7 @@ impl VfsNodeOps for FileWrapper {
     */
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<usize, i32> {
-        debug!("To read_at {}, buf len={}", offset, buf.len());
+        //debug!("To read_at {}, buf len={}", offset, buf.len());
         let mut file = self.0.borrow_mut();
         let path = file.get_path();
         let path = path.to_str().unwrap();
@@ -273,7 +272,7 @@ impl VfsNodeOps for FileWrapper {
     }
 
     fn write_at(&self, offset: u64, buf: &[u8]) -> Result<usize, i32> {
-        debug!("To write_at {}, buf len={}", offset, buf.len());
+        //debug!("To write_at {}, buf len={}", offset, buf.len());
         let mut file = self.0.borrow_mut();
         let path = file.get_path();
         let path = path.to_str().unwrap();
@@ -309,7 +308,7 @@ impl VfsNodeOps for FileWrapper {
 impl Drop for FileWrapper {
     fn drop(&mut self) {
         let mut file = self.0.borrow_mut();
-        debug!("Drop struct FileWrapper {:?}", file.get_path());
+        //debug!("Drop struct FileWrapper {:?}", file.get_path());
         file.file_close().expect("failed to close fd");
         drop(file); // todo
     }

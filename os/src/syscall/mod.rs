@@ -24,7 +24,6 @@ pub enum Syscall {
     Linkat = 37,
     Umount2 = 39,
     Mount = 40,
-    PivotRoot = 41,
     Statfs = 43,
     Ftruncate = 46,
     Faccessat = 48,

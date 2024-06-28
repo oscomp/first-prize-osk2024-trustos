@@ -47,7 +47,7 @@ pub fn sys_rt_sigaction(
 
 pub fn sys_rt_sigreturn() -> SyscallRet {
     restore_frame();
-    Ok(0)
+    Ok(2)
 }
 
 pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) -> SyscallRet {
