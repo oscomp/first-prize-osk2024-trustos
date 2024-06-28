@@ -52,7 +52,6 @@ pub fn lock_task_manager() -> MutexGuard<'static, TaskManager> {
 pub fn ready_procs_num() -> usize {
     TASK_MANAGER.lock().ready_procs_num()
 }
-///
 lazy_static! {
     pub static ref TID_TO_TASK: Mutex<BTreeMap<usize, Arc<TaskControlBlock>>> =
         Mutex::new(BTreeMap::new());
@@ -77,8 +76,8 @@ pub fn task_num() -> usize {
     TID_TO_TASK.lock().len()
 }
 
-/// 线程组
 lazy_static! {
+    /// 线程组
     pub static ref THREAD_GROUP: Mutex<BTreeMap<usize, Vec<Arc<TaskControlBlock>>>> =
         Mutex::new(BTreeMap::new());
 }
@@ -94,9 +93,10 @@ pub fn insert_into_thread_group(pid: usize, task: &Arc<TaskControlBlock>) {
 pub fn remove_all_from_thread_group(pid: usize) {
     THREAD_GROUP.lock().remove(&pid);
 }
-/// 需要持有Arc,避免进程在exit时被释放,等待到wait释放进程
-/// 一个进程组实际上是一个进程的所有子进程
+
 lazy_static! {
+    /// 需要持有Arc,避免进程在exit时被释放,等待到wait释放进程
+    /// 一个进程组实际上是一个进程的所有子进程
     pub static ref PROCESS_GROUP: Mutex<BTreeMap<usize, Vec<Arc<TaskControlBlock>>>> =
         Mutex::new(BTreeMap::new());
 }

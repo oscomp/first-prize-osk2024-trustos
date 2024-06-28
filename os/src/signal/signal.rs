@@ -145,7 +145,7 @@ pub struct SigAction {
 
 impl SigAction {
     pub fn new(signo: usize) -> Self {
-        let sa_handler: usize = match SigSet::from_bits(signo).unwrap().default_op() {
+        let _: usize = match SigSet::from_bits(signo).unwrap().default_op() {
             SigOp::Continue | SigOp::Ignore => 0,
             SigOp::Stop => 0, // TODO(ZMY) imple StopCurrent
             SigOp::Terminate | SigOp::Dump => exit_current_and_run_next as usize,

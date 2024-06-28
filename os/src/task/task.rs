@@ -147,8 +147,7 @@ impl TaskControlBlock {
     /// 只有initproc会调用
     pub fn new(elf_data: &[u8]) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack
-        let (mut memory_set, user_heapbottom, entry_point, mut auxv) =
-            MemorySetInner::from_elf(elf_data);
+        let (mut memory_set, user_heapbottom, entry_point, _) = MemorySetInner::from_elf(elf_data);
         // alloc a pid and a kernel stack in kernel space
         let tid_handle = tid_alloc();
         let kernel_stack = KernelStack::new(&tid_handle);
@@ -197,7 +196,7 @@ impl TaskControlBlock {
         drop(task_inner);
         task
     }
-    pub fn exec(&self, elf_data: &[u8], argv: &Vec<String>, mut env: &mut Vec<String>) {
+    pub fn exec(&self, elf_data: &[u8], argv: &Vec<String>, env: &mut Vec<String>) {
         let mut inner = self.inner_lock();
         //用户栈高地址到低地址：环境变量字符串/参数字符串/aux辅助向量/环境变量地址数组/参数地址数组/参数数量
         // memory_set with elf program headers/trampoline/trap context/user stack
@@ -233,7 +232,7 @@ impl TaskControlBlock {
 
         //环境变量内容入栈
         let mut env_ptr_vec = Vec::new();
-        for (i, env) in env.iter().enumerate() {
+        for env in env.iter() {
             user_sp -= env.len() + 1;
             env_ptr_vec.push(user_sp);
             // println!("{:#X}:{}", user_sp, env);
@@ -247,7 +246,7 @@ impl TaskControlBlock {
 
         //存放字符串首址的数组
         let mut argv_ptr_vec = Vec::new();
-        for (i, arg) in argv.iter().enumerate() {
+        for arg in argv.iter() {
             // 计算字符串在栈上的地址
             user_sp -= arg.len() + 1;
             argv_ptr_vec.push(user_sp);
@@ -328,7 +327,7 @@ impl TaskControlBlock {
         tls: usize,
         child_tid: *mut u32,
     ) -> Arc<TaskControlBlock> {
-        let mut parent_inner = self.inner.lock();
+        let parent_inner = self.inner.lock();
 
         let tid_handle = tid_alloc();
         let kernel_stack = KernelStack::new(&tid_handle);
