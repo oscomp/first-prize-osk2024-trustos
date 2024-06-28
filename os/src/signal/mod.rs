@@ -41,7 +41,7 @@ pub fn handle_signal(signo: usize, sig_action: KSigAction) {
     if sig_action.customed {
         setup_frame(signo, sig_action);
         let task = current_task().unwrap();
-        let mut task_inner = task.inner_lock();
+        let task_inner = task.inner_lock();
         let sig_pending = task_inner.sig_pending.get_mut();
         sig_pending.blocked |= sig_action.act.sa_mask;
         sig_pending.blocked |= SigSet::from_sig(signo);
@@ -61,7 +61,7 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
 
-    let mut trap_cx = task_inner.trap_cx();
+    let trap_cx = task_inner.trap_cx();
     let mut user_sp = trap_cx.x[2];
 
     // 保存 Trap 上下文
@@ -88,7 +88,7 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
 /// 恢复栈帧
 pub fn restore_frame() {
     let task = current_task().unwrap();
-    let mut task_inner = task.inner_lock();
+    let task_inner = task.inner_lock();
     let token = task_inner.user_token();
 
     let trap_cx = task_inner.trap_cx();
@@ -102,11 +102,11 @@ pub fn restore_frame() {
     user_sp += core::mem::size_of::<SigSet>();
     // Trap cx
     *trap_cx = *translated_ref(token, user_sp as *const TrapContext);
-    user_sp += core::mem::size_of::<TrapContext>();
+    // user_sp += core::mem::size_of::<TrapContext>();
 }
 
 pub fn add_signal(task: Arc<TaskControlBlock>, signal: SigSet) {
-    let mut task_inner = task.inner_lock();
+    let task_inner = task.inner_lock();
     task_inner.sig_pending.get_mut().pending |= signal;
 }
 
@@ -126,7 +126,7 @@ pub fn send_signal_to_thread(tid: usize, sig: SigSet) {
     }
 }
 // 目前的进程组只是一个进程的所有子进程的集合
-pub fn send_signal_to_process_group(pid: usize, sig: SigSet) {
+pub fn send_signal_to_process_group(_pid: usize, _sig: SigSet) {
     todo!()
 }
 

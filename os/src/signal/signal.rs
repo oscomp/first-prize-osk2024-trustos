@@ -39,7 +39,6 @@ pub const SIGRTMIN: usize = 32;
 // User Custom
 pub const SIGRT_1: usize = SIGRTMIN + 1;
 
-/// Signal位图
 bitflags! {
     pub struct SigSet: usize {
         const SIGHUP    = 1 << (SIGHUP -1);

@@ -250,7 +250,7 @@ impl Ioctl for DevRtc {
     fn ioctl(&self, cmd: usize, arg: usize) -> isize {
         let cmd = IoctlCommand::from(cmd);
         let task = current_task().unwrap();
-        let mut inner = task.inner_lock();
+        let inner = task.inner_lock();
         let token = inner.user_token();
 
         match cmd {
@@ -320,7 +320,7 @@ impl File for DevTty {
     fn writable(&self) -> bool {
         true
     }
-    fn read(&self, mut user_buf: UserBuffer) -> SyscallRet {
+    fn read(&self, user_buf: UserBuffer) -> SyscallRet {
         if let Some(FileClass::Abs(tty_device)) = INITPROC.inner_lock().fd_table.try_get_file(0) {
             tty_device.read(user_buf)
         } else {

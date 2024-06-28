@@ -20,8 +20,11 @@
 
 // #![deny(warnings)]
 //#![deny(missing_docs)]
-#![allow(unused)]
-#![deny(warnings)]
+// #![allow(unused)]
+// #![deny(warnings)]
+#![allow(unused_must_use)]
+#![allow(unreachable_code)]
+#![allow(dead_code)]
 #![allow(unused_imports)]
 #![no_std]
 #![no_main]

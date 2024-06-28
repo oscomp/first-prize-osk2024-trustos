@@ -72,11 +72,9 @@ pub fn cow_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapAre
         .unwrap()
         .ppn()
         .bytes_array_mut()[..PAGE_SIZE];
-    let old_ppn = page_table.translate(va.into()).unwrap().ppn().0;
     vma.unmap_one(page_table, va.into());
     vma.map_one(page_table, va.into());
     flush_tlb();
-    let new_ppn = page_table.translate(va.into()).unwrap().ppn().0;
     let dst = &mut page_table
         .translate(va.into())
         .unwrap()

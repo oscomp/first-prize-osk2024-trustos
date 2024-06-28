@@ -16,7 +16,6 @@ fn main() -> i32 {
         // exec("usertests\0");
         // exec("onlinetests\0");
         run_busyboxsh();
-        // exec("rCoretests/filetest_simple\0");
     } else {
         loop {
             let mut exit_code: i32 = 0;

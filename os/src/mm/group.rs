@@ -60,7 +60,7 @@ impl GroupManager {
             return;
         }
         //println!("del area {}", id);
-        let mut num = self.groups.get_mut(&id).unwrap();
+        let num = self.groups.get_mut(&id).unwrap();
         num.maparea_num -= 1;
         if num.maparea_num == 0 {
             self.groups.remove(&id);

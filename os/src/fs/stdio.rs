@@ -103,7 +103,7 @@ impl Ioctl for Stdin {
     fn ioctl(&self, cmd: usize, arg: usize) -> isize {
         let cmd = IoctlCommand::from(cmd);
         let task = current_task().unwrap();
-        let mut inner = task.inner_lock();
+        let inner = task.inner_lock();
         let token = inner.user_token();
 
         match cmd {
@@ -176,7 +176,7 @@ impl Ioctl for Stdout {
     fn ioctl(&self, cmd: usize, arg: usize) -> isize {
         let cmd = IoctlCommand::from(cmd);
         let task = current_task().unwrap();
-        let mut inner = task.inner_lock();
+        let inner = task.inner_lock();
         let token = inner.user_token();
 
         match cmd {

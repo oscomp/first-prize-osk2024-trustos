@@ -37,7 +37,7 @@ pub fn sys_mmap(
         addr, len, fd, off, flags, map_perm
     );
     let task = current_task().unwrap();
-    let mut task_inner = task.inner_lock();
+    let task_inner = task.inner_lock();
     let len = page_round_up(len);
     if fd == usize::MAX {
         let rv = task_inner
@@ -48,10 +48,10 @@ pub fn sys_mmap(
     // check fd and map_permission
     let file = task_inner.fd_table.get_file(fd).file()?;
     // 读写权限
-    if (map_perm.contains(MapPermission::R) && !file.readable()
+    if map_perm.contains(MapPermission::R) && !file.readable()
         || flags.contains(MmapFlags::MAP_SHARED)
             && map_perm.contains(MapPermission::W)
-            && !file.writable())
+            && !file.writable()
     {
         return Err(SysErrNo::EPERM);
     }
@@ -63,7 +63,7 @@ pub fn sys_mmap(
 
 pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut task_inner = task.inner_lock();
+    let task_inner = task.inner_lock();
     let len = page_round_up(len);
     task_inner.memory_set.munmap(addr, len);
     debug!("[sys_munmap] addr={:#X}, len={}", addr, len);
@@ -89,7 +89,7 @@ pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> SyscallRet {
     let page_num = len / PAGE_SIZE;
     //修改各段的mappermission
     let pte_flags = memory_set.mprotect(start_vpn.into(), end_vpn.into(), map_perm);
-    for i in 0..page_num {
+    for _ in 0..page_num {
         memory_set
             .get_mut()
             .page_table
@@ -108,7 +108,7 @@ pub fn sys_madvise(addr: usize, len: usize, advice: usize) -> SyscallRet {
     Ok(0)
 }
 
-const IPC_PRIVATE: usize = 0;
+// const IPC_PRIVATE: usize = 0;
 
 pub fn sys_shmget(key: usize, size: usize, shmflag: u32) -> SyscallRet {
     debug!(

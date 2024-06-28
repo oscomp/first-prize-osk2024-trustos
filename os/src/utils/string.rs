@@ -1,4 +1,5 @@
 use alloc::{
+    format,
     string::{String, ToString},
     vec::Vec,
 };
@@ -9,6 +10,10 @@ pub fn trim_first_point_slash(path: &str) -> &str {
     } else {
         &path
     }
+}
+#[inline(always)]
+pub fn trim_start_slash(s: String) -> String {
+    format!("/{}", s.trim_start_matches('/'))
 }
 
 pub fn path2abs<'a>(cwdv: &mut Vec<&'a str>, pathv: &Vec<&'a str>) -> String {

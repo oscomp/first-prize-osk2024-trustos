@@ -121,7 +121,6 @@ pub struct LogBuffer {
 impl LogBuffer {
     // READ
     pub fn read(&mut self, buf: &mut [u8], len: usize) -> usize {
-        let tail = self.tail;
         let head = self.head;
         let r_len = self.unread_size().min(len);
         let r1_len = LOG_BUF_LEN - head;
@@ -147,7 +146,6 @@ impl LogBuffer {
     // read the last len bytes
     pub fn read_all(&mut self, buf: &mut [u8], len: usize, clear: bool) -> usize {
         let tail = self.tail;
-        let clear_head = self.clear_head;
         let r_len = self.unclear_size().min(len);
         if tail > r_len {
             buf[0..r_len].copy_from_slice(&self.inner[tail - r_len..tail]);
@@ -157,7 +155,7 @@ impl LogBuffer {
             buf[r1_len..r_len].copy_from_slice(&self.inner[0..tail]);
         }
         // clear
-        if (clear) {
+        if clear {
             self.clear_buf();
         }
         return r_len;

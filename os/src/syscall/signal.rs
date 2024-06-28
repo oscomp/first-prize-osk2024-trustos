@@ -24,14 +24,14 @@ pub fn sys_rt_sigaction(
         signo, act as usize, old_act as usize
     );
     let task = current_task().unwrap();
-    let mut task_inner = task.inner_lock();
+    let task_inner = task.inner_lock();
     let token = task_inner.user_token();
     if old_act as usize != 0 {
         let sig_handler = &task_inner.sig_pending.get_ref().actions[signo].act;
         *translated_refmut(token, old_act) = *sig_handler;
     }
     if act as usize != 0 {
-        let mut new_act = *translated_ref(token, act);
+        let new_act = *translated_ref(token, act);
         let new_sig: KSigAction = if new_act.sa_handler == 0 || new_act.sa_handler == 1 {
             KSigAction::new(signo, false)
         } else {
@@ -55,7 +55,7 @@ pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) ->
     const SIG_UNBLOCK: u32 = 1;
     const SIG_SETMASK: u32 = 2;
     let task = current_task().unwrap();
-    let mut task_inner = task.inner_lock();
+    let task_inner = task.inner_lock();
     let token = task_inner.user_token();
 
     debug!(
@@ -67,7 +67,7 @@ pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) ->
         *translated_refmut(token, old_set) = task_inner.sig_pending.get_ref().blocked;
     }
     if set as usize != 0 {
-        let mut mask = *translated_ref(token, set);
+        let mask = *translated_ref(token, set);
         match how {
             SIG_BLOCK => task_inner.sig_pending.get_mut().blocked |= mask,
             SIG_UNBLOCK => task_inner.sig_pending.get_mut().blocked &= !mask,
@@ -90,7 +90,7 @@ pub fn sys_rt_sigtimedwait(
     let end_time = timeout + get_time_spec();
     loop {
         let task = current_task().unwrap();
-        let mut task_inner = task.inner_lock();
+        let task_inner = task.inner_lock();
         for signum in 1..(SIG_MAX_NUM + 1) {
             let signal = SigSet::from_sig(signum);
             if sig.contains(signal) && task_inner.sig_pending.get_ref().pending.contains(signal) {
@@ -112,17 +112,17 @@ pub fn sys_rt_sigtimedwait(
 /// 始终返回 -1
 pub fn sys_rt_sigsuspend(mask: *const SigSet) -> SyscallRet {
     let token = current_token();
-    let mut mask = *translated_ref(token, mask);
+    let mask = *translated_ref(token, mask);
 
     let task = current_task().unwrap();
-    let mut task_inner = task.inner_lock();
+    let task_inner = task.inner_lock();
     let old_mask = task_inner.sig_pending.get_mut().blocked;
     task_inner.sig_pending.get_mut().blocked = mask;
     drop(task_inner);
     drop(task);
     loop {
         let task = current_task().unwrap();
-        let mut task_inner = task.inner_lock();
+        let task_inner = task.inner_lock();
         for signum in 1..(SIG_MAX_NUM + 1) {
             let signal = SigSet::from_sig(signum);
             if task_inner.sig_pending.get_ref().pending.contains(signal) {

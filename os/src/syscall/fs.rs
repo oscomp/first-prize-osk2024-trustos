@@ -204,7 +204,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> Sysca
 
 pub fn sys_close(fd: usize) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
+    let inner = task.inner_lock();
 
     debug!("[sys_close] fd is {}", fd);
 
@@ -217,7 +217,7 @@ pub fn sys_close(fd: usize) -> SyscallRet {
 
 pub fn sys_getcwd(buf: *const u8, size: usize) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
+    let inner = task.inner_lock();
     let token = inner.user_token();
 
     let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, size).unwrap());
@@ -227,7 +227,7 @@ pub fn sys_getcwd(buf: *const u8, size: usize) -> SyscallRet {
 
 pub fn sys_dup(fd: usize) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
+    let inner = task.inner_lock();
 
     if fd >= inner.fd_table.len() || inner.fd_table.try_get_file(fd).is_none() {
         return Err(SysErrNo::EINVAL);
@@ -242,7 +242,7 @@ pub fn sys_dup(fd: usize) -> SyscallRet {
 
 pub fn sys_dup3(old: usize, new: usize, flags: u32) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
+    let inner = task.inner_lock();
 
     debug!(
         "[sys_dup3] oldfd is {}, newfd is {}, flags is {}",
@@ -274,7 +274,7 @@ pub fn sys_dup3(old: usize, new: usize, flags: u32) -> SyscallRet {
 
 pub fn sys_chdir(path: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
+    let inner = task.inner_lock();
     let token = inner.user_token();
     let path = translated_str(token, path);
 
@@ -312,7 +312,7 @@ pub fn sys_chdir(path: *const u8) -> SyscallRet {
     return Err(SysErrNo::ENOENT);
 }
 
-pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> SyscallRet {
+pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: u32) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
@@ -322,7 +322,7 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> SyscallRet {
     if let Some(_) = open(&base_path, path.as_str(), OpenFlags::O_RDWR) {
         return Err(SysErrNo::EEXIST);
     }
-    if let Some(newfile) = open(
+    if let Some(_) = open(
         &base_path,
         path.as_str(),
         OpenFlags::O_RDWR | OpenFlags::O_CREATE,
@@ -352,22 +352,22 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let off = file.lseek(0, SEEK_CUR)?;
     if let Some((de, off)) = file.inode.read_dentry(off, len) {
         buffer.write(de.as_slice());
-        let t = file.lseek(off as isize, SEEK_SET)?;
+        let _ = file.lseek(off as isize, SEEK_SET)?;
         return Ok(de.len());
     }
     return Err(SysErrNo::EINVAL);
 }
 
 pub fn sys_linkat(
-    oldfd: isize,
-    oldpath: *const u8,
-    newfd: isize,
-    newpath: *const u8,
+    _oldfd: isize,
+    _oldpath: *const u8,
+    _newfd: isize,
+    _newpath: *const u8,
     _flags: u32,
 ) -> SyscallRet {
     todo!();
 }
-pub fn sys_unlinkat(dirfd: isize, path: *const u8, flags: u32) -> SyscallRet {
+pub fn sys_unlinkat(dirfd: isize, path: *const u8, _flags: u32) -> SyscallRet {
     // assert!(flags != AT_REMOVEDIR, "not support yet");
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -452,7 +452,7 @@ pub fn sys_fstat(fd: usize, kst: *const u8) -> SyscallRet {
 
 pub fn sys_pipe2(fd: *mut u32) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
+    let inner = task.inner_lock();
     let token = inner.user_token();
 
     let read_fd = inner.fd_table.alloc_fd();
@@ -478,7 +478,7 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
-    let mut path = translated_str(token, path);
+    let path = translated_str(token, path);
     let mut kst = UserBuffer::new(translated_byte_buffer(token, kst, size_of::<Kstat>()).unwrap());
 
     debug!("[sys_fstatat] dirfd is {}, path is {}", dirfd, path);
@@ -498,7 +498,7 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
 
 pub fn sys_statfs(_path: *const u8, statfs: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
+    let inner = task.inner_lock();
     let token = inner.user_token();
     let mut statfs =
         UserBuffer::new(translated_byte_buffer(token, statfs, size_of::<Statfs>()).unwrap());
@@ -564,7 +564,7 @@ pub fn sys_utimensat(dirfd: isize, path: *const u8, times: *const u8, _flags: us
 
     let base_path = inner.get_cwd(dirfd, &path)?;
     if let Some(osfile) = open(&base_path, path.as_str(), OpenFlags::O_RDONLY) {
-        let mut osfile = osfile.file()?;
+        let osfile = osfile.file()?;
         osfile.inode.set_timestamps(atime_sec, mtime_sec);
         return Ok(0);
     }
@@ -573,8 +573,7 @@ pub fn sys_utimensat(dirfd: isize, path: *const u8, times: *const u8, _flags: us
 
 pub fn sys_lseek(fd: usize, offset: isize, whence: usize) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
-    let token = inner.user_token();
+    let inner = task.inner_lock();
 
     debug!(
         "[sys_lseek] fd is {}, offset is {}, whence is {}",
@@ -599,9 +598,7 @@ const FD_CLOEXEC: usize = 1;
 
 pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
-    let token = inner.user_token();
-
+    let inner = task.inner_lock();
     debug!("[sys_fcntl] fd is {}, cmd is {}, arg is {}", fd, cmd, arg);
 
     if fd >= inner.fd_table.len() || inner.fd_table.try_get_file(fd).is_none() {
@@ -643,7 +640,6 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
             return Ok(inner.fd_table.get_flag(fd).bits() as usize);
         }
         F_SETFL => {
-            let file = file.file()?;
             let flags = OpenFlags::from_bits_truncate(arg as u32);
             inner.fd_table.set_flags(fd, Some(flags));
         }
@@ -687,7 +683,7 @@ pub fn sys_ioctl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
 
 pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
+    let inner = task.inner_lock();
     let token = inner.user_token();
 
     debug!(
@@ -729,7 +725,7 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
         ));
     }
     //输入缓冲池
-    let mut inbuffer = UserBuffer::new(inbufv);
+    let inbuffer = UserBuffer::new(inbufv);
 
     let readcount;
     if offset_ptr == 0 {
@@ -757,7 +753,7 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
         ));
     }
     //输出缓冲池
-    let mut outbuffer = UserBuffer::new(outbufv);
+    let outbuffer = UserBuffer::new(outbufv);
     //写数据
     let retcount = outfile.write(outbuffer)?;
 
@@ -854,7 +850,12 @@ pub fn sys_sync() -> SyscallRet {
     Ok(0)
 }
 
-pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsiz: usize) -> SyscallRet {
+pub fn sys_readlinkat(
+    _dirfd: isize,
+    _path: *const u8,
+    _buf: *const u8,
+    _bufsiz: usize,
+) -> SyscallRet {
     Ok(0)
 }
 
@@ -867,7 +868,7 @@ pub fn sys_renameat2(
     oldpath: *const u8,
     newdirfd: isize,
     newpath: *const u8,
-    flags: u32,
+    _flags: u32,
 ) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -933,7 +934,7 @@ pub fn sys_copy_file_range(
         ));
     }
     //输入缓冲池
-    let mut inbuffer = UserBuffer::new(inbufv);
+    let inbuffer = UserBuffer::new(inbufv);
 
     //读数据
     let readcount;
@@ -963,7 +964,7 @@ pub fn sys_copy_file_range(
         ));
     }
     //输出缓冲池
-    let mut outbuffer = UserBuffer::new(outbufv);
+    let outbuffer = UserBuffer::new(outbufv);
 
     //写数据
     let writecount;
@@ -992,7 +993,7 @@ pub fn sys_copy_file_range(
 
 pub fn sys_getrandom(buf_ptr: *const u8, buflen: usize, _flags: u32) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
+    let inner = task.inner_lock();
     let token = inner.user_token();
 
     if buf_ptr.is_null() {
@@ -1011,7 +1012,7 @@ pub fn sys_getrandom(buf_ptr: *const u8, buflen: usize, _flags: u32) -> SyscallR
 
 pub fn sys_ppoll(fds_ptr: usize, nfds: usize, tmo_p: usize, mask: usize) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
+    let inner = task.inner_lock();
     let token = inner.user_token();
 
     debug!(
@@ -1024,7 +1025,7 @@ pub fn sys_ppoll(fds_ptr: usize, nfds: usize, tmo_p: usize, mask: usize) -> Sysc
     }
 
     let mut fds = Vec::new();
-    let mut ptr = fds_ptr as *mut PollFd;
+    let ptr = fds_ptr as *mut PollFd;
     for i in 0..nfds {
         fds.push(*translated_refmut(token, unsafe { ptr.add(i) } as *mut PollFd));
     }
@@ -1048,7 +1049,7 @@ pub fn sys_ppoll(fds_ptr: usize, nfds: usize, tmo_p: usize, mask: usize) -> Sysc
 
     loop {
         let task = current_task().unwrap();
-        let mut inner = task.inner_lock();
+        let inner = task.inner_lock();
         let mut resnum = 0;
         for i in 0..nfds {
             if fds[i].fd < 0 {
@@ -1071,7 +1072,7 @@ pub fn sys_ppoll(fds_ptr: usize, nfds: usize, tmo_p: usize, mask: usize) -> Sysc
         }
         //有响应了就可以返回
         if resnum > 0 {
-            let mut resptr = fds_ptr as *mut PollFd;
+            let resptr = fds_ptr as *mut PollFd;
             for i in 0..nfds {
                 *translated_refmut(token, unsafe { resptr.add(i) } as *mut PollFd) = fds[i];
             }
@@ -1096,7 +1097,7 @@ pub fn sys_pselect6(
     sigmask: usize,
 ) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
+    let inner = task.inner_lock();
     let token = inner.user_token();
 
     debug!("[sys_pselect6] nfds is {}, readfds is {}, writefds is {}, exceptfds is {}, timeout is {}, sigmask is {}",nfds,readfds,writefds,exceptfds,timeout,sigmask);
@@ -1147,7 +1148,7 @@ pub fn sys_pselect6(
 
     loop {
         let task = current_task().unwrap();
-        let mut inner = task.inner_lock();
+        let inner = task.inner_lock();
         let mut num = 0;
 
         // 如果设置了监视是否可读的 fd

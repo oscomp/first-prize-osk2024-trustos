@@ -95,10 +95,10 @@ pub fn sys_clone(
 
 pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usize) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut task_inner = task.inner_lock();
+    let task_inner = task.inner_lock();
 
     let token = task_inner.user_token();
-    let mut path = translated_str(token, path);
+    let path = translated_str(token, path);
 
     //处理argv参数
     let mut argv_vec = Vec::<String>::new();
@@ -164,16 +164,13 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
 ///0      meaning wait for any child process whose process group ID
 ///       is equal to that of the calling process at the time of the call to waitpid().
 ///> 0    meaning wait for the child whose process ID is equal to the value of pid.
-pub fn sys_wait4(pid: isize, wstatus: *mut i32, mut options: i32) -> SyscallRet {
+pub fn sys_wait4(pid: isize, wstatus: *mut i32, _options: i32) -> SyscallRet {
     //assert!(options == 0, "not support options yet");
-    if options == 0 {
-        //默认所有进程都在同一个组
-        options = -1;
-    }
+    //默认所有进程都在同一个组
     loop {
         let mut process_group = PROCESS_GROUP.lock();
         let task = current_task().unwrap();
-        let mut task_inner = task.inner_lock();
+        let task_inner = task.inner_lock();
         // 暂时没有子进程,返回即可
         if !process_group.contains_key(&task.pid()) {
             debug!("[sys_wait4] no child process");
@@ -266,7 +263,7 @@ pub fn sys_uname(buf: *mut u8) -> SyscallRet {
         domainname: str2u8("TrustOS"),
     };
     let token = current_token();
-    let mut buf_vec = translated_byte_buffer(token, buf, size_of::<Utsname>()).unwrap();
+    let buf_vec = translated_byte_buffer(token, buf, size_of::<Utsname>()).unwrap();
     let mut userbuf = UserBuffer::new(buf_vec);
     userbuf.write(uname.as_bytes());
     Ok(0)
@@ -283,7 +280,7 @@ pub fn sys_brk(brk_addr: usize) -> SyscallRet {
 
 pub fn sys_sysinfo(info: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
+    let inner = task.inner_lock();
     let token = inner.user_token();
     let mut info =
         UserBuffer::new(translated_byte_buffer(token, info, size_of::<Sysinfo>()).unwrap());
@@ -294,14 +291,13 @@ pub fn sys_sysinfo(info: *const u8) -> SyscallRet {
     Ok(0)
 }
 
-pub fn sys_umask(mask: u32) -> SyscallRet {
+pub fn sys_umask(_mask: u32) -> SyscallRet {
     Ok(0)
 }
 
 pub fn sys_syslog(logtype: isize, bufp: *const u8, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
-    let token = inner.user_token();
+    let inner = task.inner_lock();
 
     debug!(
         "[sys_syslog] logtype is {}, bufp is {:x}, len is {}",

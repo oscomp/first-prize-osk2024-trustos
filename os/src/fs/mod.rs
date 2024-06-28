@@ -100,12 +100,12 @@ impl FileClass {
     pub fn file(&self) -> Result<Arc<OSInode>, SysErrNo> {
         match self {
             FileClass::File(f) => Ok(f.clone()),
-            FileClass::Abs(f) => Err(SysErrNo::EINVAL),
+            FileClass::Abs(_) => Err(SysErrNo::EINVAL),
         }
     }
     pub fn abs(&self) -> Result<Arc<dyn File>, SysErrNo> {
         match self {
-            FileClass::File(f) => Err(SysErrNo::EINVAL),
+            FileClass::File(_) => Err(SysErrNo::EINVAL),
             FileClass::Abs(f) => Ok(f.clone()),
         }
     }
@@ -291,7 +291,7 @@ pub fn create_init_files() -> GeneralRet {
         let mut mountsinfo = String::from(MOUNTS);
         let mut mountsvec = Vec::new();
         unsafe {
-            let mut mounts = mountsinfo.as_bytes_mut();
+            let mounts = mountsinfo.as_bytes_mut();
             mountsvec.push(core::slice::from_raw_parts_mut(
                 mounts.as_mut_ptr(),
                 mounts.len(),
@@ -308,7 +308,7 @@ pub fn create_init_files() -> GeneralRet {
         let mut meminfo = String::from(MEMINFO);
         let mut memvec = Vec::new();
         unsafe {
-            let mut mem = meminfo.as_bytes_mut();
+            let mem = meminfo.as_bytes_mut();
             memvec.push(core::slice::from_raw_parts_mut(mem.as_mut_ptr(), mem.len()));
         }
         let membuf = UserBuffer::new(memvec);
@@ -353,7 +353,7 @@ pub fn create_init_files() -> GeneralRet {
         let mut adjtime = String::from(ADJTIME);
         let mut adjtimevec = Vec::new();
         unsafe {
-            let mut adj = adjtime.as_bytes_mut();
+            let adj = adjtime.as_bytes_mut();
             adjtimevec.push(core::slice::from_raw_parts_mut(adj.as_mut_ptr(), adj.len()));
         }
         let adjtimebuf = UserBuffer::new(adjtimevec);
@@ -367,7 +367,7 @@ pub fn create_init_files() -> GeneralRet {
         let mut localtime = String::from(LOCALTIME);
         let mut localtimevec = Vec::new();
         unsafe {
-            let mut local = localtime.as_bytes_mut();
+            let local = localtime.as_bytes_mut();
             localtimevec.push(core::slice::from_raw_parts_mut(
                 local.as_mut_ptr(),
                 local.len(),

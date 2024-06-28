@@ -1,7 +1,5 @@
 use alloc::string::String;
 
-pub const NAME_LIMIT: usize = 253;
-
 /// 存储目录中的文件信息
 #[repr(C)]
 #[derive(Debug)]

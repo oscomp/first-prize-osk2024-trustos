@@ -24,7 +24,7 @@ impl Ext4Inode {
 
 impl Inode for Ext4Inode {
     fn size(&self) -> usize {
-        let mut file = self.0.get_unchecked_mut();
+        let file = self.0.get_unchecked_mut();
         let types = as_inode_type(file.file_type_get());
         if types == InodeType::File {
             let path = file.get_path();
@@ -63,7 +63,7 @@ impl Inode for Ext4Inode {
     }
 
     fn read_at(&self, off: usize, buf: &mut [u8]) -> SyscallRet {
-        let mut file = self.0.get_unchecked_mut();
+        let file = self.0.get_unchecked_mut();
         let path = file.get_path();
         let path = path.to_str().unwrap();
         file.file_open(path, O_RDONLY).map_err(|_| SysErrNo::EIO)?;
@@ -75,7 +75,7 @@ impl Inode for Ext4Inode {
     }
 
     fn write_at(&self, off: usize, buf: &[u8]) -> SyscallRet {
-        let mut file = self.0.get_unchecked_mut();
+        let file = self.0.get_unchecked_mut();
         let path = file.get_path();
         let path = path.to_str().unwrap();
         file.file_open(path, O_RDWR).map_err(|_| SysErrNo::EIO)?;
@@ -87,7 +87,7 @@ impl Inode for Ext4Inode {
     }
 
     fn truncate(&self, size: usize) -> GeneralRet {
-        let mut file = self.0.get_unchecked_mut();
+        let file = self.0.get_unchecked_mut();
         let path = file.get_path();
         let path = path.to_str().unwrap();
         file.file_open(path, O_RDWR | O_CREAT | O_TRUNC)
@@ -104,7 +104,7 @@ impl Inode for Ext4Inode {
     }
 
     fn rename(&self, path: &str, new_path: &str) -> GeneralRet {
-        let mut file = self.0.get_unchecked_mut();
+        let file = self.0.get_unchecked_mut();
         if let Err(_) = file.file_rename(path, new_path) {
             Err(SysErrNo::EIO)
         } else {
@@ -113,7 +113,7 @@ impl Inode for Ext4Inode {
     }
 
     fn set_timestamps(&self, atime: Option<u32>, mtime: Option<u32>) -> GeneralRet {
-        let mut file = self.0.get_unchecked_mut();
+        let file = self.0.get_unchecked_mut();
         file.set_time(atime, mtime, None).unwrap();
         Ok(())
     }
@@ -122,7 +122,7 @@ impl Inode for Ext4Inode {
     }
 
     fn read_all(&self) -> Result<Vec<u8>, SysErrNo> {
-        let mut file = self.0.get_unchecked_mut();
+        let file = self.0.get_unchecked_mut();
         let path = file.get_path();
         let path = path.to_str().unwrap();
         file.file_open(path, O_RDONLY).map_err(|_| SysErrNo::EIO)?;
@@ -138,7 +138,7 @@ impl Inode for Ext4Inode {
     }
 
     fn find_by_path(&self, path: &str) -> Option<Arc<dyn Inode>> {
-        let mut file = self.0.get_unchecked_mut();
+        let file = self.0.get_unchecked_mut();
         if file.check_inode_exist(path, InodeTypes::EXT4_DE_DIR) {
             // debug!("lookup new DIR FileWrapper");
             Some(Arc::new(Ext4Inode::new(path, InodeTypes::EXT4_DE_DIR)))
@@ -151,7 +151,7 @@ impl Inode for Ext4Inode {
     }
 
     fn fstat(&self) -> Kstat {
-        let mut file = self.0.get_unchecked_mut();
+        let file = self.0.get_unchecked_mut();
         let stat = file.fstat().unwrap();
         Kstat {
             st_dev: stat.st_dev,
@@ -170,7 +170,7 @@ impl Inode for Ext4Inode {
         }
     }
     fn read_dentry(&self, off: usize, len: usize) -> Option<(Vec<u8>, isize)> {
-        let mut file = self.0.get_unchecked_mut();
+        let file = self.0.get_unchecked_mut();
         let entries = file.read_dir().unwrap();
         let mut de: Vec<u8> = Vec::new();
         let (mut cur, mut res, mut f_off) = (0usize, 0usize, 0usize);
@@ -202,7 +202,7 @@ impl Inode for Ext4Inode {
     }
 
     fn unlink(&self, path: &str) -> GeneralRet {
-        let mut file = self.0.get_unchecked_mut();
+        let file = self.0.get_unchecked_mut();
         if let Err(_) = file.file_remove(path) {
             Err(SysErrNo::EIO)
         } else {
@@ -213,7 +213,7 @@ impl Inode for Ext4Inode {
 
 impl Drop for Ext4Inode {
     fn drop(&mut self) {
-        let mut file = self.0.get_unchecked_mut();
+        let file = self.0.get_unchecked_mut();
         // debug!("Drop struct FileWrapper {:?}", file.get_path());
         file.file_close().expect("failed to close fd");
     }

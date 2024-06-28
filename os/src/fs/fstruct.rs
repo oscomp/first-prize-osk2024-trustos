@@ -64,8 +64,8 @@ impl FdTable {
         }
     }
     pub fn alloc_fd(&self) -> usize {
-        let mut fd_table = &mut self.get_mut().table;
-        let mut flags = &mut self.get_mut().flags;
+        let fd_table = &mut self.get_mut().table;
+        let flags = &mut self.get_mut().flags;
         if let Some(fd) = (0..fd_table.len()).find(|fd| fd_table[*fd].is_none()) {
             fd
         } else {
@@ -75,8 +75,8 @@ impl FdTable {
         }
     }
     pub fn alloc_fd_larger_than(&self, arg: usize) -> usize {
-        let mut fd_table = &mut self.get_mut().table;
-        let mut flags = &mut self.get_mut().flags;
+        let fd_table = &mut self.get_mut().table;
+        let flags = &mut self.get_mut().flags;
         if fd_table.len() < arg {
             fd_table.resize(arg, None);
             flags.resize(arg, None);
@@ -90,10 +90,10 @@ impl FdTable {
         }
     }
     pub fn close_on_exec(&self) {
-        let mut inner = self.get_mut();
+        let inner = self.get_mut();
         for idx in 0..inner.flags.len() {
             if let Some(flag) = inner.flags[idx] {
-                if (flag.contains(OpenFlags::O_CLOEXEC)) {
+                if flag.contains(OpenFlags::O_CLOEXEC) {
                     inner.flags[idx].take();
                     inner.table[idx].take();
                 }

@@ -149,22 +149,22 @@ impl MemorySet {
             .mprotect(start_vpn, end_vpn, map_perm)
     }
     #[inline(always)]
-    fn push(&self, mut map_area: MapArea, data: Option<&[u8]>) {
+    fn push(&self, map_area: MapArea, data: Option<&[u8]>) {
         self.inner.get_unchecked_mut().push(map_area, data)
     }
     #[inline(always)]
-    fn push_with_offset(&self, mut map_area: MapArea, offset: usize, data: Option<&[u8]>) {
+    fn push_with_offset(&self, map_area: MapArea, offset: usize, data: Option<&[u8]>) {
         self.inner
             .get_unchecked_mut()
             .push_with_offset(map_area, offset, data)
     }
     #[inline(always)]
-    fn push_with_given_frames(&self, mut map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
+    fn push_with_given_frames(&self, map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
         self.inner
             .get_unchecked_mut()
             .push_with_given_frames(map_area, frames)
     }
-    pub fn map_given_frames(&self, mut map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
+    pub fn map_given_frames(&self, map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
         self.inner
             .get_unchecked_mut()
             .map_given_frames(map_area, frames);
@@ -383,8 +383,8 @@ impl MemorySetInner {
             .iter_mut()
             .enumerate()
             .filter(|(_, area)| area.area_type == MapAreaType::Mmap)
-            .find(|(idx, area)| {
-                let (start, end) = area.vpn_range.range();
+            .find(|(_, area)| {
+                let start = area.vpn_range.start();
                 start == start_vpn
             })
         {
@@ -514,7 +514,7 @@ impl MemorySetInner {
                 new_area.vpn_range = VPNRange::new(start_vpn, end);
                 area.vpn_range = VPNRange::new(start, start_vpn);
                 loop {
-                    let mut page = area.data_frames.pop_last().unwrap();
+                    let page = area.data_frames.pop_last().unwrap();
                     if page.0 < start_vpn {
                         area.data_frames.insert(page.0, page.1);
                         break;
@@ -532,7 +532,7 @@ impl MemorySetInner {
                 new_area.vpn_range = VPNRange::new(start, end_vpn);
                 area.vpn_range = VPNRange::new(end_vpn, end);
                 loop {
-                    let mut page = area.data_frames.pop_first().unwrap();
+                    let page = area.data_frames.pop_first().unwrap();
                     if page.0 >= end_vpn {
                         area.data_frames.insert(page.0, page.1);
                         break;
@@ -552,7 +552,7 @@ impl MemorySetInner {
                 area.map_perm = map_perm;
                 flags = area.flags();
                 loop {
-                    let mut page = area.data_frames.pop_first().unwrap();
+                    let page = area.data_frames.pop_first().unwrap();
                     if page.0 >= start_vpn {
                         area.data_frames.insert(page.0, page.1);
                         break;
@@ -560,7 +560,7 @@ impl MemorySetInner {
                     front_area.data_frames.insert(page.0, page.1);
                 }
                 loop {
-                    let mut page = area.data_frames.pop_last().unwrap();
+                    let page = area.data_frames.pop_last().unwrap();
                     if page.0 < end_vpn {
                         area.data_frames.insert(page.0, page.1);
                         break;
@@ -834,12 +834,12 @@ impl MemorySetInner {
             if area.area_type == MapAreaType::Mmap {
                 GROUP_SHARE.lock().add_area(new_area.groupid);
             }
-            /// Mmap和brk是lazy allocation
+            // Mmap和brk是lazy allocation
             if area.area_type == MapAreaType::Mmap || area.area_type == MapAreaType::Brk {
                 //已经分配且独占/被写过的部分以及读共享部分按cow处理
                 //其余是未分配部分，直接clone即可
                 new_area.data_frames = area.data_frames.clone();
-                for (vpn, frame) in area.data_frames.iter() {
+                for (vpn, _) in area.data_frames.iter() {
                     let vpn = *vpn;
                     let pte = user_space.get_mut().page_table.translate(vpn).unwrap();
                     let mut pte_flags = pte.flags();
@@ -863,7 +863,7 @@ impl MemorySetInner {
                 continue;
             }
             // let mut page_table = &mut user_space.page_table;
-            ///ELF是cow
+            // ELF是cow
             if area.area_type == MapAreaType::Elf {
                 for vpn in area.vpn_range {
                     let pte = user_space.get_mut().page_table.translate(vpn).unwrap();
@@ -914,7 +914,7 @@ impl MemorySetInner {
     ///Remove all `MapArea`
     pub fn recycle_data_pages(&mut self) {
         // 先检测是否需要munmap
-        for (idx, area) in self.areas.iter_mut().enumerate() {
+        for area in self.areas.iter_mut() {
             if area.area_type == MapAreaType::Mmap {
                 if area.mmap_flags.contains(MmapFlags::MAP_SHARED)
                     && area.map_perm.contains(MapPermission::W)

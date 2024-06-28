@@ -31,27 +31,27 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     /// 在当前目录下创建文件或目录
-    fn create(&self, path: &str, ty: InodeType) -> Option<Arc<dyn Inode>> {
+    fn create(&self, _path: &str, _ty: InodeType) -> Option<Arc<dyn Inode>> {
         unimplemented!()
     }
     /// 在当前目录下查找文件
-    fn find_by_path(&self, path: &str) -> Option<Arc<dyn Inode>> {
+    fn find_by_path(&self, _path: &str) -> Option<Arc<dyn Inode>> {
         unimplemented!()
     }
     ///
-    fn read_at(&self, off: usize, buf: &mut [u8]) -> SyscallRet {
+    fn read_at(&self, _off: usize, _buf: &mut [u8]) -> SyscallRet {
         unimplemented!()
     }
     ///
-    fn write_at(&self, off: usize, buf: &[u8]) -> SyscallRet {
+    fn write_at(&self, _off: usize, _buf: &[u8]) -> SyscallRet {
         unimplemented!()
     }
     /// 读取目录项
-    fn read_dentry(&self, off: usize, len: usize) -> Option<(Vec<u8>, isize)> {
+    fn read_dentry(&self, _off: usize, _len: usize) -> Option<(Vec<u8>, isize)> {
         unimplemented!()
     }
     ///
-    fn truncate(&self, size: usize) -> GeneralRet {
+    fn truncate(&self, _size: usize) -> GeneralRet {
         unimplemented!()
     }
     ///
@@ -59,22 +59,18 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     ///
-    fn set_timestamps(&self, atime: Option<u32>, mtime: Option<u32>) -> GeneralRet {
+    fn set_timestamps(&self, _atime: Option<u32>, _mtime: Option<u32>) -> GeneralRet {
         unimplemented!()
     }
     // fn link(&self);
-    fn unlink(&self, path: &str) -> GeneralRet {
+    fn unlink(&self, _path: &str) -> GeneralRet {
         unimplemented!();
     }
-    fn rename(&self, path: &str, new_path: &str) -> GeneralRet {
+    fn rename(&self, _path: &str, _new_path: &str) -> GeneralRet {
         unimplemented!()
     }
     fn read_all(&self) -> Result<Vec<u8>, SysErrNo> {
         unimplemented!();
-    }
-    #[cfg(feature = "fat32")]
-    fn ls(&self) -> Vec<String> {
-        unimplemented!()
     }
 }
 
@@ -93,7 +89,7 @@ pub trait File: Send + Sync {
     /// ppoll处理
     fn poll(&self, events: PollEvents) -> PollEvents;
     /// 设置偏移量,并非所有文件都支持
-    fn lseek(&self, offset: isize, whence: usize) -> SyscallRet {
+    fn lseek(&self, _offset: isize, _whence: usize) -> SyscallRet {
         unimplemented!("not support!");
     }
 }
