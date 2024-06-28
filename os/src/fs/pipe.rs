@@ -9,9 +9,11 @@
 /// ```
 //
 use super::File;
+use crate::fs::{stat::S_IFIFO, Kstat};
 use crate::task::suspend_current_and_run_next;
 use crate::{mm::UserBuffer, syscall::PollEvents, utils::SyscallRet};
 use alloc::sync::{Arc, Weak};
+use log::debug;
 use spin::{Mutex, MutexGuard};
 
 /// ### 管道
@@ -56,7 +58,7 @@ enum RingBufferStatus {
     Normal,
 }
 
-const RING_BUFFER_SIZE: usize = 32;
+const RING_BUFFER_SIZE: usize = 512;
 
 /// ### 管道缓冲区(双端队列,向右增长)
 /// |成员变量|描述|
@@ -167,6 +169,7 @@ impl File for Pipe {
     }
     fn read(&self, buf: UserBuffer) -> SyscallRet {
         assert!(self.readable());
+        let buf_len = buf.len();
         let mut buf_iter = buf.into_iter();
         let mut read_size = 0usize;
         loop {
@@ -190,18 +193,25 @@ impl File for Pipe {
                 } else {
                     return Ok(read_size);
                 }
+                if read_size == buf_len {
+                    return Ok(read_size);
+                }
             }
         }
     }
     fn write(&self, buf: UserBuffer) -> SyscallRet {
         assert!(self.writable());
+        let buf_len = buf.len();
+        debug!("buf len is {}", buf_len);
         let mut buf_iter = buf.into_iter();
         let mut write_size = 0usize;
         loop {
+            //debug!("work in write loop");
             let mut ring_buffer = self.inner_lock();
             let loop_write = ring_buffer.available_write();
             if loop_write == 0 {
                 drop(ring_buffer);
+                //debug!("write 0 byte");
                 suspend_current_and_run_next();
                 continue;
             }
@@ -213,7 +223,17 @@ impl File for Pipe {
                 } else {
                     return Ok(write_size);
                 }
+                if write_size == buf_len {
+                    return Ok(write_size);
+                }
             }
+        }
+    }
+    fn fstat(&self) -> Kstat {
+        Kstat {
+            st_mode: S_IFIFO,
+            st_nlink: 1,
+            ..Kstat::default()
         }
     }
     fn poll(&self, events: PollEvents) -> PollEvents {

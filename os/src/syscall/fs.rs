@@ -1,8 +1,8 @@
 //! File and filesystem-related syscalls
 use crate::{
     fs::{
-        fs_stat, make_pipe, open, open_device_file, open_file, sync, File, FileClass, Kstat,
-        OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET,
+        fs_stat, make_pipe, open, open_device_file, open_file, root_inode, sync, File, FileClass,
+        InodeType, Kstat, OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET,
     },
     mm::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
@@ -431,6 +431,8 @@ pub fn sys_fstat(fd: usize, kst: *const u8) -> SyscallRet {
     let inner = task.inner_lock();
     let token = inner.user_token();
 
+    debug!("[sys_fstat] fd is {:?}, kst is {}", fd, kst as usize);
+
     let mut kst = UserBuffer::new(translated_byte_buffer(token, kst, size_of::<Kstat>()).unwrap());
 
     if fd >= inner.fd_table.len() || inner.fd_table.try_get_file(fd).is_none() {
@@ -455,8 +457,8 @@ pub fn sys_pipe2(fd: *mut u32) -> SyscallRet {
     let mut inner = task.inner_lock();
     let token = inner.user_token();
 
-    let read_fd = inner.fd_table.alloc_fd();
     let (read_pipe, write_pipe) = make_pipe();
+    let read_fd = inner.fd_table.alloc_fd();
     inner.fd_table.set(
         read_fd,
         Some(FileClass::Abs(read_pipe)),

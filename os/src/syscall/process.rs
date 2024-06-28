@@ -166,6 +166,12 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
 ///> 0    meaning wait for the child whose process ID is equal to the value of pid.
 pub fn sys_wait4(pid: isize, wstatus: *mut i32, mut options: i32) -> SyscallRet {
     //assert!(options == 0, "not support options yet");
+
+    debug!(
+        "[sys_wait4] pid is {},wstatus is {}, options is {}",
+        pid, wstatus as usize, options
+    );
+
     if options == 0 {
         //默认所有进程都在同一个组
         options = -1;

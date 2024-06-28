@@ -13,10 +13,10 @@ use crate::{
         flush_tlb, translated_ref, translated_refmut, MapArea, MapAreaType, MapPermission, MapType,
         MemorySet, MemorySetInner, PhysPageNum, VirtAddr,
     },
-    signal::SigPending,
+    signal::{SigPending, SigSet},
     syscall::{CloneFlags, MapedSharedMemory},
     task::insert_into_thread_group,
-    timer::{TimeData, Timer},
+    timer::{TimeData, TimeVal, Timer},
     trap::{trap_handler, TrapContext},
     utils::{is_abs_path, SysErrNo},
 };
@@ -508,6 +508,26 @@ impl TaskControlBlock {
             inner.user_heappoint = shrinked_addr;
         }
         inner.user_heappoint
+    }
+
+    pub fn check_timer(&self) {
+        let mut inner = self.inner_lock();
+        let now_timeval = TimeVal::now();
+        let timer_inner = inner.timer.get_mut();
+        if timer_inner.if_first {
+            //首次触发
+            if now_timeval > timer_inner.last_time + timer_inner.timer.it_value {
+                inner.sig_pending.get_mut().pending |= SigSet::SIGALRM;
+                timer_inner.if_first = false;
+                timer_inner.last_time = now_timeval;
+            }
+        } else if timer_inner.timer.it_interval != TimeVal::new(0, 0) {
+            //间隔触发
+            if now_timeval > timer_inner.last_time + timer_inner.timer.it_interval {
+                inner.sig_pending.get_mut().pending |= SigSet::SIGALRM;
+                timer_inner.last_time = now_timeval;
+            }
+        }
     }
 }
 

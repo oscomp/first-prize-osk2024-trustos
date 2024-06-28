@@ -2,6 +2,7 @@ mod inode;
 
 use super::{InodeType, Kstat, Statfs};
 use crate::{
+    fs::String,
     mm::UserBuffer,
     syscall::PollEvents,
     utils::{GeneralRet, SysErrNo, SyscallRet},
@@ -76,6 +77,9 @@ pub trait Inode: Send + Sync {
     #[cfg(feature = "fat32")]
     fn ls(&self) -> Vec<String> {
         unimplemented!()
+    }
+    fn get_path(&self) -> String {
+        unimplemented!();
     }
 }
 
