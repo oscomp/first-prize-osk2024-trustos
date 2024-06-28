@@ -4,7 +4,7 @@ use lwext4_rust::{
 };
 
 use crate::{
-    fs::{Dirent, Inode, InodeType, Kstat},
+    fs::{Dirent, Inode, InodeType, Kstat, String},
     sync::SyncUnsafeCell,
     utils::{GeneralRet, SysErrNo, SyscallRet},
 };
@@ -208,6 +208,10 @@ impl Inode for Ext4Inode {
         } else {
             Ok(())
         }
+    }
+
+    fn get_path(&self) -> String {
+        self.0.get_unchecked_ref().get_path().into_string().unwrap()
     }
 }
 

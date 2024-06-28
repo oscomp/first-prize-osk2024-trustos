@@ -5,6 +5,7 @@ use core::ops::Add;
 use crate::config::board::CLOCK_FREQ;
 use crate::sbi::set_timer;
 use crate::sync::SyncUnsafeCell;
+use core::cmp::Ordering;
 use riscv::register::time;
 
 const TICKS_PER_SEC: usize = 100;
@@ -132,14 +133,38 @@ pub const ITIMER_PROF: usize = 2;
 
 /// 三种 itimer,实际只会使用ITIMER_REAL
 pub struct Timer {
-    pub inner: SyncUnsafeCell<Itimerval>,
+    pub inner: SyncUnsafeCell<TimerInner>,
+}
+
+pub struct TimerInner {
+    pub timer: Itimerval,
+    pub last_time: TimeVal,
+    pub if_first: bool,
+}
+
+impl TimerInner {
+    pub fn new() -> Self {
+        Self {
+            timer: Itimerval::new(),
+            last_time: TimeVal::new(0, 0),
+            if_first: false,
+        }
+    }
 }
 
 impl Timer {
     pub fn new() -> Self {
         Self {
-            inner: SyncUnsafeCell::new(Itimerval::new()),
+            inner: SyncUnsafeCell::new(TimerInner::new()),
         }
+    }
+
+    pub fn get_mut(&self) -> &mut TimerInner {
+        self.inner.get_unchecked_mut()
+    }
+
+    pub fn get_ref(&self) -> &TimerInner {
+        self.inner.get_unchecked_ref()
     }
 }
 
@@ -152,7 +177,7 @@ bitflags! {
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TimeVal {
     pub tv_sec: usize,  //秒
     pub tv_usec: usize, //微秒
@@ -165,9 +190,46 @@ impl TimeVal {
             tv_usec: usec,
         }
     }
+    pub fn now() -> Self {
+        let now_time = get_time_ms();
+        Self {
+            tv_sec: now_time / 1000,
+            tv_usec: (now_time % 1000) * 1000,
+        }
+    }
     pub fn as_bytes(&self) -> &[u8] {
         let size = core::mem::size_of::<Self>();
         unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
+    }
+}
+
+impl Add for TimeVal {
+    type Output = TimeVal;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        let usec = self.tv_usec + rhs.tv_usec;
+        Self {
+            tv_sec: self.tv_sec + rhs.tv_sec + usec / 1_000_000,
+            tv_usec: usec % 1_000_000,
+        }
+    }
+}
+
+impl PartialOrd for TimeVal {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if self.tv_sec > other.tv_sec {
+            Some(Ordering::Greater)
+        } else if self.tv_sec < other.tv_sec {
+            Some(Ordering::Less)
+        } else {
+            if self.tv_usec > other.tv_usec {
+                Some(Ordering::Greater)
+            } else if self.tv_usec < other.tv_usec {
+                Some(Ordering::Less)
+            } else {
+                Some(Ordering::Equal)
+            }
+        }
     }
 }
 

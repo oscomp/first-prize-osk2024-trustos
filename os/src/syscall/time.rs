@@ -1,7 +1,8 @@
 use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, UserBuffer};
+use crate::syscall::SigSet;
 use crate::task::{current_task, current_token};
 use crate::timer::{
-    get_time_ms, get_time_spec, Clockid, Itimerval, Rusage, Timespec, Tms, ITIMER_REAL,
+    get_time_ms, get_time_spec, Clockid, Itimerval, Rusage, TimeVal, Timespec, Tms, ITIMER_REAL,
 };
 use crate::utils::{SysErrNo, SyscallRet};
 use core::mem::size_of;
@@ -27,21 +28,41 @@ pub fn sys_times(tms: *const u8) -> SyscallRet {
     Ok(0)
 }
 
-pub fn sys_settimmer(
-    which: usize,
-    new_value: *const Itimerval,
-    old_value: *mut Itimerval,
-) -> SyscallRet {
-    //TODO(ZMY) 什么时候更新呢?
+pub fn sys_setitimer(which: usize, new_value: usize, old_value: usize) -> SyscallRet {
     assert!(which == ITIMER_REAL, "only support Itimer Real");
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
+
+    debug!(
+        "[sys_setitimer] which is {}, new_value is {},old_value is {}",
+        which, new_value, old_value
+    );
+
     if old_value as usize != 0 {
-        *translated_refmut(token, old_value) = *task_inner.timer.inner.get_unchecked_mut();
+        *translated_refmut(token, old_value as *mut Itimerval) =
+            (*task_inner.timer.get_ref()).timer;
     }
     if new_value as usize != 0 {
-        *task_inner.timer.inner.get_unchecked_mut() = *translated_ref(token, new_value);
+        let timer_inner = task_inner.timer.get_mut();
+        let new_timer = translated_ref(token, new_value as *const Itimerval);
+
+        debug!(
+            "set new timer : value: {}s + {}us, interval: {}s + {}us",
+            new_timer.it_value.tv_sec,
+            new_timer.it_value.tv_usec,
+            new_timer.it_interval.tv_sec,
+            new_timer.it_interval.tv_usec
+        );
+
+        (*timer_inner).timer = *new_timer;
+        timer_inner.last_time = TimeVal::now();
+        if new_timer.it_value == TimeVal::new(0, 0) {
+            task_inner.sig_pending.get_mut().pending |= SigSet::SIGALRM;
+            timer_inner.if_first = false;
+        } else {
+            timer_inner.if_first = true;
+        }
     }
     Ok(0)
 }

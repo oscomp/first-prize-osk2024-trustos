@@ -16,7 +16,7 @@ use core::{cmp::min, mem::size_of};
 use lazy_static::lazy_static;
 use spin::{Mutex, RwLock};
 
-use super::{File, Ioctl, Kstat, Stdout};
+use super::{stat::S_IFCHR, File, Ioctl, Kstat, Stdout};
 
 pub struct DevZero;
 pub struct DevNull;
@@ -108,7 +108,9 @@ impl File for DevZero {
         let devno = get_devno("/dev/zero");
         Kstat {
             st_dev: devno,
+            st_mode: S_IFCHR,
             st_rdev: devno,
+            st_nlink: 1,
             ..Kstat::default()
         }
     }
@@ -149,7 +151,9 @@ impl File for DevNull {
         let devno = get_devno("/dev/null");
         Kstat {
             st_dev: devno,
+            st_mode: S_IFCHR,
             st_rdev: devno,
+            st_nlink: 1,
             ..Kstat::default()
         }
     }
@@ -230,7 +234,9 @@ impl File for DevRtc {
         let devno = get_devno("/dev/rtc");
         Kstat {
             st_dev: devno,
+            st_mode: S_IFCHR,
             st_rdev: devno,
+            st_nlink: 1,
             ..Kstat::default()
         }
     }
@@ -291,7 +297,9 @@ impl File for DevRandom {
         let devno = get_devno("/dev/random");
         Kstat {
             st_dev: devno,
+            st_mode: S_IFCHR,
             st_rdev: devno,
+            st_nlink: 1,
             ..Kstat::default()
         }
     }
@@ -338,7 +346,9 @@ impl File for DevTty {
         let devno = get_devno("/dev/tty");
         Kstat {
             st_dev: devno,
+            st_mode: S_IFCHR,
             st_rdev: devno,
+            st_nlink: 1,
             ..Kstat::default()
         }
     }
@@ -412,7 +422,9 @@ impl File for DevCpuDmaLatency {
         let devno = get_devno("/dev/cpu_dma_latency");
         Kstat {
             st_dev: devno,
+            st_mode: S_IFCHR,
             st_rdev: devno,
+            st_nlink: 1,
             ..Kstat::default()
         }
     }

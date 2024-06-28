@@ -2,6 +2,7 @@ mod inode;
 
 use super::{InodeType, Kstat, Statfs};
 use crate::{
+    fs::String,
     mm::UserBuffer,
     syscall::PollEvents,
     utils::{GeneralRet, SysErrNo, SyscallRet},
@@ -70,6 +71,9 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     fn read_all(&self) -> Result<Vec<u8>, SysErrNo> {
+        unimplemented!();
+    }
+    fn get_path(&self) -> String {
         unimplemented!();
     }
 }

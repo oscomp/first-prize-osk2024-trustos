@@ -178,6 +178,8 @@ pub fn trap_handler() {
         }
     }
 
+    current_task().unwrap().check_timer();
+
     check_signal_for_current_task();
 
     //记录内核空间花费CPU时间，同时准备用户空间花费CPU时间

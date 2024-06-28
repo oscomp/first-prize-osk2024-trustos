@@ -164,9 +164,15 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
 ///0      meaning wait for any child process whose process group ID
 ///       is equal to that of the calling process at the time of the call to waitpid().
 ///> 0    meaning wait for the child whose process ID is equal to the value of pid.
-pub fn sys_wait4(pid: isize, wstatus: *mut i32, _options: i32) -> SyscallRet {
+pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
     //assert!(options == 0, "not support options yet");
     //默认所有进程都在同一个组
+
+    debug!(
+        "[sys_wait4] pid is {},wstatus is {}, options is {}",
+        pid, wstatus as usize, options
+    );
+
     loop {
         let mut process_group = PROCESS_GROUP.lock();
         let task = current_task().unwrap();

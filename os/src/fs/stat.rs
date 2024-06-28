@@ -1,3 +1,11 @@
+pub const S_IFIFO: u32 = 0x1000; //管道设备文件
+pub const S_IFCHR: u32 = 0x2000; //字符设备文件
+pub const S_IFDIR: u32 = 0x4000; //目录文件
+pub const S_IFBLK: u32 = 0x6000; //块设备文件
+pub const S_IFREG: u32 = 0x8000; //普通文件
+pub const S_IFLINK: u32 = 0xA000; //符号链接文件
+pub const S_IFSOCK: u32 = 0xC000; //套接字设备文件
+
 #[repr(C)]
 #[derive(Debug, Default)]
 pub struct Kstat {
