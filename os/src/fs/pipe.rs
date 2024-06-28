@@ -202,7 +202,6 @@ impl File for Pipe {
     fn write(&self, buf: UserBuffer) -> SyscallRet {
         assert!(self.writable());
         let buf_len = buf.len();
-        debug!("buf len is {}", buf_len);
         let mut buf_iter = buf.into_iter();
         let mut write_size = 0usize;
         loop {
