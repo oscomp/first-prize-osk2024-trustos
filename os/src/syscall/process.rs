@@ -12,7 +12,7 @@ use crate::{
         suspend_current_and_run_next, task_num, Sysinfo, PROCESS_GROUP,
     },
     timer::{get_time_ms, Timespec},
-    utils::{SysErrNo, SyscallRet},
+    utils::{trim_start_slash, SysErrNo, SyscallRet},
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
@@ -98,7 +98,7 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
     let task_inner = task.inner_lock();
 
     let token = task_inner.user_token();
-    let path = translated_str(token, path);
+    let path = trim_start_slash(translated_str(token, path));
 
     //处理argv参数
     let mut argv_vec = Vec::<String>::new();

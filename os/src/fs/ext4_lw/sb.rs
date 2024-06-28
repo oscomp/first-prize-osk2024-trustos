@@ -5,6 +5,7 @@ use lwext4_rust::{Ext4BlockWrapper, InodeTypes, KernelDevOp};
 use crate::{
     drivers::Disk,
     fs::{Inode, Statfs, SuperBlock},
+    sync::SyncUnsafeCell,
 };
 
 use alloc::sync::Arc;
@@ -12,7 +13,7 @@ use alloc::sync::Arc;
 use super::Ext4Inode;
 
 pub struct Ext4SuperBlock {
-    inner: Ext4BlockWrapper<Disk>,
+    inner: SyncUnsafeCell<Ext4BlockWrapper<Disk>>,
     root: Arc<dyn Inode>,
 }
 
@@ -24,7 +25,7 @@ impl SuperBlock for Ext4SuperBlock {
         self.root.clone()
     }
     fn fs_stat(&self) -> Statfs {
-        let stat = self.inner.get_lwext4_mp_stats();
+        let stat = self.inner.get_unchecked_ref().get_lwext4_mp_stats();
         Statfs {
             f_type: 0xEF53,
             f_bsize: stat.block_size as i64,
@@ -38,10 +39,11 @@ impl SuperBlock for Ext4SuperBlock {
         }
     }
     fn sync(&self) {
-        todo!()
+        self.inner.get_unchecked_mut().sync();
     }
     fn ls(&self) {
         self.inner
+            .get_unchecked_ref()
             .lwext4_dir_ls()
             .into_iter()
             .for_each(|s| println!("{}", s));
@@ -53,7 +55,10 @@ impl Ext4SuperBlock {
         let inner =
             Ext4BlockWrapper::<Disk>::new(disk).expect("failed to initialize EXT4 filesystem");
         let root = Arc::new(Ext4Inode::new("/", InodeTypes::EXT4_DE_DIR));
-        Self { inner, root }
+        Self {
+            inner: SyncUnsafeCell::new(inner),
+            root,
+        }
     }
 }
 

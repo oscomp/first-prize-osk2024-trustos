@@ -11,7 +11,7 @@ use crate::{
     syscall::{FaccessatMode, PollEvents, PollFd, SigSet},
     task::{current_task, current_token, suspend_current_and_run_next},
     timer::{get_time_ms, Timespec},
-    utils::{get_abs_path, trim_first_point_slash, SysErrNo, SyscallRet},
+    utils::{get_abs_path, trim_first_point_slash, trim_start_slash, SysErrNo, SyscallRet},
 };
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use core::cmp::min;
@@ -478,7 +478,7 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
-    let path = translated_str(token, path);
+    let path = trim_start_slash(translated_str(token, path));
     let mut kst = UserBuffer::new(translated_byte_buffer(token, kst, size_of::<Kstat>()).unwrap());
 
     debug!("[sys_fstatat] dirfd is {}, path is {}", dirfd, path);

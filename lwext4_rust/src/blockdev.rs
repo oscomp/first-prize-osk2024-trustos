@@ -218,6 +218,17 @@ impl<K: KernelDevOp> Ext4BlockWrapper<K> {
         EOK as _
     }
 
+    pub fn sync(&mut self) -> Result<usize, i32> {
+        unsafe {
+            let r = ext4_block_cache_flush(&mut *self.value);
+            if r != EOK as i32 {
+                error!("ext4_block_cache_flush: rc = {:?}\n", r);
+                return Err(r);
+            }
+            Ok(0)
+        }
+    }
+
     pub unsafe fn lwext4_mount(&mut self) -> Result<usize, i32> {
         let c_name = &self.name as *const _ as *const c_char;
         let c_mountpoint = &self.mount_point as *const _ as *const c_char;
