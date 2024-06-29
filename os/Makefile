@@ -45,7 +45,7 @@ TEST ?=
 FINAL_DIR := $(shell cd ../final_tests && pwd)
 
 # 定义需要跳转到final_tests执行的目标列表
-FINAL_TARGETS := build_all busybox lua lmbench libctest iozone libc-bench netperf iperf unix-bench cyclictest time-test test_all true copy-file-range-test interrupts-test
+FINAL_TARGETS := sdcard ltp build_all busybox lua lmbench libctest iozone libc-bench netperf iperf unix-bench cyclictest time-test test_all true copy-file-range-test interrupts-test
 
 %:
 	@if echo "$(FINAL_TARGETS)" | grep -wq $@; then \
