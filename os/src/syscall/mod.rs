@@ -132,7 +132,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
     // debug!("syscall:{}", syscall_id);
     let id = syscall_id;
     let syscall_id: Syscall = Syscall::from(syscall_id);
-    // debug!("syscall:{:?}", syscall_id);
+    debug!("syscall:{:?}", syscall_id);
     match syscall_id {
         Syscall::Getcwd => sys_getcwd(args[0] as *const u8, args[1]),
         Syscall::Dup => sys_dup(args[0]),
