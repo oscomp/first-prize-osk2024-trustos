@@ -198,16 +198,16 @@ pub fn flush_preload() {
         initproc.write(UserBuffer::new(v));
     }
 
-    if let Some(FileClass::File(onlinetests)) = open_file("onlinetests", OpenFlags::O_CREATE) {
-        let mut v = Vec::new();
-        v.push(unsafe {
-            core::slice::from_raw_parts_mut(
-                shell_start as *mut u8,
-                shell_end as usize - shell_start as usize,
-            ) as &'static mut [u8]
-        });
-        onlinetests.write(UserBuffer::new(v));
-    }
+    // if let Some(FileClass::File(onlinetests)) = open_file("onlinetests", OpenFlags::O_CREATE) {
+    //     let mut v = Vec::new();
+    //     v.push(unsafe {
+    //         core::slice::from_raw_parts_mut(
+    //             shell_start as *mut u8,
+    //             shell_end as usize - shell_start as usize,
+    //         ) as &'static mut [u8]
+    //     });
+    //     onlinetests.write(UserBuffer::new(v));
+    // }
 }
 
 pub fn init() {

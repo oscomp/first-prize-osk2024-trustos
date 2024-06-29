@@ -171,9 +171,9 @@ impl Inode for Ext4Inode {
     }
     fn read_dentry(&self, off: usize, len: usize) -> Option<(Vec<u8>, isize)> {
         let file = self.0.get_unchecked_mut();
-        let entries = file.read_dir().unwrap();
+        let entries = file.read_dir_from(off as u64).unwrap();
         let mut de: Vec<u8> = Vec::new();
-        let (mut cur, mut res, mut f_off) = (0usize, 0usize, 0usize);
+        let (mut res, mut f_off) = (0usize, usize::MAX);
         for entry in entries {
             let dirent = Dirent {
                 d_ino: entry.d_ino,
@@ -182,11 +182,6 @@ impl Inode for Ext4Inode {
                 d_type: entry.d_type,
                 d_name: entry.d_name,
             };
-            // 忽略offset之前的Dirent
-            if cur < off {
-                cur += dirent.len();
-                continue;
-            }
             if res + dirent.len() > len {
                 break;
             }

@@ -449,7 +449,7 @@ impl Ext4File {
         Ok(EOK as usize)
     }
 
-    pub fn read_dir(&self) -> Result<Vec<OsDirent>, i32> {
+    pub fn read_dir_from(&self, off: u64) -> Result<Vec<OsDirent>, i32> {
         if self.this_type != InodeTypes::EXT4_DE_DIR {
             return Err(22);
         }
@@ -461,7 +461,7 @@ impl Ext4File {
         unsafe {
             ext4_dir_open(&mut d, c_path);
             drop(CString::from_raw(c_path));
-
+            d.next_off = off;
             let mut de = ext4_dir_entry_next(&mut d);
             while !de.is_null() {
                 let dentry = &(*de);

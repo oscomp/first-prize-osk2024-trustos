@@ -24,7 +24,7 @@ use crate::{
     utils::{backtrace, hart_id},
 };
 use core::arch::global_asm;
-use log::{debug, warn};
+use log::{debug, trace, warn};
 use riscv::register::{
     mtvec::TrapMode,
     scause::{self, Exception, Interrupt, Trap},
@@ -99,7 +99,7 @@ pub fn trap_handler() {
             };
             // handle error
             match result {
-                Ok(ret) => debug!("[syscall ret] {:?} ret = {}", syscall_id, ret),
+                Ok(ret) => trace!("[syscall ret] {:?} ret = {}", syscall_id, ret),
                 Err(errno) => debug!("[syscall ret] {:?} ret = {}", syscall_id, errno.str()),
             }
         }

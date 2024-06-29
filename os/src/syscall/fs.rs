@@ -98,10 +98,10 @@ pub fn sys_writev(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
     let inner = task.inner_lock();
     let token = inner.user_token();
 
-    debug!(
-        "[sys_writev] fd is {}, iov is {:x}, iovcnt is {}",
-        fd, iov as usize, iovcnt
-    );
+    // debug!(
+    //     "[sys_writev] fd is {}, iov is {:x}, iovcnt is {}",
+    //     fd, iov as usize, iovcnt
+    // );
 
     if fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
@@ -337,7 +337,7 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let inner = task.inner_lock();
 
     debug!(
-        "[sys_getdents64] fd is {},buf is {:x}, len is {}",
+        "[sys_getdents64] fd is {}, buf addr  is {:x}, len is {}",
         fd, buf as usize, len
     );
 
@@ -601,7 +601,7 @@ const FD_CLOEXEC: usize = 1;
 pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    debug!("[sys_fcntl] fd is {}, cmd is {}, arg is {}", fd, cmd, arg);
+    // debug!("[sys_fcntl] fd is {}, cmd is {}, arg is {}", fd, cmd, arg);
 
     if fd >= inner.fd_table.len() || inner.fd_table.try_get_file(fd).is_none() {
         return Err(SysErrNo::EINVAL);
@@ -654,12 +654,12 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
 
 //TODO(ZMY) 如果需要的话,使用注释内的代码;部分结构需做一下类型体操
 //busybox只需要跑脚本,大概率不需要
-pub fn sys_ioctl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
+pub fn sys_ioctl(_fd: usize, _cmd: usize, _arg: usize) -> SyscallRet {
     // let task = current_task().unwrap();
     // let mut inner = task.inner_lock();
     // let token = inner.user_token();
 
-    debug!("[sys_ioctl] fd is {},cmd is {:x},arg is {:x}", fd, cmd, arg);
+    // debug!("[sys_ioctl] fd is {},cmd is {:x},arg is {:x}", fd, cmd, arg);
     Ok(0)
 
     // if fd >= inner.fd_table.len() || inner.fd_table.get_file(fd).is_none() {
