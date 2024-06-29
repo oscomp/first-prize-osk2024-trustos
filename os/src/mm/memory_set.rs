@@ -18,6 +18,7 @@ use crate::{
 use alloc::{sync::Arc, vec::Vec};
 use core::arch::asm;
 use lazy_static::*;
+use log::debug;
 use riscv::register::{
     satp,
     scause::{Exception, Trap},
@@ -138,15 +139,10 @@ impl MemorySet {
         self.inner.get_unchecked_mut().cow_page_fault(vpn, scause)
     }
     #[inline(always)]
-    pub fn mprotect(
-        &self,
-        start_vpn: VirtPageNum,
-        end_vpn: VirtPageNum,
-        map_perm: MapPermission,
-    ) -> PTEFlags {
+    pub fn mprotect(&self, start_vpn: VirtPageNum, end_vpn: VirtPageNum, map_perm: MapPermission) {
         self.inner
             .get_unchecked_mut()
-            .mprotect(start_vpn, end_vpn, map_perm)
+            .mprotect(start_vpn, end_vpn, map_perm);
     }
     #[inline(always)]
     fn push(&self, map_area: MapArea, data: Option<&[u8]>) {
@@ -490,92 +486,94 @@ impl MemorySetInner {
         start_vpn: VirtPageNum,
         end_vpn: VirtPageNum,
         map_perm: MapPermission,
-    ) -> PTEFlags {
-        let mut flags = PTEFlags::empty();
+    ) {
         //因修改而新增的Area
         let mut new_areas = Vec::new();
         for area in self.areas.iter_mut() {
             let (start, end) = area.vpn_range.range();
-            //无需修改
-            if end <= start_vpn || start >= end_vpn {
-                continue;
-            }
             //整个area修改
-            if start >= start_vpn && end <= end_vpn {
+            if start >= start_vpn && start < end_vpn && end >= start_vpn && end <= end_vpn {
                 area.map_perm = map_perm;
-                flags = area.flags();
                 continue;
             }
             //修改area后半部分
-            if start < start_vpn && end < end_vpn {
+            else if start < start_vpn && end > start_vpn && end <= end_vpn {
                 let mut new_area = MapArea::from_another(area);
                 new_area.map_perm = map_perm;
-                flags = new_area.flags();
                 new_area.vpn_range = VPNRange::new(start_vpn, end);
                 area.vpn_range = VPNRange::new(start, start_vpn);
                 loop {
-                    let page = area.data_frames.pop_last().unwrap();
-                    if page.0 < start_vpn {
-                        area.data_frames.insert(page.0, page.1);
+                    if let Some(page) = area.data_frames.pop_last() {
+                        if page.0 < start_vpn {
+                            area.data_frames.insert(page.0, page.1);
+                        } else {
+                            new_area.data_frames.insert(page.0, page.1);
+                        }
+                    } else {
                         break;
                     }
-                    new_area.data_frames.insert(page.0, page.1);
                 }
                 new_areas.push(new_area);
                 continue;
             }
             //修改area前半部分
-            if start > start_vpn && end > end_vpn {
+            else if start >= start_vpn && start < end_vpn && end > end_vpn {
                 let mut new_area = MapArea::from_another(area);
                 new_area.map_perm = map_perm;
-                flags = new_area.flags();
                 new_area.vpn_range = VPNRange::new(start, end_vpn);
                 area.vpn_range = VPNRange::new(end_vpn, end);
                 loop {
-                    let page = area.data_frames.pop_first().unwrap();
-                    if page.0 >= end_vpn {
-                        area.data_frames.insert(page.0, page.1);
+                    if let Some(page) = area.data_frames.pop_first() {
+                        if page.0 >= end_vpn {
+                            area.data_frames.insert(page.0, page.1);
+                        } else {
+                            new_area.data_frames.insert(page.0, page.1);
+                        }
+                    } else {
                         break;
                     }
-                    new_area.data_frames.insert(page.0, page.1);
                 }
                 new_areas.push(new_area);
                 continue;
             }
             //修改area中间部分
-            if start < start_vpn && end > end_vpn {
+            else if start < start_vpn && end > end_vpn {
                 let mut front_area = MapArea::from_another(area);
                 let mut back_area = MapArea::from_another(area);
+                area.map_perm = map_perm;
                 front_area.vpn_range = VPNRange::new(start, start_vpn);
                 back_area.vpn_range = VPNRange::new(end_vpn, end);
                 area.vpn_range = VPNRange::new(start_vpn, end_vpn);
-                area.map_perm = map_perm;
-                flags = area.flags();
                 loop {
-                    let page = area.data_frames.pop_first().unwrap();
-                    if page.0 >= start_vpn {
-                        area.data_frames.insert(page.0, page.1);
+                    if let Some(page) = area.data_frames.pop_first() {
+                        if page.0 >= start_vpn {
+                            area.data_frames.insert(page.0, page.1);
+                        } else {
+                            front_area.data_frames.insert(page.0, page.1);
+                        }
+                    } else {
                         break;
                     }
-                    front_area.data_frames.insert(page.0, page.1);
                 }
                 loop {
-                    let page = area.data_frames.pop_last().unwrap();
-                    if page.0 < end_vpn {
-                        area.data_frames.insert(page.0, page.1);
+                    if let Some(page) = area.data_frames.pop_last() {
+                        if page.0 < end_vpn {
+                            area.data_frames.insert(page.0, page.1);
+                        } else {
+                            back_area.data_frames.insert(page.0, page.1);
+                        }
+                    } else {
                         break;
                     }
-                    back_area.data_frames.insert(page.0, page.1);
                 }
                 new_areas.push(front_area);
                 new_areas.push(back_area);
-                continue;
             }
+            //剩下的情况无相交部分，无需修改
         }
         for area in new_areas {
             self.areas.push(area);
         }
-        flags
     }
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);

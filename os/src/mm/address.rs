@@ -239,6 +239,10 @@ impl VirtPageNum {
         }
         idx
     }
+    ///快速转换成usize，方便输出使用
+    pub fn as_usize(&self) -> usize {
+        self.0
+    }
 }
 
 impl PhysAddr {

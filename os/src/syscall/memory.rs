@@ -7,7 +7,7 @@ use crate::{
     fs::File,
     mm::{
         flush_tlb, frames_alloc_much, FrameTracker, MapArea, MapAreaType, MapPermission, MapType,
-        VirtAddr,
+        PTEFlags, VirtAddr,
     },
     syscall::MapedSharedMemory,
     task::current_task,
@@ -71,16 +71,17 @@ pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
 }
 
 pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> SyscallRet {
-    println!("[sys_mprotect] we don't know whether this syscall is correct!");
-    debug!(
-        "[sys_mprotect] addr is {:x}, len is {}, prot is {}",
-        addr, len, prot
-    );
     if (addr % PAGE_SIZE != 0) || (len % PAGE_SIZE != 0) {
         println!("sys_mprotect: not align");
         return Err(SysErrNo::EINVAL);
     }
     let map_perm: MapPermission = MmapProt::from_bits(prot).unwrap().into();
+
+    debug!(
+        "[sys_mprotect] addr is {:x}, len is {}, map_perm is {:?}",
+        addr, len, map_perm
+    );
+
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     let memory_set = &mut inner.memory_set;
@@ -88,12 +89,14 @@ pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> SyscallRet {
     let end_vpn = (addr + len) / PAGE_SIZE;
     let page_num = len / PAGE_SIZE;
     //修改各段的mappermission
-    let pte_flags = memory_set.mprotect(start_vpn.into(), end_vpn.into(), map_perm);
+    memory_set.mprotect(start_vpn.into(), end_vpn.into(), map_perm);
+    let mut protected_vpn = start_vpn;
     for _ in 0..page_num {
-        memory_set
-            .get_mut()
-            .page_table
-            .set_flags(start_vpn.into(), pte_flags);
+        memory_set.get_mut().page_table.set_flags(
+            protected_vpn.into(),
+            PTEFlags::from_bits(map_perm.bits()).unwrap(),
+        );
+        protected_vpn += PAGE_SIZE;
     }
     flush_tlb();
     Ok(0)
