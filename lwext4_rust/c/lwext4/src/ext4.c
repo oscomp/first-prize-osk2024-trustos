@@ -2452,6 +2452,34 @@ Finish:
 	return r;
 }
 
+int ext4_get_links_cnt(const char *path,int*cnt){
+    struct ext4_inode_ref inode_ref;
+	struct ext4_mountpoint *mp = ext4_get_mount(path);
+	ext4_file f;
+	int r;
+
+	if (!mp)
+		return ENOENT;
+
+	EXT4_MP_LOCK(mp);
+
+	r = ext4_generic_open2(&f, path, O_RDONLY, EXT4_DE_UNKNOWN, NULL, NULL);
+	if (r != EOK)
+		goto Finish;
+
+	r = ext4_fs_get_inode_ref(&mp->fs, f.inode, &inode_ref);
+	if (r != EOK)
+		goto Finish;
+
+	*cnt = ext4_inode_get_links_cnt(inode_ref.inode);
+	r = ext4_fs_put_inode_ref(&inode_ref);
+
+Finish:
+	EXT4_MP_UNLOCK(mp);
+
+	return r;
+}
+
 static int ext4_fsymlink_set(ext4_file *f, const void *buf, uint32_t size)
 {
 	struct ext4_inode_ref ref;

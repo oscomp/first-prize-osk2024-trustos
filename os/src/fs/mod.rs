@@ -37,29 +37,28 @@ pub use vfs::*;
 bitflags! {
     pub struct OpenFlags: u32 {
         // reserve 3 bits for the access mode
-        const O_RDONLY      = 0;
-        const O_WRONLY      = 1;
-        const O_RDWR        = 2;
-        const O_ACCMODE     = 3;
-        const O_CREATE      = 0o100;
-        const O_EXCL        = 0o200;
-        const O_NOCTTY      = 0o400;
-        const O_TRUNC       = 0o1000;
-        const O_APPEND      = 0o2000;
-        const O_NONBLOCK    = 0o4000;
-        const O_DSYNC       = 0o10000;
-        const O_SYNC        = 0o4010000;
-        const O_RSYNC       = 0o4010000;
-        const O_DIRECTORY   = 0o200000; // 目录
-        const O_NOFOLLOW    = 0o400000;
-        const O_CLOEXEC     = 0o2000000;    //描述符标志
-
-        const O_ASYNC       = 0o20000;
-        const O_DIRECT      = 0o40000;
-        const O_LARGEFILE   = 0o100000;
-        const O_NOATIME     = 0o1000000;
-        const O_PATH        = 0o10000000;
-        const O_TMPFILE     = 0o20200000;
+        const O_RDONLY      = 0;           // Read only
+        const O_WRONLY      = 1;           // Write only
+        const O_RDWR        = 2;           // Read and write
+        const O_ACCMODE     = 3;           // Mask for file access modes
+        const O_CREATE       = 0o100;       // Create file if it doesn't exist
+        const O_EXCL        = 0o200;       // Exclusive use flag
+        const O_NOCTTY      = 0o400;       // Do not assign controlling terminal
+        const O_TRUNC       = 0o1000;      // Truncate flag
+        const O_APPEND      = 0o2000;      // Set append mode
+        const O_NONBLOCK    = 0o4000;      // Non-blocking mode
+        const O_DSYNC       = 0o10000;     // Write operations complete as defined by POSIX
+        const O_SYNC        = 0o4010000;   // Write operations complete as defined by POSIX
+        const O_RSYNC       = 0o4010000;   // Synchronized read operations
+        const O_DIRECTORY   = 0o200000;    // Must be a directory
+        const O_NOFOLLOW    = 0o400000;    // Do not follow symbolic links
+        const O_CLOEXEC     = 0o2000000;   // Set close-on-exec
+        const O_ASYNC       = 0o20000;     // Signal-driven I/O
+        const O_DIRECT      = 0o40000;     // Direct disk access hints
+        const O_LARGEFILE   = 0o100000;    // Allow files larger than 2GB
+        const O_NOATIME     = 0o1000000;   // Do not update access time
+        const O_PATH        = 0o10000000;  // Obtain a file descriptor for a directory
+        const O_TMPFILE     = 0o20200000;  // Create an unnamed temporary file
     }
 }
 
@@ -107,6 +106,12 @@ impl FileClass {
         match self {
             FileClass::File(_) => Err(SysErrNo::EINVAL),
             FileClass::Abs(f) => Ok(f.clone()),
+        }
+    }
+    pub fn any(&self) -> Arc<dyn File> {
+        match self {
+            FileClass::File(f) => f.clone(),
+            FileClass::Abs(f) => f.clone(),
         }
     }
 }
@@ -187,16 +192,18 @@ pub fn flush_preload() {
         fn shell_end();
     }
 
-    if let Some(FileClass::File(initproc)) = open_file("initproc", OpenFlags::O_CREATE) {
-        let mut v = Vec::new();
-        v.push(unsafe {
-            core::slice::from_raw_parts_mut(
-                initproc_start as *mut u8,
-                initproc_end as usize - initproc_start as usize,
-            ) as &'static mut [u8]
-        });
-        initproc.write(UserBuffer::new(v));
-    }
+    let initproc = open("/initproc", OpenFlags::O_CREATE)
+        .unwrap()
+        .file()
+        .unwrap();
+    let mut v = Vec::new();
+    v.push(unsafe {
+        core::slice::from_raw_parts_mut(
+            initproc_start as *mut u8,
+            initproc_end as usize - initproc_start as usize,
+        ) as &'static mut [u8]
+    });
+    initproc.write(UserBuffer::new(v));
 }
 
 pub fn init() {
@@ -263,45 +270,37 @@ const LOCALTIME: &str =
 pub fn create_init_files() -> GeneralRet {
     //创建/proc文件夹
     open(
-        "/",
-        "proc",
+        "/proc",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
     );
     //创建/proc/mounts文件系统使用情况
-    if let Some(FileClass::File(mountsfile)) =
-        open("/proc", "mounts", OpenFlags::O_CREATE | OpenFlags::O_RDWR)
-    {
-        let mut mountsinfo = String::from(MOUNTS);
-        let mut mountsvec = Vec::new();
-        unsafe {
-            let mounts = mountsinfo.as_bytes_mut();
-            mountsvec.push(core::slice::from_raw_parts_mut(
-                mounts.as_mut_ptr(),
-                mounts.len(),
-            ));
-        }
-        let mountbuf = UserBuffer::new(mountsvec);
-        let mountssize = mountsfile.write(mountbuf)?;
-        debug!("create /proc/mounts with {} sizes", mountssize);
+    let mountsfile = open("/proc/mounts", OpenFlags::O_CREATE | OpenFlags::O_RDWR)?.file()?;
+    let mut mountsinfo = String::from(MOUNTS);
+    let mut mountsvec = Vec::new();
+    unsafe {
+        let mounts = mountsinfo.as_bytes_mut();
+        mountsvec.push(core::slice::from_raw_parts_mut(
+            mounts.as_mut_ptr(),
+            mounts.len(),
+        ));
     }
+    let mountbuf = UserBuffer::new(mountsvec);
+    let mountssize = mountsfile.write(mountbuf)?;
+    debug!("create /proc/mounts with {} sizes", mountssize);
     //创建/proc/meminfo系统内存使用情况
-    if let Some(FileClass::File(memfile)) =
-        open("/proc", "meminfo", OpenFlags::O_CREATE | OpenFlags::O_RDWR)
-    {
-        let mut meminfo = String::from(MEMINFO);
-        let mut memvec = Vec::new();
-        unsafe {
-            let mem = meminfo.as_bytes_mut();
-            memvec.push(core::slice::from_raw_parts_mut(mem.as_mut_ptr(), mem.len()));
-        }
-        let membuf = UserBuffer::new(memvec);
-        let memsize = memfile.write(membuf)?;
-        debug!("create /proc/meminfo with {} sizes", memsize);
+    let memfile = open("/proc/meminfo", OpenFlags::O_CREATE | OpenFlags::O_RDWR)?.file()?;
+    let mut meminfo = String::from(MEMINFO);
+    let mut memvec = Vec::new();
+    unsafe {
+        let mem = meminfo.as_bytes_mut();
+        memvec.push(core::slice::from_raw_parts_mut(mem.as_mut_ptr(), mem.len()));
     }
+    let membuf = UserBuffer::new(memvec);
+    let memsize = memfile.write(membuf)?;
+    debug!("create /proc/meminfo with {} sizes", memsize);
     //创建/dev文件夹
     open(
-        "/",
-        "dev",
+        "/dev",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
     );
     //注册设备/dev/rtc和/dev/rtc0
@@ -317,58 +316,47 @@ pub fn create_init_files() -> GeneralRet {
     register_device("/dev/cpu_dma_latency");
     //创建./dev/misc文件夹
     open(
-        "/dev",
-        "misc",
+        "/dev/misc",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
     );
     //注册设备/dev/misc/rtc
     register_device("/dev/misc/rtc");
     //创建/etc文件夹
     open(
-        "/",
-        "etc",
+        "/etc",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
     );
     //创建/etc/adjtime记录时间偏差
-    if let Some(FileClass::File(adjtimefile)) =
-        open("/etc", "adjtime", OpenFlags::O_CREATE | OpenFlags::O_RDWR)
-    {
-        let mut adjtime = String::from(ADJTIME);
-        let mut adjtimevec = Vec::new();
-        unsafe {
-            let adj = adjtime.as_bytes_mut();
-            adjtimevec.push(core::slice::from_raw_parts_mut(adj.as_mut_ptr(), adj.len()));
-        }
-        let adjtimebuf = UserBuffer::new(adjtimevec);
-        let adjtimesize = adjtimefile.write(adjtimebuf)?;
-        debug!("create /etc/adjtime with {} sizes", adjtimesize);
+    let adjtimefile = open("/etc/adjtime", OpenFlags::O_CREATE | OpenFlags::O_RDWR)?.file()?;
+    let mut adjtime = String::from(ADJTIME);
+    let mut adjtimevec = Vec::new();
+    unsafe {
+        let adj = adjtime.as_bytes_mut();
+        adjtimevec.push(core::slice::from_raw_parts_mut(adj.as_mut_ptr(), adj.len()));
     }
+    let adjtimebuf = UserBuffer::new(adjtimevec);
+    let adjtimesize = adjtimefile.write(adjtimebuf)?;
+    debug!("create /etc/adjtime with {} sizes", adjtimesize);
+
     //创建./etc/localtime记录时区
-    if let Some(FileClass::File(localtimefile)) =
-        open("/etc", "localtime", OpenFlags::O_CREATE | OpenFlags::O_RDWR)
-    {
-        let mut localtime = String::from(LOCALTIME);
-        let mut localtimevec = Vec::new();
-        unsafe {
-            let local = localtime.as_bytes_mut();
-            localtimevec.push(core::slice::from_raw_parts_mut(
-                local.as_mut_ptr(),
-                local.len(),
-            ));
-        }
-        let localtimebuf = UserBuffer::new(localtimevec);
-        let localtimesize = localtimefile.write(localtimebuf)?;
-        debug!("create /etc/localtime with {} sizes", localtimesize);
+    let localtimefile = open("/etc/localtime", OpenFlags::O_CREATE | OpenFlags::O_RDWR)?.file()?;
+    let mut localtime = String::from(LOCALTIME);
+    let mut localtimevec = Vec::new();
+    unsafe {
+        let local = localtime.as_bytes_mut();
+        localtimevec.push(core::slice::from_raw_parts_mut(
+            local.as_mut_ptr(),
+            local.len(),
+        ));
     }
+    let localtimebuf = UserBuffer::new(localtimevec);
+    let localtimesize = localtimefile.write(localtimebuf)?;
+    debug!("create /etc/localtime with {} sizes", localtimesize);
     println!("create_init_files success!");
     Ok(())
 }
 
-pub fn open_file(path: &str, flags: OpenFlags) -> Option<FileClass> {
-    open(&"/", path, flags)
-}
-
-fn create_file(abs_path: &str, flags: OpenFlags) -> Option<FileClass> {
+fn create_file(abs_path: &str, flags: OpenFlags) -> Result<FileClass, SysErrNo> {
     // 一定能找到,因为除了RootInode外都有父结点
     let parent_dir = root_inode();
     let (readable, writable) = flags.read_write();
@@ -378,17 +366,14 @@ fn create_file(abs_path: &str, flags: OpenFlags) -> Option<FileClass> {
     });
 }
 
-pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
-    let abs_path = get_abs_path(cwd, path);
+pub fn open(abs_path: &str, flags: OpenFlags) -> Result<FileClass, SysErrNo> {
     //判断是否是设备文件
     if find_device(&abs_path) {
-        if let Some(device) = open_device_file(&abs_path) {
-            return Some(FileClass::Abs(device));
-        }
-        return None;
+        let device = open_device_file(&abs_path)?;
+        return Ok(FileClass::Abs(device));
     }
     let parent_inode = root_inode();
-    if let Some(inode) = parent_inode.find_by_path(&abs_path) {
+    if let Ok(inode) = parent_inode.find(&abs_path) {
         let (readable, writable) = flags.read_write();
         let vfile = OSInode::new(readable, writable, inode);
         if flags.contains(OpenFlags::O_APPEND) {
@@ -397,12 +382,11 @@ pub fn open(cwd: &str, path: &str, flags: OpenFlags) -> Option<FileClass> {
         if flags.contains(OpenFlags::O_TRUNC) {
             vfile.inode.truncate(0);
         }
-        return Some(FileClass::File(Arc::new(vfile)));
+        return Ok(FileClass::File(Arc::new(vfile)));
     }
-
     // 节点不存在
     if flags.contains(OpenFlags::O_CREATE) {
         return create_file(&abs_path, flags);
     }
-    None
+    Err(SysErrNo::ENOENT)
 }

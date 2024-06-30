@@ -24,7 +24,7 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     ///
-    fn node_type(&self) -> InodeType {
+    fn types(&self) -> InodeType {
         unimplemented!()
     }
     ///
@@ -32,11 +32,11 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     /// 在当前目录下创建文件或目录
-    fn create(&self, _path: &str, _ty: InodeType) -> Option<Arc<dyn Inode>> {
+    fn create(&self, _path: &str, _ty: InodeType) -> Result<Arc<dyn Inode>, SysErrNo> {
         unimplemented!()
     }
-    /// 在当前目录下查找文件
-    fn find_by_path(&self, _path: &str) -> Option<Arc<dyn Inode>> {
+    /// 查找文件
+    fn find(&self, _path: &str) -> Result<Arc<dyn Inode>, SysErrNo> {
         unimplemented!()
     }
     ///
@@ -64,16 +64,19 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     // fn link(&self);
+    fn link_cnt(&self) -> SyscallRet {
+        unimplemented!()
+    }
     fn unlink(&self, _path: &str) -> GeneralRet {
         unimplemented!();
     }
-    fn rename(&self, _path: &str, _new_path: &str) -> GeneralRet {
+    fn rename(&self, _path: &str, _new_path: &str) -> SyscallRet {
         unimplemented!()
     }
     fn read_all(&self) -> Result<Vec<u8>, SysErrNo> {
         unimplemented!();
     }
-    fn get_path(&self) -> String {
+    fn path(&self) -> String {
         unimplemented!();
     }
 }

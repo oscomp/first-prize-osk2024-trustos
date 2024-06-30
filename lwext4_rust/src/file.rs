@@ -25,11 +25,11 @@ impl Ext4File {
         }
     }
 
-    pub fn get_path(&self) -> CString {
+    pub fn path(&self) -> CString {
         self.file_path.clone()
     }
 
-    pub fn get_type(&self) -> InodeTypes {
+    pub fn types(&self) -> InodeTypes {
         self.this_type.clone()
     }
 
@@ -50,7 +50,7 @@ impl Ext4File {
     /// |---------------------------------------------------------------|
     pub fn file_open(&mut self, path: &str, flags: u32) -> Result<usize, i32> {
         let c_path = CString::new(path).expect("CString::new failed");
-        if c_path != self.get_path() {
+        if c_path != self.path() {
             debug!(
                 "Ext4File file_open, cur path={}, new path={}",
                 self.file_path.to_str().unwrap(),
@@ -299,7 +299,7 @@ impl Ext4File {
         Ok(EOK as usize)
     }
     // Ok(atime,mtime,ctime)
-    pub fn get_time(&mut self) -> Result<(u32, u32, u32), i32> {
+    pub fn time(&mut self) -> Result<(u32, u32, u32), i32> {
         let (mut atime, mut mtime, mut ctime) = (0, 0, 0);
         let c_path = self.file_path.clone();
         let c_path = c_path.into_raw();
@@ -331,7 +331,22 @@ impl Ext4File {
         }
         Ok(stat)
     }
-    pub fn file_mode_get(&mut self) -> Result<u32, i32> {
+
+    pub fn links_cnt(&mut self) -> Result<u32, i32> {
+        let mut cnt: u32 = 0;
+        let c_path = self.file_path.clone();
+        let c_path = c_path.into_raw();
+        let r = unsafe { ext4_mode_get(c_path, &mut cnt) };
+        unsafe {
+            drop(CString::from_raw(c_path));
+        }
+        if r != EOK as i32 {
+            error!("ext4_mode_get: rc = {}", r);
+            return Err(r);
+        }
+        Ok(cnt)
+    }
+    pub fn file_mode(&mut self) -> Result<u32, i32> {
         // 0o777 (octal) == rwxrwxrwx
         let mut mode: u32 = 0o777;
         let c_path = self.file_path.clone();
@@ -364,8 +379,8 @@ impl Ext4File {
         Ok(EOK as usize)
     }
 
-    pub fn file_type_get(&mut self) -> InodeTypes {
-        let mode = self.file_mode_get().unwrap();
+    pub fn file_type(&mut self) -> InodeTypes {
+        let mode = self.file_mode().unwrap();
         // 0o777 (octal) == rwxrwxrwx
         // if filetype == EXT4_DE_SYMLINK;
         // mode = 0777;
@@ -484,54 +499,6 @@ impl Ext4File {
             ext4_dir_close(&mut d);
         }
         Ok(entries)
-    }
-
-    #[deprecated]
-    pub fn lwext4_dir_entries(&self) -> Result<(Vec<Vec<u8>>, Vec<InodeTypes>), i32> {
-        if self.this_type != InodeTypes::EXT4_DE_DIR {
-            return Err(-1);
-        }
-
-        let c_path = self.file_path.clone();
-        let c_path = c_path.into_raw();
-        let mut d: ext4_dir = unsafe { core::mem::zeroed() };
-
-        let mut name: Vec<Vec<u8>> = Vec::new();
-        let mut inode_type: Vec<InodeTypes> = Vec::new();
-
-        //info!("ls {}", str::from_utf8(path).unwrap());
-        unsafe {
-            ext4_dir_open(&mut d, c_path);
-            drop(CString::from_raw(c_path));
-
-            let mut de = ext4_dir_entry_next(&mut d);
-            while !de.is_null() {
-                let dentry = &(*de);
-                let len = dentry.name_length as usize;
-
-                let mut sss: [u8; 255] = [0; 255];
-                sss[..len].copy_from_slice(&dentry.name[..len]);
-                sss[len] = 0;
-                /*
-                debug!(
-                    "  {} {}",
-                    dentry.inode_type,
-                    core::str::from_utf8(&sss).unwrap()
-                );
-                */
-                /*   let mut dname: Vec<u8> =
-                    Vec::from_raw_parts(&mut dentry.name as *mut u8, len, len + 1);
-                dname.push(0);
-                */
-                name.push(sss[..(len + 1)].to_vec());
-                inode_type.push((dentry.inode_type as usize).into());
-
-                de = ext4_dir_entry_next(&mut d);
-            }
-            ext4_dir_close(&mut d);
-        }
-
-        Ok((name, inode_type))
     }
 }
 

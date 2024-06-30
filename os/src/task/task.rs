@@ -8,7 +8,7 @@ use crate::{
     config::mm::{
         PAGE_SIZE, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP, USER_TRAP_CONTEXT_TOP,
     },
-    fs::{open_file, FdTable, FsInfo},
+    fs::{open, FdTable, FsInfo},
     mm::{
         flush_tlb, translated_ref, translated_refmut, MapArea, MapAreaType, MapPermission, MapType,
         MemorySet, MemorySetInner, PhysPageNum, VirtAddr,
@@ -18,7 +18,7 @@ use crate::{
     task::{insert_into_thread_group, OpenFlags},
     timer::{TimeData, TimeVal, Timer},
     trap::{trap_handler, TrapContext},
-    utils::{is_abs_path, SysErrNo},
+    utils::{get_abs_path, is_abs_path, SysErrNo},
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
@@ -113,6 +113,7 @@ impl TaskControlBlockInner {
             .remove_area_with_start_vpn(VirtAddr::from(self.trap_cx_bottom).floor());
         flush_tlb();
     }
+    #[deprecated]
     pub fn get_cwd(&self, dirfd: isize, path: &str) -> Result<String, SysErrNo> {
         if is_abs_path(path) {
             Ok(String::from("/"))
@@ -121,12 +122,28 @@ impl TaskControlBlockInner {
             let dirfd = dirfd as usize;
             if let Some(file) = self.fd_table.try_get_file(dirfd) {
                 let file = file.file()?;
-                Ok(file.inode.get_path())
+                Ok(file.inode.path())
             } else {
                 Err(SysErrNo::EINVAL)
             }
         } else {
             Ok(self.fs_info.get_cwd())
+        }
+    }
+    pub fn get_abs_path(&self, dirfd: isize, path: &str) -> Result<String, SysErrNo> {
+        if is_abs_path(path) {
+            Ok(get_abs_path("/", path))
+        } else if dirfd != -100 {
+            // AT_FDCWD=-100
+            let dirfd = dirfd as usize;
+            if let Some(file) = self.fd_table.try_get_file(dirfd) {
+                let base_path = file.file()?.inode.path();
+                Ok(get_abs_path(&base_path, path))
+            } else {
+                Err(SysErrNo::EINVAL)
+            }
+        } else {
+            Ok(get_abs_path(self.fs_info.cwd(), path))
         }
     }
 }
@@ -147,8 +164,7 @@ impl TaskControlBlock {
     /// 只有initproc会调用
     pub fn new(elf_data: &[u8]) -> Self {
         // memory_set with elf program headers/trampoline/trap context/user stack
-        let (mut memory_set, user_heapbottom, entry_point, _) =
-            MemorySetInner::from_elf(elf_data).unwrap();
+        let (mut memory_set, user_heapbottom, entry_point, _) = MemorySetInner::from_elf(elf_data);
         // alloc a pid and a kernel stack in kernel space
         let tid_handle = tid_alloc();
         let kernel_stack = KernelStack::new(&tid_handle);
@@ -201,26 +217,26 @@ impl TaskControlBlock {
         let mut inner = self.inner_lock();
         //用户栈高地址到低地址：环境变量字符串/参数字符串/aux辅助向量/环境变量地址数组/参数地址数组/参数数量
         // memory_set with elf program headers/trampoline/trap context/user stack
-        let (mut memory_set, user_hp, entry_point, mut auxv) =
-            if let Some((memory_set, user_hp, entry_point, auxv)) =
-                MemorySetInner::from_elf(elf_data)
-            {
-                (memory_set, user_hp, entry_point, auxv)
-            } else {
-                drop(inner);
-                let new_elf_data = open_file("/busybox", OpenFlags::O_RDONLY)
-                    .unwrap()
-                    .file()
-                    .unwrap()
-                    .inode
-                    .read_all()
-                    .unwrap();
-                let mut new_argv = alloc::vec![String::from("busybox"), String::from("sh")];
-                argv.iter().for_each(|x| new_argv.push(x.clone()));
-                self.exec(&new_elf_data, &new_argv, env);
-                return;
-            };
-
+        // let (mut memory_set, user_hp, entry_point, mut auxv) =
+        //     if let Some((memory_set, user_hp, entry_point, auxv)) =
+        //         MemorySetInner::from_elf(elf_data)
+        //     {
+        //         (memory_set, user_hp, entry_point, auxv)
+        //     } else {
+        //         drop(inner);
+        //         let new_elf_data = open("/busybox", OpenFlags::O_RDONLY)
+        //             .unwrap()
+        //             .file()
+        //             .unwrap()
+        //             .inode
+        //             .read_all()
+        //             .unwrap();
+        //         let mut new_argv = alloc::vec![String::from("busybox"), String::from("sh")];
+        //         argv.iter().for_each(|x| new_argv.push(x.clone()));
+        //         self.exec(&new_elf_data, &new_argv, env);
+        //         return;
+        //     };
+        let (mut memory_set, user_hp, entry_point, mut auxv) = MemorySetInner::from_elf(elf_data);
         let token = memory_set.token();
 
         inner.time_data.clear();

@@ -3,7 +3,7 @@ use crate::{
     mm::{translated_byte_buffer, UserBuffer},
     syscall::{IoctlCommand, PollEvents},
     task::{current_task, INITPROC},
-    utils::SyscallRet,
+    utils::{SysErrNo, SyscallRet},
 };
 use alloc::{
     collections::BTreeMap,
@@ -56,32 +56,16 @@ pub fn get_devno(abs_path: &str) -> usize {
     *DEVICES.lock().get(&abs_path.to_string()).unwrap()
 }
 
-pub fn open_device_file(abs_path: &str) -> Option<Arc<dyn File>> {
+pub fn open_device_file(abs_path: &str) -> Result<Arc<dyn File>, SysErrNo> {
     match abs_path {
-        "/dev/zero" => Some(Arc::new(DevZero::new())),
-        "/dev/null" => Some(Arc::new(DevNull::new())),
-        "/dev/rtc" | "/dev/rtc0" | "/dev/misc/rtc" => Some(Arc::new(DevRtc::new())),
-        "/dev/random" => Some(Arc::new(DevRandom::new())),
-        "/dev/tty" => Some(Arc::new(DevTty::new())),
-        "/dev/cpu_dma_latency" => Some(Arc::new(DevCpuDmaLatency::new())),
-        _ => None,
+        "/dev/zero" => Ok(Arc::new(DevZero::new())),
+        "/dev/null" => Ok(Arc::new(DevNull::new())),
+        "/dev/rtc" | "/dev/rtc0" | "/dev/misc/rtc" => Ok(Arc::new(DevRtc::new())),
+        "/dev/random" => Ok(Arc::new(DevRandom::new())),
+        "/dev/tty" => Ok(Arc::new(DevTty::new())),
+        "/dev/cpu_dma_latency" => Ok(Arc::new(DevCpuDmaLatency::new())),
+        _ => Err(SysErrNo::ENOENT),
     }
-    /*
-    // warning: just a fake implementation
-    if abs_path == "/dev/zero" {
-        Some(Arc::new(DevZero::new()))
-    } else if abs_path == "/dev/null" {
-        Some(Arc::new(DevNull::new()))
-    } else if abs_path == "/dev/rtc" || abs_path == "/dev/rtc0" || abs_path == "/dev/misc/rtc" {
-        Some(Arc::new(DevRtc::new()))
-    } else if abs_path == "/dev/random" {
-        Some(Arc::new(DevRandom::new()))
-    } else if abs_path == "/dev/tty" {
-        Some(Arc::new(DevTty::new()))
-    } else {
-        None
-    }
-    */
 }
 
 impl DevZero {

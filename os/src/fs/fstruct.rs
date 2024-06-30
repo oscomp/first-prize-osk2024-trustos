@@ -2,7 +2,13 @@ use crate::{
     sync::SyncUnsafeCell,
     utils::{GeneralRet, SysErrNo, SyscallRet},
 };
-use alloc::{string::String, sync::Arc, vec, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    sync::Arc,
+    vec,
+    vec::Vec,
+};
+use hashbrown::{HashMap, HashSet};
 
 use super::{FileClass, OpenFlags, Stdin, Stdout};
 pub struct FdTable {
@@ -208,6 +214,7 @@ impl FdTable {
 #[derive(Clone)]
 pub struct FsInfoInner {
     pub cwd: String,
+    pub fd2path: HashMap<usize, String>, // 一个文件对应多个fd
 }
 
 pub struct FsInfo {
@@ -216,13 +223,20 @@ pub struct FsInfo {
 
 impl FsInfo {
     pub fn new(cwd: String) -> Self {
+        let mut fd2path = HashMap::new();
+        fd2path.insert(0, "stdin".to_string());
+        fd2path.insert(1, "stdout".to_string());
+        fd2path.insert(2, "stderr".to_string());
         Self {
-            inner: SyncUnsafeCell::new(FsInfoInner { cwd }),
+            inner: SyncUnsafeCell::new(FsInfoInner { cwd, fd2path }),
         }
     }
     pub fn from_another(another: &Arc<FsInfo>) -> Self {
         Self {
-            inner: SyncUnsafeCell::new(another.get_mut().clone()),
+            inner: SyncUnsafeCell::new(FsInfoInner {
+                cwd: another.get_cwd(),
+                fd2path: another.inner.get_unchecked_ref().fd2path.clone(),
+            }),
         }
     }
     pub fn get_cwd(&self) -> String {
@@ -233,6 +247,22 @@ impl FsInfo {
     }
     pub fn as_bytes(&self) -> &[u8] {
         self.get_ref().cwd.as_bytes()
+    }
+    pub fn in_root(&self) -> bool {
+        self.cwd() == "/"
+    }
+    pub fn insert(&self, path: String, fd: usize) {
+        self.get_mut().fd2path.insert(fd, path);
+    }
+    pub fn insert_with_glue(&self, glue: usize, target: usize) {
+        let path = self.get_ref().fd2path.get(&glue).unwrap().clone();
+        self.get_mut().fd2path.insert(target, path);
+    }
+    pub fn has_fd(&self, path: &str) -> bool {
+        self.get_ref().fd2path.values().any(|v| v == path)
+    }
+    pub fn remove(&self, fd: usize) {
+        self.get_mut().fd2path.remove(&fd);
     }
     pub fn set_cwd(&self, cwd: String) {
         self.get_mut().cwd = cwd;

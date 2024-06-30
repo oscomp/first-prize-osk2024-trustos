@@ -20,6 +20,7 @@ pub struct OSInode {
 }
 pub struct OSInodeInner {
     pub(crate) offset: usize, // 偏移量
+    pub(crate) delay_unlink: bool,
 }
 
 impl OSInode {
@@ -28,7 +29,22 @@ impl OSInode {
             readable,
             writable,
             inode,
-            inner: Mutex::new(OSInodeInner { offset: 0 }),
+            inner: Mutex::new(OSInodeInner {
+                offset: 0,
+                delay_unlink: false,
+            }),
+        }
+    }
+    pub fn delay(&self) {
+        self.inner.lock().delay_unlink = true;
+    }
+}
+
+impl Drop for OSInode {
+    fn drop(&mut self) {
+        if self.inner.lock().delay_unlink {
+            let path = self.inode.path();
+            self.inode.unlink(&path);
         }
     }
 }
