@@ -7,11 +7,11 @@ MODE := release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 DISASM_TMP := target/$(TARGET)/$(MODE)/asm
-# FS := lwext4_rust
-# IMG := ext4.img
+FS := lwext4_rust
+IMG := ext4.img
 # 使用的时候把copy_to_fs的命令注释掉
-FS := final_tests
-IMG := sdcard.img
+# FS := final_tests
+# IMG := sdcard.img
 FS_IMG := ../$(FS)/$(IMG)
 APPS := ../user/src/bin/*
 
@@ -51,7 +51,7 @@ FINAL_TARGETS := sdcard ltp build_all busybox lua lmbench libctest iozone libc-b
 %:
 	@if echo "$(FINAL_TARGETS)" | grep -wq $@; then \
 		echo "Target $@ exists in $(FINAL_DIR), running there."&& \
-		cd ../final_tests&&docker run --rm -it -v $(FINAL_DIR):/code --privileged --entrypoint make alphamj/os-contest:v7.7 -C /code $@;\
+		cd ../final_tests && docker run --rm -it -v $(FINAL_DIR):/code --privileged --entrypoint make alphamj/os-contest:v7.7 -C /code $@;\
 	fi
 # WORK_DIR := $(shell cd ../final_tests && pwd)
 # build_all: build
@@ -78,7 +78,7 @@ $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
 
 copy_to_fs: 
-	# @cd ../$(FS)&&sh create_img.sh 
+	@cd ../$(FS) && sh create_img.sh 
 
 $(APPS):
 

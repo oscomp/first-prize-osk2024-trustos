@@ -34,7 +34,7 @@ unsafe impl Send for Iovec {}
 unsafe impl Sync for Iovec {}
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
-    debug!("[sys_write] fd is {}", fd);
+    debug!("[sys_write] fd is {}, len={}", fd, len);
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
@@ -167,8 +167,8 @@ pub fn sys_readv(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
                 translated_byte_buffer(token, iovinfo.iov_base as *mut u8, iovinfo.iov_len)
                     .unwrap(),
             );
-            let write_ret = file.read(buf)?;
-            ret += write_ret as usize;
+            let read_ret = file.read(buf)?;
+            ret += read_ret as usize;
         }
         Ok(ret)
     } else {
@@ -376,6 +376,7 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, _flags: u32) -> SyscallRet {
     let path = translated_str(token, path);
     let base_path = inner.get_cwd(dirfd, &path)?;
     let abs_path = get_abs_path(&base_path, &path);
+    debug!("[sys_unlinkat] path={}", &abs_path);
     if let Some(target) = open(&base_path, &path, OpenFlags::empty()) {
         let file = target.file()?;
         file.inode.unlink(&abs_path);

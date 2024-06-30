@@ -169,12 +169,13 @@ impl File for Pipe {
     }
     fn read(&self, buf: UserBuffer) -> SyscallRet {
         assert!(self.readable());
-        let buf_len = buf.len();
+        // let buf_len = buf.len();
         let mut buf_iter = buf.into_iter();
         let mut read_size = 0usize;
+        let mut loop_read;
         loop {
-            let mut ring_buffer = self.inner_lock();
-            let loop_read = ring_buffer.available_read();
+            let ring_buffer = self.inner_lock();
+            loop_read = ring_buffer.available_read();
             if loop_read == 0 {
                 if ring_buffer.all_write_ends_closed() {
                     return Ok(read_size);
@@ -182,51 +183,52 @@ impl File for Pipe {
                 drop(ring_buffer);
                 suspend_current_and_run_next();
                 continue;
-            }
-            // read at most loop_read bytes
-            for _ in 0..loop_read {
-                if let Some(byte_ref) = buf_iter.next() {
-                    unsafe {
-                        *byte_ref = ring_buffer.read_byte();
-                    }
-                    read_size += 1;
-                } else {
-                    return Ok(read_size);
-                }
-                if read_size == buf_len {
-                    return Ok(read_size);
-                }
+            } else {
+                break;
             }
         }
+        // read at most loop_read bytes
+        let mut ring_buffer = self.inner_lock();
+        for _ in 0..loop_read {
+            if let Some(byte_ref) = buf_iter.next() {
+                unsafe {
+                    *byte_ref = ring_buffer.read_byte();
+                }
+                read_size += 1;
+            } else {
+                break;
+            }
+        }
+        Ok(read_size)
     }
     fn write(&self, buf: UserBuffer) -> SyscallRet {
         assert!(self.writable());
-        let buf_len = buf.len();
+        // let buf_len = buf.len();
         let mut buf_iter = buf.into_iter();
         let mut write_size = 0usize;
+        let mut loop_write;
         loop {
-            //debug!("work in write loop");
-            let mut ring_buffer = self.inner_lock();
-            let loop_write = ring_buffer.available_write();
+            let ring_buffer = self.inner_lock();
+            loop_write = ring_buffer.available_write();
             if loop_write == 0 {
                 drop(ring_buffer);
-                //debug!("write 0 byte");
                 suspend_current_and_run_next();
                 continue;
-            }
-            // write at most loop_write bytes
-            for _ in 0..loop_write {
-                if let Some(byte_ref) = buf_iter.next() {
-                    ring_buffer.write_byte(unsafe { *byte_ref });
-                    write_size += 1;
-                } else {
-                    return Ok(write_size);
-                }
-                if write_size == buf_len {
-                    return Ok(write_size);
-                }
+            } else {
+                break;
             }
         }
+        // write at most loop_write bytes
+        let mut ring_buffer = self.inner_lock();
+        for _ in 0..loop_write {
+            if let Some(byte_ref) = buf_iter.next() {
+                ring_buffer.write_byte(unsafe { *byte_ref });
+                write_size += 1;
+            } else {
+                break;
+            }
+        }
+        Ok(write_size)
     }
     fn fstat(&self) -> Kstat {
         Kstat {

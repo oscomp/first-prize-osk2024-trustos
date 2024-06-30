@@ -121,7 +121,7 @@ impl TaskControlBlockInner {
             let dirfd = dirfd as usize;
             if let Some(file) = self.fd_table.try_get_file(dirfd) {
                 let file = file.file()?;
-                Ok(file.path.clone())
+                Ok(file.inode.get_path())
             } else {
                 Err(SysErrNo::EINVAL)
             }

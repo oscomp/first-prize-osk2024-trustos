@@ -67,16 +67,6 @@ impl FdTable {
     }
     pub fn from_another(another: &Arc<FdTable>) -> Self {
         let other = another.get_ref();
-        // let mut fd_table: Vec<_> = Vec::new();
-        // for fd in other.table.iter() {
-        //     if let Some(file) = fd {
-        //         fd_table.push(Some(file.clone()));
-        //     } else {
-        //         fd_table.push(None);
-        //     }
-        // }
-        // let mut flags: Vec<Option<OpenFlags>> = Vec::new();
-        // flags.extend(&other.flags);
         Self {
             inner: SyncUnsafeCell::new(FdTableInner::new(
                 other.flags.clone(),
