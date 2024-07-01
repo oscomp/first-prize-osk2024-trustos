@@ -5,14 +5,14 @@ use crate::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
         translated_str, UserBuffer,
     },
-    signal::check_signal_for_current_task,
+    signal::{check_if_any_sig_for_current_task, ready_to_handle_signal},
     syscall::{CloneFlags, Utsname},
     task::{
         add_task, current_task, current_token, exit_current_and_run_next,
         exit_current_group_and_run_next, move_child_process_to_init, remove_all_from_thread_group,
         suspend_current_and_run_next, task_num, Sysinfo, PROCESS_GROUP,
     },
-    timer::{get_time_ms, Timespec},
+    timer::{calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
     utils::{trim_start_slash, SysErrNo, SyscallRet},
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
@@ -240,15 +240,31 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
     }
 }
 
-pub fn sys_nanosleep(req: *const u8, _rem: *const u8) -> SyscallRet {
+pub fn sys_nanosleep(req: *const u8, rem: *const u8) -> SyscallRet {
     let token = current_token();
+
+    debug!(
+        "[sys_nanosleep] req is {:x}, rem is {:x}",
+        req as usize, rem as usize
+    );
+
     let req = translated_ref(token, req as *const Timespec);
+    let waittime = req.tv_sec * 1_000_000_000usize + req.tv_nsec;
+    let begin = get_time_ms() * 1_000_000usize;
+    let endtime = get_time_spec() + *req;
 
-    let begin = get_time_ms() * 1000000;
-    let waittime = req.tv_sec * 1000000000 + req.tv_nsec;
+    debug!(
+        "[sys_nanosleep] ready to sleep for {} sec, {} nsec",
+        req.tv_sec, req.tv_nsec
+    );
 
-    while get_time_ms() * 1000000 - begin < waittime {
-        check_signal_for_current_task();
+    while get_time_ms() * 1_000_000usize - begin < waittime {
+        if let Some(signo) = check_if_any_sig_for_current_task() {
+            if rem as usize != 0 {
+                *translated_refmut(token, rem as *mut Timespec) = calculate_left_timespec(endtime);
+            }
+            ready_to_handle_signal(signo);
+        }
         suspend_current_and_run_next();
     }
     Ok(0)
@@ -401,5 +417,50 @@ pub fn sys_sched_getparam(pid: usize, param: *const u8) -> SyscallRet {
         pid, param as usize
     );
     //由于使用的是标准的时间片调度算法，param参数需要被忽略
+    Ok(0)
+}
+
+const TIME_ABSTIME: u32 = 1;
+
+pub fn sys_clock_nanosleep(
+    clockid: usize,
+    flags: u32,
+    t: *const u8,
+    remain: *const u8,
+) -> SyscallRet {
+    let token = current_token();
+
+    debug!(
+        "[sys_clock_nanosleep] clockid is {}, flags is {}, t is {:x}, remain is {:x}",
+        clockid, flags, t as usize, remain as usize
+    );
+
+    let t = translated_ref(token, t as *const Timespec);
+    let waittime = t.tv_sec * 1_000_000_000usize + t.tv_nsec;
+
+    let begin = get_time_ms() * 1_000_000usize;
+    let endtime = if flags == TIME_ABSTIME {
+        //绝对时间
+        *t
+    } else {
+        //相对时间
+        get_time_spec() + *t
+    };
+
+    debug!(
+        "[sys_clock_nanosleep] when not abs_time, ready to sleep for {} sec, {} nsec",
+        t.tv_sec, t.tv_nsec
+    );
+
+    while get_time_ms() * 1_000_000usize - begin < waittime {
+        if let Some(signo) = check_if_any_sig_for_current_task() {
+            if remain as usize != 0 {
+                *translated_refmut(token, remain as *mut Timespec) =
+                    calculate_left_timespec(endtime);
+            }
+            ready_to_handle_signal(signo);
+        }
+        suspend_current_and_run_next();
+    }
     Ok(0)
 }

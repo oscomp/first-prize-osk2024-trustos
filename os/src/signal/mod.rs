@@ -22,20 +22,26 @@ extern "C" {
     pub fn sigreturn_trampoline();
 }
 
-pub fn check_signal_for_current_task() {
+pub fn check_if_any_sig_for_current_task() -> Option<usize> {
+    let task = current_task().unwrap();
+    let task_inner = task.inner_lock();
     for signo in 1..(SIG_MAX_NUM + 1) {
-        let task = current_task().unwrap();
-        let task_inner = task.inner_lock();
         let sig = SigSet::from_sig(signo);
         if task_inner.sig_pending.need_handle(sig) {
-            debug!("handle signal {}", signo);
-            let sig_act = task_inner.sig_pending.get_ref().actions[signo];
-            drop(task_inner);
-            drop(task);
-            handle_signal(signo, sig_act);
-            return;
+            return Some(signo);
         }
     }
+    None
+}
+
+pub fn ready_to_handle_signal(signo: usize) {
+    let task = current_task().unwrap();
+    let task_inner = task.inner_lock();
+    debug!("handle signal {}", signo);
+    let sig_act = task_inner.sig_pending.get_ref().actions[signo];
+    drop(task_inner);
+    drop(task);
+    handle_signal(signo, sig_act);
 }
 
 pub fn handle_signal(signo: usize, sig_action: KSigAction) {

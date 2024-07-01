@@ -11,7 +11,7 @@ use riscv::register::time;
 const TICKS_PER_SEC: usize = 100;
 const MSEC_PER_SEC: usize = 1000;
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Timespec {
     pub tv_sec: usize,  //秒
     pub tv_nsec: usize, //纳秒
@@ -38,6 +38,38 @@ impl Add for Timespec {
         tv_sec += tv_nsec / (1_000_000_000usize);
         tv_nsec %= 1_000_000_000usize;
         Self { tv_sec, tv_nsec }
+    }
+}
+
+impl PartialOrd for Timespec {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if self.tv_sec > other.tv_sec {
+            Some(Ordering::Greater)
+        } else if self.tv_sec < other.tv_sec {
+            Some(Ordering::Less)
+        } else {
+            if self.tv_nsec > other.tv_nsec {
+                Some(Ordering::Greater)
+            } else if self.tv_nsec < other.tv_nsec {
+                Some(Ordering::Less)
+            } else {
+                Some(Ordering::Equal)
+            }
+        }
+    }
+}
+
+pub fn calculate_left_timespec(endtime: Timespec) -> Timespec {
+    let nowtime = get_time_spec();
+    let mut endsec = endtime.tv_sec;
+    let mut nsec: isize = endtime.tv_nsec as isize - nowtime.tv_nsec as isize;
+    if nsec < 0 {
+        endsec -= 1;
+        nsec = 1_000_000_000isize + nsec;
+    }
+    Timespec {
+        tv_sec: endsec - nowtime.tv_sec,
+        tv_nsec: nsec as usize,
     }
 }
 

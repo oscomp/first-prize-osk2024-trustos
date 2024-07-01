@@ -15,7 +15,7 @@ mod context;
 
 use crate::{
     mm::{VirtAddr, VirtPageNum},
-    signal::check_signal_for_current_task,
+    signal::{check_if_any_sig_for_current_task, ready_to_handle_signal},
     syscall::{syscall, Syscall},
     task::{
         current_task, current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next,
@@ -178,9 +178,13 @@ pub fn trap_handler() {
         }
     }
 
+    //检查定时器
     current_task().unwrap().check_timer();
 
-    check_signal_for_current_task();
+    //检查信号
+    if let Some(signo) = check_if_any_sig_for_current_task() {
+        ready_to_handle_signal(signo);
+    }
 
     //记录内核空间花费CPU时间，同时准备用户空间花费CPU时间
     current_task()
