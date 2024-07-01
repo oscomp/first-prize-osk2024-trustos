@@ -4,13 +4,13 @@ use alloc::{
     vec::Vec,
 };
 
-pub fn trim_first_point_slash(path: &str) -> &str {
-    if path.starts_with("./") {
-        &path[2..]
-    } else {
-        &path
-    }
-}
+// pub fn trim_first_point_slash(path: &str) -> &str {
+//     if path.starts_with("./") {
+//         &path[2..]
+//     } else {
+//         &path
+//     }
+// }
 #[inline(always)]
 pub fn trim_start_slash(s: String) -> String {
     if s.chars().take_while(|c| *c == '/').count() >= 2 {

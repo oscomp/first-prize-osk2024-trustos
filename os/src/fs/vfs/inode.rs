@@ -16,8 +16,6 @@ pub struct OSInode {
     readable: bool, // 该文件是否允许通过 sys_read 进行读
     writable: bool, // 该文件是否允许通过 sys_write 进行写
     pub inode: Arc<dyn Inode>,
-    pub parent: Option<Weak<dyn Inode>>,
-    pub path: String,
     pub(crate) inner: Mutex<OSInodeInner>,
 }
 pub struct OSInodeInner {
@@ -25,19 +23,11 @@ pub struct OSInodeInner {
 }
 
 impl OSInode {
-    pub fn new(
-        readable: bool,
-        writable: bool,
-        inode: Arc<dyn Inode>,
-        parent: Option<Weak<dyn Inode>>,
-        path: String,
-    ) -> Self {
+    pub fn new(readable: bool, writable: bool, inode: Arc<dyn Inode>) -> Self {
         Self {
             readable,
             writable,
             inode,
-            parent,
-            path,
             inner: Mutex::new(OSInodeInner { offset: 0 }),
         }
     }

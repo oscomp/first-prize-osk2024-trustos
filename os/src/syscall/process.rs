@@ -13,7 +13,7 @@ use crate::{
         suspend_current_and_run_next, task_num, Sysinfo, PROCESS_GROUP,
     },
     timer::{calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
-    utils::{trim_start_slash, SysErrNo, SyscallRet},
+    utils::{get_abs_path, trim_start_slash, SysErrNo, SyscallRet},
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
@@ -99,7 +99,7 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
     let task_inner = task.inner_lock();
 
     let token = task_inner.user_token();
-    let path = trim_start_slash(translated_str(token, path));
+    let mut path = trim_start_slash(translated_str(token, path));
 
     //处理argv参数
     let mut argv_vec = Vec::<String>::new();
@@ -115,6 +115,11 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
         unsafe {
             argv = argv.add(1);
         }
+    }
+    if path.ends_with(".sh") {
+        argv_vec.insert(0, String::from("sh"));
+        argv_vec.insert(0, String::from("busybox"));
+        path = String::from("/busybox");
     }
     debug!("[sys_execve] path is {},arg is {:?}", path, argv_vec);
     let mut env = Vec::<String>::new();
@@ -137,26 +142,13 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
     } else {
         "/"
     };
-
-    if let Some(app_inode) = open(cwd, path.as_str(), OpenFlags::O_RDONLY) {
-        let app_inode = app_inode.file()?;
-
-        cfg_if::cfg_if! {
-            if #[cfg(feature="fat32")]{
-                let elf_data = unsafe { app_inode.read_as_elf() };
-                drop(task_inner);
-                task.exec(elf_data, &argv_vec, &mut env);
-            }else if #[cfg(not(feature="fat32"))]{
-                let elf_data = app_inode.inode.read_all()?;
-                drop(task_inner);
-                task.exec(&elf_data, &argv_vec, &mut env);
-            }
-        }
-        task.inner_lock().memory_set.activate();
-        Ok(0)
-    } else {
-        Err(SysErrNo::ENOENT)
-    }
+    let abs_path = get_abs_path(&cwd, &path);
+    let app_inode = open(&abs_path, OpenFlags::O_RDONLY)?.file()?;
+    let elf_data = app_inode.inode.read_all()?;
+    drop(task_inner);
+    task.exec(&elf_data, &argv_vec, &mut env);
+    task.inner_lock().memory_set.activate();
+    Ok(0)
 }
 /// 等待子进程状态发生变化,即子进程终止或被信号停止或被信号挂起
 /// < -1   meaning wait for any child process whose process group ID

@@ -26,7 +26,7 @@ mod task;
 mod tid;
 
 use crate::{
-    fs::{open_file, FileClass, OpenFlags},
+    fs::{open, FileClass, OpenFlags},
     signal::{send_signal_to_thread_group, SigSet},
 };
 use alloc::{boxed::Box, sync::Arc};
@@ -120,22 +120,10 @@ pub fn exit_current_and_run_next(exit_code: i32) {
 lazy_static! {
     ///Globle process that init user shell
     pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new({
-        if let Some(FileClass::File(inode)) = open_file("initproc", OpenFlags::O_RDONLY) {
-            cfg_if::cfg_if!{
-                if #[cfg(feature="fat32")]{
-                    let elf_data = unsafe {inode.read_as_elf()};
-                    let res=TaskControlBlock::new(elf_data);
-                    res
-                } else if #[cfg(not(feature="fat32"))]{
-                    let elf_data = inode.inode.read_all().unwrap();
-                    let res=TaskControlBlock::new(&elf_data);
-                    res
-                }
-            }
-        } else {
-            panic!("error: initproc from Abs File!");
-        }
-
+        let initproc= open("/initproc", OpenFlags::O_RDONLY).expect("open initproc error!").file().expect("initproc can not be abs file!");
+        let elf_data = initproc.inode.read_all().unwrap();
+        let res=TaskControlBlock::new(&elf_data);
+        res
     });
 }
 ///Add init process to the manager

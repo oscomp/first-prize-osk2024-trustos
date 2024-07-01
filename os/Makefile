@@ -1,17 +1,16 @@
-# make srun 只编译内核和rust测例
-# make run 编译rust内核、rust测例和c测例
-# make brun 编译rust内核、rust测例、c测例和busybox
+# make run 编译rust内核、rust测例
+# make drun 直接运行,不编译
 # Building
 TARGET := riscv64gc-unknown-none-elf
 MODE := release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 DISASM_TMP := target/$(TARGET)/$(MODE)/asm
-# FS := lwext4_rust
-# IMG := ext4.img
+FS := lwext4_rust
+IMG := ext4.img
 # 使用的时候把copy_to_fs的命令注释掉
-FS := final_tests
-IMG := sdcard.img
+# FS := final_tests
+# IMG := sdcard.img
 FS_IMG := ../$(FS)/$(IMG)
 APPS := ../user/src/bin/*
 
@@ -51,7 +50,7 @@ FINAL_TARGETS := sdcard ltp build_all busybox lua lmbench libctest iozone libc-b
 %:
 	@if echo "$(FINAL_TARGETS)" | grep -wq $@; then \
 		echo "Target $@ exists in $(FINAL_DIR), running there."&& \
-		cd ../final_tests&&docker run --rm -it -v $(FINAL_DIR):/code --privileged --entrypoint make alphamj/os-contest:v7.7 -C /code $@;\
+		cd ../final_tests && docker run --rm -it -v $(FINAL_DIR):/code --privileged --entrypoint make alphamj/os-contest:v7.7 -C /code $@;\
 	fi
 # WORK_DIR := $(shell cd ../final_tests && pwd)
 # build_all: build
@@ -62,13 +61,6 @@ build: env initrust $(KERNEL_BIN)
 initrust: 
 	@cd ../user && make build
 
-initproc: initrust
-	@cd ../pre_ctests && ./build-oscomp.sh
-
-# initbusybox: initproc
-# 	@-rm ../busybox
-# 	@cd ../busyb0x && sudo make defconfig && sudo bear -- make -j 4 && cp ./busybox ../busybox
-
 env:
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
 	rustup component add rust-src
@@ -78,7 +70,7 @@ $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
 
 copy_to_fs: 
-	# @cd ../$(FS)&&sh create_img.sh 
+	@cd ../$(FS) && sh create_img.sh 
 
 $(APPS):
 
@@ -92,7 +84,6 @@ clean:
 	@cargo clean
 	@cd ../user && cargo clean
 # @cd ../$(FS) && cargo clean && rm *.img
-# @cd ../pre_ctests && make clean
 
 disasm: kernel
 	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) | less
@@ -102,11 +93,7 @@ disasm-vim: kernel
 	@vim $(DISASM_TMP)
 	@rm $(DISASM_TMP)
 
-run: initproc run-inner
-
-srun: initrust run-inner
-
-# brun: initbusybox run-inner
+run: initrust run-inner
 
 QEMU_ARGS := -machine virt \
 			 -nographic \
@@ -119,9 +106,9 @@ QEMU_ARGS := -machine virt \
 
 run-inner: build copy_to_fs
 	@qemu-system-riscv64 $(QEMU_ARGS)
-ssrun: 
+drun: 
 	@qemu-system-riscv64 $(QEMU_ARGS)
-debug: initproc build copy_to_fs
+debug: initrust build copy_to_fs
 	@tmux new-session -d \
 		"qemu-system-riscv64 $(QEMU_ARGS) -s -S" && \
 		tmux split-window -h "riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'" && \
@@ -134,5 +121,4 @@ gdbserver: build
 gdbclient:
 	@riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'
 
-.PHONY: build env kernel clean disasm disasm-vim run-inner copy-to-fs procinit gdbserver gdbclient srun ssrun initrust 
-# initbusybox brun
+.PHONY: build env kernel clean disasm disasm-vim run-inner copy-to-fs procinit gdbserver gdbclient run drun initrust 

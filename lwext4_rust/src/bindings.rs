@@ -1938,6 +1938,12 @@ extern "C" {
     pub fn ext4_ctime_get(path: *const ::core::ffi::c_char, ctime: *mut u32) -> ::core::ffi::c_int;
 }
 extern "C" {
+    pub fn ext4_get_links_cnt(
+        path: *const ::core::ffi::c_char,
+        cnt: *mut u32,
+    ) -> ::core::ffi::c_int;
+}
+extern "C" {
     #[doc = "@brief Create symbolic link.\n\n @param target Destination entry path.\n @param path   Source entry path.\n\n @return  Standard error code."]
     pub fn ext4_fsymlink(
         target: *const ::core::ffi::c_char,

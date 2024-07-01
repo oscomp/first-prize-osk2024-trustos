@@ -84,7 +84,7 @@ impl FileWrapper {
         //Todo ? ../
         //注：lwext4创建文件必须提供文件path的绝对路径
         let file = self.0.borrow_mut();
-        let path = file.get_path();
+        let path = file.path();
         let fpath = String::from(path.to_str().unwrap().trim_end_matches('/')) + "/" + p;
         info!("dealt with full path: {}", fpath.as_str());
         fpath
@@ -184,8 +184,8 @@ impl VfsNodeOps for FileWrapper {
     /// Return `None` if the node is a file.
     fn parent(&self) -> Option<Arc<dyn VfsNodeOps>> {
         let file = self.0.borrow_mut();
-        if file.get_type() == InodeTypes::EXT4_DE_DIR {
-            let path = file.get_path();
+        if file.types() == InodeTypes::EXT4_DE_DIR {
+            let path = file.path();
             let path = path.to_str().unwrap();
             info!("Get the parent dir of {}", path);
             let path = path.trim_end_matches('/').trim_end_matches(|c| c != '/');
@@ -260,7 +260,7 @@ impl VfsNodeOps for FileWrapper {
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<usize, i32> {
         //debug!("To read_at {}, buf len={}", offset, buf.len());
         let mut file = self.0.borrow_mut();
-        let path = file.get_path();
+        let path = file.path();
         let path = path.to_str().unwrap();
         file.file_open(path, O_RDONLY)?;
 
@@ -274,7 +274,7 @@ impl VfsNodeOps for FileWrapper {
     fn write_at(&self, offset: u64, buf: &[u8]) -> Result<usize, i32> {
         //debug!("To write_at {}, buf len={}", offset, buf.len());
         let mut file = self.0.borrow_mut();
-        let path = file.get_path();
+        let path = file.path();
         let path = path.to_str().unwrap();
         file.file_open(path, O_RDWR)?;
 
@@ -288,7 +288,7 @@ impl VfsNodeOps for FileWrapper {
     fn truncate(&self, size: u64) -> Result<usize, i32> {
         info!("truncate file to size={}", size);
         let mut file = self.0.borrow_mut();
-        let path = file.get_path();
+        let path = file.path();
         let path = path.to_str().unwrap();
         file.file_open(path, O_RDWR | O_CREAT | O_TRUNC)?;
 

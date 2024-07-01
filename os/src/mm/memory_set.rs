@@ -719,17 +719,18 @@ impl MemorySetInner {
     /// Include sections in elf and trampoline and TrapContext and user stack,
     /// also returns user_sp and entry point.
     /// 不包括用户栈和Trap
-    pub fn from_elf(elf_data: &[u8]) -> Option<(Self, usize, usize, Vec<Aux>)> {
+    pub fn from_elf(elf_data: &[u8]) -> (Self, usize, usize, Vec<Aux>) {
         let mut auxv = Vec::new();
         let mut memory_set = Self::new_from_kernel();
         // debug!("from_elf new stap={:#x}", memory_set.page_table.token());
         // map program headers of elf, with U flag
         //let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
-        let elf = if let Ok(elfhere) = xmas_elf::ElfFile::new(elf_data) {
-            elfhere
-        } else {
-            return None;
-        };
+        // let elf = if let Ok(elfhere) = xmas_elf::ElfFile::new(elf_data) {
+        //     elfhere
+        // } else {
+        //     return None;
+        // };
+        let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
         let elf_header = elf.header;
         let magic = elf_header.pt1.magic;
         assert_eq!(magic, [0x7f, 0x45, 0x4c, 0x46], "invalid elf!");
@@ -816,12 +817,12 @@ impl MemorySetInner {
         ));
 
         // println!("start:{:#X}", elf.header.pt2.entry_point() as usize);
-        Some((
+        (
             memory_set,
             user_heap_bottom,
             elf.header.pt2.entry_point() as usize,
             auxv,
-        ))
+        )
     }
     ///Clone a same `MemorySet`
     pub fn from_existed_user(user_space: &Arc<MemorySet>) -> MemorySetInner {

@@ -16,7 +16,7 @@ sudo cp ../user/target/riscv64gc-unknown-none-elf/release/* ../${DIR}/fs/rCorete
 sudo rm ../${DIR}/fs/rCoretests/initproc 
 
 sudo cp ../user/target/riscv64gc-unknown-none-elf/release/usertests ../${DIR}/fs
-sudo cp -r ../pre_ctests/build/riscv64/* ../${DIR}/fs/ 
+# sudo cp -r ../pre_ctests/build/riscv64/* ../${DIR}/fs/ 
 
 
 sudo cp -r ../final_tests/sdcard/* ../${DIR}/fs

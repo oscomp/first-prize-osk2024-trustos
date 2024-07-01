@@ -130,7 +130,6 @@ use log::debug;
 
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
-    // debug!("syscall:{}", syscall_id);
     let id = syscall_id;
     let syscall_id: Syscall = Syscall::from(syscall_id);
     debug!("syscall:{:?}", syscall_id);
