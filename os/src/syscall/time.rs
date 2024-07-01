@@ -28,7 +28,7 @@ pub fn sys_times(tms: *const u8) -> SyscallRet {
     Ok(0)
 }
 
-pub fn sys_settimer(which: usize, new_value: usize, old_value: usize) -> SyscallRet {
+pub fn sys_settimer(which: usize, new_value: *const u8, old_value: *const u8) -> SyscallRet {
     assert!(which == ITIMER_REAL, "only support Itimer Real");
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
@@ -36,12 +36,14 @@ pub fn sys_settimer(which: usize, new_value: usize, old_value: usize) -> Syscall
 
     debug!(
         "[sys_settimer] which is {}, new_value is {},old_value is {}",
-        which, new_value, old_value
+        which, new_value as usize, old_value as usize
     );
 
     if old_value as usize != 0 {
-        *translated_refmut(token, old_value as *mut Itimerval) =
-            (*task_inner.timer.get_ref()).timer;
+        let mut buffer = UserBuffer::new(
+            translated_byte_buffer(token, old_value, size_of::<Itimerval>()).unwrap(),
+        );
+        buffer.write((*task_inner.timer.get_ref()).timer.as_bytes());
     }
     if new_value as usize != 0 {
         let timer_inner = task_inner.timer.get_mut();

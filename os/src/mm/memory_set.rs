@@ -502,16 +502,16 @@ impl MemorySetInner {
                 new_area.map_perm = map_perm;
                 new_area.vpn_range = VPNRange::new(start_vpn, end);
                 area.vpn_range = VPNRange::new(start, start_vpn);
-                loop {
-                    if let Some(page) = area.data_frames.pop_last() {
-                        if page.0 < start_vpn {
-                            area.data_frames.insert(page.0, page.1);
-                        } else {
-                            new_area.data_frames.insert(page.0, page.1);
-                        }
+                let mut area_pages: Vec<(VirtPageNum, Arc<FrameTracker>)> = Vec::new();
+                while let Some(page) = area.data_frames.pop_last() {
+                    if page.0 < start_vpn {
+                        area_pages.push((page.0, page.1));
                     } else {
-                        break;
+                        new_area.data_frames.insert(page.0, page.1);
                     }
+                }
+                for page in area_pages.iter() {
+                    area.data_frames.insert(page.0, page.1.clone());
                 }
                 new_areas.push(new_area);
                 continue;
@@ -522,16 +522,16 @@ impl MemorySetInner {
                 new_area.map_perm = map_perm;
                 new_area.vpn_range = VPNRange::new(start, end_vpn);
                 area.vpn_range = VPNRange::new(end_vpn, end);
-                loop {
-                    if let Some(page) = area.data_frames.pop_first() {
-                        if page.0 >= end_vpn {
-                            area.data_frames.insert(page.0, page.1);
-                        } else {
-                            new_area.data_frames.insert(page.0, page.1);
-                        }
+                let mut area_pages: Vec<(VirtPageNum, Arc<FrameTracker>)> = Vec::new();
+                while let Some(page) = area.data_frames.pop_last() {
+                    if page.0 >= end_vpn {
+                        area_pages.push((page.0, page.1));
                     } else {
-                        break;
+                        new_area.data_frames.insert(page.0, page.1);
                     }
+                }
+                for page in area_pages.iter() {
+                    area.data_frames.insert(page.0, page.1.clone());
                 }
                 new_areas.push(new_area);
                 continue;
@@ -544,27 +544,18 @@ impl MemorySetInner {
                 front_area.vpn_range = VPNRange::new(start, start_vpn);
                 back_area.vpn_range = VPNRange::new(end_vpn, end);
                 area.vpn_range = VPNRange::new(start_vpn, end_vpn);
-                loop {
-                    if let Some(page) = area.data_frames.pop_first() {
-                        if page.0 >= start_vpn {
-                            area.data_frames.insert(page.0, page.1);
-                        } else {
-                            front_area.data_frames.insert(page.0, page.1);
-                        }
+                let mut area_pages: Vec<(VirtPageNum, Arc<FrameTracker>)> = Vec::new();
+                while let Some(page) = area.data_frames.pop_last() {
+                    if page.0 >= start_vpn && page.0 < end_vpn {
+                        area_pages.push((page.0, page.1));
+                    } else if page.0 < start_vpn {
+                        front_area.data_frames.insert(page.0, page.1);
                     } else {
-                        break;
+                        back_area.data_frames.insert(page.0, page.1);
                     }
                 }
-                loop {
-                    if let Some(page) = area.data_frames.pop_last() {
-                        if page.0 < end_vpn {
-                            area.data_frames.insert(page.0, page.1);
-                        } else {
-                            back_area.data_frames.insert(page.0, page.1);
-                        }
-                    } else {
-                        break;
-                    }
+                for page in area_pages.iter() {
+                    area.data_frames.insert(page.0, page.1.clone());
                 }
                 new_areas.push(front_area);
                 new_areas.push(back_area);

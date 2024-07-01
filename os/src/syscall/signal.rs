@@ -3,8 +3,9 @@ use log::debug;
 use crate::{
     mm::{translated_ref, translated_refmut},
     signal::{
-        restore_frame, send_access_signal, send_signal_to_thread, send_signal_to_thread_group,
-        KSigAction, SigAction, SigOp, SigSet, SIG_MAX_NUM,
+        restore_frame, send_access_signal, send_signal_to_one_thread_of_thread_group,
+        send_signal_to_thread, send_signal_to_thread_group, KSigAction, SigAction, SigOp, SigSet,
+        SIG_MAX_NUM,
     },
     task::{current_task, current_token, suspend_current_and_run_next},
     timer::{get_time_spec, Timespec},
@@ -20,8 +21,10 @@ pub fn sys_rt_sigaction(
         return Err(SysErrNo::EINVAL);
     }
     debug!(
-        "[sys_rt_sigaction] signo is {}, act is {:x}, old_act is {:x}",
-        signo, act as usize, old_act as usize
+        "[sys_rt_sigaction] sig is {:?}, act is {:x}, old_act is {:x}",
+        SigSet::from_sig(signo),
+        act as usize,
+        old_act as usize
     );
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
@@ -67,6 +70,9 @@ pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) ->
     }
     if set as usize != 0 {
         let mask = *translated_ref(token, set);
+
+        debug!("mask sig: {:?}", mask);
+
         match how {
             SIG_BLOCK => task_inner.sig_pending.get_mut().blocked |= mask,
             SIG_UNBLOCK => task_inner.sig_pending.get_mut().blocked &= !mask,
@@ -169,5 +175,17 @@ pub fn sys_kill(pid: isize, signo: usize) -> SyscallRet {
 pub fn sys_tkill(tid: usize, signo: usize) -> SyscallRet {
     let sig = SigSet::from_sig(signo);
     send_signal_to_thread(tid, sig);
+    Ok(0)
+}
+
+pub fn sys_tgkill(tgid: usize, tid: usize, signo: usize) -> SyscallRet {
+    let sig = SigSet::from_sig(signo);
+
+    debug!(
+        "[sys_tgkill] tgid is {}, tid is {}, sig is {:?}",
+        tgid, tid, sig
+    );
+
+    send_signal_to_one_thread_of_thread_group(tgid, tid, sig);
     Ok(0)
 }

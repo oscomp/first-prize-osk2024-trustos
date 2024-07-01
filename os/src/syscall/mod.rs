@@ -65,6 +65,7 @@ pub enum Syscall {
     SchedYield = 124,
     SigKill = 129,
     Tkill = 130,
+    Tgkill = 131,
     Sigsupend = 133,
     Sigaction = 134,
     Sigprocmask = 135,
@@ -238,7 +239,9 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Exitgroup => sys_exit_group(args[0] as i32),
         Syscall::Settidaddress => sys_settidaddress(args[0]),
         Syscall::Nanosleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
-        Syscall::Setitimer => sys_settimer(args[0] as usize, args[1] as usize, args[2] as usize),
+        Syscall::Setitimer => {
+            sys_settimer(args[0] as usize, args[1] as *const u8, args[2] as *const u8)
+        }
         Syscall::ClockGettime => sys_clock_gettime(args[0], args[1] as *const u8),
         Syscall::ClockGetres => sys_clock_getres(args[0] as usize, args[1] as *const u8),
         Syscall::ClockNanosleep => sys_clock_nanosleep(
@@ -262,6 +265,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::SchedYield => sys_sched_yield(),
         Syscall::SigKill => sys_kill(args[0] as isize, args[0]),
         Syscall::Tkill => sys_tkill(args[0] as usize, args[1] as usize),
+        Syscall::Tgkill => sys_tgkill(args[0] as usize, args[1] as usize, args[2] as usize),
         Syscall::Sigsupend => sys_rt_sigsuspend(args[0] as *const SigSet),
         Syscall::Sigaction => sys_rt_sigaction(
             args[0],

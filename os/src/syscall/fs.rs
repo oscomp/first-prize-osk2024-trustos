@@ -863,13 +863,25 @@ pub fn sys_prlimit(
     Ok(0)
 }
 
-pub fn sys_readlinkat(
-    _dirfd: isize,
-    _path: *const u8,
-    _buf: *const u8,
-    _bufsiz: usize,
-) -> SyscallRet {
-    Ok(0)
+pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsiz: usize) -> SyscallRet {
+    let task = current_task().unwrap();
+    let inner = task.inner_lock();
+    let token = inner.user_token();
+    let path = translated_str(token, path);
+
+    debug!(
+        "[sys_readlinkat] dirfd is {}, path is {}, buf is {:x}, bufsiz is {}",
+        dirfd, path, buf as usize, bufsiz
+    );
+
+    assert!(path == "/proc/self/exe", "unsupported other path!");
+
+    debug!("[sys_read_linkat] got path : {}", inner.fs_info.get_cwd());
+
+    let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, bufsiz).unwrap());
+    let res = buffer.write(inner.fs_info.as_bytes());
+
+    Ok(res)
 }
 
 /// If newpath already exists, replace it.
@@ -1006,15 +1018,6 @@ pub fn sys_getrandom(buf_ptr: *const u8, buflen: usize, _flags: u32) -> SyscallR
         return Err(SysErrNo::EINVAL);
     }
 
-    // if let Some(random_device) = open_device_file("/dev/random") {
-    //     let ret = random_device.read(UserBuffer::new(
-    //         translated_byte_buffer(token, buf_ptr, buflen).unwrap(),
-    //     ))?;
-    //     Ok(ret)
-    // } else {
-    //     Err(SysErrNo::ENOENT)
-    // }
-
     open_device_file("/dev/random")?.read(UserBuffer::new(
         translated_byte_buffer(token, buf_ptr, buflen).unwrap(),
     ))
@@ -1037,7 +1040,7 @@ pub fn sys_ppoll(fds_ptr: usize, nfds: usize, tmo_p: usize, mask: usize) -> Sysc
     let mut fds = Vec::new();
     let ptr = fds_ptr as *mut PollFd;
     for i in 0..nfds {
-        fds.push(*translated_refmut(token, unsafe { ptr.add(i) } as *mut PollFd));
+        fds.push(translated_refmut(token, unsafe { ptr.add(i) } as *mut PollFd));
     }
 
     let waittime = if tmo_p == 0 {
@@ -1082,10 +1085,6 @@ pub fn sys_ppoll(fds_ptr: usize, nfds: usize, tmo_p: usize, mask: usize) -> Sysc
         }
         //有响应了就可以返回
         if resnum > 0 {
-            let resptr = fds_ptr as *mut PollFd;
-            for i in 0..nfds {
-                *translated_refmut(token, unsafe { resptr.add(i) } as *mut PollFd) = fds[i];
-            }
             return Ok(resnum);
         }
         //或者时间到了也可以返回

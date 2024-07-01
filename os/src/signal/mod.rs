@@ -23,9 +23,9 @@ extern "C" {
 }
 
 pub fn check_if_any_sig_for_current_task() -> Option<usize> {
-    let task = current_task().unwrap();
-    let task_inner = task.inner_lock();
     for signo in 1..(SIG_MAX_NUM + 1) {
+        let task = current_task().unwrap();
+        let task_inner = task.inner_lock();
         let sig = SigSet::from_sig(signo);
         if task_inner.sig_pending.need_handle(sig) {
             return Some(signo);
@@ -37,7 +37,7 @@ pub fn check_if_any_sig_for_current_task() -> Option<usize> {
 pub fn ready_to_handle_signal(signo: usize) {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
-    debug!("handle signal {}", signo);
+    debug!("handle signal {:?}", SigSet::from_sig(signo));
     let sig_act = task_inner.sig_pending.get_ref().actions[signo];
     drop(task_inner);
     drop(task);
@@ -134,6 +134,18 @@ pub fn send_signal_to_thread(tid: usize, sig: SigSet) {
         add_signal(Arc::clone(task), sig);
     }
 }
+
+pub fn send_signal_to_one_thread_of_thread_group(pid: usize, tid: usize, sig: SigSet) {
+    let thread_group = THREAD_GROUP.lock();
+    if let Some(tasks) = thread_group.get(&pid) {
+        for task in tasks.iter() {
+            if task.tid() == tid {
+                add_signal(task.clone(), sig);
+            }
+        }
+    }
+}
+
 // 目前的进程组只是一个进程的所有子进程的集合
 pub fn send_signal_to_process_group(_pid: usize, _sig: SigSet) {
     todo!()

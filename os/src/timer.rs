@@ -153,6 +153,10 @@ impl Itimerval {
             it_value: TimeVal::new(0, 0),
         }
     }
+    pub fn as_bytes(&self) -> &[u8] {
+        let size = core::mem::size_of::<Self>();
+        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
+    }
 }
 ///以实际（即挂钟）时间倒计时。在每次到期时，都会生成一个 SIGALRM 信号
 pub const ITIMER_REAL: usize = 0;

@@ -253,7 +253,10 @@ pub fn sys_nanosleep(req: *const u8, rem: *const u8) -> SyscallRet {
     while get_time_ms() * 1_000_000usize - begin < waittime {
         if let Some(signo) = check_if_any_sig_for_current_task() {
             if rem as usize != 0 {
-                *translated_refmut(token, rem as *mut Timespec) = calculate_left_timespec(endtime);
+                let mut buffer = UserBuffer::new(
+                    translated_byte_buffer(token, rem, size_of::<Timespec>()).unwrap(),
+                );
+                buffer.write(calculate_left_timespec(endtime).as_bytes());
             }
             ready_to_handle_signal(signo);
         }
@@ -271,8 +274,8 @@ pub fn sys_uname(buf: *mut u8) -> SyscallRet {
     let uname = Utsname {
         sysname: str2u8("TrustOS"),
         nodename: str2u8("TrustOS"),
-        release: str2u8("1.0.0"),
-        version: str2u8("1.0.0"),
+        release: str2u8("5.0.0"),
+        version: str2u8("5.0.0"),
         machine: str2u8("RISC-V64"),
         domainname: str2u8("TrustOS"),
     };
@@ -447,8 +450,10 @@ pub fn sys_clock_nanosleep(
     while get_time_ms() * 1_000_000usize - begin < waittime {
         if let Some(signo) = check_if_any_sig_for_current_task() {
             if remain as usize != 0 {
-                *translated_refmut(token, remain as *mut Timespec) =
-                    calculate_left_timespec(endtime);
+                let mut buffer = UserBuffer::new(
+                    translated_byte_buffer(token, remain, size_of::<Timespec>()).unwrap(),
+                );
+                buffer.write(calculate_left_timespec(endtime).as_bytes());
             }
             ready_to_handle_signal(signo);
         }
