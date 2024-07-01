@@ -492,18 +492,18 @@ impl MemorySetInner {
         for area in self.areas.iter_mut() {
             let (start, end) = area.vpn_range.range();
             //整个area修改
-            if start >= start_vpn && start < end_vpn && end >= start_vpn && end <= end_vpn {
+            if start >= start_vpn && start < end_vpn && end >= start_vpn && end < end_vpn {
                 area.map_perm = map_perm;
                 continue;
             }
             //修改area后半部分
-            else if start < start_vpn && end > start_vpn && end <= end_vpn {
+            else if start < start_vpn && end >= start_vpn && end < end_vpn {
                 let mut new_area = MapArea::from_another(area);
                 new_area.map_perm = map_perm;
                 new_area.vpn_range = VPNRange::new(start_vpn, end);
                 area.vpn_range = VPNRange::new(start, start_vpn);
                 let mut area_pages: Vec<(VirtPageNum, Arc<FrameTracker>)> = Vec::new();
-                while let Some(page) = area.data_frames.pop_last() {
+                while let Some(page) = area.data_frames.pop_first() {
                     if page.0 < start_vpn {
                         area_pages.push((page.0, page.1));
                     } else {
@@ -517,13 +517,13 @@ impl MemorySetInner {
                 continue;
             }
             //修改area前半部分
-            else if start >= start_vpn && start < end_vpn && end > end_vpn {
+            else if start >= start_vpn && start < end_vpn && end >= end_vpn {
                 let mut new_area = MapArea::from_another(area);
                 new_area.map_perm = map_perm;
                 new_area.vpn_range = VPNRange::new(start, end_vpn);
                 area.vpn_range = VPNRange::new(end_vpn, end);
                 let mut area_pages: Vec<(VirtPageNum, Arc<FrameTracker>)> = Vec::new();
-                while let Some(page) = area.data_frames.pop_last() {
+                while let Some(page) = area.data_frames.pop_first() {
                     if page.0 >= end_vpn {
                         area_pages.push((page.0, page.1));
                     } else {
@@ -537,7 +537,7 @@ impl MemorySetInner {
                 continue;
             }
             //修改area中间部分
-            else if start < start_vpn && end > end_vpn {
+            else if start < start_vpn && end >= end_vpn {
                 let mut front_area = MapArea::from_another(area);
                 let mut back_area = MapArea::from_another(area);
                 area.map_perm = map_perm;
@@ -545,7 +545,7 @@ impl MemorySetInner {
                 back_area.vpn_range = VPNRange::new(end_vpn, end);
                 area.vpn_range = VPNRange::new(start_vpn, end_vpn);
                 let mut area_pages: Vec<(VirtPageNum, Arc<FrameTracker>)> = Vec::new();
-                while let Some(page) = area.data_frames.pop_last() {
+                while let Some(page) = area.data_frames.pop_first() {
                     if page.0 >= start_vpn && page.0 < end_vpn {
                         area_pages.push((page.0, page.1));
                     } else if page.0 < start_vpn {

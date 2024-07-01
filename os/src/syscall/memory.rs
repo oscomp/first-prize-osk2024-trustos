@@ -92,7 +92,7 @@ pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> SyscallRet {
     memory_set.mprotect(start_vpn.into(), end_vpn.into(), map_perm);
     let mut protected_vpn = start_vpn;
     for _ in 0..page_num {
-        memory_set.get_mut().page_table.set_flags(
+        memory_set.get_mut().page_table.set_map_flags(
             protected_vpn.into(),
             PTEFlags::from_bits(map_perm.bits()).unwrap(),
         );

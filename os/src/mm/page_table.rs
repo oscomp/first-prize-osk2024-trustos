@@ -99,6 +99,10 @@ impl PageTableEntry {
         let new_flags: u8 = flags.bits().clone();
         self.bits = (self.bits & 0xFFFF_FFFF_FFFF_FF00) | (new_flags as usize);
     }
+    pub fn set_map_flags(&mut self, flags: PTEFlags) {
+        let new_flags: u8 = (self.bits & 0xFF) as u8 | flags.bits().clone();
+        self.bits = (self.bits & 0xFFFF_FFFF_FFFF_FF00) | (new_flags as usize);
+    }
 }
 ///Record root ppn and has the same lifetime as 1 and 2 level `PageTableEntry`
 pub struct PageTable {
@@ -225,6 +229,9 @@ impl PageTable {
     }
     pub fn set_flags(&mut self, vpn: VirtPageNum, flags: PTEFlags) {
         self.find_pte_create(vpn).unwrap().set_flags(flags);
+    }
+    pub fn set_map_flags(&mut self, vpn: VirtPageNum, flags: PTEFlags) {
+        self.find_pte_create(vpn).unwrap().set_map_flags(flags);
     }
 }
 /// Translate a pointer to a mutable u8 Vec through page table
