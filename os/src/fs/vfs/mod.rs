@@ -63,7 +63,6 @@ pub trait Inode: Send + Sync {
     fn set_timestamps(&self, _atime: Option<u32>, _mtime: Option<u32>) -> GeneralRet {
         unimplemented!()
     }
-    // fn link(&self);
     fn link_cnt(&self) -> SyscallRet {
         unimplemented!()
     }
@@ -71,6 +70,9 @@ pub trait Inode: Send + Sync {
         unimplemented!();
     }
     fn rename(&self, _path: &str, _new_path: &str) -> SyscallRet {
+        unimplemented!()
+    }
+    fn delay(&self) {
         unimplemented!()
     }
     fn read_all(&self) -> Result<Vec<u8>, SysErrNo> {

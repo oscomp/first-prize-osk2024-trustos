@@ -1938,9 +1938,9 @@ extern "C" {
     pub fn ext4_ctime_get(path: *const ::core::ffi::c_char, ctime: *mut u32) -> ::core::ffi::c_int;
 }
 extern "C" {
-    pub fn ext4_links_cnt_get(
+    pub fn ext4_get_links_cnt(
         path: *const ::core::ffi::c_char,
-        ctime: *mut u32,
+        cnt: *mut u32,
     ) -> ::core::ffi::c_int;
 }
 extern "C" {

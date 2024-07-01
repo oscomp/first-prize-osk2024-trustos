@@ -336,12 +336,12 @@ impl Ext4File {
         let mut cnt: u32 = 0;
         let c_path = self.file_path.clone();
         let c_path = c_path.into_raw();
-        let r = unsafe { ext4_mode_get(c_path, &mut cnt) };
+        let r = unsafe { ext4_get_links_cnt(c_path, &mut cnt) };
         unsafe {
             drop(CString::from_raw(c_path));
         }
         if r != EOK as i32 {
-            error!("ext4_mode_get: rc = {}", r);
+            error!("ext4_links_cnt_get: rc = {}", r);
             return Err(r);
         }
         Ok(cnt)

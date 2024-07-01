@@ -1,8 +1,8 @@
 //! File and filesystem-related syscalls
 use crate::{
     fs::{
-        fs_stat, make_pipe, open, open_device_file, root_inode, sync, File, FileClass, InodeType,
-        Kstat, OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET,
+        fs_stat, make_pipe, open, open_device_file, remove_inode_idx, root_inode, sync, File,
+        FileClass, InodeType, Kstat, OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET,
     },
     mm::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
@@ -362,16 +362,24 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, _flags: u32) -> SyscallRet {
 
     let path = translated_str(token, path);
     let abs_path = inner.get_abs_path(dirfd, &path)?;
-    debug!("[sys_unlinkat] path={}", &abs_path);
     // TODO(ZMY) 支持符号链接,socket,FIFO,device
     // 如果是File但尚有对应的fd未关闭,等到close时unlink
     // 如果是符号链接,直接移除
     // 如果是socket, FIFO, or device,移除但现有的fd可继续使用
     let osfile = open(&abs_path, OpenFlags::empty())?.file()?;
+    debug!(
+        "[sys_unlinkat] path={},link_cnt={},has_activate_fd={}",
+        &abs_path,
+        osfile.inode.link_cnt()?,
+        inner.fs_info.has_fd(&abs_path)
+    );
+
     if osfile.inode.link_cnt()? == 1 && inner.fs_info.has_fd(&path) {
-        osfile.delay();
+        osfile.inode.delay();
+        remove_inode_idx(&abs_path);
     } else {
         osfile.inode.unlink(&abs_path);
+        remove_inode_idx(&abs_path);
     }
 
     Ok(0)

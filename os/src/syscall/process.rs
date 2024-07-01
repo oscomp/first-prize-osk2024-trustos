@@ -99,7 +99,7 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
     let task_inner = task.inner_lock();
 
     let token = task_inner.user_token();
-    let path = trim_start_slash(translated_str(token, path));
+    let mut path = trim_start_slash(translated_str(token, path));
 
     //处理argv参数
     let mut argv_vec = Vec::<String>::new();
@@ -119,8 +119,8 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
     if path.ends_with(".sh") {
         argv_vec.insert(0, String::from("sh"));
         argv_vec.insert(0, String::from("busybox"));
+        path = String::from("/busybox");
     }
-    let path = String::from("/busybox");
     debug!("[sys_execve] path is {},arg is {:?}", path, argv_vec);
     let mut env = Vec::<String>::new();
     loop {

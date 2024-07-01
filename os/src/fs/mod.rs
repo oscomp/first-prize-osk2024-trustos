@@ -360,8 +360,9 @@ fn create_file(abs_path: &str, flags: OpenFlags) -> Result<FileClass, SysErrNo> 
     // 一定能找到,因为除了RootInode外都有父结点
     let parent_dir = root_inode();
     let (readable, writable) = flags.read_write();
-    return parent_dir.create(abs_path, flags.node_type()).map(|vfile| {
-        let osinode = OSInode::new(readable, writable, vfile);
+    return parent_dir.create(abs_path, flags.node_type()).map(|inode| {
+        insert_inode_idx(abs_path, inode.clone());
+        let osinode = OSInode::new(readable, writable, inode);
         FileClass::File(Arc::new(osinode))
     });
 }
@@ -372,18 +373,39 @@ pub fn open(abs_path: &str, flags: OpenFlags) -> Result<FileClass, SysErrNo> {
         let device = open_device_file(&abs_path)?;
         return Ok(FileClass::Abs(device));
     }
-    let parent_inode = root_inode();
-    if let Ok(inode) = parent_inode.find(&abs_path) {
+    let mut inode: Option<Arc<dyn Inode>> = None;
+    // 同一个路径对应一个Inode
+    if has_inode(abs_path) {
+        inode = find_inode_idx(abs_path);
+    } else {
+        if let Ok(t) = root_inode().find(&abs_path) {
+            insert_inode_idx(abs_path, t.clone());
+            inode = Some(t);
+        }
+    }
+    if let Some(inode) = inode {
         let (readable, writable) = flags.read_write();
-        let vfile = OSInode::new(readable, writable, inode);
+        let osfile = OSInode::new(readable, writable, inode);
         if flags.contains(OpenFlags::O_APPEND) {
-            vfile.lseek(0, SEEK_END);
+            osfile.lseek(0, SEEK_END);
         }
         if flags.contains(OpenFlags::O_TRUNC) {
-            vfile.inode.truncate(0);
+            osfile.inode.truncate(0);
         }
-        return Ok(FileClass::File(Arc::new(vfile)));
+        return Ok(FileClass::File(Arc::new(osfile)));
     }
+
+    // if let Ok(inode) = root_inode().find(&abs_path) {
+    //     let (readable, writable) = flags.read_write();
+    //     let osfile = OSInode::new(readable, writable, inode);
+    //     if flags.contains(OpenFlags::O_APPEND) {
+    //         osfile.lseek(0, SEEK_END);
+    //     }
+    //     if flags.contains(OpenFlags::O_TRUNC) {
+    //         osfile.inode.truncate(0);
+    //     }
+    //     return Ok(FileClass::File(Arc::new(osfile)));
+    // }
     // 节点不存在
     if flags.contains(OpenFlags::O_CREATE) {
         return create_file(&abs_path, flags);
