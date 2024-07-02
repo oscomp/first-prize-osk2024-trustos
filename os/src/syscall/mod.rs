@@ -51,6 +51,7 @@ pub enum Syscall {
     Exit = 93,
     Exitgroup = 94,
     Settidaddress = 96,
+    Futex = 98,
     Nanosleep = 101,
     Setitimer = 103,
     ClockGettime = 113,
@@ -238,6 +239,14 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Exit => sys_exit(args[0] as i32),
         Syscall::Exitgroup => sys_exit_group(args[0] as i32),
         Syscall::Settidaddress => sys_settidaddress(args[0]),
+        Syscall::Futex => sys_futex(
+            args[0] as *mut i32,
+            args[1] as i32,
+            args[2] as i32,
+            args[3] as *const Timespec,
+            args[4] as *mut i32,
+            args[5] as i32,
+        ),
         Syscall::Nanosleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
         Syscall::Setitimer => {
             sys_settimer(args[0] as usize, args[1] as *const u8, args[2] as *const u8)

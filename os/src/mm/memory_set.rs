@@ -2,7 +2,7 @@
 use super::{
     brk_page_fault, cow_page_fault, frame_alloc, mmap_read_page_fault, mmap_write_page_fault,
     translated_byte_buffer, FrameTracker, MapArea, MapAreaType, MapPermission, MapType, PTEFlags,
-    PageTable, PageTableEntry, UserBuffer, VPNRange, VirtAddr, VirtPageNum, GROUP_SHARE,
+    PageTable, PageTableEntry, PhysAddr, UserBuffer, VPNRange, VirtAddr, VirtPageNum, GROUP_SHARE,
 };
 use crate::{
     config::{
@@ -195,6 +195,9 @@ impl MemorySet {
     #[inline(always)]
     pub fn clone_area(&self, start_vpn: VirtPageNum, another: &MemorySetInner) {
         self.get_mut().clone_area(start_vpn, another)
+    }
+    pub fn translate_va(&self, va: VirtAddr) -> Option<PhysAddr> {
+        self.get_mut().page_table.translate_va(va)
     }
 }
 

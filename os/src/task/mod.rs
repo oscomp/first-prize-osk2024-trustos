@@ -14,23 +14,27 @@
 //!
 //! Be careful when you see `__switch` ASM function in `switch.S`. Control flow around this function
 //! might not be what you expect.
-mod aux;
-mod context;
-pub mod manager;
-pub mod processor;
-mod switch;
-mod sysinfo;
+
 #[allow(clippy::module_inception)]
 #[allow(rustdoc::private_intra_doc_links)]
+mod aux;
+mod context;
+mod futex;
+mod manager;
+mod processor;
+mod switch;
+mod sysinfo;
 mod task;
 mod tid;
 
 use crate::{
     fs::{open, FileClass, OpenFlags},
+    mm::{translated_refmut, VirtAddr},
     signal::{send_signal_to_thread_group, SigSet},
 };
 use alloc::{boxed::Box, sync::Arc};
 pub use context::TaskContext;
+pub use futex::*;
 use lazy_static::*;
 use log::debug;
 pub use manager::*;
@@ -56,6 +60,16 @@ pub fn suspend_current_and_run_next() {
     drop(task_inner);
     drop(task);
     // jump to scheduling cycle
+    schedule(task_cx_ptr);
+}
+
+pub fn block_current_and_run_next() {
+    let task = take_current_task().unwrap();
+    let mut task_inner = task.inner_lock();
+    let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
+    task_inner.task_status = TaskStatus::Blocked;
+    drop(task_inner);
+    drop(task);
     schedule(task_cx_ptr);
 }
 
@@ -88,6 +102,18 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     let task = take_current_task().unwrap();
     let mut inner = task.inner_lock();
     debug!("[sys_exit] thread {}", task.tid());
+
+    // CLONE_CHILD_CLEARTID
+    if inner.clear_child_tid != 0 {
+        let token = inner.user_token();
+        *translated_refmut(token, inner.clear_child_tid as *mut u32) = 0;
+        // 唤醒等待在 child_tid 的进程
+        let pa = inner
+            .memory_set
+            .translate_va(VirtAddr::from(inner.clear_child_tid))
+            .unwrap();
+        futex_wake_up(pa, 1);
+    }
 
     // 无论如何一个轻量级进程都会是一个线程
     // 释放线程相关资源

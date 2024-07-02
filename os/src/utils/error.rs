@@ -84,6 +84,7 @@ pub enum SysErrNo {
     ENOTEMPTY = 39,
     /// Toomany symbolic links encountereds
     ELOOP = 40,
+    ETIMEDOUT = 110,
     // 后续错误码用不上
 }
 
@@ -131,6 +132,7 @@ impl SysErrNo {
             Self::ENOSYS => "Function not implemented",
             Self::ENOTEMPTY => "Directory not empty",
             Self::ELOOP => "Toomany symbolic links encountereds",
+            Self::ETIMEDOUT => "Connection timed",
         }
     }
 }

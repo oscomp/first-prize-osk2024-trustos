@@ -1,5 +1,5 @@
 //!Implementation of [`TaskManager`]
-use super::{TaskControlBlock, INITPROC};
+use super::{TaskControlBlock, TaskStatus, INITPROC};
 use alloc::collections::{BTreeMap, VecDeque};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -127,4 +127,11 @@ pub fn move_child_process_to_init(ppid: usize) {
             init_childer.push(child);
         }
     }
+}
+
+pub fn wakeup_task(task: Arc<TaskControlBlock>) {
+    let mut task_inner = task.inner_lock();
+    task_inner.task_status = TaskStatus::Ready;
+    drop(task_inner);
+    add_task(task);
 }

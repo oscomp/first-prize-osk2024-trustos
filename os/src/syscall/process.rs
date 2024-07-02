@@ -3,20 +3,22 @@ use crate::{
     logger::{change_log_level, clear_log_buf, console_log_off, console_log_on, unread_size},
     mm::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
-        translated_str, UserBuffer,
+        translated_str, PhysAddr, UserBuffer, VirtAddr,
     },
     signal::{check_if_any_sig_for_current_task, ready_to_handle_signal},
     syscall::{CloneFlags, Utsname},
     task::{
         add_task, current_task, current_token, exit_current_and_run_next,
-        exit_current_group_and_run_next, move_child_process_to_init, remove_all_from_thread_group,
-        suspend_current_and_run_next, task_num, Sysinfo, PROCESS_GROUP,
+        exit_current_group_and_run_next, futex_requeue, futex_wait, futex_wake_up,
+        move_child_process_to_init, remove_all_from_thread_group, suspend_current_and_run_next,
+        task_num, Sysinfo, PROCESS_GROUP,
     },
-    timer::{calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
+    timer::{add_timer, calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
     utils::{get_abs_path, trim_start_slash, SysErrNo, SyscallRet},
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
+use num_enum::TryFromPrimitive;
 
 use super::SyslogType;
 use crate::logger::{read_all_log_buf, read_clear_log_buf, read_log_buf, LOG_BUF_LEN};
@@ -150,6 +152,71 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
     task.inner_lock().memory_set.activate();
     Ok(0)
 }
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive)]
+#[repr(i32)]
+pub enum FutexCmd {
+    FUTEX_WAIT = 0,
+    FUTEX_WAKE = 1,
+    FUTEX_REQUEUE = 3,
+}
+
+pub fn sys_futex(
+    uaddr: *mut i32,
+    futex_op: i32,
+    val: i32,
+    timeout: *const Timespec,
+    uaddr2: *mut i32,
+    _val3: i32,
+) -> SyscallRet {
+    let cmd = FutexCmd::try_from_primitive(futex_op & 0x7f).unwrap();
+    debug!(
+        "[sys_futex] uaddr = {:#x}, cmd = {:?}, val = {}",
+        uaddr as usize, cmd, val
+    );
+    if uaddr.align_offset(4) != 0 {
+        return Err(SysErrNo::EINVAL);
+    }
+    let task = current_task().unwrap();
+    let task_inner = task.inner_lock();
+    let token = task_inner.user_token();
+    let pa = task_inner
+        .memory_set
+        .translate_va(VirtAddr::from(uaddr as usize))
+        .unwrap();
+    let pa2 = if !uaddr2.is_null() {
+        task_inner
+            .memory_set
+            .translate_va(VirtAddr::from(uaddr2 as usize))
+            .unwrap()
+    } else {
+        PhysAddr::from(0)
+    };
+    drop(task_inner);
+    drop(task);
+    match cmd {
+        FutexCmd::FUTEX_WAIT => {
+            let futex_word = *translated_ref(token, uaddr);
+            if futex_word != val {
+                return Err(SysErrNo::EAGAIN);
+            }
+            if !timeout.is_null() {
+                let timeout = *translated_ref(token, timeout);
+                debug!("[sys_futex] timeout = {:?}", timeout);
+                add_timer(get_time_spec() + timeout, current_task().unwrap());
+            }
+            if futex_wait(pa) {
+                Ok(0)
+            } else {
+                Err(SysErrNo::ETIMEDOUT)
+            }
+        }
+        FutexCmd::FUTEX_WAKE => Ok(futex_wake_up(pa, val)),
+        FutexCmd::FUTEX_REQUEUE => Ok(futex_requeue(pa, val, pa2, timeout as i32)),
+    }
+}
+
 /// 等待子进程状态发生变化,即子进程终止或被信号停止或被信号挂起
 /// < -1   meaning wait for any child process whose process group ID
 ///         is equal to the absolute value of pid.

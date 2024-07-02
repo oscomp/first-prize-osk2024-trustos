@@ -217,25 +217,6 @@ impl TaskControlBlock {
         let mut inner = self.inner_lock();
         //用户栈高地址到低地址：环境变量字符串/参数字符串/aux辅助向量/环境变量地址数组/参数地址数组/参数数量
         // memory_set with elf program headers/trampoline/trap context/user stack
-        // let (mut memory_set, user_hp, entry_point, mut auxv) =
-        //     if let Some((memory_set, user_hp, entry_point, auxv)) =
-        //         MemorySetInner::from_elf(elf_data)
-        //     {
-        //         (memory_set, user_hp, entry_point, auxv)
-        //     } else {
-        //         drop(inner);
-        //         let new_elf_data = open("/busybox", OpenFlags::O_RDONLY)
-        //             .unwrap()
-        //             .file()
-        //             .unwrap()
-        //             .inode
-        //             .read_all()
-        //             .unwrap();
-        //         let mut new_argv = alloc::vec![String::from("busybox"), String::from("sh")];
-        //         argv.iter().for_each(|x| new_argv.push(x.clone()));
-        //         self.exec(&new_elf_data, &new_argv, env);
-        //         return;
-        //     };
         let (mut memory_set, user_hp, entry_point, mut auxv) = MemorySetInner::from_elf(elf_data);
         let token = memory_set.token();
 
@@ -576,4 +557,5 @@ pub enum TaskStatus {
     Ready,
     Running,
     Zombie,
+    Blocked,
 }

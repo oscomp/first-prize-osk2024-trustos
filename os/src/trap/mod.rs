@@ -20,7 +20,7 @@ use crate::{
     task::{
         current_task, current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next,
     },
-    timer::set_next_trigger,
+    timer::{check_timer, set_next_trigger},
     utils::{backtrace, hart_id},
 };
 use core::arch::global_asm;
@@ -156,9 +156,13 @@ pub fn trap_handler() {
             exit_current_and_run_next(-3);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
-            debug!("Timer Interupt!");
+            // 检查futex操作是否超时
+            check_timer();
+            // debug!("Timer Interupt!");
             set_next_trigger();
             suspend_current_and_run_next();
+            //检查定时器
+            current_task().unwrap().check_timer();
         }
         Trap::Exception(Exception::Breakpoint) => {
             warn!(
@@ -177,10 +181,6 @@ pub fn trap_handler() {
             );
         }
     }
-
-    //检查定时器
-    current_task().unwrap().check_timer();
-
     //检查信号
     if let Some(signo) = check_if_any_sig_for_current_task() {
         ready_to_handle_signal(signo);

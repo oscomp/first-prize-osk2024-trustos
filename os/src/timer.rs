@@ -2,14 +2,24 @@
 
 use core::ops::Add;
 
-use crate::config::board::CLOCK_FREQ;
 use crate::sbi::set_timer;
 use crate::sync::SyncUnsafeCell;
+use crate::task::TaskControlBlock;
+use crate::{config::board::CLOCK_FREQ, task::wakeup_task};
+use alloc::{
+    collections::BinaryHeap,
+    sync::{Arc, Weak},
+};
 use core::cmp::Ordering;
+use lazy_static::*;
+use log::debug;
 use riscv::register::time;
+use spin::Mutex;
 
 const TICKS_PER_SEC: usize = 100;
 const MSEC_PER_SEC: usize = 1000;
+const USEC_PER_SEC: usize = 1000000;
+const NSEC_PER_SEC: usize = 1000000000;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Timespec {
@@ -27,6 +37,9 @@ impl Timespec {
     pub fn as_bytes(&self) -> &[u8] {
         let size = core::mem::size_of::<Self>();
         unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
+    }
+    pub fn to_tick(&self) -> usize {
+        self.tv_sec * CLOCK_FREQ + (self.tv_nsec * CLOCK_FREQ / NSEC_PER_SEC)
     }
 }
 
@@ -334,4 +347,58 @@ pub fn get_time_spec() -> Timespec {
 /// set the next timer interrupt
 pub fn set_next_trigger() {
     set_timer(get_time() + CLOCK_FREQ / TICKS_PER_SEC);
+}
+
+/// 时钟计数器，与 itimer 间隔定时器不同，用于阻塞唤醒进程
+pub struct TimerCondVar {
+    pub expire: Timespec,
+    pub task: Weak<TaskControlBlock>,
+}
+impl PartialEq for TimerCondVar {
+    fn eq(&self, other: &Self) -> bool {
+        self.expire == other.expire
+    }
+}
+impl Eq for TimerCondVar {}
+impl PartialOrd for TimerCondVar {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let a = -(self.expire.to_tick() as isize);
+        let b = -(other.expire.to_tick() as isize);
+        Some(a.cmp(&b))
+    }
+}
+impl Ord for TimerCondVar {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+lazy_static! {
+    static ref TIMERS: Mutex<BinaryHeap<TimerCondVar>> =
+        Mutex::new(BinaryHeap::<TimerCondVar>::new());
+}
+
+pub fn add_timer(expire: Timespec, task: Arc<TaskControlBlock>) {
+    let mut timers = TIMERS.lock();
+    timers.push(TimerCondVar {
+        expire,
+        task: Arc::downgrade(&task),
+    });
+}
+
+pub fn check_timer() {
+    let current = get_time_spec();
+    let mut timers = TIMERS.lock();
+    while let Some(timer) = timers.peek() {
+        if timer.expire <= current {
+            if let Some(task) = timer.task.upgrade() {
+                debug!("[check_timer] wake up task",);
+                // 调用 wakeup_task 唤醒超时线程
+                wakeup_task(Arc::clone(&task));
+            }
+            timers.pop();
+        } else {
+            break;
+        }
+    }
 }
