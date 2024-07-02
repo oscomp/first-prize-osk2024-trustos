@@ -76,10 +76,13 @@ pub fn sys_clone(
     stack_ptr: usize,
     parent_tid_ptr: usize,
     tls_ptr: usize,
-    chilren_tid_ptr: usize,
+    child_tid_ptr: usize,
 ) -> SyscallRet {
     let flags = CloneFlags::from_bits(flags as u32).unwrap();
-    debug!("[sys_clone] flags {:?}", flags);
+    debug!(
+        "[sys_clone] flags {:?},stack:{:#x},parent_tid_ptr:{:#x},child_tid_ptr:{:#x},tls_ptr:{:#x}",
+        flags, stack_ptr, parent_tid_ptr, child_tid_ptr, tls_ptr
+    );
 
     let task = current_task().unwrap();
     let new_task = task.clone_process(
@@ -87,7 +90,7 @@ pub fn sys_clone(
         stack_ptr,
         parent_tid_ptr as *mut u32,
         tls_ptr,
-        chilren_tid_ptr as *mut u32,
+        child_tid_ptr as *mut u32,
     );
     let new_tid = new_task.tid();
     // we do not have to move to next instruction since we have done it before
@@ -302,20 +305,20 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
 pub fn sys_nanosleep(req: *const u8, rem: *const u8) -> SyscallRet {
     let token = current_token();
 
-    debug!(
-        "[sys_nanosleep] req is {:x}, rem is {:x}",
-        req as usize, rem as usize
-    );
+    // debug!(
+    //     "[sys_nanosleep] req is {:x}, rem is {:x}",
+    //     req as usize, rem as usize
+    // );
 
     let req = translated_ref(token, req as *const Timespec);
     let waittime = req.tv_sec * 1_000_000_000usize + req.tv_nsec;
     let begin = get_time_ms() * 1_000_000usize;
     let endtime = get_time_spec() + *req;
 
-    debug!(
-        "[sys_nanosleep] ready to sleep for {} sec, {} nsec",
-        req.tv_sec, req.tv_nsec
-    );
+    // debug!(
+    //     "[sys_nanosleep] ready to sleep for {} sec, {} nsec",
+    //     req.tv_sec, req.tv_nsec
+    // );
 
     while get_time_ms() * 1_000_000usize - begin < waittime {
         if let Some(signo) = check_if_any_sig_for_current_task() {
@@ -371,7 +374,7 @@ pub fn sys_sysinfo(info: *const u8) -> SyscallRet {
 
     let ourinfo = Sysinfo::new(get_time_ms() / 1000, 1 << 56, task_num());
     info.write(ourinfo.as_bytes());
-    debug!("[sys_sysinfo] ourinfo is {:?}", ourinfo);
+    // debug!("[sys_sysinfo] ourinfo is {:?}", ourinfo);
     Ok(0)
 }
 
@@ -383,10 +386,10 @@ pub fn sys_syslog(logtype: isize, bufp: *const u8, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
 
-    debug!(
-        "[sys_syslog] logtype is {}, bufp is {:x}, len is {}",
-        logtype, bufp as usize, len
-    );
+    // debug!(
+    //     "[sys_syslog] logtype is {}, bufp is {:x}, len is {}",
+    //     logtype, bufp as usize, len
+    // );
 
     let logtype = SyslogType::from(logtype);
 
@@ -443,41 +446,41 @@ pub fn sys_syslog(logtype: isize, bufp: *const u8, len: usize) -> SyscallRet {
     }
 }
 
-pub fn sys_sched_setaffinity(pid: usize, cpusetsize: usize, mask: usize) -> SyscallRet {
-    debug!(
-        "[sys_sched_setaffinity] pid is {}, cpusetsize is {}, mask is {}",
-        pid, cpusetsize, mask
-    );
+pub fn sys_sched_setaffinity(_pid: usize, _cpusetsize: usize, _mask: usize) -> SyscallRet {
+    // debug!(
+    //     "[sys_sched_setaffinity] pid is {}, cpusetsize is {}, mask is {}",
+    //     pid, cpusetsize, mask
+    // );
     Ok(0)
 }
 
-pub fn sys_sched_getaffinity(pid: usize, cpusetsize: usize, mask: usize) -> SyscallRet {
-    debug!(
-        "[sys_sched_getaffinity] pid is {}, cpusetsize is {}, mask is {}",
-        pid, cpusetsize, mask
-    );
+pub fn sys_sched_getaffinity(_pid: usize, _cpusetsize: usize, _mask: usize) -> SyscallRet {
+    // debug!(
+    //     "[sys_sched_getaffinity] pid is {}, cpusetsize is {}, mask is {}",
+    //     pid, cpusetsize, mask
+    // );
     Ok(0)
 }
 
-pub fn sys_sched_setscheduler(pid: usize, policy: usize, param: *const u8) -> SyscallRet {
-    debug!(
-        "[sys_sched_setscheduler] pid is {}, policy is {}, param is {:x}",
-        pid, policy, param as usize
-    );
+pub fn sys_sched_setscheduler(_pid: usize, _policy: usize, _param: *const u8) -> SyscallRet {
+    // debug!(
+    //     "[sys_sched_setscheduler] pid is {}, policy is {}, param is {:x}",
+    //     pid, policy, param as usize
+    // );
     Ok(0)
 }
 
-pub fn sys_sched_getscheduler(pid: usize) -> SyscallRet {
-    debug!("[sys_sched_getscheduler] pid is {}", pid);
+pub fn sys_sched_getscheduler(_pid: usize) -> SyscallRet {
+    // debug!("[sys_sched_getscheduler] pid is {}", pid);
     //由于使用的是标准的时间片调度算法，直接返回SCHED_OHTER = 0
     Ok(0)
 }
 
-pub fn sys_sched_getparam(pid: usize, param: *const u8) -> SyscallRet {
-    debug!(
-        "[sys_sched_getparam] pid is {}, param is {:x}",
-        pid, param as usize
-    );
+pub fn sys_sched_getparam(_pid: usize, _param: *const u8) -> SyscallRet {
+    // debug!(
+    //     "[sys_sched_getparam] pid is {}, param is {:x}",
+    //     pid, param as usize
+    // );
     //由于使用的是标准的时间片调度算法，param参数需要被忽略
     Ok(0)
 }
@@ -485,17 +488,17 @@ pub fn sys_sched_getparam(pid: usize, param: *const u8) -> SyscallRet {
 const TIME_ABSTIME: u32 = 1;
 
 pub fn sys_clock_nanosleep(
-    clockid: usize,
+    _clockid: usize,
     flags: u32,
     t: *const u8,
     remain: *const u8,
 ) -> SyscallRet {
     let token = current_token();
 
-    debug!(
-        "[sys_clock_nanosleep] clockid is {}, flags is {}, t is {:x}, remain is {:x}",
-        clockid, flags, t as usize, remain as usize
-    );
+    // debug!(
+    //     "[sys_clock_nanosleep] clockid is {}, flags is {}, t is {:x}, remain is {:x}",
+    //     clockid, flags, t as usize, remain as usize
+    // );
 
     let t = translated_ref(token, t as *const Timespec);
     let waittime = t.tv_sec * 1_000_000_000usize + t.tv_nsec;
@@ -509,10 +512,10 @@ pub fn sys_clock_nanosleep(
         get_time_spec() + *t
     };
 
-    debug!(
-        "[sys_clock_nanosleep] when not abs_time, ready to sleep for {} sec, {} nsec",
-        t.tv_sec, t.tv_nsec
-    );
+    // debug!(
+    //     "[sys_clock_nanosleep] when not abs_time, ready to sleep for {} sec, {} nsec",
+    //     t.tv_sec, t.tv_nsec
+    // );
 
     while get_time_ms() * 1_000_000usize - begin < waittime {
         if let Some(signo) = check_if_any_sig_for_current_task() {

@@ -92,10 +92,10 @@ pub fn sys_clock_gettime(clockid: usize, tp: *const u8) -> SyscallRet {
     let inner = task.inner_lock();
     let token = inner.user_token();
 
-    debug!(
-        "[sys_clock_gettime] clockid is {}, tp is {:x}",
-        clockid, tp as usize
-    );
+    // debug!(
+    //     "[sys_clock_gettime] clockid is {}, tp is {:x}",
+    //     clockid, tp as usize
+    // );
 
     let clockid = Clockid::from_bits(clockid as u32).unwrap();
     let mut tp = UserBuffer::new(translated_byte_buffer(token, tp, size_of::<Timespec>()).unwrap());
@@ -120,10 +120,10 @@ pub fn sys_getrusage(who: isize, usage: *const u8) -> SyscallRet {
     let inner = task.inner_lock();
     let token = inner.user_token();
 
-    debug!(
-        "[sys_getrusage] who is {}, usage is {:x}",
-        who, usage as usize
-    );
+    // debug!(
+    //     "[sys_getrusage] who is {}, usage is {:x}",
+    //     who, usage as usize
+    // );
 
     let mut usage =
         UserBuffer::new(translated_byte_buffer(token, usage, size_of::<Rusage>()).unwrap());
@@ -158,10 +158,10 @@ pub fn sys_clock_getres(clockid: usize, res: *const u8) -> SyscallRet {
     let inner = task.inner_lock();
     let token = inner.user_token();
 
-    debug!(
-        "[sys_clock_getres] clockid is {}, res is {:x}",
-        clockid, res as usize
-    );
+    // debug!(
+    //     "[sys_clock_getres] clockid is {}, res is {:x}",
+    //     clockid, res as usize
+    // );
 
     let clockid = Clockid::from_bits(clockid as u32).unwrap();
     let mut res =

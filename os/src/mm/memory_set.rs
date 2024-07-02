@@ -154,12 +154,12 @@ impl MemorySet {
             .get_unchecked_mut()
             .push_with_offset(map_area, offset, data)
     }
-    #[inline(always)]
-    fn push_with_given_frames(&self, map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
-        self.inner
-            .get_unchecked_mut()
-            .push_with_given_frames(map_area, frames)
-    }
+    // #[inline(always)]
+    // fn push_with_given_frames(&self, map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
+    //     self.inner
+    //         .get_unchecked_mut()
+    //         .push_with_given_frames(map_area, frames)
+    // }
     pub fn map_given_frames(&self, map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
         self.inner
             .get_unchecked_mut()

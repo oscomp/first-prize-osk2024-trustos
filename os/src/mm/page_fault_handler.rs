@@ -59,7 +59,7 @@ pub fn brk_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapAre
 pub fn cow_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapArea) {
     // 只有一个，不用复制
     let frame = vma.data_frames.get(&va.into()).unwrap();
-    debug!("handle va {:#x}, count={}", va.0, Arc::strong_count(frame));
+    // debug!("handle va {:#x}, count={}", va.0, Arc::strong_count(frame));
     if Arc::strong_count(frame) == 1 {
         page_table.reset_cow(va.into());
         page_table.set_w(va.into());

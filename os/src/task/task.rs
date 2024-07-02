@@ -329,7 +329,7 @@ impl TaskControlBlock {
             trap_handler as usize,
         );
         *inner.trap_cx() = trap_cx;
-        debug!("task.exec.tid={}", self.tid.0);
+        // debug!("task.exec.tid={}", self.tid.0);
         inner.user_heappoint = user_hp;
         inner.user_heapbottom = user_hp;
         // println!("final user_sp:{:#X}", user_sp);
@@ -487,19 +487,21 @@ impl TaskControlBlock {
             *translated_refmut(child_token, child_tid) = child.tid() as u32;
         }
 
-        //子进程映射共享内存
-        parent_inner.shms.iter().for_each(|x| {
-            child_inner.memory_set.map_given_frames(
-                MapArea::new(
-                    VirtAddr::from(x.start),
-                    VirtAddr::from(x.end),
-                    MapType::Framed,
-                    MapPermission::all(),
-                    MapAreaType::Shm,
-                ),
-                x.mem.trackers.clone(),
-            );
-        });
+        if flags.contains(CloneFlags::SIGCHLD) {
+            //子进程映射共享内存
+            parent_inner.shms.iter().for_each(|x| {
+                child_inner.memory_set.map_given_frames(
+                    MapArea::new(
+                        VirtAddr::from(x.start),
+                        VirtAddr::from(x.end),
+                        MapType::Framed,
+                        MapPermission::all(),
+                        MapAreaType::Shm,
+                    ),
+                    x.mem.trackers.clone(),
+                );
+            });
+        }
 
         drop(child_inner);
         drop(parent_inner);

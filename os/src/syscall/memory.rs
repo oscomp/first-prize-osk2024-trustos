@@ -33,8 +33,8 @@ pub fn sys_mmap(
         return Err(SysErrNo::EPERM);
     }
     debug!(
-        "[sys_mmap]: start...  addr {:#x}, len {:#x}, fd {}, offset {:#x}, flags {:?}, prot {:?}",
-        addr, len, fd, off, flags, map_perm
+        "[sys_mmap]: addr {:#x}, len {:#x}, fd {}, offset {:#x}, flags {:?}, prot {:?}",
+        addr, len, fd as isize, off, flags, map_perm
     );
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
@@ -62,11 +62,11 @@ pub fn sys_mmap(
 }
 
 pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
+    debug!("[sys_munmap] addr={:#X}, len={}", addr, len);
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let len = page_round_up(len);
     task_inner.memory_set.munmap(addr, len);
-    debug!("[sys_munmap] addr={:#X}, len={}", addr, len);
     Ok(0)
 }
 
@@ -78,7 +78,7 @@ pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> SyscallRet {
     let map_perm: MapPermission = MmapProt::from_bits(prot).unwrap().into();
 
     debug!(
-        "[sys_mprotect] addr is {:x}, len is {}, map_perm is {:?}",
+        "[sys_mprotect] addr is {:x}, len is {:#x}, map_perm is {:?}",
         addr, len, map_perm
     );
 
