@@ -455,6 +455,12 @@ impl TaskControlBlock {
         });
 
         let mut child_inner = child.inner_lock();
+        // debug!(
+        //     "to {:?}, parent is {:?}, child is {:?}",
+        //     SigSet::from_sig(3),
+        //     parent_inner.sig_pending.get_mut().actions[3].act,
+        //     child_inner.sig_pending.get_mut().actions[3].act
+        // );
         if flags.contains(CloneFlags::CLONE_THREAD) {
             // 线程
             child_inner.alloc_user_res();

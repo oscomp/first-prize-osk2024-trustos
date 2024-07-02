@@ -1,3 +1,5 @@
+use log::debug;
+
 use crate::task::exit_current_and_run_next;
 
 /// 仿照Linux signal实现
@@ -135,7 +137,7 @@ impl SigSet {
 // 	sigset_t sa_mask;
 // };
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct SigAction {
     pub sa_handler: usize,
     pub sa_flags: usize,
@@ -145,13 +147,17 @@ pub struct SigAction {
 
 impl SigAction {
     pub fn new(signo: usize) -> Self {
-        let _: usize = match SigSet::from_bits(signo).unwrap().default_op() {
-            SigOp::Continue | SigOp::Ignore => 0,
-            SigOp::Stop => 0, // TODO(ZMY) imple StopCurrent
-            SigOp::Terminate | SigOp::Dump => exit_current_and_run_next as usize,
+        let handler: usize = if signo == 0 {
+            0
+        } else {
+            match SigSet::from_sig(signo).default_op() {
+                SigOp::Continue | SigOp::Ignore => 0,
+                SigOp::Stop => 0, // TODO(ZMY) imple StopCurrent
+                SigOp::Terminate | SigOp::Dump => exit_current_and_run_next as usize,
+            }
         };
         Self {
-            sa_handler: 0,
+            sa_handler: handler,
             sa_flags: 0,
             sa_restore: 0,
             sa_mask: SigSet::empty(),

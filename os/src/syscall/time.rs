@@ -103,8 +103,8 @@ pub fn sys_clock_gettime(clockid: usize, tp: *const u8) -> SyscallRet {
     match clockid {
         //当前可匹配实时时钟，单调时钟，进程CPU时钟，且三者返回值相同
         Clockid::CLOCK_REALTIME | Clockid::CLOCK_MONOTONIC | Clockid::CLOCK_PROCESS_CPUTIME_ID => {
-            let time = get_time_ms();
-            let timespec = Timespec::new(time / 1000, (time % 1000) * 1000000);
+            let timespec = get_time_spec();
+            //debug!("got timespec {:?}", timespec);
             tp.write(timespec.as_bytes());
             Ok(0)
         }
@@ -120,6 +120,11 @@ pub fn sys_getrusage(who: isize, usage: *const u8) -> SyscallRet {
     let inner = task.inner_lock();
     let token = inner.user_token();
 
+    debug!(
+        "[sys_getrusage] who is {}, usage is {:x}",
+        who, usage as usize
+    );
+
     let mut usage =
         UserBuffer::new(translated_byte_buffer(token, usage, size_of::<Rusage>()).unwrap());
 
@@ -129,6 +134,10 @@ pub fn sys_getrusage(who: isize, usage: *const u8) -> SyscallRet {
                 inner.time_data.utime as usize,
                 inner.time_data.stime as usize,
             );
+            // debug!(
+            //     "got utime {:?}, stime {:?}",
+            //     gotusage.ru_utime, gotusage.ru_stime
+            // );
             usage.write(gotusage.as_bytes());
             Ok(0)
         }

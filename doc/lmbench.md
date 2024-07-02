@@ -7,3 +7,24 @@
 # mprotect后出现LoadPageFault
 原因：MapPermission只能设置部分位，不要直接覆盖页表中对应的页表项的访问权限。
 解决方法：将原来的页表项或上设置的部分位再赋值即可。
+# 经过一段时间的获取时间后，handle signal SIGQUIT出现错误
+原因：信号处理未完成，SIGQUIT内核函数未注册。
+解决方法：将exit相关的内核函数注册给SIGQUIT信号。
+# pid3卡在管道写端，pid2发送了SIGQUIT后卡住
+原因：管道的阻塞等待也需要可以处理信号的机制。
+解决方法：在管道的读写等待处添加信号处理代码。
+# 很多输出没有打印
+目前打印：
+latency measurements
+File /var/tmp/XXX write bandwidth:311 KB/sec
+file system latency
+0k	-1	-1	-1
+1k	-1	-1	-1
+4k	-1	-1	-1
+10k	-1	-1	-1
+Bandwidth measurements
+0.524288 inf
+0.524288 inf
+0.524288 inf
+0.524288 inf
+context switch overhead

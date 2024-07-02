@@ -1140,6 +1140,12 @@ pub fn sys_pselect6(
         -1
     } else {
         let timespec = translated_ref(token, timeout as *const Timespec);
+
+        debug!(
+            "waittime is {} sec, {} nsec",
+            timespec.tv_sec, timespec.tv_nsec
+        );
+
         (timespec.tv_sec * 1000000000 + timespec.tv_nsec) as isize
     };
     if waittime == 0 {

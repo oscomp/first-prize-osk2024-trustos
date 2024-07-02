@@ -43,6 +43,7 @@ pub fn sys_rt_sigaction(
                 customed: true,
             }
         };
+        //debug!("signo is {}, new act is {:?}", signo, new_act);
         task_inner.sig_pending.get_mut().actions[signo] = new_sig;
     }
     Ok(0)
@@ -71,7 +72,7 @@ pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) ->
     if set as usize != 0 {
         let mask = *translated_ref(token, set);
 
-        debug!("mask sig: {:?}", mask);
+        //debug!("mask sig: {:?}", mask);
 
         match how {
             SIG_BLOCK => task_inner.sig_pending.get_mut().blocked |= mask,
@@ -161,6 +162,9 @@ pub fn sys_rt_sigsuspend(mask: *const SigSet) -> SyscallRet {
 /// pid < -1 the sig is sent to every process in process group whose ID is -pid
 pub fn sys_kill(pid: isize, signo: usize) -> SyscallRet {
     let sig = SigSet::from_sig(signo);
+
+    debug!("[sys_kill] pid is {}, sig is {:?}", pid, sig);
+
     match pid {
         _ if pid > 0 => send_signal_to_thread_group(pid as usize, sig),
         0 => send_signal_to_thread_group(current_task().unwrap().pid(), sig),

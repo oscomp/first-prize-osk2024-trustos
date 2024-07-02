@@ -10,6 +10,7 @@
 //
 use super::File;
 use crate::fs::{stat::S_IFIFO, Kstat};
+use crate::signal::{check_if_any_sig_for_current_task, ready_to_handle_signal};
 use crate::task::suspend_current_and_run_next;
 use crate::{mm::UserBuffer, syscall::PollEvents, utils::SyscallRet};
 use alloc::sync::{Arc, Weak};
@@ -180,6 +181,12 @@ impl File for Pipe {
                 if ring_buffer.all_write_ends_closed() {
                     return Ok(read_size);
                 }
+
+                //信号处理
+                if let Some(signo) = check_if_any_sig_for_current_task() {
+                    ready_to_handle_signal(signo);
+                }
+
                 drop(ring_buffer);
                 suspend_current_and_run_next();
                 continue;
@@ -211,6 +218,11 @@ impl File for Pipe {
             let ring_buffer = self.inner_lock();
             loop_write = ring_buffer.available_write();
             if loop_write == 0 {
+                //信号处理
+                if let Some(signo) = check_if_any_sig_for_current_task() {
+                    ready_to_handle_signal(signo);
+                }
+
                 drop(ring_buffer);
                 suspend_current_and_run_next();
                 continue;
