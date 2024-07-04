@@ -519,6 +519,16 @@ impl MemorySetInner {
                 new_area.map_perm = map_perm;
                 new_area.vpn_range = VPNRange::new(start_vpn, end);
                 area.vpn_range = VPNRange::new(start, start_vpn);
+                //因为area有拆分，所以两部分都不能继续共享，需要修改groupid
+                //因为连续调用GROUP_SHARE，这样子不需要多次获取/释放锁，应该能快点
+                {
+                    let mut g=GROUP_SHARE.lock();
+                    g.del_area(area.groupid);
+                    area.groupid=g.alloc_id();
+                    g.add_area(area.groupid);
+                    new_area.groupid=g.alloc_id();
+                    g.add_area(new_area.groupid);
+                }
                 let mut area_pages: Vec<(VirtPageNum, Arc<FrameTracker>)> = Vec::new();
                 while let Some(page) = area.data_frames.pop_first() {
                     if page.0 < start_vpn {
@@ -539,6 +549,16 @@ impl MemorySetInner {
                 new_area.vpn_range = VPNRange::new(start, end_vpn);
                 area.vpn_range = VPNRange::new(end_vpn, end);
                 let mut area_pages: Vec<(VirtPageNum, Arc<FrameTracker>)> = Vec::new();
+                //因为area有拆分，所以两部分都不能继续共享，需要修改groupid
+                //因为连续调用GROUP_SHARE，这样子不需要多次获取/释放锁，应该能快点
+                {
+                    let mut g=GROUP_SHARE.lock();
+                    g.del_area(area.groupid);
+                    area.groupid=g.alloc_id();
+                    g.add_area(area.groupid);
+                    new_area.groupid=g.alloc_id();
+                    g.add_area(new_area.groupid);
+                }
                 while let Some(page) = area.data_frames.pop_first() {
                     if page.0 >= end_vpn {
                         area_pages.push((page.0, page.1));
@@ -560,6 +580,18 @@ impl MemorySetInner {
                 back_area.vpn_range = VPNRange::new(end_vpn, end);
                 area.vpn_range = VPNRange::new(start_vpn, end_vpn);
                 let mut area_pages: Vec<(VirtPageNum, Arc<FrameTracker>)> = Vec::new();
+                //因为area有拆分，所以三部分都不能继续共享，需要修改groupid
+                //因为连续调用GROUP_SHARE，这样子不需要多次获取/释放锁，应该能快点
+                {
+                    let mut g=GROUP_SHARE.lock();
+                    g.del_area(area.groupid);
+                    area.groupid=g.alloc_id();
+                    g.add_area(area.groupid);
+                    front_area.groupid=g.alloc_id();
+                    g.add_area(front_area.groupid);
+                    back_area.groupid=g.alloc_id();
+                    g.add_area(back_area.groupid);
+                }
                 while let Some(page) = area.data_frames.pop_first() {
                     if page.0 >= start_vpn && page.0 < end_vpn {
                         area_pages.push((page.0, page.1));
