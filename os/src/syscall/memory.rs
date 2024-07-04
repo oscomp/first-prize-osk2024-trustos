@@ -7,7 +7,7 @@ use crate::{
     fs::File,
     mm::{
         flush_tlb, frames_alloc_much, FrameTracker, MapArea, MapAreaType, MapPermission, MapType,
-        PTEFlags, VirtAddr,
+        PTEFlags, VPNRange, VirtAddr,
     },
     syscall::MapedSharedMemory,
     task::current_task,
@@ -58,6 +58,7 @@ pub fn sys_mmap(
     let rv = task_inner
         .memory_set
         .mmap(addr, len, map_perm, flags, Some(file), off);
+    debug!("[sys_mmap] alloc addr={:#x}", rv);
     Ok(rv)
 }
 
@@ -67,6 +68,7 @@ pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
     let task_inner = task.inner_lock();
     let len = page_round_up(len);
     task_inner.memory_set.munmap(addr, len);
+    debug!("[sys_munmap] end");
     Ok(0)
 }
 
@@ -85,20 +87,10 @@ pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     let memory_set = &mut inner.memory_set;
-    let start_vpn = addr / PAGE_SIZE;
-    let end_vpn = (addr + len) / PAGE_SIZE;
-    let page_num = len / PAGE_SIZE;
+    let start_vpn = VirtAddr::from(addr).floor();
+    let end_vpn = VirtAddr::from(addr + len).ceil();
     //修改各段的mappermission
-    memory_set.mprotect(start_vpn.into(), end_vpn.into(), map_perm);
-    let mut protected_vpn = start_vpn;
-    for _ in 0..page_num {
-        memory_set.get_mut().page_table.set_map_flags(
-            protected_vpn.into(),
-            PTEFlags::from_bits(map_perm.bits()).unwrap(),
-        );
-        protected_vpn += PAGE_SIZE;
-    }
-    flush_tlb();
+    memory_set.mprotect(start_vpn, end_vpn, map_perm);
     Ok(0)
 }
 
