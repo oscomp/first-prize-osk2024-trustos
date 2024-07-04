@@ -8,19 +8,19 @@ use crate::{
     config::mm::{
         PAGE_SIZE, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP, USER_TRAP_CONTEXT_TOP,
     },
-    fs::{open, FdTable, FsInfo},
+    fs::{open, FdTable, File, FsInfo},
     mm::{
         flush_tlb, translated_ref, translated_refmut, MapArea, MapAreaType, MapPermission, MapType,
-        MemorySet, MemorySetInner, PhysPageNum, VirtAddr,
+        MemorySet, MemorySetInner, PhysPageNum, UserBuffer, VirtAddr,
     },
     signal::{SigPending, SigSet},
     syscall::{CloneFlags, MapedSharedMemory},
     task::{insert_into_thread_group, OpenFlags},
-    timer::{TimeData, TimeVal, Timer},
+    timer::{get_time, get_time_ms, TimeData, TimeVal, Timer},
     trap::{trap_handler, TrapContext},
     utils::{get_abs_path, is_abs_path, SysErrNo},
 };
-use alloc::{string::String, sync::Arc, vec::Vec};
+use alloc::{fmt::format, format, string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
 use log::debug;
 use spin::{Mutex, MutexGuard};
@@ -352,6 +352,35 @@ impl TaskControlBlock {
         inner.user_heappoint = user_hp;
         inner.user_heapbottom = user_hp;
         // println!("final user_sp:{:#X}", user_sp);
+
+        //创建进程完整命令文件/proc/<pid>/cmdline
+        let cmdlinefile = open(
+            format!("/proc/{}/cmdline", self.pid).as_str(),
+            OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        )
+        .unwrap()
+        .file()
+        .unwrap();
+        let mut cmdlineinfo = argv
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<&str>>()
+            .join("\0")
+            + "\0";
+        let mut cmdlinevec = Vec::new();
+        unsafe {
+            let cmdline = cmdlineinfo.as_bytes_mut();
+            cmdlinevec.push(core::slice::from_raw_parts_mut(
+                cmdline.as_mut_ptr(),
+                cmdline.len(),
+            ));
+        }
+        let cmdlinebuf = UserBuffer::new(cmdlinevec);
+        let cmdlinesize = cmdlinefile.write(cmdlinebuf).unwrap();
+        debug!(
+            "create /proc/{}/cmdline with {} sizes",
+            self.pid, cmdlinesize
+        );
     }
     ///
     pub fn clone_process(
@@ -519,6 +548,36 @@ impl TaskControlBlock {
                 x.mem.trackers.clone(),
             );
         });
+
+        //创建进程专属目录，路径为/proc/<pid>
+        open(
+            format!("/proc/{}", pid).as_str(),
+            OpenFlags::O_DIRECTORY | OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        )
+        .unwrap()
+        .file()
+        .unwrap();
+
+        //创建进程状态文件/proc/<pid>/stat
+        let statfile = open(
+            format!("/proc/{}/stat", pid).as_str(),
+            OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        )
+        .unwrap()
+        .file()
+        .unwrap();
+        let mut statinfo = format!("{} (busybox) S {} 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 {} 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0", pid, ppid,get_time());
+        let mut statvec = Vec::new();
+        unsafe {
+            let stat = statinfo.as_bytes_mut();
+            statvec.push(core::slice::from_raw_parts_mut(
+                stat.as_mut_ptr(),
+                stat.len(),
+            ));
+        }
+        let statbuf = UserBuffer::new(statvec);
+        let statsize = statfile.write(statbuf).unwrap();
+        debug!("create /proc/{}/stat with {} sizes", pid, statsize);
 
         drop(child_inner);
         drop(parent_inner);

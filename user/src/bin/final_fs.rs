@@ -3,7 +3,7 @@
 use user_lib::{
     chdir, close, copy_file_range, faccessat, fcntl, fstatat, fsync, ftruncate, getrandom, lseek,
     mkdir, openat, ppoll, pread64, pwrite64, read, readlinkat, renameat2, statfs, symlinkat, sync,
-    write, FaccessatMode, Kstat, OpenFlags, PollEvents, PollFd, Statfs, Timespec,
+    unlink, write, FaccessatMode, Kstat, OpenFlags, PollEvents, PollFd, Statfs, Timespec,
 };
 
 #[macro_use]
@@ -352,6 +352,49 @@ pub fn test_ppoll() {
     println!("");
 }
 
+pub fn test_write_after_unlink() {
+    println!("-----------------write_after_unlink-----------------");
+    let fd0 = openat(
+        -100,
+        "./waudir\0",
+        OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0,
+    );
+    println!("fd0 {} create dir ./waudir ok ", fd0);
+    let fd = openat(
+        -100,
+        "/waudir/wau\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0,
+    );
+    println!("fd {} create ./wau ok ", fd);
+    close(fd as usize);
+    close(fd0 as usize);
+    let result1 = unlink(-100, "./waudir/wau\0", OpenFlags::empty());
+    println!("result1 is {} which should be 0", result1);
+    let result2 = unlink(-100, "./waudir\0", OpenFlags::empty());
+    println!("result2 is {} which should be 0", result2);
+    let fd1 = openat(
+        -100,
+        "./waudir\0",
+        OpenFlags::O_DIRECTROY | OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0,
+    );
+    let fd2 = openat(
+        -100,
+        "/waudir/wau\0",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        0,
+    );
+    let buf: [u8; 10] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    let writeresult = write(fd as usize, &buf, 10);
+    println!("have written {} bytes [1,2,3,4,5,6,7,8,9,10]", writeresult);
+    close(fd1 as usize);
+    close(fd2 as usize);
+    println!("-----------------end write_after_unlink-----------------");
+    println!("");
+}
+
 #[no_mangle]
 pub fn main() -> i32 {
     test_fstatat();
@@ -370,5 +413,6 @@ pub fn main() -> i32 {
     //test_copy_file_range();
     test_getrandom();
     test_ppoll();
+    test_write_after_unlink();
     0
 }

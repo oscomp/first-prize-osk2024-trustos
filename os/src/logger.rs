@@ -36,7 +36,7 @@ impl log::Log for SimpleLogger {
                 record.args()
             );
             LOG_BUF.write().write_fmt(format_args!(
-                "\x1b[{}m[{}] [HART{}] [PID {}] [TID {}] {}\x1b[0m",
+                "\x1b[{}m[{}] [HART{}] [PID {}] [TID {}] {}\x1b[0m\n",
                 level_color(record.level()),
                 record.level(),
                 hart_id(),

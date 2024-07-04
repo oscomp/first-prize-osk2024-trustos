@@ -218,7 +218,8 @@ pub fn list_apps() {
 }
 
 //
-const MOUNTS: &str = " fat32 / fat rw 0 0\n";
+const MOUNTS: &str = " ext4 / ext rw 0 0\n";
+const PASSWD: &str = "root:x:0:0:root:/root:/bin/bash\n";
 const MEMINFO: &str = r"
 MemTotal:         944564 kB
 MemFree:          835248 kB
@@ -352,6 +353,19 @@ pub fn create_init_files() -> GeneralRet {
     let localtimebuf = UserBuffer::new(localtimevec);
     let localtimesize = localtimefile.write(localtimebuf)?;
     debug!("create /etc/localtime with {} sizes", localtimesize);
+
+    //创建/etc/passwd记录用户信息
+    let passwdfile = open("/etc/passwd", OpenFlags::O_CREATE | OpenFlags::O_RDWR)?.file()?;
+    let mut passwd = String::from(PASSWD);
+    let mut passwdvec = Vec::new();
+    unsafe {
+        let wd = passwd.as_bytes_mut();
+        passwdvec.push(core::slice::from_raw_parts_mut(wd.as_mut_ptr(), wd.len()));
+    }
+    let passwdbuf = UserBuffer::new(passwdvec);
+    let passwdsize = passwdfile.write(passwdbuf)?;
+    debug!("create /etc/passwd with {} sizes", passwdsize);
+
     println!("create_init_files success!");
     Ok(())
 }

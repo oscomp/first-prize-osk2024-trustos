@@ -26,10 +26,10 @@ mod task;
 mod tid;
 
 use crate::{
-    fs::{open, FileClass, OpenFlags},
+    fs::{open, remove_inode_idx, root_inode, FileClass, OpenFlags},
     signal::{send_signal_to_thread_group, SigSet},
 };
-use alloc::{boxed::Box, sync::Arc};
+use alloc::{boxed::Box, format, sync::Arc};
 pub use context::TaskContext;
 use lazy_static::*;
 use log::debug;
@@ -108,6 +108,15 @@ pub fn exit_current_and_run_next(exit_code: i32) {
                 if inner.sig_pending.get_mut().group_exit_code.is_none() {
                     inner.sig_pending.get_mut().group_exit_code = Some(exit_code);
                 }
+
+                // 删除进程的专属目录
+                root_inode().unlink(format!("/proc/{}/cmdline", task.pid()).as_str());
+                remove_inode_idx(format!("/proc/{}/cmdline", task.pid()).as_str());
+                root_inode().unlink(format!("/proc/{}/stat", task.pid()).as_str());
+                remove_inode_idx(format!("/proc/{}/stat", task.pid()).as_str());
+                root_inode().unlink(format!("/proc/{}", task.pid()).as_str());
+                remove_inode_idx(format!("/proc/{}", task.pid()).as_str());
+                debug!("remove /proc/{}/* and /proc/{}", task.pid(), task.pid());
             }
         }
     }
