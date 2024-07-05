@@ -1,3 +1,5 @@
+.attribute arch, "rv64gc"
+FP_START = 51
 .altmacro
 .macro SAVE_GP n
     sd x\n, \n*8(sp)
@@ -5,8 +7,14 @@
 .macro LOAD_GP n
     ld x\n, \n*8(sp)
 .endm
+.macro SAVE_FP n, m
+    fsd f\n, \m*8(sp)
+.endm
+.macro LOAD_FP n, m
+    fld f\n, \m*8(sp)
+.endm
 
-.section .text
+    .section .text
     .globl __trap_from_user
     .globl __return_to_user
     .align 2
@@ -25,6 +33,19 @@ __trap_from_user:
         SAVE_GP %n
         .set n, n+1
     .endr
+    # sd freg
+    .set n, 0
+    .set m, FP_START
+    .rept 32
+        SAVE_FP %n, %m
+        .set n, n+1
+        .set m, m+1
+    .endr
+    # sd fcsr
+    csrr t0, fcsr
+    sd t0, 83*8(sp)
+    # sd original_a0
+    # sd a0, 50*8(sp)
     # we can use t0/t1/t2 freely, because they have been saved in TrapContext
     csrr t0, sstatus
     csrr t1, sepc
@@ -85,6 +106,8 @@ __return_to_user_for_new_task_once:
     mv sp, a0
     # now sp points to TrapContext in kernel space, start restoring based on it
     # restore sstatus/sepc
+    ld t0, 83*8(sp)
+    csrw fcsr, t0
     ld t0, 32*8(sp)
     ld t1, 33*8(sp)
     csrw sstatus, t0
@@ -95,6 +118,13 @@ __return_to_user_for_new_task_once:
     .rept 29
         LOAD_GP %n
         .set n, n+1
+    .endr
+    .set n, 0
+    .set m, FP_START
+    .rept 32
+        LOAD_FP %n, %m
+        .set n, n+1
+        .set m, m+1
     .endr
     # back to user stack
     ld sp, 2*8(sp)
@@ -127,6 +157,8 @@ __return_to_user:
     mv sp, a0
     # now sp points to TrapContext in kernel space, start restoring based on it
     # restore sstatus/sepc
+    ld t0, 83*8(sp)
+    csrw fcsr, t0
     ld t0, 32*8(sp)
     ld t1, 33*8(sp)
     csrw sstatus, t0
@@ -137,6 +169,13 @@ __return_to_user:
     .rept 29
         LOAD_GP %n
         .set n, n+1
+    .endr
+    .set n, 0
+    .set m, FP_START
+    .rept 32
+        LOAD_FP %n, %m
+        .set n, n+1
+        .set m, m+1
     .endr
     # back to user stack
     ld sp, 2*8(sp)

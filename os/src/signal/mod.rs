@@ -101,6 +101,7 @@ pub fn setup_frame(_signo: usize, sig_action: KSigAction) {
     // sp
     trap_cx.x[2] = user_sp;
     // a0
+    trap_cx.origin_a0 = trap_cx.x[10];
     trap_cx.x[10] = -(SysErrNo::EINTR as isize) as usize;
 }
 /// 恢复栈帧
@@ -120,7 +121,7 @@ pub fn restore_frame() -> SyscallRet {
     user_sp += core::mem::size_of::<SigSet>();
     // Trap cx
     *trap_cx = *translated_ref(token, user_sp as *const TrapContext);
-
+    trap_cx.x[10] = trap_cx.origin_a0;
     Ok(trap_cx.x[10])
     // user_sp += core::mem::size_of::<TrapContext>();
 }

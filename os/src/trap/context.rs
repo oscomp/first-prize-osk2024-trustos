@@ -19,6 +19,11 @@ pub struct TrapContext {
     pub kernel_fp: usize,      // 48
     /// kernel hart address
     pub kernel_tp: usize, // 49
+    /// A copy of register a0, useful when we need to restart syscall
+    pub origin_a0: usize, // 50
+    /// float regs
+    pub f: [usize; 32], // 51 - 82
+    pub fcsr: u32,             // 83
 }
 
 impl TrapContext {
@@ -44,6 +49,9 @@ impl TrapContext {
             kernel_s: [0; 12],
             kernel_fp: 0,
             kernel_tp: 0,
+            origin_a0: 0,
+            f: [0; 32],
+            fcsr: 0,
         };
         cx.set_sp(sp);
         cx
