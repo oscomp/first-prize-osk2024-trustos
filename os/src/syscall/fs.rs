@@ -525,6 +525,11 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
     open(&abs_path, OpenFlags::O_RDWR).map_or_else(
         |_| {
             if mode.contains(FaccessatMode::F_OK) {
+                if abs_path.starts_with("/bin") {
+                    //使用which命令查找时再创建，避免内核启动时创建带来更多开销
+                    open(&abs_path, OpenFlags::O_CREATE | OpenFlags::O_RDWR);
+                    return Ok(0);
+                }
                 return Ok(usize::MAX);
             }
             Err(SysErrNo::ENOENT)

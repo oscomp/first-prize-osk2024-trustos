@@ -137,6 +137,8 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
         }
     }
 
+    debug!("[sys_execve] env is {:?}", env);
+
     let cwd = if !path.starts_with('/') {
         task_inner.fs_info.cwd()
     } else {

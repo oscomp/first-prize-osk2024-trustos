@@ -81,6 +81,10 @@ pub trait Inode: Send + Sync {
     fn path(&self) -> String {
         unimplemented!();
     }
+    ///获取文件的mode，遇到需要文件访问权限的需要使用，暂时放在这里
+    fn fmode(&self) -> u32 {
+        unimplemented!();
+    }
 }
 
 /// 文件接口

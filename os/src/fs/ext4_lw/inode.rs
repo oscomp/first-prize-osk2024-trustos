@@ -214,6 +214,11 @@ impl Inode for Ext4Inode {
     fn delay(&self) {
         self.inner.get_unchecked_mut().delay = true;
     }
+
+    fn fmode(&self) -> u32 {
+        let file = &mut self.inner.get_unchecked_mut().f;
+        file.file_mode().unwrap()
+    }
 }
 
 impl Drop for Ext4Inode {
