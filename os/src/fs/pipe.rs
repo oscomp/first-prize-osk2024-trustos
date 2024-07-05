@@ -59,7 +59,7 @@ enum RingBufferStatus {
     Normal,
 }
 
-const RING_BUFFER_SIZE: usize = 512;
+const RING_BUFFER_SIZE: usize = 1024;
 
 /// ### 管道缓冲区(双端队列,向右增长)
 /// |成员变量|描述|

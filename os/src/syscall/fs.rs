@@ -598,7 +598,8 @@ const FD_CLOEXEC: usize = 1;
 pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    // debug!("[sys_fcntl] fd is {}, cmd is {}, arg is {}", fd, cmd, arg);
+
+    debug!("[sys_fcntl] fd is {}, cmd is {}, arg is {}", fd, cmd, arg);
 
     if fd >= inner.fd_table.len() || inner.fd_table.try_get_file(fd).is_none() {
         return Err(SysErrNo::EINVAL);

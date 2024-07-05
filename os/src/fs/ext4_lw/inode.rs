@@ -181,7 +181,6 @@ impl Inode for Ext4Inode {
                 d_type: entry.d_type,
                 d_name: entry.d_name,
             };
-            debug!("{:?}", dirent);
             if res + dirent.len() > len {
                 break;
             }
