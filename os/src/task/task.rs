@@ -263,7 +263,7 @@ impl TaskControlBlock {
         env.push(String::from("SHELL=/user_shell"));
         env.push(String::from("PWD=/"));
         env.push(String::from("HOME=/"));
-        env.push(String::from("PATH=/bin"));
+        env.push(String::from("PATH=/"));
 
         //环境变量内容入栈
         let mut env_ptr_vec = Vec::new();

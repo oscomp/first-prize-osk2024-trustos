@@ -63,6 +63,12 @@ pub fn sys_getegid() -> SyscallRet {
 pub fn sys_gettid() -> SyscallRet {
     Ok(current_task().unwrap().tid())
 }
+
+pub fn sys_setsid() -> SyscallRet {
+    //涉及到会话和进程组，暂时伪实现
+    Ok(0)
+}
+
 pub fn sys_settidaddress(tidptr: usize) -> SyscallRet {
     current_task().unwrap().inner_lock().clear_child_tid = tidptr;
     sys_gettid()

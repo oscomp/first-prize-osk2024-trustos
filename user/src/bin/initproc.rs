@@ -6,7 +6,10 @@
 #[macro_use]
 extern crate user_lib;
 
-use user_lib::{close, exec, fork, openat, run_busyboxsh, shutdown, sleep, wait, write, OpenFlags};
+use user_lib::{
+    close, exec, fork, openat, run_busyboxsh, run_libc_bench, shutdown, sleep, wait, write,
+    OpenFlags,
+};
 
 #[no_mangle]
 fn main() -> i32 {
@@ -15,7 +18,8 @@ fn main() -> i32 {
         // exec("user_shell\0");
         // exec("usertests\0");
         // exec("onlinetests\0");
-        run_busyboxsh();
+        // run_busyboxsh();
+        run_libc_bench();
     } else {
         loop {
             let mut exit_code: i32 = 0;
