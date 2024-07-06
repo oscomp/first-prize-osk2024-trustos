@@ -149,6 +149,7 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
     };
     let abs_path = get_abs_path(&cwd, &path);
     let app_inode = open(&abs_path, OpenFlags::O_RDONLY)?.file()?;
+    task_inner.fs_info.set_exe(abs_path);
     let elf_data = app_inode.inode.read_all()?;
     drop(task_inner);
     task.exec(&elf_data, &argv_vec, &mut env);

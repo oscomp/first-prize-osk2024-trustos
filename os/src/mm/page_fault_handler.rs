@@ -9,7 +9,9 @@ use crate::{
     mm::flush_tlb,
 };
 
-use super::{translated_byte_buffer, MapArea, PageTable, UserBuffer, VirtAddr, GROUP_SHARE,PTEFlags};
+use super::{
+    translated_byte_buffer, MapArea, PTEFlags, PageTable, UserBuffer, VirtAddr, GROUP_SHARE,
+};
 
 ///mmap写触发的lazy alocation，直接新分配帧
 pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapArea) {
@@ -31,7 +33,7 @@ pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut
     });
     file.lseek(old_offset as isize, SEEK_SET);
     //设置为cow
-    let vpn = va.into();
+    let vpn = VirtAddr::from(va).floor();
     let mut pte_flags = vma.flags();
     //可写的才需要cow
     let need_cow = pte_flags.contains(PTEFlags::W);
@@ -48,7 +50,7 @@ pub fn mmap_read_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut 
         //有现成的，直接clone,需要是cow的
         let vpn = va.into();
         let mut pte_flags = vma.flags();
-         //可写的才需要cow
+        //可写的才需要cow
         let need_cow = pte_flags.contains(PTEFlags::W);
         pte_flags &= !PTEFlags::W;
         page_table.set_flags(vpn, pte_flags);

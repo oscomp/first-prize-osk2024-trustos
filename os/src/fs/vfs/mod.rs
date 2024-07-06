@@ -69,6 +69,9 @@ pub trait Inode: Send + Sync {
     fn unlink(&self, _path: &str) -> SyscallRet {
         unimplemented!();
     }
+    fn read_link(&self, _buf: &mut [u8], _bufsize: usize) -> SyscallRet {
+        unimplemented!()
+    }
     fn rename(&self, _path: &str, _new_path: &str) -> SyscallRet {
         unimplemented!()
     }

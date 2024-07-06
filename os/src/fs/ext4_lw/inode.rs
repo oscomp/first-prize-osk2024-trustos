@@ -202,6 +202,12 @@ impl Inode for Ext4Inode {
         Ok((de, f_off as isize))
     }
 
+    fn read_link(&self, buf: &mut [u8], bufsize: usize) -> SyscallRet {
+        let file = &mut self.inner.get_unchecked_mut().f;
+        file.file_readlink(buf, bufsize)
+            .map_err(|e| SysErrNo::from(e))
+    }
+
     fn link_cnt(&self) -> SyscallRet {
         let file = &mut self.inner.get_unchecked_mut().f;
         file.links_cnt()

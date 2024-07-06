@@ -24,7 +24,7 @@ use core::mem::size_of;
 use log::{debug, info};
 
 pub const AT_FDCWD: isize = -100;
-pub const FD_LIMIT: usize = 128;
+// pub const FD_LIMIT: usize = 128;
 pub const AT_REMOVEDIR: u32 = 0x200;
 
 #[repr(C)]
@@ -226,7 +226,7 @@ pub fn sys_getcwd(buf: *const u8, size: usize) -> SyscallRet {
     let token = inner.user_token();
 
     let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, size).unwrap());
-    buffer.write(inner.fs_info.as_bytes());
+    buffer.write(inner.fs_info.cwd_as_bytes());
     Ok(buf as usize)
 }
 pub fn sys_dup(fd: usize) -> SyscallRet {
@@ -256,10 +256,6 @@ pub fn sys_dup3(old: usize, new: usize, flags: u32) -> SyscallRet {
 
     if old >= inner.fd_table.len() || inner.fd_table.try_get_file(old).is_none() {
         return Err(SysErrNo::EINVAL);
-    }
-
-    if new >= FD_LIMIT {
-        return Err(SysErrNo::EBADF);
     }
 
     if inner.fd_table.len() <= new {
@@ -855,31 +851,41 @@ pub fn sys_prlimit(
             fd_table.set_limit(limit.rlim_cur, limit.rlim_max);
         }
     } else {
-        unimplemented!("未实现的非0 pid");
+        unimplemented!("pid must equal zero");
     }
 
     Ok(0)
 }
 
-pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsiz: usize) -> SyscallRet {
+pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsize: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
     let path = translated_str(token, path);
 
     debug!(
-        "[sys_readlinkat] dirfd is {}, path is {}, buf is {:x}, bufsiz is {}",
-        dirfd, path, buf as usize, bufsiz
+        "[sys_readlinkat] dirfd is {}, path is {}, buf is {:x}, bufsize is {}",
+        dirfd, path, buf as usize, bufsize
     );
 
-    assert!(path == "/proc/self/exe", "unsupported other path!");
+    // assert!(path == "/proc/self/exe", "unsupported other path!");
+    if path == "/proc/self/exe" {
+        debug!("fs_info={}", inner.fs_info.exe());
+        let size_needed = inner.fs_info.exe_as_bytes().len();
+        let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, size_needed).unwrap());
+        let res = buffer.write(inner.fs_info.exe_as_bytes());
+        return Ok(res);
+    }
+    // debug!("[sys_read_linkat] got path : {}", inner.fs_info.get_cwd());
+    let abs_path = inner.get_abs_path(dirfd, &path)?;
+    let mut linkbuf = vec![0u8; bufsize];
+    let file = open(&abs_path, OpenFlags::empty())?.file()?;
+    let readcnt = file.inode.read_link(&mut linkbuf, bufsize)?;
+    let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, readcnt).unwrap());
+    buffer.write(&linkbuf);
+    Ok(readcnt)
 
-    debug!("[sys_read_linkat] got path : {}", inner.fs_info.get_cwd());
-
-    let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, bufsiz).unwrap());
-    let res = buffer.write(inner.fs_info.as_bytes());
-
-    Ok(res)
+    // Ok(res)
 }
 
 /// If newpath already exists, replace it.
@@ -1114,7 +1120,7 @@ pub fn sys_pselect6(
         inner.sig_pending.get_mut().blocked = *translated_ref(token, sigmask as *const SigSet);
     }
 
-    let nfds = min(nfds, FD_LIMIT);
+    let nfds = min(nfds, inner.fd_table.get_soft_limit());
 
     let mut using_readfds = if readfds != 0 {
         *translated_refmut(token, readfds as *mut usize)
@@ -1140,7 +1146,7 @@ pub fn sys_pselect6(
         let timespec = translated_ref(token, timeout as *const Timespec);
 
         debug!(
-            "waittime is {} sec, {} nsec",
+            "[sys_pselect6] waittime is {} sec, {} nsec",
             timespec.tv_sec, timespec.tv_nsec
         );
 

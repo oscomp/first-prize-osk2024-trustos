@@ -213,8 +213,12 @@ impl FdTable {
 
 #[derive(Clone)]
 pub struct FsInfoInner {
+    /// 当前工作路径
     pub cwd: String,
-    pub fd2path: HashMap<usize, String>, // 一个文件对应多个fd
+    /// 可执行文件绝对路径
+    pub exe: String,
+    /// 一个文件对应多个fd
+    pub fd2path: HashMap<usize, String>,
 }
 
 pub struct FsInfo {
@@ -222,19 +226,25 @@ pub struct FsInfo {
 }
 
 impl FsInfo {
+    /// 只有initproc会调用
     pub fn new(cwd: String) -> Self {
         let mut fd2path = HashMap::new();
         fd2path.insert(0, "stdin".to_string());
         fd2path.insert(1, "stdout".to_string());
         fd2path.insert(2, "stderr".to_string());
         Self {
-            inner: SyncUnsafeCell::new(FsInfoInner { cwd, fd2path }),
+            inner: SyncUnsafeCell::new(FsInfoInner {
+                cwd,
+                fd2path,
+                exe: String::from("/initproc"),
+            }),
         }
     }
     pub fn from_another(another: &Arc<FsInfo>) -> Self {
         Self {
             inner: SyncUnsafeCell::new(FsInfoInner {
                 cwd: another.get_cwd(),
+                exe: another.get_exe(),
                 fd2path: another.inner.get_unchecked_ref().fd2path.clone(),
             }),
         }
@@ -245,8 +255,23 @@ impl FsInfo {
     pub fn cwd(&self) -> &str {
         self.get_ref().cwd.as_str()
     }
-    pub fn as_bytes(&self) -> &[u8] {
+    pub fn cwd_as_bytes(&self) -> &[u8] {
         self.get_ref().cwd.as_bytes()
+    }
+    pub fn set_cwd(&self, cwd: String) {
+        self.get_mut().cwd = cwd;
+    }
+    pub fn get_exe(&self) -> String {
+        self.get_mut().exe.clone()
+    }
+    pub fn exe(&self) -> &str {
+        &self.get_ref().exe
+    }
+    pub fn exe_as_bytes(&self) -> &[u8] {
+        self.get_ref().exe.as_bytes()
+    }
+    pub fn set_exe(&self, exe: String) {
+        self.get_mut().exe = exe;
     }
     pub fn in_root(&self) -> bool {
         self.cwd() == "/"
@@ -264,9 +289,7 @@ impl FsInfo {
     pub fn remove(&self, fd: usize) {
         self.get_mut().fd2path.remove(&fd);
     }
-    pub fn set_cwd(&self, cwd: String) {
-        self.get_mut().cwd = cwd;
-    }
+
     fn get_mut(&self) -> &mut FsInfoInner {
         self.inner.get_unchecked_mut()
     }
