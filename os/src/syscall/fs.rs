@@ -337,12 +337,10 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
 
     let file = inner.fd_table.get_file(fd).file()?;
     let off = file.lseek(0, SEEK_CUR)?;
-    if let Some((de, off)) = file.inode.read_dentry(off, len) {
-        buffer.write(de.as_slice());
-        let _ = file.lseek(off as isize, SEEK_SET)?;
-        return Ok(de.len());
-    }
-    return Err(SysErrNo::EINVAL);
+    let (de, off) = file.inode.read_dentry(off, len)?;
+    buffer.write(de.as_slice());
+    let _ = file.lseek(off as isize, SEEK_SET)?;
+    return Ok(de.len());
 }
 
 pub fn sys_linkat(

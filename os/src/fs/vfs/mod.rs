@@ -48,11 +48,11 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     /// 读取目录项
-    fn read_dentry(&self, _off: usize, _len: usize) -> Option<(Vec<u8>, isize)> {
+    fn read_dentry(&self, _off: usize, _len: usize) -> Result<(Vec<u8>, isize), SysErrNo> {
         unimplemented!()
     }
     ///
-    fn truncate(&self, _size: usize) -> GeneralRet {
+    fn truncate(&self, _size: usize) -> SyscallRet {
         unimplemented!()
     }
     ///
@@ -60,13 +60,13 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     ///
-    fn set_timestamps(&self, _atime: Option<u32>, _mtime: Option<u32>) -> GeneralRet {
+    fn set_timestamps(&self, _atime: Option<u32>, _mtime: Option<u32>) -> SyscallRet {
         unimplemented!()
     }
     fn link_cnt(&self) -> SyscallRet {
         unimplemented!()
     }
-    fn unlink(&self, _path: &str) -> GeneralRet {
+    fn unlink(&self, _path: &str) -> SyscallRet {
         unimplemented!();
     }
     fn rename(&self, _path: &str, _new_path: &str) -> SyscallRet {
