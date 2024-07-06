@@ -588,7 +588,7 @@ impl MemorySetInner {
         map_area.map_given_frames(&mut self.page_table, frames);
     }
     /// 不映射MapArea里的虚拟页面
-    fn push_lazily(&mut self, map_area: MapArea) {
+    pub fn push_lazily(&mut self, map_area: MapArea) {
         self.areas.push(map_area);
     }
     ///仅initproc会用，将懒分配的全部分配

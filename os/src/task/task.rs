@@ -48,6 +48,7 @@ pub struct TaskControlBlockInner {
     pub time_data: TimeData,
     pub user_heappoint: usize,
     pub user_heapbottom: usize,
+    pub user_heaptop: usize,
     pub set_child_tid: usize,
     pub clear_child_tid: usize,
     pub sig_pending: Arc<SigPending>,
@@ -193,6 +194,7 @@ impl TaskControlBlock {
                 time_data: TimeData::new(),
                 user_heappoint: user_heapbottom,
                 user_heapbottom,
+                user_heaptop: user_heapbottom + USER_HEAP_SIZE,
                 set_child_tid: 0,
                 clear_child_tid: 0,
                 sig_pending: Arc::new(SigPending::new()),
@@ -351,6 +353,7 @@ impl TaskControlBlock {
         debug!("task.exec.tid={}", self.tid.0);
         inner.user_heappoint = user_hp;
         inner.user_heapbottom = user_hp;
+        inner.user_heaptop = user_hp + USER_HEAP_SIZE;
         // println!("final user_sp:{:#X}", user_sp);
 
         //创建进程完整命令文件/proc/<pid>/cmdline
@@ -476,6 +479,7 @@ impl TaskControlBlock {
                 time_data: TimeData::new(),
                 user_heappoint: parent_inner.user_heappoint,
                 user_heapbottom: parent_inner.user_heapbottom,
+                user_heaptop: parent_inner.user_heaptop,
                 set_child_tid,
                 clear_child_tid,
                 sig_pending,
@@ -594,13 +598,31 @@ impl TaskControlBlock {
         let mut inner = self.inner_lock();
         if grow_size > 0 {
             let growed_addr: usize = inner.user_heappoint + grow_size as usize;
-            let limit = inner.user_heapbottom + USER_HEAP_SIZE;
+            let limit = inner.user_heaptop;
             if growed_addr > limit {
-                panic!("heap overflow at {:#X}!", growed_addr);
+                //panic!("heap overflow at {:#X}!", growed_addr);
+                //堆空间大小不够，分配新的堆空间
+                let addition = growed_addr - limit;
+                // align addition to PAGE_SIZE
+                let addition = (addition + PAGE_SIZE - 1) & !(PAGE_SIZE - 1);
+                debug!("extend heap: {:#x} -- {:#x}", limit, limit + addition);
+                inner
+                    .memory_set
+                    .inner
+                    .get_unchecked_mut()
+                    .push_lazily(MapArea::new(
+                        limit.into(),
+                        (limit + addition).into(),
+                        MapType::Framed,
+                        MapPermission::R | MapPermission::W | MapPermission::U,
+                        MapAreaType::Brk,
+                    ));
+                inner.user_heaptop = limit + addition;
+                return inner.user_heaptop;
             }
             inner.user_heappoint = growed_addr;
         } else {
-            let shrinked_addr: usize = inner.user_heappoint + grow_size as usize;
+            let shrinked_addr: usize = (inner.user_heappoint as isize + grow_size) as usize;
             if shrinked_addr < inner.user_heapbottom {
                 panic!("heap downflow at {:#X}!", shrinked_addr);
             }
