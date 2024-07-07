@@ -28,7 +28,7 @@ mod task;
 mod tid;
 
 use crate::{
-    fs::{open, remove_inode_idx, root_inode, OpenFlags, NONE_MODE},
+    fs::{open, remove_inode_idx, remove_proc_dir_and_file, root_inode, OpenFlags, NONE_MODE},
     mm::{translated_refmut, VirtAddr},
     signal::{send_signal_to_thread_group, SigSet},
 };
@@ -136,15 +136,8 @@ pub fn exit_current_and_run_next(exit_code: i32) {
                 if inner.sig_pending.get_mut().group_exit_code.is_none() {
                     inner.sig_pending.get_mut().group_exit_code = Some(exit_code);
                 }
-
                 // 删除进程的专属目录
-                root_inode().unlink(format!("/proc/{}/cmdline", task.pid()).as_str());
-                remove_inode_idx(format!("/proc/{}/cmdline", task.pid()).as_str());
-                root_inode().unlink(format!("/proc/{}/stat", task.pid()).as_str());
-                remove_inode_idx(format!("/proc/{}/stat", task.pid()).as_str());
-                root_inode().unlink(format!("/proc/{}", task.pid()).as_str());
-                remove_inode_idx(format!("/proc/{}", task.pid()).as_str());
-                // debug!("remove /proc/{}/* and /proc/{}", task.pid(), task.pid());
+                remove_proc_dir_and_file(task.pid());
             }
         }
     }

@@ -8,7 +8,10 @@ use crate::{
     config::mm::{
         PAGE_SIZE, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP, USER_TRAP_CONTEXT_TOP,
     },
-    fs::{open, FdTable, File, FsInfo, DEFAULT_DIR_MODE, DEFAULT_FILE_MODE},
+    fs::{
+        create_cmdline, create_proc_dir_and_file, open, FdTable, File, FsInfo, DEFAULT_DIR_MODE,
+        DEFAULT_FILE_MODE,
+    },
     mm::{
         flush_tlb, translated_ref, translated_refmut, MapArea, MapAreaType, MapPermission, MapType,
         MemorySet, MemorySetInner, PhysPageNum, UserBuffer, VPNRange, VirtAddr, VirtPageNum,
@@ -336,34 +339,7 @@ impl TaskControlBlock {
         inner.user_heapbottom = user_hp;
 
         //创建进程完整命令文件/proc/<pid>/cmdline
-        let cmdlinefile = open(
-            format!("/proc/{}/cmdline", self.pid).as_str(),
-            OpenFlags::O_CREATE | OpenFlags::O_RDWR,
-            DEFAULT_FILE_MODE,
-        )
-        .unwrap()
-        .file()
-        .unwrap();
-        let mut cmdlineinfo = argv
-            .iter()
-            .map(|s| s.as_str())
-            .collect::<Vec<&str>>()
-            .join("\0")
-            + "\0";
-        let mut cmdlinevec = Vec::new();
-        unsafe {
-            let cmdline = cmdlineinfo.as_bytes_mut();
-            cmdlinevec.push(core::slice::from_raw_parts_mut(
-                cmdline.as_mut_ptr(),
-                cmdline.len(),
-            ));
-        }
-        let cmdlinebuf = UserBuffer::new(cmdlinevec);
-        cmdlinefile.write(cmdlinebuf).unwrap();
-        // debug!(
-        //     "create /proc/{}/cmdline with {} sizes",
-        //     self.pid, cmdlinesize
-        // );
+        create_cmdline(self.pid, argv);
     }
     ///
     pub fn clone_process(
@@ -533,34 +509,7 @@ impl TaskControlBlock {
                 );
             });
             //创建进程专属目录，路径为/proc/<pid>
-            open(
-                format!("/proc/{}", pid).as_str(),
-                OpenFlags::O_DIRECTORY | OpenFlags::O_CREATE | OpenFlags::O_RDWR,
-                DEFAULT_DIR_MODE,
-            )
-            .unwrap()
-            .file()?;
-
-            //创建进程状态文件/proc/<pid>/stat
-            let statfile = open(
-                format!("/proc/{}/stat", pid).as_str(),
-                OpenFlags::O_CREATE | OpenFlags::O_RDWR,
-                DEFAULT_FILE_MODE,
-            )
-            .unwrap()
-            .file()?;
-            let mut statinfo = format!("{} (busybox) S {} 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 {} 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0", pid, ppid,get_time());
-            let mut statvec = Vec::new();
-            unsafe {
-                let stat = statinfo.as_bytes_mut();
-                statvec.push(core::slice::from_raw_parts_mut(
-                    stat.as_mut_ptr(),
-                    stat.len(),
-                ));
-            }
-            let statbuf = UserBuffer::new(statvec);
-            statfile.write(statbuf)?;
-            // debug!("create /proc/{}/stat with {} sizes", pid, statsize);
+            create_proc_dir_and_file(pid, ppid);
         }
 
         drop(child_inner);
