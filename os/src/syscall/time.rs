@@ -1,8 +1,8 @@
-use crate::mm::{translated_byte_buffer, translated_ref, translated_refmut, UserBuffer};
+use crate::mm::{translated_byte_buffer, translated_ref, UserBuffer};
 use crate::syscall::SigSet;
 use crate::task::{current_task, current_token};
 use crate::timer::{
-    get_time_ms, get_time_spec, Clockid, Itimerval, Rusage, TimeVal, Timespec, Tms, ITIMER_REAL,
+    get_time_spec, Clockid, Itimerval, Rusage, TimeVal, Timespec, Tms, ITIMER_REAL,
 };
 use crate::utils::{SysErrNo, SyscallRet};
 use core::mem::size_of;

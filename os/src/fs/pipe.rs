@@ -14,7 +14,6 @@ use crate::signal::{check_if_any_sig_for_current_task, ready_to_handle_signal};
 use crate::task::suspend_current_and_run_next;
 use crate::{mm::UserBuffer, syscall::PollEvents, utils::SyscallRet};
 use alloc::sync::{Arc, Weak};
-use log::debug;
 use spin::{Mutex, MutexGuard};
 
 /// ### 管道

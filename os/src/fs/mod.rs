@@ -19,7 +19,7 @@ cfg_if::cfg_if! {
 }
 
 use crate::mm::UserBuffer;
-use crate::utils::{get_abs_path, rsplit_once, GeneralRet, SysErrNo};
+use crate::utils::{GeneralRet, SysErrNo};
 use alloc::string::String;
 use alloc::{sync::Arc, vec::Vec};
 pub use devfs::*;

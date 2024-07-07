@@ -1,8 +1,8 @@
 //! File and filesystem-related syscalls
 use crate::{
     fs::{
-        fs_stat, make_pipe, open, open_device_file, remove_inode_idx, root_inode, sync, File,
-        FileClass, InodeType, Kstat, OpenFlags, Statfs, MNT_TABLE, NONE_MODE, SEEK_CUR, SEEK_SET,
+        fs_stat, make_pipe, open, open_device_file, remove_inode_idx, sync, File, FileClass, Kstat,
+        OpenFlags, Statfs, MNT_TABLE, NONE_MODE, SEEK_CUR, SEEK_SET,
     },
     mm::{
         get_data, put_data, safe_translated_byte_buffer, translated_byte_buffer, translated_ref,
@@ -21,7 +21,7 @@ use alloc::{
 };
 use core::cmp::min;
 use core::mem::size_of;
-use log::{debug, info};
+use log::debug;
 
 pub const AT_FDCWD: isize = -100;
 // pub const FD_LIMIT: usize = 128;

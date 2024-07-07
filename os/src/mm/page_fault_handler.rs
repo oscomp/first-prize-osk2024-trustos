@@ -1,7 +1,6 @@
 // Page Fault Handler 回调
 
 use alloc::sync::Arc;
-use log::debug;
 
 use crate::{
     config::mm::PAGE_SIZE,

@@ -7,7 +7,7 @@ use super::{
 use crate::{
     config::{
         board::{MEMORY_END, MMIO},
-        mm::{KERNEL_ADDR_OFFSET, MMAP_TOP, PAGE_SIZE, USER_HEAP_SIZE},
+        mm::{KERNEL_ADDR_OFFSET, MMAP_TOP, PAGE_SIZE},
     },
     fs::{File, OSInode},
     mm::flush_tlb,

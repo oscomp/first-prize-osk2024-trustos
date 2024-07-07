@@ -1,5 +1,5 @@
 #![allow(non_snake_case)]
-use log::{debug, error, warn};
+use log::{error, warn};
 use lwext4_rust::{Ext4BlockWrapper, InodeTypes, KernelDevOp};
 
 use crate::{

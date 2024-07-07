@@ -2,7 +2,6 @@
 use crate::config::mm::{KERNEL_STACK_SIZE, KSTACK_TOP, PAGE_SIZE};
 use alloc::vec::Vec;
 use lazy_static::*;
-use log::debug;
 use spin::Mutex;
 ///Pid Allocator struct
 pub struct TidAllocator {

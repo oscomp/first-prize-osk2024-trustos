@@ -7,7 +7,7 @@ use lwext4_rust::{
 use crate::{
     fs::{Dirent, Inode, InodeType, Kstat, String},
     sync::SyncUnsafeCell,
-    utils::{GeneralRet, SysErrNo, SyscallRet},
+    utils::{SysErrNo, SyscallRet},
 };
 
 use alloc::{sync::Arc, vec, vec::Vec};

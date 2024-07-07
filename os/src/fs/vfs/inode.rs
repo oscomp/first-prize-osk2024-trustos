@@ -6,10 +6,7 @@ use crate::{
 };
 
 use super::{File, Inode};
-use alloc::{
-    string::String,
-    sync::{Arc, Weak},
-};
+use alloc::sync::Arc;
 use spin::Mutex;
 
 pub struct OSInode {

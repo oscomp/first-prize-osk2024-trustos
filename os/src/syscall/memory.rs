@@ -5,10 +5,7 @@ use log::debug;
 use crate::{
     config::mm::PAGE_SIZE,
     fs::File,
-    mm::{
-        flush_tlb, frames_alloc_much, FrameTracker, MapArea, MapAreaType, MapPermission, MapType,
-        PTEFlags, VPNRange, VirtAddr,
-    },
+    mm::{frames_alloc_much, FrameTracker, MapArea, MapAreaType, MapPermission, MapType, VirtAddr},
     syscall::MapedSharedMemory,
     task::current_task,
     utils::{page_round_up, SysErrNo, SyscallRet},

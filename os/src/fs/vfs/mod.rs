@@ -5,7 +5,7 @@ use crate::{
     fs::String,
     mm::UserBuffer,
     syscall::PollEvents,
-    utils::{GeneralRet, SysErrNo, SyscallRet},
+    utils::{SysErrNo, SyscallRet},
 };
 use alloc::{sync::Arc, vec::Vec};
 

@@ -16,18 +16,20 @@ use crate::{
     signal::{SigPending, SigSet},
     syscall::{CloneFlags, MapedSharedMemory},
     task::{insert_into_thread_group, OpenFlags},
-    timer::{get_time, get_time_ms, TimeData, TimeVal, Timer},
+    timer::{get_time, TimeData, TimeVal, Timer},
     trap::{trap_handler, TrapContext},
     utils::{get_abs_path, is_abs_path, SysErrNo},
 };
-use alloc::{borrow::ToOwned, fmt::format, format, string::String, sync::Arc, vec::Vec};
+use alloc::{format, string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
-use log::debug;
 use spin::{Mutex, MutexGuard};
 
 pub struct TaskControlBlock {
     // immutable
     tid: TidHandle,
+    /// 父进程退出后,子进程会被挂到initproc下,此时需要改变.
+    /// 但只有wakeup_parent会用到改变后的值,手动特殊处理了
+    /// 其他地方若有需求再修改
     ppid: usize,
     pid: usize,
     pub kernel_stack: KernelStack,
@@ -48,7 +50,6 @@ pub struct TaskControlBlockInner {
     pub time_data: TimeData,
     pub user_heappoint: usize,  //堆顶指针,小于等于user_heaptop
     pub user_heapbottom: usize, //堆底指针
-    pub user_heaptop: usize,    //堆上界，是个常量
     pub set_child_tid: usize,
     pub clear_child_tid: usize,
     pub sig_pending: Arc<SigPending>,
@@ -194,7 +195,6 @@ impl TaskControlBlock {
                 time_data: TimeData::new(),
                 user_heappoint: user_heapbottom,
                 user_heapbottom,
-                user_heaptop: user_heapbottom + USER_HEAP_SIZE,
                 set_child_tid: 0,
                 clear_child_tid: 0,
                 sig_pending: Arc::new(SigPending::new()),
@@ -334,7 +334,6 @@ impl TaskControlBlock {
         // debug!("task.exec.tid={}", self.tid.0);
         inner.user_heappoint = user_hp;
         inner.user_heapbottom = user_hp;
-        inner.user_heaptop = user_hp + USER_HEAP_SIZE;
         // println!("final user_sp:{:#X}", user_sp);
 
         //创建进程完整命令文件/proc/<pid>/cmdline
@@ -460,7 +459,6 @@ impl TaskControlBlock {
                 time_data: TimeData::new(),
                 user_heappoint: parent_inner.user_heappoint,
                 user_heapbottom: parent_inner.user_heapbottom,
-                user_heaptop: parent_inner.user_heaptop,
                 set_child_tid,
                 clear_child_tid,
                 sig_pending,
@@ -591,7 +589,8 @@ impl TaskControlBlock {
             .unwrap();
         let growed_addr: usize = inner.user_heappoint + grow_size as usize;
         let shrinked_addr: usize = (inner.user_heappoint as isize + grow_size) as usize;
-        let user_vpn_top: VirtPageNum = (inner.user_heaptop / PAGE_SIZE).into();
+        let user_vpn_top: VirtPageNum =
+            ((inner.user_heapbottom + USER_HEAP_SIZE) / PAGE_SIZE).into();
         let growed_vpn: VirtPageNum = (growed_addr / PAGE_SIZE + 1).into();
         let shrinked_vpn: VirtPageNum = (shrinked_addr / PAGE_SIZE + 1).into();
         if grow_size > 0 {

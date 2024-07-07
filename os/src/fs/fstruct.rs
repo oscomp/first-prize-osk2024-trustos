@@ -8,7 +8,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 
 use super::{FileClass, OpenFlags, Stdin, Stdout};
 pub struct FdTable {

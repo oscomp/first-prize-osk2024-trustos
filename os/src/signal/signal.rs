@@ -1,5 +1,3 @@
-use log::debug;
-
 use crate::task::exit_current_and_run_next;
 
 /// 仿照Linux signal实现

@@ -28,7 +28,7 @@ mod task;
 mod tid;
 
 use crate::{
-    fs::{open, remove_inode_idx, root_inode, FileClass, OpenFlags, NONE_MODE},
+    fs::{open, remove_inode_idx, root_inode, OpenFlags, NONE_MODE},
     mm::{translated_refmut, VirtAddr},
     signal::{send_signal_to_thread_group, SigSet},
 };

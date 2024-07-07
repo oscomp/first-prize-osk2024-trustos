@@ -4,7 +4,6 @@ use alloc::collections::{BTreeMap, VecDeque};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use lazy_static::*;
-use log::info;
 use spin::{Mutex, MutexGuard};
 ///A array of `TaskControlBlock` that is thread-safe
 pub struct TaskManager {
