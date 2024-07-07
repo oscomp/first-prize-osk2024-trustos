@@ -820,7 +820,7 @@ impl MemorySetInner {
         let mut user_heap_bottom: usize = max_end_va.into();
         //guard page
         user_heap_bottom += PAGE_SIZE;
-        let user_heap_top: usize = user_heap_bottom + USER_HEAP_SIZE;
+        let user_heap_top: usize = user_heap_bottom;
         memory_set.push_lazily(MapArea::new(
             user_heap_bottom.into(),
             user_heap_top.into(),

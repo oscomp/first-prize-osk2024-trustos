@@ -11,7 +11,7 @@ use crate::{
     fs::{open, FdTable, File, FsInfo, DEFAULT_DIR_MODE, DEFAULT_FILE_MODE},
     mm::{
         flush_tlb, translated_ref, translated_refmut, MapArea, MapAreaType, MapPermission, MapType,
-        MemorySet, MemorySetInner, PhysPageNum, UserBuffer, VirtAddr,
+        MemorySet, MemorySetInner, PhysPageNum, UserBuffer, VPNRange, VirtAddr, VirtPageNum,
     },
     signal::{SigPending, SigSet},
     syscall::{CloneFlags, MapedSharedMemory},
@@ -20,7 +20,7 @@ use crate::{
     trap::{trap_handler, TrapContext},
     utils::{get_abs_path, is_abs_path, SysErrNo},
 };
-use alloc::{fmt::format, format, string::String, sync::Arc, vec::Vec};
+use alloc::{borrow::ToOwned, fmt::format, format, string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
 use log::debug;
 use spin::{Mutex, MutexGuard};
@@ -46,9 +46,9 @@ pub struct TaskControlBlockInner {
     pub fd_table: Arc<FdTable>,
     pub fs_info: Arc<FsInfo>,
     pub time_data: TimeData,
-    pub user_heappoint: usize,
-    pub user_heapbottom: usize,
-    pub user_heaptop: usize,
+    pub user_heappoint: usize,  //堆顶指针,小于等于user_heaptop
+    pub user_heapbottom: usize, //堆底指针
+    pub user_heaptop: usize,    //堆上界，是个常量
     pub set_child_tid: usize,
     pub clear_child_tid: usize,
     pub sig_pending: Arc<SigPending>,
@@ -578,38 +578,46 @@ impl TaskControlBlock {
     ///修改数据段大小，懒分配
     pub fn growproc(&self, grow_size: isize) -> usize {
         let mut inner = self.inner_lock();
+        if grow_size == 0 {
+            return inner.user_heappoint;
+        }
+        //因为Brk一定连续，所以就只需要有一个Brk段
+        let area = inner
+            .memory_set
+            .get_mut()
+            .areas
+            .iter_mut()
+            .find(|area| area.area_type == MapAreaType::Brk)
+            .unwrap();
+        let growed_addr: usize = inner.user_heappoint + grow_size as usize;
+        let shrinked_addr: usize = (inner.user_heappoint as isize + grow_size) as usize;
+        let user_vpn_top: VirtPageNum = (inner.user_heaptop / PAGE_SIZE).into();
+        let growed_vpn: VirtPageNum = (growed_addr / PAGE_SIZE + 1).into();
+        let shrinked_vpn: VirtPageNum = (shrinked_addr / PAGE_SIZE + 1).into();
         if grow_size > 0 {
-            let growed_addr: usize = inner.user_heappoint + grow_size as usize;
-            let limit = inner.user_heaptop;
-            if growed_addr > limit {
-                //panic!("heap overflow at {:#X}!", growed_addr);
-                //堆空间大小不够，分配新的堆空间
-                let addition = growed_addr - limit;
-                // align addition to PAGE_SIZE
-                let addition = (addition + PAGE_SIZE - 1) & !(PAGE_SIZE - 1);
-                // debug!("extend heap: {:#x} -- {:#x}", limit, limit + addition);
-                inner
-                    .memory_set
-                    .inner
-                    .get_unchecked_mut()
-                    .push_lazily(MapArea::new(
-                        limit.into(),
-                        (limit + addition).into(),
-                        MapType::Framed,
-                        MapPermission::R | MapPermission::W | MapPermission::U,
-                        MapAreaType::Brk,
-                    ));
-                inner.user_heaptop = limit + addition;
-                return inner.user_heaptop;
+            if growed_vpn >= user_vpn_top {
+                panic!("USER_HEAP overflow as {:#X}!", growed_addr);
             }
+            //因为是懒分配，只要改范围就行了
+            area.vpn_range = VPNRange::new((inner.user_heapbottom / PAGE_SIZE).into(), growed_vpn);
             inner.user_heappoint = growed_addr;
         } else {
-            let shrinked_addr: usize = (inner.user_heappoint as isize + grow_size) as usize;
             if shrinked_addr < inner.user_heapbottom {
-                panic!("heap downflow at {:#X}!", shrinked_addr);
+                panic!("USER_HEAP downflow at {:#X}!", shrinked_addr);
+            }
+            area.vpn_range =
+                VPNRange::new((inner.user_heapbottom / PAGE_SIZE).into(), shrinked_vpn);
+            while !area.data_frames.is_empty() {
+                let page = area.data_frames.pop_last().unwrap();
+                if page.0 < growed_vpn {
+                    area.data_frames.insert(page.0, page.1);
+                    break;
+                }
+                inner.memory_set.get_mut().page_table.unmap(page.0);
             }
             inner.user_heappoint = shrinked_addr;
         }
+        flush_tlb();
         inner.user_heappoint
     }
 

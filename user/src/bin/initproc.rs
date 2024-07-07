@@ -24,7 +24,7 @@ fn main() -> i32 {
         loop {
             let mut exit_code: i32 = 0;
             let pid = wait(&mut exit_code);
-            // shutdown();
+            shutdown();
             // sleep(5000);
             // println!(
             //     "[initproc] Released a zombie process, pid={}, exit_code={}",
