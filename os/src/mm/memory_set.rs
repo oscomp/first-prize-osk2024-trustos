@@ -382,10 +382,10 @@ impl MemorySetInner {
     pub fn munmap(&mut self, addr: usize, len: usize) {
         let start_vpn = VirtPageNum::from(VirtAddr::from(addr));
         let end_vpn = VirtPageNum::from(VirtAddr::from(addr + len));
-        debug!(
-            "[MemorySet] start_vpn:{:#x},end_vpn:{:#x}",
-            start_vpn.0, end_vpn.0
-        );
+        // debug!(
+        //     "[MemorySet] start_vpn:{:#x},end_vpn:{:#x}",
+        //     start_vpn.0, end_vpn.0
+        // );
         while let Some((idx, area)) = self
             .areas
             .iter_mut()
@@ -412,20 +412,20 @@ impl MemorySetInner {
                     .unwrap(),
                 });
             }
-            debug!(
-                "[area vpn_range] start:{:#x},end:{:#x}",
-                area.vpn_range.start().0,
-                area.vpn_range.end().0
-            );
+            // debug!(
+            //     "[area vpn_range] start:{:#x},end:{:#x}",
+            //     area.vpn_range.start().0,
+            //     area.vpn_range.end().0
+            // );
             // 取消映射
             for vpn in VPNRange::new(start_vpn, end_vpn) {
                 area.unmap_one(&mut self.page_table, vpn);
             }
             let area_end_vpn = area.vpn_range.end();
-            debug!(
-                "[MemorySet] end_vpn:{:#x},area_end_vpn:{:#x}",
-                end_vpn.0, area_end_vpn.0
-            );
+            // debug!(
+            //     "[MemorySet] end_vpn:{:#x},area_end_vpn:{:#x}",
+            //     end_vpn.0, area_end_vpn.0
+            // );
             // 是否回收,mprotect可能将mmap区域拆分成多个
             if area_end_vpn <= end_vpn {
                 self.areas.remove(idx);

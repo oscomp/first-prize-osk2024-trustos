@@ -97,7 +97,7 @@ pub fn sys_clone(
         parent_tid_ptr as *mut u32,
         tls_ptr,
         child_tid_ptr as *mut u32,
-    );
+    )?;
     let new_tid = new_task.tid();
     // we do not have to move to next instruction since we have done it before
     // add new task to scheduler

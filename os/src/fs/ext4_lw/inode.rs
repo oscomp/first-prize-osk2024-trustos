@@ -151,6 +151,8 @@ impl Inode for Ext4Inode {
             Ok(Arc::new(Ext4Inode::new(path, InodeTypes::EXT4_DE_DIR)))
         } else if file.check_inode_exist(path, InodeTypes::EXT4_DE_REG_FILE) {
             Ok(Arc::new(Ext4Inode::new(path, InodeTypes::EXT4_DE_REG_FILE)))
+        } else if file.check_inode_exist(path, InodeTypes::EXT4_DE_SYMLINK) {
+            Ok(Arc::new(Ext4Inode::new(path, InodeTypes::EXT4_DE_SYMLINK)))
         } else {
             Err(SysErrNo::ENOENT)
         }

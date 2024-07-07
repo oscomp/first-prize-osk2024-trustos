@@ -38,7 +38,7 @@ pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut
     //可写的才需要cow
     let need_cow = pte_flags.contains(PTEFlags::W);
     pte_flags &= !PTEFlags::W;
-    page_table.set_flags(vpn, pte_flags);
+    page_table.set_map_flags(vpn, pte_flags);
     if need_cow {
         page_table.set_cow(vpn);
     }

@@ -18,13 +18,13 @@ fn main() -> i32 {
         // exec("user_shell\0");
         // exec("usertests\0");
         // exec("onlinetests\0");
-        // run_busyboxsh();
-        run_libc_bench();
+        run_busyboxsh();
+        // run_libc_bench();
     } else {
         loop {
             let mut exit_code: i32 = 0;
             let pid = wait(&mut exit_code);
-            // shutdown();
+            shutdown();
             // sleep(5000);
             // println!(
             //     "[initproc] Released a zombie process, pid={}, exit_code={}",

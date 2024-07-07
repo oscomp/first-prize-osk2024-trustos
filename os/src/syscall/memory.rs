@@ -58,7 +58,7 @@ pub fn sys_mmap(
     let rv = task_inner
         .memory_set
         .mmap(addr, len, map_perm, flags, Some(file), off);
-    debug!("[sys_mmap] alloc addr={:#x}", rv);
+    // debug!("[sys_mmap] alloc addr={:#x}", rv);
     Ok(rv)
 }
 
@@ -68,7 +68,7 @@ pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
     let task_inner = task.inner_lock();
     let len = page_round_up(len);
     task_inner.memory_set.munmap(addr, len);
-    debug!("[sys_munmap] end");
+    // debug!("[sys_munmap] end");
     Ok(0)
 }
 
@@ -94,12 +94,12 @@ pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> SyscallRet {
     Ok(0)
 }
 
-pub fn sys_madvise(addr: usize, len: usize, advice: usize) -> SyscallRet {
+pub fn sys_madvise(_addr: usize, _len: usize, _advice: usize) -> SyscallRet {
     //伪实现，该系统调用用于给内存提建议
-    debug!(
-        "[sys_madvise] addr is {}, len is {}, advice is {}",
-        addr, len, advice
-    );
+    // debug!(
+    //     "[sys_madvise] addr is {}, len is {}, advice is {}",
+    //     addr, len, advice
+    // );
     Ok(0)
 }
 

@@ -338,33 +338,33 @@ impl TaskControlBlock {
         // println!("final user_sp:{:#X}", user_sp);
 
         //创建进程完整命令文件/proc/<pid>/cmdline
-        let cmdlinefile = open(
-            format!("/proc/{}/cmdline", self.pid).as_str(),
-            OpenFlags::O_CREATE | OpenFlags::O_RDWR,
-        )
-        .unwrap()
-        .file()
-        .unwrap();
-        let mut cmdlineinfo = argv
-            .iter()
-            .map(|s| s.as_str())
-            .collect::<Vec<&str>>()
-            .join("\0")
-            + "\0";
-        let mut cmdlinevec = Vec::new();
-        unsafe {
-            let cmdline = cmdlineinfo.as_bytes_mut();
-            cmdlinevec.push(core::slice::from_raw_parts_mut(
-                cmdline.as_mut_ptr(),
-                cmdline.len(),
-            ));
-        }
-        let cmdlinebuf = UserBuffer::new(cmdlinevec);
-        let cmdlinesize = cmdlinefile.write(cmdlinebuf).unwrap();
-        debug!(
-            "create /proc/{}/cmdline with {} sizes",
-            self.pid, cmdlinesize
-        );
+        // let cmdlinefile = open(
+        //     format!("/proc/{}/cmdline", self.pid).as_str(),
+        //     OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        // )
+        // .unwrap()
+        // .file()
+        // .unwrap();
+        // let mut cmdlineinfo = argv
+        //     .iter()
+        //     .map(|s| s.as_str())
+        //     .collect::<Vec<&str>>()
+        //     .join("\0")
+        //     + "\0";
+        // let mut cmdlinevec = Vec::new();
+        // unsafe {
+        //     let cmdline = cmdlineinfo.as_bytes_mut();
+        //     cmdlinevec.push(core::slice::from_raw_parts_mut(
+        //         cmdline.as_mut_ptr(),
+        //         cmdline.len(),
+        //     ));
+        // }
+        // let cmdlinebuf = UserBuffer::new(cmdlinevec);
+        // let cmdlinesize = cmdlinefile.write(cmdlinebuf).unwrap();
+        // debug!(
+        //     "create /proc/{}/cmdline with {} sizes",
+        //     self.pid, cmdlinesize
+        // );
     }
     ///
     pub fn clone_process(
@@ -374,7 +374,7 @@ impl TaskControlBlock {
         parent_tid: *mut u32,
         tls: usize,
         child_tid: *mut u32,
-    ) -> Arc<TaskControlBlock> {
+    ) -> Result<Arc<TaskControlBlock>, SysErrNo> {
         let parent_inner = self.inner.lock();
 
         let tid_handle = tid_alloc();
@@ -534,37 +534,34 @@ impl TaskControlBlock {
                     x.mem.trackers.clone(),
                 );
             });
-        }
+            //创建进程专属目录，路径为/proc/<pid>
+            open(
+                format!("/proc/{}", pid).as_str(),
+                OpenFlags::O_DIRECTORY | OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+            )
+            .unwrap()
+            .file()?;
 
-        //创建进程专属目录，路径为/proc/<pid>
-        open(
-            format!("/proc/{}", pid).as_str(),
-            OpenFlags::O_DIRECTORY | OpenFlags::O_CREATE | OpenFlags::O_RDWR,
-        )
-        .unwrap()
-        .file()
-        .unwrap();
-
-        //创建进程状态文件/proc/<pid>/stat
-        let statfile = open(
-            format!("/proc/{}/stat", pid).as_str(),
-            OpenFlags::O_CREATE | OpenFlags::O_RDWR,
-        )
-        .unwrap()
-        .file()
-        .unwrap();
-        let mut statinfo = format!("{} (busybox) S {} 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 {} 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0", pid, ppid,get_time());
-        let mut statvec = Vec::new();
-        unsafe {
-            let stat = statinfo.as_bytes_mut();
-            statvec.push(core::slice::from_raw_parts_mut(
-                stat.as_mut_ptr(),
-                stat.len(),
-            ));
+            //创建进程状态文件/proc/<pid>/stat
+            let statfile = open(
+                format!("/proc/{}/stat", pid).as_str(),
+                OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+            )
+            .unwrap()
+            .file()?;
+            let mut statinfo = format!("{} (busybox) S {} 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 {} 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0", pid, ppid,get_time());
+            let mut statvec = Vec::new();
+            unsafe {
+                let stat = statinfo.as_bytes_mut();
+                statvec.push(core::slice::from_raw_parts_mut(
+                    stat.as_mut_ptr(),
+                    stat.len(),
+                ));
+            }
+            let statbuf = UserBuffer::new(statvec);
+            statfile.write(statbuf)?;
+            // debug!("create /proc/{}/stat with {} sizes", pid, statsize);
         }
-        let statbuf = UserBuffer::new(statvec);
-        let statsize = statfile.write(statbuf).unwrap();
-        debug!("create /proc/{}/stat with {} sizes", pid, statsize);
 
         drop(child_inner);
         drop(parent_inner);
@@ -573,7 +570,7 @@ impl TaskControlBlock {
         if !flags.contains(CloneFlags::CLONE_THREAD) {
             insert_into_process_group(child.ppid, &child);
         }
-        child
+        Ok(child)
     }
 
     ///修改数据段大小，懒分配
@@ -588,7 +585,7 @@ impl TaskControlBlock {
                 let addition = growed_addr - limit;
                 // align addition to PAGE_SIZE
                 let addition = (addition + PAGE_SIZE - 1) & !(PAGE_SIZE - 1);
-                debug!("extend heap: {:#x} -- {:#x}", limit, limit + addition);
+                // debug!("extend heap: {:#x} -- {:#x}", limit, limit + addition);
                 inner
                     .memory_set
                     .inner

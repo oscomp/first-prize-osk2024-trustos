@@ -427,7 +427,10 @@ pub fn sys_fstat(fd: usize, kst: *const u8) -> SyscallRet {
     let inner = task.inner_lock();
     let token = inner.user_token();
 
-    debug!("[sys_fstat] fd is {:?}, kst is {}", fd, kst as usize);
+    debug!(
+        "[sys_fstat] fd is {:?}, kst_addr is {:#x}",
+        fd, kst as usize
+    );
 
     let mut kst = UserBuffer::new(translated_byte_buffer(token, kst, size_of::<Kstat>()).unwrap());
 
@@ -436,10 +439,7 @@ pub fn sys_fstat(fd: usize, kst: *const u8) -> SyscallRet {
     }
 
     if let Some(file) = &inner.fd_table.try_get_file(fd) {
-        let file: Arc<dyn File> = match file {
-            FileClass::File(f) => f.clone(),
-            FileClass::Abs(f) => f.clone(),
-        };
+        let file: Arc<dyn File> = file.any();
         let kstat = file.fstat();
         kst.write(kstat.as_bytes());
         Ok(0)
@@ -480,10 +480,9 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
     let path = trim_start_slash(translated_str(token, path));
     let mut kst = UserBuffer::new(translated_byte_buffer(token, kst, size_of::<Kstat>()).unwrap());
 
-    debug!("[sys_fstatat] dirfd is {}, path is {}", dirfd, path);
-
     // let base_path = inner.get_cwd(dirfd, &path)?;
     let abs_path = inner.get_abs_path(dirfd, &path)?;
+    debug!("abs_path={}", &abs_path);
     let file = open(&abs_path, OpenFlags::O_RDONLY)?.any();
     let kstat = file.fstat();
     kst.write(kstat.as_bytes());

@@ -70,7 +70,7 @@ $(KERNEL_BIN): kernel
 	@$(OBJCOPY) $(KERNEL_ELF) --strip-all -O binary $@
 
 copy_to_fs: 
-	@cd ../$(FS) && sh create_img.sh 
+	# @cd ../$(FS) && sh create_img.sh 
 
 $(APPS):
 

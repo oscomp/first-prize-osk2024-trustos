@@ -144,7 +144,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
                 remove_inode_idx(format!("/proc/{}/stat", task.pid()).as_str());
                 root_inode().unlink(format!("/proc/{}", task.pid()).as_str());
                 remove_inode_idx(format!("/proc/{}", task.pid()).as_str());
-                debug!("remove /proc/{}/* and /proc/{}", task.pid(), task.pid());
+                // debug!("remove /proc/{}/* and /proc/{}", task.pid(), task.pid());
             }
         }
     }
