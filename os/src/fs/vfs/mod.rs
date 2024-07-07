@@ -95,18 +95,28 @@ pub trait Inode: Send + Sync {
 
 /// 文件接口
 pub trait File: Send + Sync {
-    fn readable(&self) -> bool;
-    fn writable(&self) -> bool;
+    fn readable(&self) -> bool {
+        unimplemented!()
+    }
+    fn writable(&self) -> bool {
+        unimplemented!()
+    }
     /// read 指的是从文件中读取数据放到缓冲区中，最多将缓冲区填满，并返回实际读取的字节数
-    fn read(&self, buf: UserBuffer) -> SyscallRet;
+    fn read(&self, _buf: UserBuffer) -> SyscallRet {
+        unimplemented!()
+    }
     /// 将缓冲区中的数据写入文件，最多将缓冲区中的数据全部写入，并返回直接写入的字节数
-    fn write(&self, buf: UserBuffer) -> SyscallRet;
+    fn write(&self, _buf: UserBuffer) -> SyscallRet {
+        unimplemented!()
+    }
     /// 获得文件信息
     fn fstat(&self) -> Kstat {
         unimplemented!()
     }
     /// ppoll处理
-    fn poll(&self, events: PollEvents) -> PollEvents;
+    fn poll(&self, _events: PollEvents) -> PollEvents {
+        unimplemented!()
+    }
     /// 设置偏移量,并非所有文件都支持
     fn lseek(&self, _offset: isize, _whence: usize) -> SyscallRet {
         unimplemented!("not support!");

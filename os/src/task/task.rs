@@ -334,32 +334,32 @@ impl TaskControlBlock {
         // debug!("task.exec.tid={}", self.tid.0);
         inner.user_heappoint = user_hp;
         inner.user_heapbottom = user_hp;
-        // println!("final user_sp:{:#X}", user_sp);
 
         //创建进程完整命令文件/proc/<pid>/cmdline
-        // let cmdlinefile = open(
-        //     format!("/proc/{}/cmdline", self.pid).as_str(),
-        //     OpenFlags::O_CREATE | OpenFlags::O_RDWR,
-        // )
-        // .unwrap()
-        // .file()
-        // .unwrap();
-        // let mut cmdlineinfo = argv
-        //     .iter()
-        //     .map(|s| s.as_str())
-        //     .collect::<Vec<&str>>()
-        //     .join("\0")
-        //     + "\0";
-        // let mut cmdlinevec = Vec::new();
-        // unsafe {
-        //     let cmdline = cmdlineinfo.as_bytes_mut();
-        //     cmdlinevec.push(core::slice::from_raw_parts_mut(
-        //         cmdline.as_mut_ptr(),
-        //         cmdline.len(),
-        //     ));
-        // }
-        // let cmdlinebuf = UserBuffer::new(cmdlinevec);
-        // let cmdlinesize = cmdlinefile.write(cmdlinebuf).unwrap();
+        let cmdlinefile = open(
+            format!("/proc/{}/cmdline", self.pid).as_str(),
+            OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+            DEFAULT_FILE_MODE,
+        )
+        .unwrap()
+        .file()
+        .unwrap();
+        let mut cmdlineinfo = argv
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<&str>>()
+            .join("\0")
+            + "\0";
+        let mut cmdlinevec = Vec::new();
+        unsafe {
+            let cmdline = cmdlineinfo.as_bytes_mut();
+            cmdlinevec.push(core::slice::from_raw_parts_mut(
+                cmdline.as_mut_ptr(),
+                cmdline.len(),
+            ));
+        }
+        let cmdlinebuf = UserBuffer::new(cmdlinevec);
+        cmdlinefile.write(cmdlinebuf).unwrap();
         // debug!(
         //     "create /proc/{}/cmdline with {} sizes",
         //     self.pid, cmdlinesize

@@ -24,7 +24,7 @@ pub enum Syscall {
     Linkat = 37,
     Umount2 = 39,
     Mount = 40,
-    Statfs = 43,
+    StatFs = 43,
     Ftruncate = 46,
     Faccessat = 48,
     Chdir = 49,
@@ -39,25 +39,25 @@ pub enum Syscall {
     Writev = 66,
     Pread64 = 67,
     Pwrite64 = 68,
-    Sendfile = 71,
+    SendFile = 71,
     Pselect6 = 72,
     Ppoll = 73,
-    Readlinkat = 78,
+    ReadLinkat = 78,
     Fstatat = 79,
     Fstat = 80,
     Sync = 81,
     Fsync = 82,
     Utimensat = 88,
     Exit = 93,
-    Exitgroup = 94,
-    Settidaddress = 96,
+    ExitGroup = 94,
+    SetTidAddress = 96,
     Futex = 98,
-    Nanosleep = 101,
-    Setitimer = 103,
+    NanoSleep = 101,
+    SetTimer = 103,
     ClockGettime = 113,
     ClockGetres = 114,
     ClockNanosleep = 115,
-    Syslog = 116,
+    SysLog = 116,
     SchedSetScheduler = 119,
     SchedGetScheduler = 120,
     SchedGetParam = 121,
@@ -67,30 +67,40 @@ pub enum Syscall {
     SigKill = 129,
     Tkill = 130,
     Tgkill = 131,
-    Sigsupend = 133,
-    Sigaction = 134,
-    Sigprocmask = 135,
-    Sigtimedwait = 137,
+    SigSupend = 133,
+    SigAction = 134,
+    SigProcMask = 135,
+    SigTimedWait = 137,
     SigReturn = 139,
     Times = 153,
-    Setpgid = 154,
-    Getpgid = 155,
-    Setsid = 157,
+    SetPGid = 154,
+    GetPGid = 155,
+    SetSid = 157,
     Uname = 160,
-    Getrusage = 165,
+    GetRusage = 165,
     Umask = 166,
-    Gettimeofday = 169,
-    Getpid = 172,
-    Getppid = 173,
-    Getuid = 174,
-    Geteuid = 175,
-    Getgid = 176,
-    Getegid = 177,
-    Gettid = 178,
-    Sysinfo = 179,
+    GetTimeOfDay = 169,
+    GetPid = 172,
+    GetPPid = 173,
+    GetUid = 174,
+    GetEUid = 175,
+    GetGid = 176,
+    GetEGid = 177,
+    GetTid = 178,
+    SysInfo = 179,
     Shmget = 194,
     Shmctl = 195,
     Shmat = 196,
+    Socket = 198,
+    Bind = 200,
+    Listen = 201,
+    Accept = 202,
+    Connect = 203,
+    GetSockName = 204,
+    GetPeerName = 205,
+    SendTo = 206,
+    RecvFrom = 207,
+    SetSockOpt = 208,
     Brk = 214,
     Munmap = 215,
     Clone = 220,
@@ -111,6 +121,7 @@ pub enum Syscall {
 
 mod fs;
 mod memory;
+mod net;
 mod options;
 mod process;
 mod signal;
@@ -118,6 +129,7 @@ mod time;
 
 use fs::*;
 use memory::*;
+use net::*;
 pub use options::*;
 use process::*;
 use signal::*;
@@ -158,7 +170,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[3] as u32,
             args[4] as *const u8,
         ),
-        Syscall::Statfs => sys_statfs(args[0] as *const u8, args[1] as *const u8),
+        Syscall::StatFs => sys_statfs(args[0] as *const u8, args[1] as *const u8),
         Syscall::Ftruncate => sys_ftruncate(args[0] as usize, args[1] as i32),
         Syscall::Faccessat => sys_faccessat(
             args[0] as isize,
@@ -195,7 +207,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[2] as usize,
             args[3] as isize,
         ),
-        Syscall::Sendfile => sys_sendfile(
+        Syscall::SendFile => sys_sendfile(
             args[0] as usize,
             args[1] as usize,
             args[2] as usize,
@@ -215,7 +227,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[2] as usize,
             args[3] as usize,
         ),
-        Syscall::Readlinkat => sys_readlinkat(
+        Syscall::ReadLinkat => sys_readlinkat(
             args[0] as isize,
             args[1] as *const u8,
             args[2] as *const u8,
@@ -237,8 +249,8 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[3] as usize,
         ),
         Syscall::Exit => sys_exit(args[0] as i32),
-        Syscall::Exitgroup => sys_exit_group(args[0] as i32),
-        Syscall::Settidaddress => sys_settidaddress(args[0]),
+        Syscall::ExitGroup => sys_exit_group(args[0] as i32),
+        Syscall::SetTidAddress => sys_settidaddress(args[0]),
         Syscall::Futex => sys_futex(
             args[0] as *mut i32,
             args[1] as i32,
@@ -247,8 +259,8 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[4] as *mut i32,
             args[5] as i32,
         ),
-        Syscall::Nanosleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
-        Syscall::Setitimer => {
+        Syscall::NanoSleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
+        Syscall::SetTimer => {
             sys_settimer(args[0] as usize, args[1] as *const u8, args[2] as *const u8)
         }
         Syscall::ClockGettime => sys_clock_gettime(args[0], args[1] as *const u8),
@@ -259,7 +271,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[2] as *const u8,
             args[3] as *const u8,
         ),
-        Syscall::Syslog => sys_syslog(args[0] as isize, args[1] as *const u8, args[2] as usize),
+        Syscall::SysLog => sys_syslog(args[0] as isize, args[1] as *const u8, args[2] as usize),
         Syscall::SchedSetScheduler => {
             sys_sched_setscheduler(args[0] as usize, args[1] as usize, args[2] as *const u8)
         }
@@ -275,42 +287,76 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::SigKill => sys_kill(args[0] as isize, args[0]),
         Syscall::Tkill => sys_tkill(args[0] as usize, args[1] as usize),
         Syscall::Tgkill => sys_tgkill(args[0] as usize, args[1] as usize, args[2] as usize),
-        Syscall::Sigsupend => sys_rt_sigsuspend(args[0] as *const SigSet),
-        Syscall::Sigaction => sys_rt_sigaction(
+        Syscall::SigSupend => sys_rt_sigsuspend(args[0] as *const SigSet),
+        Syscall::SigAction => sys_rt_sigaction(
             args[0],
             args[1] as *const SigAction,
             args[2] as *mut SigAction,
         ),
-        Syscall::Sigprocmask => sys_rt_sigprocmask(
+        Syscall::SigProcMask => sys_rt_sigprocmask(
             args[0] as u32,
             args[1] as *const SigSet,
             args[2] as *mut SigSet,
         ),
-        Syscall::Sigtimedwait => sys_rt_sigtimedwait(
+        Syscall::SigTimedWait => sys_rt_sigtimedwait(
             args[0] as *const SigSet,
             args[1],
             args[2] as *const Timespec,
         ),
         Syscall::SigReturn => sys_rt_sigreturn(),
         Syscall::Times => sys_times(args[0] as *const u8),
-        Syscall::Setpgid => Ok(0),
-        Syscall::Getpgid => Ok(0),
-        Syscall::Setsid => sys_setsid(),
-        Syscall::Getrusage => sys_getrusage(args[0] as isize, args[1] as *const u8),
-        Syscall::Gettimeofday => sys_gettimeofday(args[0] as *const u8),
+        Syscall::SetPGid => Ok(0),
+        Syscall::GetPGid => Ok(0),
+        Syscall::SetSid => sys_setsid(),
+        Syscall::GetRusage => sys_getrusage(args[0] as isize, args[1] as *const u8),
+        Syscall::GetTimeOfDay => sys_gettimeofday(args[0] as *const u8),
         Syscall::Umask => sys_umask(args[0] as u32),
         Syscall::Uname => sys_uname(args[0] as *mut u8),
-        Syscall::Getpid => sys_getpid(),
-        Syscall::Getppid => sys_getppid(),
-        Syscall::Getuid => sys_getuid(),
-        Syscall::Geteuid => sys_geteuid(),
-        Syscall::Getgid => sys_getgid(),
-        Syscall::Getegid => sys_getegid(),
-        Syscall::Gettid => sys_gettid(),
-        Syscall::Sysinfo => sys_sysinfo(args[0] as *const u8),
+        Syscall::GetPid => sys_getpid(),
+        Syscall::GetPPid => sys_getppid(),
+        Syscall::GetUid => sys_getuid(),
+        Syscall::GetEUid => sys_geteuid(),
+        Syscall::GetGid => sys_getgid(),
+        Syscall::GetEGid => sys_getegid(),
+        Syscall::GetTid => sys_gettid(),
+        Syscall::SysInfo => sys_sysinfo(args[0] as *const u8),
         Syscall::Shmget => sys_shmget(args[0] as usize, args[1] as usize, args[2] as u32),
         Syscall::Shmctl => sys_shmctl(args[0] as usize, args[1] as usize, args[2] as usize),
         Syscall::Shmat => sys_shmat(args[0] as usize, args[1] as usize, args[2] as u32),
+        Syscall::Socket => sys_socket(args[0] as u32, args[1] as u32, args[2] as u32),
+        Syscall::Bind => sys_bind(args[0] as usize, args[1] as *const u8, args[2] as u32),
+        Syscall::Listen => sys_listen(args[0] as usize, args[1] as u32),
+        Syscall::Accept => sys_accept(args[0] as usize, args[1] as *const u8, args[2] as u32),
+        Syscall::Connect => sys_connect(args[0] as usize, args[1] as *const u8, args[2] as u32),
+        Syscall::GetSockName => {
+            sys_getsockname(args[0] as usize, args[1] as *const u8, args[2] as u32)
+        }
+        Syscall::GetPeerName => {
+            sys_getpeername(args[0] as usize, args[1] as *const u8, args[2] as u32)
+        }
+        Syscall::SendTo => sys_sendto(
+            args[0] as usize,
+            args[1] as *const u8,
+            args[2] as usize,
+            args[3] as u32,
+            args[4] as *const u8,
+            args[5] as u32,
+        ),
+        Syscall::RecvFrom => sys_recvfrom(
+            args[0] as usize,
+            args[1] as *mut u8,
+            args[2] as usize,
+            args[3] as u32,
+            args[4] as *const u8,
+            args[5] as u32,
+        ),
+        Syscall::SetSockOpt => sys_setsockopt(
+            args[0] as usize,
+            args[1] as u32,
+            args[2] as u32,
+            args[3] as *const u8,
+            args[4] as u32,
+        ),
         Syscall::Clone => sys_clone(args[0], args[1], args[2], args[3], args[4]),
         Syscall::Brk => sys_brk(args[0]),
         Syscall::Execve => sys_execve(
