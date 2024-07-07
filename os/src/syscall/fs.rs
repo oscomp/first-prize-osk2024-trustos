@@ -2,7 +2,7 @@
 use crate::{
     fs::{
         fs_stat, make_pipe, open, open_device_file, remove_inode_idx, root_inode, sync, File,
-        FileClass, InodeType, Kstat, OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET,
+        FileClass, InodeType, Kstat, OpenFlags, Statfs, MNT_TABLE, NONE_MODE, SEEK_CUR, SEEK_SET,
     },
     mm::{
         get_data, put_data, safe_translated_byte_buffer, translated_byte_buffer, translated_ref,
@@ -195,11 +195,11 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> Sysca
     let abs_path = inner.get_abs_path(dirfd, &path)?;
 
     debug!(
-        "[sys_openat] dirfd is {}, path is {}, flags is {:?}, mode is {}",
-        dirfd, path, flags, mode
+        "[sys_openat] path is {}, flags is {:?}, mode is {:o}",
+        &abs_path, flags, mode
     );
 
-    let inode = open(&abs_path, flags)?;
+    let inode = open(&abs_path, flags, mode)?;
     let new_fd = inner.fd_table.alloc_fd()?;
     inner.fd_table.set(new_fd, Some(inode), Some(flags));
     inner.fs_info.insert(abs_path, new_fd);
@@ -283,7 +283,7 @@ pub fn sys_chdir(path: *const u8) -> SyscallRet {
     debug!("[sys_chdir] path is {}", path);
 
     let abs_path = get_abs_path(inner.fs_info.cwd(), &path);
-    let osfile = open(&abs_path, OpenFlags::O_RDONLY)?.file()?;
+    let osfile = open(&abs_path, OpenFlags::O_RDONLY, NONE_MODE)?.file()?;
     if !osfile.inode.types().is_dir() {
         return Err(SysErrNo::ENOTDIR);
     }
@@ -299,17 +299,21 @@ pub fn sys_chdir(path: *const u8) -> SyscallRet {
     Ok(0)
 }
 
-pub fn sys_mkdirat(dirfd: isize, path: *const u8, _mode: u32) -> SyscallRet {
+pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
     let path = translated_str(token, path);
 
     let abs_path = inner.get_abs_path(dirfd, &path)?;
-    if let Ok(_) = open(&abs_path, OpenFlags::O_RDWR) {
+    if let Ok(_) = open(&abs_path, OpenFlags::O_RDWR, NONE_MODE) {
         return Err(SysErrNo::EEXIST);
     }
-    if let Ok(_) = open(&abs_path, OpenFlags::O_RDWR | OpenFlags::O_CREATE) {
+    if let Ok(_) = open(
+        &abs_path,
+        OpenFlags::O_RDWR | OpenFlags::O_CREATE | OpenFlags::O_DIRECTORY,
+        mode,
+    ) {
         return Ok(0);
     }
     return Err(SysErrNo::ENOENT);
@@ -360,7 +364,7 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, _flags: u32) -> SyscallRet {
     // 如果是File但尚有对应的fd未关闭,等到close时unlink
     // 如果是符号链接,直接移除
     // 如果是socket, FIFO, or device,移除但现有的fd可继续使用
-    let osfile = open(&abs_path, OpenFlags::empty())?.file()?;
+    let osfile = open(&abs_path, OpenFlags::empty(), NONE_MODE)?.file()?;
     debug!(
         "[sys_unlinkat] path={},link_cnt={},has_activate_fd={}",
         &abs_path,
@@ -482,8 +486,8 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
 
     // let base_path = inner.get_cwd(dirfd, &path)?;
     let abs_path = inner.get_abs_path(dirfd, &path)?;
-    debug!("abs_path={}", &abs_path);
-    let file = open(&abs_path, OpenFlags::O_RDONLY)?.any();
+    debug!("[sys_fstatat] abs_path={}", &abs_path);
+    let file = open(&abs_path, OpenFlags::O_RDONLY, NONE_MODE)?.any();
     let kstat = file.fstat();
     kst.write(kstat.as_bytes());
     return Ok(0);
@@ -512,14 +516,14 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
         dirfd, path, mode
     );
 
-    let mode = FaccessatMode::from_bits(mode).unwrap();
+    let accmode = FaccessatMode::from_bits(mode).unwrap();
     // let base_path = inner.get_cwd(dirfd, &path)?;
     let abs_path = inner.get_abs_path(dirfd, &path)?;
-    open(&abs_path, OpenFlags::O_RDWR).map_or_else(
+    open(&abs_path, OpenFlags::O_RDWR, NONE_MODE).map_or_else(
         |_| {
-            if mode.contains(FaccessatMode::F_OK) {
+            if accmode.contains(FaccessatMode::F_OK) {
                 //使用which命令查找时再创建，避免内核启动时创建带来更多开销
-                open(&abs_path, OpenFlags::O_CREATE);
+                open(&abs_path, OpenFlags::O_CREATE, mode);
                 return Ok(0);
                 //return Ok(usize::MAX);
             }
@@ -561,7 +565,7 @@ pub fn sys_utimensat(dirfd: isize, path: *const u8, times: *const u8, _flags: us
     }
 
     let abs_path = inner.get_abs_path(dirfd, &path)?;
-    let osfile = open(&abs_path, OpenFlags::O_RDONLY)?.file()?;
+    let osfile = open(&abs_path, OpenFlags::O_RDONLY, NONE_MODE)?.file()?;
     osfile.inode.set_timestamps(atime_sec, mtime_sec);
     return Ok(0);
 }
@@ -882,7 +886,7 @@ pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsize: us
     // debug!("[sys_read_linkat] got path : {}", inner.fs_info.get_cwd());
     let abs_path = inner.get_abs_path(dirfd, &path)?;
     let mut linkbuf = vec![0u8; bufsize];
-    let file = open(&abs_path, OpenFlags::empty())?.file()?;
+    let file = open(&abs_path, OpenFlags::empty(), NONE_MODE)?.file()?;
     let readcnt = file.inode.read_link(&mut linkbuf, bufsize)?;
     let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, readcnt).unwrap());
     buffer.write(&linkbuf);
@@ -909,7 +913,7 @@ pub fn sys_renameat2(
     let newpath = translated_str(token, newpath);
 
     let old_abs_path = inner.get_abs_path(olddirfd, &oldpath)?;
-    let osfile = open(&old_abs_path, OpenFlags::O_RDWR)?.file()?;
+    let osfile = open(&old_abs_path, OpenFlags::O_RDWR, NONE_MODE)?.file()?;
     let new_abs_path = inner.get_abs_path(newdirfd, &newpath)?;
     osfile.inode.rename(&old_abs_path, &new_abs_path)
 }

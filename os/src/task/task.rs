@@ -8,7 +8,7 @@ use crate::{
     config::mm::{
         PAGE_SIZE, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP, USER_TRAP_CONTEXT_TOP,
     },
-    fs::{open, FdTable, File, FsInfo},
+    fs::{open, FdTable, File, FsInfo, DEFAULT_DIR_MODE, DEFAULT_FILE_MODE},
     mm::{
         flush_tlb, translated_ref, translated_refmut, MapArea, MapAreaType, MapPermission, MapType,
         MemorySet, MemorySetInner, PhysPageNum, UserBuffer, VirtAddr,
@@ -538,6 +538,7 @@ impl TaskControlBlock {
             open(
                 format!("/proc/{}", pid).as_str(),
                 OpenFlags::O_DIRECTORY | OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+                DEFAULT_DIR_MODE,
             )
             .unwrap()
             .file()?;
@@ -546,6 +547,7 @@ impl TaskControlBlock {
             let statfile = open(
                 format!("/proc/{}/stat", pid).as_str(),
                 OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+                DEFAULT_FILE_MODE,
             )
             .unwrap()
             .file()?;

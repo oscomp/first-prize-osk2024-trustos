@@ -86,6 +86,10 @@ pub const SEEK_SET: usize = 0;
 pub const SEEK_CUR: usize = 1;
 pub const SEEK_END: usize = 2;
 
+pub const DEFAULT_FILE_MODE: u32 = 0o666;
+pub const DEFAULT_DIR_MODE: u32 = 0o777;
+pub const NONE_MODE: u32 = 0;
+
 /// 枚举类型，分为普通文件和抽象文件
 /// 普通文件File，特点是支持更多类型的操作，包含seek, offset等
 /// 抽象文件Abs，抽象文件，只支持File trait的一些操作
@@ -192,7 +196,7 @@ pub fn flush_preload() {
         fn shell_end();
     }
 
-    let initproc = open("/initproc", OpenFlags::O_CREATE)
+    let initproc = open("/initproc", OpenFlags::O_CREATE, DEFAULT_FILE_MODE)
         .unwrap()
         .file()
         .unwrap();
@@ -273,9 +277,15 @@ pub fn create_init_files() -> GeneralRet {
     open(
         "/proc",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
+        DEFAULT_DIR_MODE,
     );
     //创建/proc/mounts文件系统使用情况
-    let mountsfile = open("/proc/mounts", OpenFlags::O_CREATE | OpenFlags::O_RDWR)?.file()?;
+    let mountsfile = open(
+        "/proc/mounts",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        DEFAULT_FILE_MODE,
+    )?
+    .file()?;
     let mut mountsinfo = String::from(MOUNTS);
     let mut mountsvec = Vec::new();
     unsafe {
@@ -289,7 +299,12 @@ pub fn create_init_files() -> GeneralRet {
     let mountssize = mountsfile.write(mountbuf)?;
     debug!("create /proc/mounts with {} sizes", mountssize);
     //创建/proc/meminfo系统内存使用情况
-    let memfile = open("/proc/meminfo", OpenFlags::O_CREATE | OpenFlags::O_RDWR)?.file()?;
+    let memfile = open(
+        "/proc/meminfo",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        DEFAULT_FILE_MODE,
+    )?
+    .file()?;
     let mut meminfo = String::from(MEMINFO);
     let mut memvec = Vec::new();
     unsafe {
@@ -303,6 +318,7 @@ pub fn create_init_files() -> GeneralRet {
     open(
         "/dev",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
+        DEFAULT_DIR_MODE,
     );
     //注册设备/dev/rtc和/dev/rtc0
     register_device("/dev/rtc");
@@ -319,6 +335,7 @@ pub fn create_init_files() -> GeneralRet {
     open(
         "/dev/misc",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
+        DEFAULT_DIR_MODE,
     );
     //注册设备/dev/misc/rtc
     register_device("/dev/misc/rtc");
@@ -326,9 +343,15 @@ pub fn create_init_files() -> GeneralRet {
     open(
         "/etc",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
+        DEFAULT_DIR_MODE,
     );
     //创建/etc/adjtime记录时间偏差
-    let adjtimefile = open("/etc/adjtime", OpenFlags::O_CREATE | OpenFlags::O_RDWR)?.file()?;
+    let adjtimefile = open(
+        "/etc/adjtime",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        DEFAULT_FILE_MODE,
+    )?
+    .file()?;
     let mut adjtime = String::from(ADJTIME);
     let mut adjtimevec = Vec::new();
     unsafe {
@@ -340,7 +363,12 @@ pub fn create_init_files() -> GeneralRet {
     debug!("create /etc/adjtime with {} sizes", adjtimesize);
 
     //创建./etc/localtime记录时区
-    let localtimefile = open("/etc/localtime", OpenFlags::O_CREATE | OpenFlags::O_RDWR)?.file()?;
+    let localtimefile = open(
+        "/etc/localtime",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        DEFAULT_FILE_MODE,
+    )?
+    .file()?;
     let mut localtime = String::from(LOCALTIME);
     let mut localtimevec = Vec::new();
     unsafe {
@@ -355,7 +383,12 @@ pub fn create_init_files() -> GeneralRet {
     debug!("create /etc/localtime with {} sizes", localtimesize);
 
     //创建/etc/passwd记录用户信息
-    let passwdfile = open("/etc/passwd", OpenFlags::O_CREATE | OpenFlags::O_RDWR)?.file()?;
+    let passwdfile = open(
+        "/etc/passwd",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        DEFAULT_FILE_MODE,
+    )?
+    .file()?;
     let mut passwd = String::from(PASSWD);
     let mut passwdvec = Vec::new();
     unsafe {
@@ -370,18 +403,19 @@ pub fn create_init_files() -> GeneralRet {
     Ok(())
 }
 
-fn create_file(abs_path: &str, flags: OpenFlags) -> Result<FileClass, SysErrNo> {
+fn create_file(abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass, SysErrNo> {
     // 一定能找到,因为除了RootInode外都有父结点
     let parent_dir = root_inode();
     let (readable, writable) = flags.read_write();
     return parent_dir.create(abs_path, flags.node_type()).map(|inode| {
         insert_inode_idx(abs_path, inode.clone());
+        inode.fmode_set(mode);
         let osinode = OSInode::new(readable, writable, inode);
         FileClass::File(Arc::new(osinode))
     });
 }
 
-pub fn open(abs_path: &str, flags: OpenFlags) -> Result<FileClass, SysErrNo> {
+pub fn open(abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass, SysErrNo> {
     //判断是否是设备文件
     if find_device(&abs_path) {
         let device = open_device_file(&abs_path)?;
@@ -411,7 +445,7 @@ pub fn open(abs_path: &str, flags: OpenFlags) -> Result<FileClass, SysErrNo> {
 
     // 节点不存在
     if flags.contains(OpenFlags::O_CREATE) {
-        return create_file(&abs_path, flags);
+        return create_file(&abs_path, flags, mode);
     }
     Err(SysErrNo::ENOENT)
 }

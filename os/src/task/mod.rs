@@ -28,7 +28,7 @@ mod task;
 mod tid;
 
 use crate::{
-    fs::{open, remove_inode_idx, root_inode, FileClass, OpenFlags},
+    fs::{open, remove_inode_idx, root_inode, FileClass, OpenFlags, NONE_MODE},
     mm::{translated_refmut, VirtAddr},
     signal::{send_signal_to_thread_group, SigSet},
 };
@@ -157,7 +157,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
 lazy_static! {
     ///Globle process that init user shell
     pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new({
-        let initproc= open("/initproc", OpenFlags::O_RDONLY).expect("open initproc error!").file().expect("initproc can not be abs file!");
+        let initproc= open("/initproc", OpenFlags::O_RDONLY,NONE_MODE).expect("open initproc error!").file().expect("initproc can not be abs file!");
         let elf_data = initproc.inode.read_all().unwrap();
         let res=TaskControlBlock::new(&elf_data);
         res

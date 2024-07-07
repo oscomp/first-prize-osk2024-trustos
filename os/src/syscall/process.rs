@@ -1,5 +1,5 @@
 use crate::{
-    fs::{open, OpenFlags},
+    fs::{open, OpenFlags, NONE_MODE},
     logger::{change_log_level, clear_log_buf, console_log_off, console_log_on, unread_size},
     mm::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
@@ -156,7 +156,7 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
         "/"
     };
     let abs_path = get_abs_path(&cwd, &path);
-    let app_inode = open(&abs_path, OpenFlags::O_RDONLY)?.file()?;
+    let app_inode = open(&abs_path, OpenFlags::O_RDONLY, NONE_MODE)?.file()?;
     task_inner.fs_info.set_exe(abs_path);
     let elf_data = app_inode.inode.read_all()?;
     drop(task_inner);

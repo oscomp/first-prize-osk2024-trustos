@@ -85,8 +85,11 @@ pub trait Inode: Send + Sync {
         unimplemented!();
     }
     ///获取文件的mode，遇到需要文件访问权限的需要使用，暂时放在这里
-    fn fmode(&self) -> u32 {
+    fn fmode(&self) -> Result<u32, SysErrNo> {
         unimplemented!();
+    }
+    fn fmode_set(&self, _mode: u32) -> SyscallRet {
+        unimplemented!()
     }
 }
 

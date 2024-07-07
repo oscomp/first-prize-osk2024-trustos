@@ -233,9 +233,13 @@ impl Inode for Ext4Inode {
         self.inner.get_unchecked_mut().delay = true;
     }
 
-    fn fmode(&self) -> u32 {
+    fn fmode(&self) -> Result<u32, SysErrNo> {
         let file = &mut self.inner.get_unchecked_mut().f;
-        file.file_mode().unwrap()
+        file.file_mode().map_err(|e| SysErrNo::from(e))
+    }
+    fn fmode_set(&self, mode: u32) -> SyscallRet {
+        let file = &mut self.inner.get_unchecked_mut().f;
+        file.file_mode_set(mode).map_err(|e| SysErrNo::from(e))
     }
 }
 
