@@ -6,6 +6,7 @@
  * (1) the benchmark is unmodified, and
  * (2) the version in the sccsid below is included in the report.
  */
+#include <stdio.h>
 static char	*id = "$Id: s.lat_syscall.c 1.11 97/06/15 22:38:58-07:00 lm $\n";
 
 #include "bench.h"
@@ -102,6 +103,7 @@ do_openclose(iter_t iterations, void *cookie)
 int
 lat_syscall_main(int ac, char **av)
 {
+    fprintf(stderr, "lat syscall main\n");
 	int parallel = 1;
 	int warmup = 0;
 	int repetitions = TRIES;
@@ -135,8 +137,10 @@ lat_syscall_main(int ac, char **av)
 		state.file = av[optind + 1];
 
 	if (!strcmp("null", av[optind])) {
+        fprintf(stderr, "[lat-syscall] bench null\n");
 		benchmp(NULL, do_getppid, NULL, 0, parallel, 
 			warmup, repetitions, &state);
+        fprintf(stderr, "[lat-syscall] bench end\n");
 		micro("Simple syscall", get_n());
 	} else if (!strcmp("write", av[optind])) {
 		state.fd = open("/dev/null", 1);
@@ -171,5 +175,6 @@ lat_syscall_main(int ac, char **av)
 	} else {
 		lmbench_usage(ac, av, usage);
 	}
+    fprintf(stderr,"[lat-syscall] end!\n");
 	return(0);
 }

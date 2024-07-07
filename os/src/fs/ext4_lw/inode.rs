@@ -59,11 +59,11 @@ impl Inode for Ext4Inode {
         if !file.check_inode_exist(path, types.clone()) {
             let nfile = &mut nf.inner.get_unchecked_mut().f;
             if types == InodeTypes::EXT4_DE_DIR {
-                if nfile.dir_mk(path).is_err() {
-                    return Err(SysErrNo::ENOENT);
+                if let Err(e) = nfile.dir_mk(path) {
+                    return Err(SysErrNo::from(e));
                 }
-            } else if nfile.file_open(path, O_RDWR | O_CREAT | O_TRUNC).is_err() {
-                return Err(SysErrNo::ENOENT);
+            } else if let Err(e) = nfile.file_open(path, O_RDWR | O_CREAT | O_TRUNC) {
+                return Err(SysErrNo::from(e));
             } else {
                 nfile.file_close();
             }
@@ -79,36 +79,38 @@ impl Inode for Ext4Inode {
         let file = &mut self.inner.get_unchecked_mut().f;
         let path = file.path();
         let path = path.to_str().unwrap();
-        file.file_open(path, O_RDONLY).map_err(|_| SysErrNo::EIO)?;
+        file.file_open(path, O_RDONLY)
+            .map_err(|e| SysErrNo::from(e))?;
         file.file_seek(off as i64, SEEK_SET)
-            .map_err(|_| SysErrNo::EIO)?;
+            .map_err(|e| SysErrNo::from(e))?;
         let r = file.file_read(buf);
         let _ = file.file_close();
-        r.map_err(|_| SysErrNo::EIO)
+        r.map_err(|e| SysErrNo::from(e))
     }
 
     fn write_at(&self, off: usize, buf: &[u8]) -> SyscallRet {
         let file = &mut self.inner.get_unchecked_mut().f;
         let path = file.path();
         let path = path.to_str().unwrap();
-        file.file_open(path, O_RDWR).map_err(|_| SysErrNo::EIO)?;
+        file.file_open(path, O_RDWR)
+            .map_err(|e| SysErrNo::from(e))?;
         file.file_seek(off as i64, SEEK_SET)
-            .map_err(|_| SysErrNo::EIO)?;
+            .map_err(|e| SysErrNo::from(e))?;
         let r = file.file_write(buf);
         let _ = file.file_close();
-        r.map_err(|_| SysErrNo::EIO)
+        r.map_err(|e| SysErrNo::from(e))
     }
 
-    fn truncate(&self, size: usize) -> GeneralRet {
+    fn truncate(&self, size: usize) -> SyscallRet {
         let file = &mut self.inner.get_unchecked_mut().f;
         let path = file.path();
         let path = path.to_str().unwrap();
         file.file_open(path, O_RDWR | O_CREAT | O_TRUNC)
-            .map_err(|_| SysErrNo::EIO)?;
+            .map_err(|e| SysErrNo::from(e))?;
 
         let t = file.file_truncate(size as u64);
         let _ = file.file_close();
-        t.map_or(Err(SysErrNo::EIO), |_| Ok(()))
+        t.map_err(|e| SysErrNo::from(e))
     }
 
     fn rename(&self, path: &str, new_path: &str) -> SyscallRet {
@@ -117,10 +119,10 @@ impl Inode for Ext4Inode {
             .map_or(Err(SysErrNo::ENOENT), |_| Ok(0))
     }
 
-    fn set_timestamps(&self, atime: Option<u32>, mtime: Option<u32>) -> GeneralRet {
+    fn set_timestamps(&self, atime: Option<u32>, mtime: Option<u32>) -> SyscallRet {
         let file = &mut self.inner.get_unchecked_mut().f;
-        file.set_time(atime, mtime, None).unwrap();
-        Ok(())
+        file.set_time(atime, mtime, None)
+            .map_err(|e| SysErrNo::from(e))
     }
     fn sync(&self) {
         self.inner.get_unchecked_mut().f.file_cache_flush();
@@ -130,12 +132,17 @@ impl Inode for Ext4Inode {
         let file = &mut self.inner.get_unchecked_mut().f;
         let path = file.path();
         let path = path.to_str().unwrap();
-        file.file_open(path, O_RDONLY).map_err(|_| SysErrNo::EIO)?;
+        file.file_open(path, O_RDONLY)
+            .map_err(|e| SysErrNo::from(e))?;
         let mut buf: Vec<u8> = vec![0; file.file_size() as usize];
-        file.file_seek(0, SEEK_SET).map_err(|_| SysErrNo::EIO)?;
+        file.file_seek(0, SEEK_SET).map_err(|e| SysErrNo::from(e))?;
         let r = file.file_read(buf.as_mut_slice());
-        let _ = file.file_close();
-        r.map_or(Err(SysErrNo::EIO), |_| Ok(buf))
+        file.file_close();
+        if let Err(e) = r {
+            Err(SysErrNo::from(e))
+        } else {
+            Ok(buf)
+        }
     }
 
     fn find(&self, path: &str) -> Result<Arc<dyn Inode>, SysErrNo> {
@@ -168,9 +175,11 @@ impl Inode for Ext4Inode {
             ..Kstat::default()
         }
     }
-    fn read_dentry(&self, off: usize, len: usize) -> Option<(Vec<u8>, isize)> {
+    fn read_dentry(&self, off: usize, len: usize) -> Result<(Vec<u8>, isize), SysErrNo> {
         let file = &mut self.inner.get_unchecked_mut().f;
-        let entries = file.read_dir_from(off as u64).unwrap();
+        let entries = file
+            .read_dir_from(off as u64)
+            .map_err(|e| SysErrNo::from(e))?;
         let mut de: Vec<u8> = Vec::new();
         let (mut res, mut f_off) = (0usize, usize::MAX);
         for entry in entries {
@@ -188,7 +197,15 @@ impl Inode for Ext4Inode {
             f_off = dirent.off();
             de.extend_from_slice(dirent.as_bytes());
         }
-        (res != 0).then(|| (de, f_off as isize))
+        // (res != 0).then(|| (de, f_off as isize))
+        assert!(res != 0);
+        Ok((de, f_off as isize))
+    }
+
+    fn read_link(&self, buf: &mut [u8], bufsize: usize) -> SyscallRet {
+        let file = &mut self.inner.get_unchecked_mut().f;
+        file.file_readlink(buf, bufsize)
+            .map_err(|e| SysErrNo::from(e))
     }
 
     fn link_cnt(&self) -> SyscallRet {
@@ -197,10 +214,9 @@ impl Inode for Ext4Inode {
             .map_or(Err(SysErrNo::EIO), |cnt| Ok(cnt as usize))
     }
 
-    fn unlink(&self, path: &str) -> GeneralRet {
+    fn unlink(&self, path: &str) -> SyscallRet {
         let file = &mut self.inner.get_unchecked_mut().f;
-        file.file_remove(path)
-            .map_or(Err(SysErrNo::EIO), |_| Ok(()))
+        file.file_remove(path).map_err(|e| SysErrNo::from(e))
     }
 
     fn path(&self) -> String {

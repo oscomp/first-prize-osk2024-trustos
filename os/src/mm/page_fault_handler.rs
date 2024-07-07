@@ -9,7 +9,9 @@ use crate::{
     mm::flush_tlb,
 };
 
-use super::{translated_byte_buffer, MapArea, PageTable, UserBuffer, VirtAddr, GROUP_SHARE};
+use super::{
+    translated_byte_buffer, MapArea, PTEFlags, PageTable, UserBuffer, VirtAddr, GROUP_SHARE,
+};
 
 ///mmap写触发的lazy alocation，直接新分配帧
 pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapArea) {
@@ -30,15 +32,32 @@ pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut
         buffers: translated_byte_buffer(page_table.token(), va as *const u8, PAGE_SIZE).unwrap(),
     });
     file.lseek(old_offset as isize, SEEK_SET);
+    //设置为cow
+    let vpn = VirtAddr::from(va).floor();
+    let mut pte_flags = vma.flags();
+    //可写的才需要cow
+    let need_cow = pte_flags.contains(PTEFlags::W);
+    pte_flags &= !PTEFlags::W;
+    page_table.set_flags(vpn, pte_flags);
+    if need_cow {
+        page_table.set_cow(vpn);
+    }
 }
 ///mmap读触发的lazy alocation，查看是否有共享页可直接用，没有再直接分配
 pub fn mmap_read_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapArea) {
     let frame = GROUP_SHARE.lock().find(vma.groupid, va.into());
     if let Some(frame) = frame {
-        //有现成的，直接clone
-        let ppn = frame.ppn;
-        vma.data_frames.insert(va.into(), frame);
-        page_table.map(va.into(), ppn, vma.flags());
+        //有现成的，直接clone,需要是cow的
+        let vpn = va.into();
+        let mut pte_flags = vma.flags();
+        //可写的才需要cow
+        let need_cow = pte_flags.contains(PTEFlags::W);
+        pte_flags &= !PTEFlags::W;
+        page_table.set_flags(vpn, pte_flags);
+        if need_cow {
+            page_table.set_cow(vpn);
+        }
+        vma.data_frames.insert(vpn, frame);
     } else {
         //第一次读，分配页面
         mmap_write_page_fault(va, page_table, vma);
@@ -59,7 +78,7 @@ pub fn brk_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapAre
 pub fn cow_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapArea) {
     // 只有一个，不用复制
     let frame = vma.data_frames.get(&va.into()).unwrap();
-    debug!("handle va {:#x}, count={}", va.0, Arc::strong_count(frame));
+    // debug!("handle va {:#x}, count={}", va.0, Arc::strong_count(frame));
     if Arc::strong_count(frame) == 1 {
         page_table.reset_cow(va.into());
         page_table.set_w(va.into());

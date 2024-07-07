@@ -37,7 +37,11 @@ pub fn check_if_any_sig_for_current_task() -> Option<usize> {
 pub fn ready_to_handle_signal(signo: usize) {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
-    debug!("handle signal {:?}", SigSet::from_sig(signo));
+    debug!(
+        "signo={},handle signal {:?}",
+        signo,
+        SigSet::from_sig(signo)
+    );
     let sig_act = task_inner.sig_pending.get_ref().actions[signo];
     drop(task_inner);
     drop(task);
@@ -46,6 +50,7 @@ pub fn ready_to_handle_signal(signo: usize) {
 
 pub fn handle_signal(signo: usize, sig_action: KSigAction) {
     if sig_action.customed {
+        debug!("customed");
         setup_frame(signo, sig_action);
         let task = current_task().unwrap();
         let task_inner = task.inner_lock();
@@ -55,6 +60,7 @@ pub fn handle_signal(signo: usize, sig_action: KSigAction) {
         sig_pending.pending ^= SigSet::from_sig(signo);
     } else {
         // 就在S模式运行,转换成fn(i32)
+        debug!("sa_handler:{:#x}", sig_action.act.sa_handler);
         let handler: fn(i32) =
             unsafe { core::mem::transmute(sig_action.act.sa_handler as *const ()) };
         handler(signo as i32);
@@ -71,6 +77,7 @@ pub fn setup_frame(_signo: usize, sig_action: KSigAction) {
     let trap_cx = task_inner.trap_cx();
     let mut user_sp = trap_cx.x[2];
 
+    debug!("a");
     // 保存 Trap 上下文
     user_sp -= core::mem::size_of::<TrapContext>();
     *translated_refmut(token, user_sp as *mut TrapContext) = *trap_cx;
@@ -83,6 +90,10 @@ pub fn setup_frame(_signo: usize, sig_action: KSigAction) {
     user_sp -= core::mem::size_of::<usize>();
     *translated_refmut(token, user_sp as *mut usize) = 0xdeadbeef;
 
+    debug!(
+        "[setup_frame] sepc={:#x},user_sp={:#x}",
+        sig_action.act.sa_handler, user_sp
+    );
     // 修改Trap
     trap_cx.sepc = sig_action.act.sa_handler;
     // ra
@@ -90,6 +101,7 @@ pub fn setup_frame(_signo: usize, sig_action: KSigAction) {
     // sp
     trap_cx.x[2] = user_sp;
     // a0
+    trap_cx.origin_a0 = trap_cx.x[10];
     trap_cx.x[10] = -(SysErrNo::EINTR as isize) as usize;
 }
 /// 恢复栈帧
@@ -109,7 +121,7 @@ pub fn restore_frame() -> SyscallRet {
     user_sp += core::mem::size_of::<SigSet>();
     // Trap cx
     *trap_cx = *translated_ref(token, user_sp as *const TrapContext);
-
+    trap_cx.x[10] = trap_cx.origin_a0;
     Ok(trap_cx.x[10])
     // user_sp += core::mem::size_of::<TrapContext>();
 }

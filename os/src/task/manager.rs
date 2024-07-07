@@ -1,9 +1,10 @@
 //!Implementation of [`TaskManager`]
-use super::{TaskControlBlock, INITPROC};
+use super::{TaskControlBlock, TaskStatus, INITPROC};
 use alloc::collections::{BTreeMap, VecDeque};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use lazy_static::*;
+use log::info;
 use spin::{Mutex, MutexGuard};
 ///A array of `TaskControlBlock` that is thread-safe
 pub struct TaskManager {
@@ -32,6 +33,27 @@ impl TaskManager {
     pub fn ready_procs_num(&self) -> usize {
         self.ready_queue.len()
     }
+    pub fn wakeup_parent(&mut self, pid: usize) {
+        let idx = self
+            .ready_queue
+            .iter()
+            .enumerate()
+            .find(|(_, task)| {
+                task.pid() == pid && task.inner_lock().task_status == TaskStatus::Ready
+            })
+            .map(|(idx, _)| idx);
+        if let Some(idx) = idx {
+            // info!("wake up parent {}", pid);
+            let p = self.ready_queue.remove(idx).unwrap();
+            self.ready_queue.push_front(p);
+        } else {
+            // info!("no parent pid=={}", pid);
+            // 父进程已被回收,被添加到了initproc下
+            if pid != 0 {
+                self.wakeup_parent(0);
+            }
+        }
+    }
 }
 
 lazy_static! {
@@ -44,6 +66,9 @@ pub fn add_task(task: Arc<TaskControlBlock>) {
 ///Interface offered to pop the first task
 pub fn fetch_task() -> Option<Arc<TaskControlBlock>> {
     TASK_MANAGER.lock().fetch()
+}
+pub fn wakeup_parent(pid: usize) {
+    TASK_MANAGER.lock().wakeup_parent(pid);
 }
 ///Lock TaskManager
 pub fn lock_task_manager() -> MutexGuard<'static, TaskManager> {
@@ -127,4 +152,11 @@ pub fn move_child_process_to_init(ppid: usize) {
             init_childer.push(child);
         }
     }
+}
+
+pub fn wakeup_task(task: Arc<TaskControlBlock>) {
+    let mut task_inner = task.inner_lock();
+    task_inner.task_status = TaskStatus::Ready;
+    drop(task_inner);
+    add_task(task);
 }

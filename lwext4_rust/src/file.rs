@@ -1,3 +1,5 @@
+use core::ffi::c_char;
+
 use crate::bindings::*;
 use alloc::{ffi::CString, vec::Vec};
 
@@ -131,6 +133,19 @@ impl Ext4File {
             //debug!("{:?} {} No Exist. ext4_inode_exist rc = {}", mtype, path, r);
             false
         }
+    }
+
+    pub fn file_readlink(&mut self, buf: &mut [u8], bufsize: usize) -> Result<usize, i32> {
+        let c_path = self.file_path.clone();
+        let c_path = c_path.into_raw();
+        let buf_c_char = buf.as_mut_ptr() as *mut c_char;
+        let mut rcnt = 0usize;
+        let r = unsafe { ext4_readlink(c_path, buf_c_char, bufsize, &mut rcnt) };
+        if r != EOK as i32 {
+            error!("ext4_readlink error: rc = {}", r);
+            return Err(r);
+        }
+        Ok(rcnt)
     }
 
     /// Rename file and directory

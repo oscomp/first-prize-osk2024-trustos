@@ -3,20 +3,22 @@ use crate::{
     logger::{change_log_level, clear_log_buf, console_log_off, console_log_on, unread_size},
     mm::{
         safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
-        translated_str, UserBuffer,
+        translated_str, PhysAddr, UserBuffer, VirtAddr,
     },
     signal::{check_if_any_sig_for_current_task, ready_to_handle_signal},
     syscall::{CloneFlags, Utsname},
     task::{
         add_task, current_task, current_token, exit_current_and_run_next,
-        exit_current_group_and_run_next, move_child_process_to_init, remove_all_from_thread_group,
-        suspend_current_and_run_next, task_num, Sysinfo, PROCESS_GROUP,
+        exit_current_group_and_run_next, futex_requeue, futex_wait, futex_wake_up,
+        move_child_process_to_init, remove_all_from_thread_group, suspend_current_and_run_next,
+        task_num, Sysinfo, PROCESS_GROUP,
     },
-    timer::{calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
+    timer::{add_timer, calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
     utils::{get_abs_path, trim_start_slash, SysErrNo, SyscallRet},
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
+use num_enum::TryFromPrimitive;
 
 use super::SyslogType;
 use crate::logger::{read_all_log_buf, read_clear_log_buf, read_log_buf, LOG_BUF_LEN};
@@ -80,10 +82,13 @@ pub fn sys_clone(
     stack_ptr: usize,
     parent_tid_ptr: usize,
     tls_ptr: usize,
-    chilren_tid_ptr: usize,
+    child_tid_ptr: usize,
 ) -> SyscallRet {
     let flags = CloneFlags::from_bits(flags as u32).unwrap();
-    debug!("[sys_clone] flags {:?}", flags);
+    debug!(
+        "[sys_clone] flags {:?},stack:{:#x},parent_tid_ptr:{:#x},child_tid_ptr:{:#x},tls_ptr:{:#x}",
+        flags, stack_ptr, parent_tid_ptr, child_tid_ptr, tls_ptr
+    );
 
     let task = current_task().unwrap();
     let new_task = task.clone_process(
@@ -91,7 +96,7 @@ pub fn sys_clone(
         stack_ptr,
         parent_tid_ptr as *mut u32,
         tls_ptr,
-        chilren_tid_ptr as *mut u32,
+        child_tid_ptr as *mut u32,
     );
     let new_tid = new_task.tid();
     // we do not have to move to next instruction since we have done it before
@@ -152,12 +157,78 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
     };
     let abs_path = get_abs_path(&cwd, &path);
     let app_inode = open(&abs_path, OpenFlags::O_RDONLY)?.file()?;
+    task_inner.fs_info.set_exe(abs_path);
     let elf_data = app_inode.inode.read_all()?;
     drop(task_inner);
     task.exec(&elf_data, &argv_vec, &mut env);
     task.inner_lock().memory_set.activate();
     Ok(0)
 }
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive)]
+#[repr(i32)]
+pub enum FutexCmd {
+    FUTEX_WAIT = 0,
+    FUTEX_WAKE = 1,
+    FUTEX_REQUEUE = 3,
+}
+
+pub fn sys_futex(
+    uaddr: *mut i32,
+    futex_op: i32,
+    val: i32,
+    timeout: *const Timespec,
+    uaddr2: *mut i32,
+    _val3: i32,
+) -> SyscallRet {
+    let cmd = FutexCmd::try_from_primitive(futex_op & 0x7f).unwrap();
+    debug!(
+        "[sys_futex] uaddr = {:#x}, cmd = {:?}, val = {}",
+        uaddr as usize, cmd, val
+    );
+    if uaddr.align_offset(4) != 0 {
+        return Err(SysErrNo::EINVAL);
+    }
+    let task = current_task().unwrap();
+    let task_inner = task.inner_lock();
+    let token = task_inner.user_token();
+    let pa = task_inner
+        .memory_set
+        .translate_va(VirtAddr::from(uaddr as usize))
+        .unwrap();
+    let pa2 = if !uaddr2.is_null() {
+        task_inner
+            .memory_set
+            .translate_va(VirtAddr::from(uaddr2 as usize))
+            .unwrap()
+    } else {
+        PhysAddr::from(0)
+    };
+    drop(task_inner);
+    drop(task);
+    match cmd {
+        FutexCmd::FUTEX_WAIT => {
+            let futex_word = *translated_ref(token, uaddr);
+            if futex_word != val {
+                return Err(SysErrNo::EAGAIN);
+            }
+            if !timeout.is_null() {
+                let timeout = *translated_ref(token, timeout);
+                debug!("[sys_futex] timeout = {:?}", timeout);
+                add_timer(get_time_spec() + timeout, current_task().unwrap());
+            }
+            if futex_wait(pa) {
+                Ok(0)
+            } else {
+                Err(SysErrNo::ETIMEDOUT)
+            }
+        }
+        FutexCmd::FUTEX_WAKE => Ok(futex_wake_up(pa, val)),
+        FutexCmd::FUTEX_REQUEUE => Ok(futex_requeue(pa, val, pa2, timeout as i32)),
+    }
+}
+
 /// 等待子进程状态发生变化,即子进程终止或被信号停止或被信号挂起
 /// < -1   meaning wait for any child process whose process group ID
 ///         is equal to the absolute value of pid.
@@ -243,20 +314,20 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
 pub fn sys_nanosleep(req: *const u8, rem: *const u8) -> SyscallRet {
     let token = current_token();
 
-    debug!(
-        "[sys_nanosleep] req is {:x}, rem is {:x}",
-        req as usize, rem as usize
-    );
+    // debug!(
+    //     "[sys_nanosleep] req is {:x}, rem is {:x}",
+    //     req as usize, rem as usize
+    // );
 
     let req = translated_ref(token, req as *const Timespec);
     let waittime = req.tv_sec * 1_000_000_000usize + req.tv_nsec;
     let begin = get_time_ms() * 1_000_000usize;
     let endtime = get_time_spec() + *req;
 
-    debug!(
-        "[sys_nanosleep] ready to sleep for {} sec, {} nsec",
-        req.tv_sec, req.tv_nsec
-    );
+    // debug!(
+    //     "[sys_nanosleep] ready to sleep for {} sec, {} nsec",
+    //     req.tv_sec, req.tv_nsec
+    // );
 
     while get_time_ms() * 1_000_000usize - begin < waittime {
         if let Some(signo) = check_if_any_sig_for_current_task() {
@@ -312,7 +383,7 @@ pub fn sys_sysinfo(info: *const u8) -> SyscallRet {
 
     let ourinfo = Sysinfo::new(get_time_ms() / 1000, 1 << 56, task_num());
     info.write(ourinfo.as_bytes());
-    debug!("[sys_sysinfo] ourinfo is {:?}", ourinfo);
+    // debug!("[sys_sysinfo] ourinfo is {:?}", ourinfo);
     Ok(0)
 }
 
@@ -324,10 +395,10 @@ pub fn sys_syslog(logtype: isize, bufp: *const u8, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
 
-    debug!(
-        "[sys_syslog] logtype is {}, bufp is {:x}, len is {}",
-        logtype, bufp as usize, len
-    );
+    // debug!(
+    //     "[sys_syslog] logtype is {}, bufp is {:x}, len is {}",
+    //     logtype, bufp as usize, len
+    // );
 
     let logtype = SyslogType::from(logtype);
 
@@ -384,41 +455,41 @@ pub fn sys_syslog(logtype: isize, bufp: *const u8, len: usize) -> SyscallRet {
     }
 }
 
-pub fn sys_sched_setaffinity(pid: usize, cpusetsize: usize, mask: usize) -> SyscallRet {
-    debug!(
-        "[sys_sched_setaffinity] pid is {}, cpusetsize is {}, mask is {}",
-        pid, cpusetsize, mask
-    );
+pub fn sys_sched_setaffinity(_pid: usize, _cpusetsize: usize, _mask: usize) -> SyscallRet {
+    // debug!(
+    //     "[sys_sched_setaffinity] pid is {}, cpusetsize is {}, mask is {}",
+    //     pid, cpusetsize, mask
+    // );
     Ok(0)
 }
 
-pub fn sys_sched_getaffinity(pid: usize, cpusetsize: usize, mask: usize) -> SyscallRet {
-    debug!(
-        "[sys_sched_getaffinity] pid is {}, cpusetsize is {}, mask is {}",
-        pid, cpusetsize, mask
-    );
+pub fn sys_sched_getaffinity(_pid: usize, _cpusetsize: usize, _mask: usize) -> SyscallRet {
+    // debug!(
+    //     "[sys_sched_getaffinity] pid is {}, cpusetsize is {}, mask is {}",
+    //     pid, cpusetsize, mask
+    // );
     Ok(0)
 }
 
-pub fn sys_sched_setscheduler(pid: usize, policy: usize, param: *const u8) -> SyscallRet {
-    debug!(
-        "[sys_sched_setscheduler] pid is {}, policy is {}, param is {:x}",
-        pid, policy, param as usize
-    );
+pub fn sys_sched_setscheduler(_pid: usize, _policy: usize, _param: *const u8) -> SyscallRet {
+    // debug!(
+    //     "[sys_sched_setscheduler] pid is {}, policy is {}, param is {:x}",
+    //     pid, policy, param as usize
+    // );
     Ok(0)
 }
 
-pub fn sys_sched_getscheduler(pid: usize) -> SyscallRet {
-    debug!("[sys_sched_getscheduler] pid is {}", pid);
+pub fn sys_sched_getscheduler(_pid: usize) -> SyscallRet {
+    // debug!("[sys_sched_getscheduler] pid is {}", pid);
     //由于使用的是标准的时间片调度算法，直接返回SCHED_OHTER = 0
     Ok(0)
 }
 
-pub fn sys_sched_getparam(pid: usize, param: *const u8) -> SyscallRet {
-    debug!(
-        "[sys_sched_getparam] pid is {}, param is {:x}",
-        pid, param as usize
-    );
+pub fn sys_sched_getparam(_pid: usize, _param: *const u8) -> SyscallRet {
+    // debug!(
+    //     "[sys_sched_getparam] pid is {}, param is {:x}",
+    //     pid, param as usize
+    // );
     //由于使用的是标准的时间片调度算法，param参数需要被忽略
     Ok(0)
 }
@@ -426,17 +497,17 @@ pub fn sys_sched_getparam(pid: usize, param: *const u8) -> SyscallRet {
 const TIME_ABSTIME: u32 = 1;
 
 pub fn sys_clock_nanosleep(
-    clockid: usize,
+    _clockid: usize,
     flags: u32,
     t: *const u8,
     remain: *const u8,
 ) -> SyscallRet {
     let token = current_token();
 
-    debug!(
-        "[sys_clock_nanosleep] clockid is {}, flags is {}, t is {:x}, remain is {:x}",
-        clockid, flags, t as usize, remain as usize
-    );
+    // debug!(
+    //     "[sys_clock_nanosleep] clockid is {}, flags is {}, t is {:x}, remain is {:x}",
+    //     clockid, flags, t as usize, remain as usize
+    // );
 
     let t = translated_ref(token, t as *const Timespec);
     let waittime = t.tv_sec * 1_000_000_000usize + t.tv_nsec;
@@ -450,10 +521,10 @@ pub fn sys_clock_nanosleep(
         get_time_spec() + *t
     };
 
-    debug!(
-        "[sys_clock_nanosleep] when not abs_time, ready to sleep for {} sec, {} nsec",
-        t.tv_sec, t.tv_nsec
-    );
+    // debug!(
+    //     "[sys_clock_nanosleep] when not abs_time, ready to sleep for {} sec, {} nsec",
+    //     t.tv_sec, t.tv_nsec
+    // );
 
     while get_time_ms() * 1_000_000usize - begin < waittime {
         if let Some(signo) = check_if_any_sig_for_current_task() {

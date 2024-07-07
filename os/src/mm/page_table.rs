@@ -353,6 +353,49 @@ pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
     let va = ptr as usize;
     KernelAddr::from(page_table.translate_va(VirtAddr::from(va)).unwrap()).as_mut()
 }
+
+/// 从 `token` 地址空间 `ptr` 处读取数据，
+/// 其中虚拟地址 `ptr` 解析得到的物理地址可以跨页。
+///
+/// 类型 `T` 需实现 Copy trait
+pub fn get_data<T: 'static + Copy>(token: usize, ptr: *const T) -> T {
+    let page_table = PageTable::from_token(token);
+    let mut va = VirtAddr::from(ptr as usize);
+    let pa = page_table.translate_va(va).unwrap();
+    let size = core::mem::size_of::<T>();
+    // 若数据跨页，则转换成字节数据写入
+    if (pa + size - 1).floor() != pa.floor() {
+        let mut bytes = vec![0u8; size];
+        for i in 0..size {
+            bytes[i] = *(page_table.translate_va(va).unwrap().get_ref());
+            va = va + 1;
+        }
+        unsafe { *(bytes.as_slice().as_ptr() as usize as *const T) }
+    } else {
+        *translated_ref(token, ptr)
+    }
+}
+
+/// 将数据 `data` 写入 `token` 地址空间 `ptr` 处，
+/// 其中虚拟地址 `ptr` 解析得到的物理地址可以跨页
+pub fn put_data<T: 'static>(token: usize, ptr: *mut T, data: T) {
+    let page_table = PageTable::from_token(token);
+    let mut va = VirtAddr::from(ptr as usize);
+    let pa = page_table.translate_va(va).unwrap();
+    let size = core::mem::size_of::<T>();
+    // 若数据跨页，则转换成字节数据写入
+    if (pa + size - 1).floor() != pa.floor() {
+        let bytes =
+            unsafe { core::slice::from_raw_parts(&data as *const _ as usize as *const u8, size) };
+        for i in 0..size {
+            *(page_table.translate_va(va).unwrap().get_mut()) = bytes[i];
+            va = va + 1;
+        }
+    } else {
+        *translated_refmut(token, ptr) = data;
+    }
+}
+
 ///Array of u8 slice that user communicate with os
 pub struct UserBuffer {
     ///U8 vec

@@ -409,17 +409,6 @@ pub fn open(abs_path: &str, flags: OpenFlags) -> Result<FileClass, SysErrNo> {
         return Ok(FileClass::File(Arc::new(osfile)));
     }
 
-    // if let Ok(inode) = root_inode().find(&abs_path) {
-    //     let (readable, writable) = flags.read_write();
-    //     let osfile = OSInode::new(readable, writable, inode);
-    //     if flags.contains(OpenFlags::O_APPEND) {
-    //         osfile.lseek(0, SEEK_END);
-    //     }
-    //     if flags.contains(OpenFlags::O_TRUNC) {
-    //         osfile.inode.truncate(0);
-    //     }
-    //     return Ok(FileClass::File(Arc::new(osfile)));
-    // }
     // 节点不存在
     if flags.contains(OpenFlags::O_CREATE) {
         return create_file(&abs_path, flags);

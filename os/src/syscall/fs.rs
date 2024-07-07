@@ -5,8 +5,8 @@ use crate::{
         FileClass, InodeType, Kstat, OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET,
     },
     mm::{
-        safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
-        translated_str, UserBuffer,
+        get_data, put_data, safe_translated_byte_buffer, translated_byte_buffer, translated_ref,
+        translated_refmut, translated_str, UserBuffer,
     },
     syscall::{FaccessatMode, PollEvents, PollFd, SigSet},
     task::{current_task, current_token, suspend_current_and_run_next},
@@ -24,7 +24,7 @@ use core::mem::size_of;
 use log::{debug, info};
 
 pub const AT_FDCWD: isize = -100;
-pub const FD_LIMIT: usize = 128;
+// pub const FD_LIMIT: usize = 128;
 pub const AT_REMOVEDIR: u32 = 0x200;
 
 #[repr(C)]
@@ -226,7 +226,7 @@ pub fn sys_getcwd(buf: *const u8, size: usize) -> SyscallRet {
     let token = inner.user_token();
 
     let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, size).unwrap());
-    buffer.write(inner.fs_info.as_bytes());
+    buffer.write(inner.fs_info.cwd_as_bytes());
     Ok(buf as usize)
 }
 pub fn sys_dup(fd: usize) -> SyscallRet {
@@ -256,10 +256,6 @@ pub fn sys_dup3(old: usize, new: usize, flags: u32) -> SyscallRet {
 
     if old >= inner.fd_table.len() || inner.fd_table.try_get_file(old).is_none() {
         return Err(SysErrNo::EINVAL);
-    }
-
-    if new >= FD_LIMIT {
-        return Err(SysErrNo::EBADF);
     }
 
     if inner.fd_table.len() <= new {
@@ -337,12 +333,10 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
 
     let file = inner.fd_table.get_file(fd).file()?;
     let off = file.lseek(0, SEEK_CUR)?;
-    if let Some((de, off)) = file.inode.read_dentry(off, len) {
-        buffer.write(de.as_slice());
-        let _ = file.lseek(off as isize, SEEK_SET)?;
-        return Ok(de.len());
-    }
-    return Err(SysErrNo::EINVAL);
+    let (de, off) = file.inode.read_dentry(off, len)?;
+    buffer.write(de.as_slice());
+    let _ = file.lseek(off as isize, SEEK_SET)?;
+    return Ok(de.len());
 }
 
 pub fn sys_linkat(
@@ -861,31 +855,41 @@ pub fn sys_prlimit(
             fd_table.set_limit(limit.rlim_cur, limit.rlim_max);
         }
     } else {
-        unimplemented!("未实现的非0 pid");
+        unimplemented!("pid must equal zero");
     }
 
     Ok(0)
 }
 
-pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsiz: usize) -> SyscallRet {
+pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsize: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
     let path = translated_str(token, path);
 
     debug!(
-        "[sys_readlinkat] dirfd is {}, path is {}, buf is {:x}, bufsiz is {}",
-        dirfd, path, buf as usize, bufsiz
+        "[sys_readlinkat] dirfd is {}, path is {}, buf is {:x}, bufsize is {}",
+        dirfd, path, buf as usize, bufsize
     );
 
-    assert!(path == "/proc/self/exe", "unsupported other path!");
+    // assert!(path == "/proc/self/exe", "unsupported other path!");
+    if path == "/proc/self/exe" {
+        debug!("fs_info={}", inner.fs_info.exe());
+        let size_needed = inner.fs_info.exe_as_bytes().len();
+        let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, size_needed).unwrap());
+        let res = buffer.write(inner.fs_info.exe_as_bytes());
+        return Ok(res);
+    }
+    // debug!("[sys_read_linkat] got path : {}", inner.fs_info.get_cwd());
+    let abs_path = inner.get_abs_path(dirfd, &path)?;
+    let mut linkbuf = vec![0u8; bufsize];
+    let file = open(&abs_path, OpenFlags::empty())?.file()?;
+    let readcnt = file.inode.read_link(&mut linkbuf, bufsize)?;
+    let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, readcnt).unwrap());
+    buffer.write(&linkbuf);
+    Ok(readcnt)
 
-    debug!("[sys_read_linkat] got path : {}", inner.fs_info.get_cwd());
-
-    let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, bufsiz).unwrap());
-    let res = buffer.write(inner.fs_info.as_bytes());
-
-    Ok(res)
+    // Ok(res)
 }
 
 /// If newpath already exists, replace it.
@@ -1117,23 +1121,27 @@ pub fn sys_pselect6(
 
     let old_mask = inner.sig_pending.get_ref().blocked;
     if sigmask != 0 {
-        inner.sig_pending.get_mut().blocked = *translated_ref(token, sigmask as *const SigSet);
+        // inner.sig_pending.get_mut().blocked = *translated_ref(token, sigmask as *const SigSet);
+        inner.sig_pending.get_mut().blocked = get_data(token, sigmask as *const SigSet);
     }
 
-    let nfds = min(nfds, FD_LIMIT);
+    let nfds = min(nfds, inner.fd_table.get_soft_limit());
 
     let mut using_readfds = if readfds != 0 {
-        *translated_refmut(token, readfds as *mut usize)
+        // *translated_refmut(token, readfds as *mut usize)
+        get_data(token, readfds as *mut usize)
     } else {
         0
     };
     let mut using_writefds = if writefds != 0 {
-        *translated_refmut(token, writefds as *mut usize)
+        // *translated_refmut(token, writefds as *mut usize)
+        get_data(token, writefds as *mut usize)
     } else {
         0
     };
     let mut using_exceptfds = if exceptfds != 0 {
-        *translated_refmut(token, exceptfds as *mut usize)
+        // *translated_refmut(token, exceptfds as *mut usize)
+        get_data(token, exceptfds as *mut usize)
     } else {
         0
     };
@@ -1143,10 +1151,10 @@ pub fn sys_pselect6(
         //为0则永远等待直到完成
         -1
     } else {
-        let timespec = translated_ref(token, timeout as *const Timespec);
-
+        // let timespec = translated_ref(token, timeout as *const Timespec);
+        let timespec = get_data(token, timeout as *const Timespec);
         debug!(
-            "waittime is {} sec, {} nsec",
+            "[sys_pselect6] waittime is {} sec, {} nsec",
             timespec.tv_sec, timespec.tv_nsec
         );
 
@@ -1175,10 +1183,7 @@ pub fn sys_pselect6(
             for i in 0..nfds {
                 if using_readfds & (1 << i) != 0 {
                     if let Some(file) = &inner.fd_table.try_get_file(i) {
-                        let file: Arc<dyn File> = match file {
-                            FileClass::File(f) => f.clone(),
-                            FileClass::Abs(f) => f.clone(),
-                        };
+                        let file: Arc<dyn File> = file.any();
                         let event = file.poll(PollEvents::IN);
                         if event.contains(PollEvents::IN) {
                             using_readfds |= 1 << i;
@@ -1200,10 +1205,7 @@ pub fn sys_pselect6(
             for i in 0..nfds {
                 if using_writefds & (1 << i) != 0 {
                     if let Some(file) = &inner.fd_table.try_get_file(i) {
-                        let file: Arc<dyn File> = match file {
-                            FileClass::File(f) => f.clone(),
-                            FileClass::Abs(f) => f.clone(),
-                        };
+                        let file: Arc<dyn File> = file.any();
                         let event = file.poll(PollEvents::OUT);
                         if event.contains(PollEvents::OUT) {
                             using_writefds |= 1 << i;
@@ -1225,10 +1227,7 @@ pub fn sys_pselect6(
             for i in 0..nfds {
                 if using_exceptfds & (1 << i) != 0 {
                     if let Some(file) = &inner.fd_table.try_get_file(i) {
-                        let file: Arc<dyn File> = match file {
-                            FileClass::File(f) => f.clone(),
-                            FileClass::Abs(f) => f.clone(),
-                        };
+                        let file: Arc<dyn File> = file.any();
                         let event = file.poll(PollEvents::ERR);
                         if event.contains(PollEvents::ERR) {
                             using_exceptfds |= 1 << i;
@@ -1248,13 +1247,16 @@ pub fn sys_pselect6(
         //如果有响应了则返回
         if num > 0 {
             if using_readfds != 0 {
-                *translated_refmut(token, readfds as *mut usize) = using_readfds;
+                // *translated_refmut(token, readfds as *mut usize) = using_readfds;
+                put_data(token, readfds as *mut usize, using_readfds);
             }
             if using_writefds != 0 {
-                *translated_refmut(token, writefds as *mut usize) = using_writefds;
+                // *translated_refmut(token, writefds as *mut usize) = using_writefds;
+                put_data(token, writefds as *mut usize, using_writefds);
             }
             if using_exceptfds != 0 {
-                *translated_refmut(token, exceptfds as *mut usize) = using_exceptfds;
+                // *translated_refmut(token, exceptfds as *mut usize) = using_exceptfds;
+                put_data(token, exceptfds as *mut usize, using_exceptfds);
             }
             if sigmask != 0 {
                 inner.sig_pending.get_mut().blocked = old_mask;

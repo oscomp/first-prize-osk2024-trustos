@@ -2,7 +2,7 @@
 use super::{
     brk_page_fault, cow_page_fault, frame_alloc, mmap_read_page_fault, mmap_write_page_fault,
     translated_byte_buffer, FrameTracker, MapArea, MapAreaType, MapPermission, MapType, PTEFlags,
-    PageTable, PageTableEntry, UserBuffer, VPNRange, VirtAddr, VirtPageNum, GROUP_SHARE,
+    PageTable, PageTableEntry, PhysAddr, UserBuffer, VPNRange, VirtAddr, VirtPageNum, GROUP_SHARE,
 };
 use crate::{
     config::{
@@ -154,12 +154,12 @@ impl MemorySet {
             .get_unchecked_mut()
             .push_with_offset(map_area, offset, data)
     }
-    #[inline(always)]
-    fn push_with_given_frames(&self, map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
-        self.inner
-            .get_unchecked_mut()
-            .push_with_given_frames(map_area, frames)
-    }
+    // #[inline(always)]
+    // fn push_with_given_frames(&self, map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
+    //     self.inner
+    //         .get_unchecked_mut()
+    //         .push_with_given_frames(map_area, frames)
+    // }
     pub fn map_given_frames(&self, map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
         self.inner
             .get_unchecked_mut()
@@ -195,6 +195,9 @@ impl MemorySet {
     #[inline(always)]
     pub fn clone_area(&self, start_vpn: VirtPageNum, another: &MemorySetInner) {
         self.get_mut().clone_area(start_vpn, another)
+    }
+    pub fn translate_va(&self, va: VirtAddr) -> Option<PhysAddr> {
+        self.get_mut().page_table.translate_va(va)
     }
 }
 
@@ -356,6 +359,11 @@ impl MemorySetInner {
         } else {
             // 自行选择地址,计算已经使用的MMap地址
             let addr = self.find_insert_addr(MMAP_TOP, len);
+            debug!(
+                "[sys_mmap] start_vpn:{:#x},end_vpn:{:#x}",
+                VirtAddr::from(addr).floor().0,
+                VirtAddr::from(addr + len).floor().0
+            );
             self.push_lazily(MapArea::new_mmap(
                 VirtAddr::from(addr),
                 VirtAddr::from(addr + len),
@@ -374,15 +382,16 @@ impl MemorySetInner {
     pub fn munmap(&mut self, addr: usize, len: usize) {
         let start_vpn = VirtPageNum::from(VirtAddr::from(addr));
         let end_vpn = VirtPageNum::from(VirtAddr::from(addr + len));
-        if let Some((idx, area)) = self
+        debug!(
+            "[MemorySet] start_vpn:{:#x},end_vpn:{:#x}",
+            start_vpn.0, end_vpn.0
+        );
+        while let Some((idx, area)) = self
             .areas
             .iter_mut()
             .enumerate()
             .filter(|(_, area)| area.area_type == MapAreaType::Mmap)
-            .find(|(_, area)| {
-                let start = area.vpn_range.start();
-                start == start_vpn
-            })
+            .find(|(_, area)| area.vpn_range.start() == start_vpn)
         {
             // 检查是否需要写回
             if area.mmap_flags.contains(MmapFlags::MAP_SHARED)
@@ -403,13 +412,22 @@ impl MemorySetInner {
                     .unwrap(),
                 });
             }
+            debug!(
+                "[area vpn_range] start:{:#x},end:{:#x}",
+                area.vpn_range.start().0,
+                area.vpn_range.end().0
+            );
             // 取消映射
             for vpn in VPNRange::new(start_vpn, end_vpn) {
                 area.unmap_one(&mut self.page_table, vpn);
             }
             let area_end_vpn = area.vpn_range.end();
-            // 是否回收
-            if area_end_vpn == end_vpn {
+            debug!(
+                "[MemorySet] end_vpn:{:#x},area_end_vpn:{:#x}",
+                end_vpn.0, area_end_vpn.0
+            );
+            // 是否回收,mprotect可能将mmap区域拆分成多个
+            if area_end_vpn <= end_vpn {
                 self.areas.remove(idx);
             } else {
                 area.vpn_range = VPNRange::new(end_vpn, area_end_vpn);
@@ -491,72 +509,71 @@ impl MemorySetInner {
         let mut new_areas = Vec::new();
         for area in self.areas.iter_mut() {
             let (start, end) = area.vpn_range.range();
-            //整个area修改
-            if start >= start_vpn && start < end_vpn && end >= start_vpn && end < end_vpn {
+            if start >= start_vpn && end <= end_vpn {
+                //修改整个area
                 area.map_perm = map_perm;
                 continue;
-            }
-            //修改area后半部分
-            else if start < start_vpn && end >= start_vpn && end < end_vpn {
+            } else if start < start_vpn && end > start_vpn && end <= end_vpn {
+                //修改area后半部分
                 let mut new_area = MapArea::from_another(area);
                 new_area.map_perm = map_perm;
                 new_area.vpn_range = VPNRange::new(start_vpn, end);
                 area.vpn_range = VPNRange::new(start, start_vpn);
-                let mut area_pages: Vec<(VirtPageNum, Arc<FrameTracker>)> = Vec::new();
-                while let Some(page) = area.data_frames.pop_first() {
-                    if page.0 < start_vpn {
-                        area_pages.push((page.0, page.1));
-                    } else {
-                        new_area.data_frames.insert(page.0, page.1);
+                GROUP_SHARE.lock().add_area(new_area.groupid);
+                while !area.data_frames.is_empty() {
+                    let page = area.data_frames.pop_last().unwrap();
+                    new_area.data_frames.insert(page.0, page.1);
+                    if page.0 == start_vpn {
+                        break;
                     }
-                }
-                for page in area_pages.iter() {
-                    area.data_frames.insert(page.0, page.1.clone());
                 }
                 new_areas.push(new_area);
                 continue;
-            }
-            //修改area前半部分
-            else if start >= start_vpn && start < end_vpn && end >= end_vpn {
+            } else if start >= start_vpn && start < end_vpn && end > end_vpn {
+                //修改area前半部分
                 let mut new_area = MapArea::from_another(area);
                 new_area.map_perm = map_perm;
                 new_area.vpn_range = VPNRange::new(start, end_vpn);
                 area.vpn_range = VPNRange::new(end_vpn, end);
-                let mut area_pages: Vec<(VirtPageNum, Arc<FrameTracker>)> = Vec::new();
-                while let Some(page) = area.data_frames.pop_first() {
+                GROUP_SHARE.lock().add_area(new_area.groupid);
+                while !area.data_frames.is_empty() {
+                    let page = area.data_frames.pop_first().unwrap();
                     if page.0 >= end_vpn {
-                        area_pages.push((page.0, page.1));
-                    } else {
-                        new_area.data_frames.insert(page.0, page.1);
+                        area.data_frames.insert(page.0, page.1);
+                        break;
                     }
+                    new_area.data_frames.insert(page.0, page.1);
                 }
-                for page in area_pages.iter() {
-                    area.data_frames.insert(page.0, page.1.clone());
-                }
+
                 new_areas.push(new_area);
                 continue;
-            }
-            //修改area中间部分
-            else if start < start_vpn && end >= end_vpn {
+            } else if start < start_vpn && end > end_vpn {
+                //修改area中间部分
                 let mut front_area = MapArea::from_another(area);
                 let mut back_area = MapArea::from_another(area);
                 area.map_perm = map_perm;
                 front_area.vpn_range = VPNRange::new(start, start_vpn);
                 back_area.vpn_range = VPNRange::new(end_vpn, end);
                 area.vpn_range = VPNRange::new(start_vpn, end_vpn);
-                let mut area_pages: Vec<(VirtPageNum, Arc<FrameTracker>)> = Vec::new();
-                while let Some(page) = area.data_frames.pop_first() {
-                    if page.0 >= start_vpn && page.0 < end_vpn {
-                        area_pages.push((page.0, page.1));
-                    } else if page.0 < start_vpn {
-                        front_area.data_frames.insert(page.0, page.1);
-                    } else {
-                        back_area.data_frames.insert(page.0, page.1);
+                GROUP_SHARE.lock().add_area(front_area.groupid);
+                GROUP_SHARE.lock().add_area(back_area.groupid);
+                while !area.data_frames.is_empty() {
+                    let page = area.data_frames.pop_first().unwrap();
+                    if page.0 >= start_vpn {
+                        area.data_frames.insert(page.0, page.1);
+                        break;
                     }
+                    front_area.data_frames.insert(page.0, page.1);
                 }
-                for page in area_pages.iter() {
-                    area.data_frames.insert(page.0, page.1.clone());
+                while !area.data_frames.is_empty() {
+                    let page = area.data_frames.pop_last().unwrap();
+                    if page.0 < end_vpn {
+                        area.data_frames.insert(page.0, page.1);
+                        break;
+                    }
+                    back_area.data_frames.insert(page.0, page.1);
                 }
+
                 new_areas.push(front_area);
                 new_areas.push(back_area);
             }
@@ -565,6 +582,11 @@ impl MemorySetInner {
         for area in new_areas {
             self.areas.push(area);
         }
+        for vpn in start_vpn.0..=end_vpn.0 {
+            self.page_table
+                .set_map_flags(vpn.into(), PTEFlags::from_bits(map_perm.bits()).unwrap());
+        }
+        flush_tlb();
     }
     fn push(&mut self, mut map_area: MapArea, data: Option<&[u8]>) {
         map_area.map(&mut self.page_table);

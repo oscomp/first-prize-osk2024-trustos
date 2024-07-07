@@ -63,19 +63,19 @@ pub fn kernel_stack_position(app_id: usize) -> (usize, usize) {
 }
 ///Kernelstack for app
 pub struct KernelStack {
-    pid: usize,
+    tid: usize,
 }
 
 impl KernelStack {
     ///Create a kernelstack from pid
     pub fn new(tid_handle: &TidHandle) -> Self {
-        let tid = tid_handle.0;
-        let (kernel_stack_bottom, kernel_stack_top) = kernel_stack_position(tid);
-        debug!(
-            "kernel stack pos [{:#x},{:#x})",
-            kernel_stack_bottom, kernel_stack_top
-        );
-        KernelStack { pid: tid_handle.0 }
+        // let tid = tid_handle.0;
+        // let (kernel_stack_bottom, kernel_stack_top) = kernel_stack_position(tid);
+        // debug!(
+        //     "kernel stack pos [{:#x},{:#x})",
+        //     kernel_stack_bottom, kernel_stack_top
+        // );
+        KernelStack { tid: tid_handle.0 }
     }
     #[allow(unused)]
     ///Push a value on top of kernelstack
@@ -92,11 +92,11 @@ impl KernelStack {
     }
     ///Get the value on the top of kernelstack
     pub fn top(&self) -> usize {
-        let (_, kernel_stack_top) = kernel_stack_position(self.pid);
+        let (_, kernel_stack_top) = kernel_stack_position(self.tid);
         kernel_stack_top
     }
     /// Return (bottom, top) of a kernel stack in kernel space.)
     pub fn pos(&self) -> (usize, usize) {
-        kernel_stack_position(self.pid)
+        kernel_stack_position(self.tid)
     }
 }

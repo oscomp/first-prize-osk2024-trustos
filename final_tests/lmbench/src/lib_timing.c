@@ -1016,12 +1016,14 @@ nano(char *s, uint64 n)
 void
 micro(char *s, uint64 n)
 {
+    fprintf(stderr, "[lmbench.micro]\n");
 	struct timeval td;
 	double	micro;
 
 	tvsub(&td, &stop_tv, &start_tv);
 	micro = td.tv_sec * 1000000 + td.tv_usec;
 	micro /= n;
+    fprintf(stderr,"[lmbench.micro] tv.sec:%d,tv.usec:%d\n,micro:%.f\n", td.tv_sec,td.tv_usec,micro);
 	if (micro == 0.0) return;
 	if (!ftiming) ftiming = stderr;
 	fprintf(ftiming, "%s: %.4f microseconds\n", s, micro);

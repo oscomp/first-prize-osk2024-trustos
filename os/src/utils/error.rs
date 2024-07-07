@@ -1,6 +1,9 @@
 #![allow(unused)]
 
-#[derive(Debug, Clone, Copy)]
+use num_enum::FromPrimitive;
+
+#[derive(Debug, Clone, Copy, FromPrimitive)]
+#[repr(i32)]
 pub enum SysErrNo {
     /// Undefined
     EUNDEF = 0,
@@ -84,7 +87,14 @@ pub enum SysErrNo {
     ENOTEMPTY = 39,
     /// Toomany symbolic links encountereds
     ELOOP = 40,
+    /// No data available
+    ENODATA = 61,
+    /// Not supported
+    ENOTSUP = 95,
+    ETIMEDOUT = 110,
     // 后续错误码用不上
+    #[num_enum(default)]
+    Default = 255,
 }
 
 impl SysErrNo {
@@ -131,6 +141,10 @@ impl SysErrNo {
             Self::ENOSYS => "Function not implemented",
             Self::ENOTEMPTY => "Directory not empty",
             Self::ELOOP => "Toomany symbolic links encountereds",
+            Self::ENODATA => " No data available",
+            Self::ENOTSUP => " Not supported",
+            Self::ETIMEDOUT => "Connection timed",
+            Self::Default => panic!("unknown error num! please add!"),
         }
     }
 }
