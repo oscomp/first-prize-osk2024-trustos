@@ -5,8 +5,8 @@ use crate::{
         FileClass, InodeType, Kstat, OpenFlags, Statfs, MNT_TABLE, SEEK_CUR, SEEK_SET,
     },
     mm::{
-        safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
-        translated_str, UserBuffer,
+        get_data, put_data, safe_translated_byte_buffer, translated_byte_buffer, translated_ref,
+        translated_refmut, translated_str, UserBuffer,
     },
     syscall::{FaccessatMode, PollEvents, PollFd, SigSet},
     task::{current_task, current_token, suspend_current_and_run_next},
@@ -1117,23 +1117,27 @@ pub fn sys_pselect6(
 
     let old_mask = inner.sig_pending.get_ref().blocked;
     if sigmask != 0 {
-        inner.sig_pending.get_mut().blocked = *translated_ref(token, sigmask as *const SigSet);
+        // inner.sig_pending.get_mut().blocked = *translated_ref(token, sigmask as *const SigSet);
+        inner.sig_pending.get_mut().blocked = get_data(token, sigmask as *const SigSet);
     }
 
     let nfds = min(nfds, inner.fd_table.get_soft_limit());
 
     let mut using_readfds = if readfds != 0 {
-        *translated_refmut(token, readfds as *mut usize)
+        // *translated_refmut(token, readfds as *mut usize)
+        get_data(token, readfds as *mut usize)
     } else {
         0
     };
     let mut using_writefds = if writefds != 0 {
-        *translated_refmut(token, writefds as *mut usize)
+        // *translated_refmut(token, writefds as *mut usize)
+        get_data(token, writefds as *mut usize)
     } else {
         0
     };
     let mut using_exceptfds = if exceptfds != 0 {
-        *translated_refmut(token, exceptfds as *mut usize)
+        // *translated_refmut(token, exceptfds as *mut usize)
+        get_data(token, exceptfds as *mut usize)
     } else {
         0
     };
@@ -1143,8 +1147,8 @@ pub fn sys_pselect6(
         //为0则永远等待直到完成
         -1
     } else {
-        let timespec = translated_ref(token, timeout as *const Timespec);
-
+        // let timespec = translated_ref(token, timeout as *const Timespec);
+        let timespec = get_data(token, timeout as *const Timespec);
         debug!(
             "[sys_pselect6] waittime is {} sec, {} nsec",
             timespec.tv_sec, timespec.tv_nsec
@@ -1175,10 +1179,7 @@ pub fn sys_pselect6(
             for i in 0..nfds {
                 if using_readfds & (1 << i) != 0 {
                     if let Some(file) = &inner.fd_table.try_get_file(i) {
-                        let file: Arc<dyn File> = match file {
-                            FileClass::File(f) => f.clone(),
-                            FileClass::Abs(f) => f.clone(),
-                        };
+                        let file: Arc<dyn File> = file.any();
                         let event = file.poll(PollEvents::IN);
                         if event.contains(PollEvents::IN) {
                             using_readfds |= 1 << i;
@@ -1200,10 +1201,7 @@ pub fn sys_pselect6(
             for i in 0..nfds {
                 if using_writefds & (1 << i) != 0 {
                     if let Some(file) = &inner.fd_table.try_get_file(i) {
-                        let file: Arc<dyn File> = match file {
-                            FileClass::File(f) => f.clone(),
-                            FileClass::Abs(f) => f.clone(),
-                        };
+                        let file: Arc<dyn File> = file.any();
                         let event = file.poll(PollEvents::OUT);
                         if event.contains(PollEvents::OUT) {
                             using_writefds |= 1 << i;
@@ -1225,10 +1223,7 @@ pub fn sys_pselect6(
             for i in 0..nfds {
                 if using_exceptfds & (1 << i) != 0 {
                     if let Some(file) = &inner.fd_table.try_get_file(i) {
-                        let file: Arc<dyn File> = match file {
-                            FileClass::File(f) => f.clone(),
-                            FileClass::Abs(f) => f.clone(),
-                        };
+                        let file: Arc<dyn File> = file.any();
                         let event = file.poll(PollEvents::ERR);
                         if event.contains(PollEvents::ERR) {
                             using_exceptfds |= 1 << i;
@@ -1248,13 +1243,16 @@ pub fn sys_pselect6(
         //如果有响应了则返回
         if num > 0 {
             if using_readfds != 0 {
-                *translated_refmut(token, readfds as *mut usize) = using_readfds;
+                // *translated_refmut(token, readfds as *mut usize) = using_readfds;
+                put_data(token, readfds as *mut usize, using_readfds);
             }
             if using_writefds != 0 {
-                *translated_refmut(token, writefds as *mut usize) = using_writefds;
+                // *translated_refmut(token, writefds as *mut usize) = using_writefds;
+                put_data(token, writefds as *mut usize, using_writefds);
             }
             if using_exceptfds != 0 {
-                *translated_refmut(token, exceptfds as *mut usize) = using_exceptfds;
+                // *translated_refmut(token, exceptfds as *mut usize) = using_exceptfds;
+                put_data(token, exceptfds as *mut usize, using_exceptfds);
             }
             if sigmask != 0 {
                 inner.sig_pending.get_mut().blocked = old_mask;

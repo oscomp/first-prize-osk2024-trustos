@@ -1,7 +1,10 @@
 //! Implementation of physical and virtual address and page number.
 use super::PageTableEntry;
 use crate::config::mm::{KERNEL_ADDR_OFFSET, PAGE_SIZE, PAGE_SIZE_BITS};
-use core::fmt::{self, Debug, Formatter};
+use core::{
+    fmt::{self, Debug, Formatter},
+    ops::{Add, Sub},
+};
 
 const PA_WIDTH_SV39: usize = 56;
 const VA_WIDTH_SV39: usize = 39;
@@ -149,6 +152,56 @@ impl From<KernelAddr> for PhysPageNum {
     }
 }
 
+impl Add for VirtAddr {
+    type Output = VirtAddr;
+    fn add(self, rhs: Self) -> Self::Output {
+        VirtAddr(self.0 + rhs.0)
+    }
+}
+impl Add<usize> for VirtAddr {
+    type Output = VirtAddr;
+    fn add(self, rhs: usize) -> Self::Output {
+        VirtAddr(self.0 + rhs)
+    }
+}
+impl Sub for VirtAddr {
+    type Output = VirtAddr;
+    fn sub(self, rhs: Self) -> Self::Output {
+        VirtAddr(self.0 - rhs.0)
+    }
+}
+impl Sub<usize> for VirtAddr {
+    type Output = VirtAddr;
+    fn sub(self, rhs: usize) -> Self::Output {
+        VirtAddr(self.0 - rhs)
+    }
+}
+
+impl Add for PhysAddr {
+    type Output = PhysAddr;
+    fn add(self, rhs: Self) -> Self::Output {
+        PhysAddr(self.0 + rhs.0)
+    }
+}
+impl Add<usize> for PhysAddr {
+    type Output = PhysAddr;
+    fn add(self, rhs: usize) -> Self::Output {
+        PhysAddr(self.0 + rhs)
+    }
+}
+impl Sub for PhysAddr {
+    type Output = PhysAddr;
+    fn sub(self, rhs: Self) -> Self::Output {
+        PhysAddr(self.0 - rhs.0)
+    }
+}
+impl Sub<usize> for PhysAddr {
+    type Output = PhysAddr;
+    fn sub(self, rhs: usize) -> Self::Output {
+        PhysAddr(self.0 - rhs)
+    }
+}
+
 /// impl KernelAddr
 impl KernelAddr {
     pub fn as_ref<T>(&self) -> &'static T {
@@ -214,6 +267,12 @@ impl PhysAddr {
     ///Check page aligned
     pub fn aligned(&self) -> bool {
         self.page_offset() == 0
+    }
+    pub fn get_ref<T>(&self) -> &'static T {
+        unsafe { (self.0 as *const T).as_ref().unwrap() }
+    }
+    pub fn get_mut<T>(&self) -> &'static mut T {
+        unsafe { (self.0 as *mut T).as_mut().unwrap() }
     }
 }
 impl From<PhysAddr> for PhysPageNum {
