@@ -23,20 +23,10 @@ use core::cmp::min;
 use core::mem::size_of;
 use log::debug;
 
-pub const AT_FDCWD: isize = -100;
-// pub const FD_LIMIT: usize = 128;
-pub const AT_REMOVEDIR: u32 = 0x200;
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug)]
-pub struct Iovec {
-    /// user space buf starting address
-    pub iov_base: usize,
-    /// number of bytes to transfer
-    pub iov_len: usize,
-}
-unsafe impl Send for Iovec {}
-unsafe impl Sync for Iovec {}
+use super::{
+    Iovec, RLimit, FD_CLOEXEC, F_DUPFD, F_DUPFD_CLOEXEC, F_GETFD, F_GETFL, F_SETFD, F_SETFL,
+    UTIME_NOW, UTIME_OMIT,
+};
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     debug!("[sys_write] fd is {}, len={}", fd, len);
@@ -533,9 +523,6 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
     )
 }
 
-const UTIME_NOW: usize = (1 << 30) - 1;
-const UTIME_OMIT: usize = (1 << 30) - 2;
-
 pub fn sys_utimensat(dirfd: isize, path: *const u8, times: *const u8, _flags: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -585,15 +572,6 @@ pub fn sys_lseek(fd: usize, offset: isize, whence: usize) -> SyscallRet {
     let file = inner.fd_table.get_file(fd).file()?;
     file.lseek(offset, whence)
 }
-
-const F_DUPFD: usize = 0;
-const F_DUPFD_CLOEXEC: usize = 1030;
-const F_GETFD: usize = 1;
-const F_SETFD: usize = 2;
-const F_GETFL: usize = 3;
-const F_SETFL: usize = 4;
-
-const FD_CLOEXEC: usize = 1;
 
 pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
     let task = current_task().unwrap();
@@ -820,14 +798,6 @@ pub fn sys_fsync(fd: usize) -> SyscallRet {
 pub fn sys_sync() -> SyscallRet {
     sync();
     Ok(0)
-}
-
-#[allow(unused)]
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-pub struct RLimit {
-    pub rlim_cur: usize, /* Soft limit */
-    pub rlim_max: usize, /* Hard limit (ceiling for rlim_cur) */
 }
 
 pub fn sys_prlimit(
@@ -1131,19 +1101,16 @@ pub fn sys_pselect6(
     let nfds = min(nfds, inner.fd_table.get_soft_limit());
 
     let mut using_readfds = if readfds != 0 {
-        // *translated_refmut(token, readfds as *mut usize)
         get_data(token, readfds as *mut usize)
     } else {
         0
     };
     let mut using_writefds = if writefds != 0 {
-        // *translated_refmut(token, writefds as *mut usize)
         get_data(token, writefds as *mut usize)
     } else {
         0
     };
     let mut using_exceptfds = if exceptfds != 0 {
-        // *translated_refmut(token, exceptfds as *mut usize)
         get_data(token, exceptfds as *mut usize)
     } else {
         0
@@ -1250,15 +1217,12 @@ pub fn sys_pselect6(
         //如果有响应了则返回
         if num > 0 {
             if using_readfds != 0 {
-                // *translated_refmut(token, readfds as *mut usize) = using_readfds;
                 put_data(token, readfds as *mut usize, using_readfds);
             }
             if using_writefds != 0 {
-                // *translated_refmut(token, writefds as *mut usize) = using_writefds;
                 put_data(token, writefds as *mut usize, using_writefds);
             }
             if using_exceptfds != 0 {
-                // *translated_refmut(token, exceptfds as *mut usize) = using_exceptfds;
                 put_data(token, exceptfds as *mut usize, using_exceptfds);
             }
             if sigmask != 0 {

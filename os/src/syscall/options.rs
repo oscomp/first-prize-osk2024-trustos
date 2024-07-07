@@ -313,3 +313,40 @@ bitflags! {
         const SHM_NORESERVE = 0o10000;
     }
 }
+
+pub const AT_FDCWD: isize = -100;
+pub const AT_REMOVEDIR: u32 = 0x200;
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct Iovec {
+    /// user space buf starting address
+    pub iov_base: usize,
+    /// number of bytes to transfer
+    pub iov_len: usize,
+}
+unsafe impl Send for Iovec {}
+unsafe impl Sync for Iovec {}
+
+// utime
+pub const UTIME_NOW: usize = (1 << 30) - 1;
+pub const UTIME_OMIT: usize = (1 << 30) - 2;
+
+//  fcntl
+pub const F_DUPFD: usize = 0;
+pub const F_DUPFD_CLOEXEC: usize = 1030;
+pub const F_GETFD: usize = 1;
+pub const F_SETFD: usize = 2;
+pub const F_GETFL: usize = 3;
+pub const F_SETFL: usize = 4;
+pub const FD_CLOEXEC: usize = 1;
+
+// rlimit
+
+#[allow(unused)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct RLimit {
+    pub rlim_cur: usize, /* Soft limit */
+    pub rlim_max: usize, /* Hard limit (ceiling for rlim_cur) */
+}
