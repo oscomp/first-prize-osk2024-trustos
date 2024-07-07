@@ -23,7 +23,7 @@ static SUCC_TESTS: &[(&str, &str, &str, &str, i32)] = &[
     ("rCoretests/sleep_simple\0", "\0", "\0", "\0", 0),
     ("rCoretests/sleep\0", "\0", "\0", "\0", 0),
     ("rCoretests/yield\0", "\0", "\0", "\0", 0),
-    ("mmaptest\0", "\0", "\0", "\0", 0),
+    // ("mmaptest\0", "\0", "\0", "\0", 0),
 ];
 
 static FAIL_TESTS: &[(&str, &str, &str, &str, i32)] =

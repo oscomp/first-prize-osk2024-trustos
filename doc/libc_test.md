@@ -35,4 +35,6 @@ FILE *tmpfile(void)
 错误原因: 对于ext4文件,若是只有一个链接且有活跃的fd未关闭,调用unlink时应该将该操作延迟到所有对应的fd全部关闭为止。
 解决方案: 为Ext4Inode添加delay标识变量并实现RAII自动管理
 
-
+#### sys_munmap error
+错误原因: munmmap时只回收了mmap的一个区间的前一部分,mprotect会拆分mmap的区间
+解决方案: 支持拆分区间的回收

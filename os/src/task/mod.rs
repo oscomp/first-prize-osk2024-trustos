@@ -129,6 +129,8 @@ pub fn exit_current_and_run_next(exit_code: i32) {
         if let Some(tasks) = thread_group.get(&task.pid()) {
             if tasks.iter().all(|task| task.inner_lock().is_zombie()) {
                 drop(thread_group);
+                // send_signal_to_thread_group(task.ppid(), SigSet::SIGCHLD);
+                wakeup_parent(task.ppid());
                 let inner = task.inner_lock();
                 inner.memory_set.recycle_data_pages();
                 if inner.sig_pending.get_mut().group_exit_code.is_none() {
