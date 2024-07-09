@@ -245,11 +245,13 @@ impl TaskControlBlock {
 
         // println!("user_sp:{:#X}  argv:{:?}", user_sp, argv);
 
-        //一些初始的环境变量
-        env.push(String::from("SHELL=/user_shell"));
-        env.push(String::from("PWD=/"));
-        env.push(String::from("HOME=/"));
-        env.push(String::from("PATH=/"));
+        if env.is_empty() {
+            //一些初始的环境变量
+            env.push(String::from("SHELL=/user_shell"));
+            env.push(String::from("PWD=/"));
+            env.push(String::from("HOME=/"));
+            env.push(String::from("PATH=/"));
+        }
 
         //环境变量内容入栈
         let mut env_ptr_vec = Vec::new();

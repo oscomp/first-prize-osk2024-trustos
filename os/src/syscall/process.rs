@@ -14,7 +14,7 @@ use crate::{
         task_num, Sysinfo, PROCESS_GROUP,
     },
     timer::{add_timer, calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
-    utils::{get_abs_path, trim_start_slash, SysErrNo, SyscallRet},
+    utils::{find_command_in_busybox, get_abs_path, trim_start_slash, SysErrNo, SyscallRet},
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
@@ -128,6 +128,21 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
         }
     }
     if path.ends_with(".sh") {
+        //.sh文件不是可执行文件，需要用busybox的sh来启动
+        argv_vec.insert(0, String::from("sh"));
+        argv_vec.insert(0, String::from("busybox"));
+        path = String::from("/busybox");
+    }
+    if find_command_in_busybox(path.trim_start_matches("/")) {
+        //如果执行环境变量中的命令的可执行文件，则改为用busybox启动该命令
+        argv_vec.insert(0, String::from("busybox"));
+        path = String::from("/busybox");
+    }
+    if path == "./kirk" {
+        //TODO（ZCH）：猜测启动kirk会启动runltp
+        argv_vec.remove(0);
+        argv_vec.remove(0);
+        argv_vec[0] = String::from("runltp");
         argv_vec.insert(0, String::from("sh"));
         argv_vec.insert(0, String::from("busybox"));
         path = String::from("/busybox");

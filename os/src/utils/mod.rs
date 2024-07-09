@@ -1,8 +1,10 @@
+mod command;
 mod error;
 mod hart;
 mod string;
 use core::arch::asm;
 
+pub use command::*;
 pub use error::*;
 pub use hart::hart_id;
 use log::warn;
