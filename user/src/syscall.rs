@@ -178,11 +178,9 @@ pub fn sys_busyboxsh() -> isize {
         [
             "/busybox\0".as_ptr() as isize,
             [
-                //"busybox\0".as_ptr() as isize,
-                //"sh\0".as_ptr() as isize,
-                //"ltp_testcode.sh\0".as_ptr() as isize,
-                "which\0".as_ptr() as isize,
-                "basename\0".as_ptr() as isize,
+                "busybox\0".as_ptr() as isize,
+                "sh\0".as_ptr() as isize,
+                "ltp_testcode.sh\0".as_ptr() as isize,
                 0,
             ]
             .as_ptr() as isize,

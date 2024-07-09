@@ -138,15 +138,6 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
         argv_vec.insert(0, String::from("busybox"));
         path = String::from("/busybox");
     }
-    if path == "./kirk" {
-        //TODO（ZCH）：猜测启动kirk会启动runltp
-        argv_vec.remove(0);
-        argv_vec.remove(0);
-        argv_vec[0] = String::from("runltp");
-        argv_vec.insert(0, String::from("sh"));
-        argv_vec.insert(0, String::from("busybox"));
-        path = String::from("/busybox");
-    }
     debug!("[sys_execve] path is {},arg is {:?}", path, argv_vec);
     let mut env = Vec::<String>::new();
     loop {
