@@ -1,6 +1,6 @@
 use alloc::sync::Arc;
 
-use crate::sync::SyncUnsafeCell;
+use crate::{drivers::BlockDeviceImpl, sync::SyncUnsafeCell};
 
 use super::{KSigAction, SigSet, SIG_MAX_NUM};
 // struct task_struct {
@@ -40,13 +40,47 @@ impl SigPending {
         let pend = &self.get_ref();
         pend.pending.contains(sig) && !pend.blocked.contains(sig)
     }
+    pub fn blocked(&self) -> SigSet {
+        self.get_ref().blocked
+    }
+    pub fn blocked_mut(&self) -> &mut SigSet {
+        &mut self.get_mut().blocked
+    }
+    pub fn pending(&self) -> SigSet {
+        self.get_mut().pending
+    }
+    pub fn pending_mut(&self) -> &mut SigSet {
+        &mut self.get_mut().pending
+    }
+    pub fn is_pending(&self, sig: SigSet) -> bool {
+        self.get_ref().pending.contains(sig)
+    }
+
+    pub fn action(&self, signo: usize) -> KSigAction {
+        self.get_ref().actions[signo]
+    }
+    pub fn set_action(&self, signo: usize, act: KSigAction) {
+        self.get_mut().actions[signo] = act
+    }
+    pub fn exit_code(&self) -> i32 {
+        self.get_ref().group_exit_code.unwrap()
+    }
+    pub fn is_exited(&self) -> bool {
+        self.get_ref().group_exit_code.is_some()
+    }
+    pub fn not_exited(&self) -> bool {
+        self.get_ref().group_exit_code.is_none()
+    }
+    pub fn set_exit_code(&self, exit_code: i32) {
+        self.get_mut().group_exit_code = Some(exit_code)
+    }
 }
 
 pub struct SigPendingInner {
-    pub pending: SigSet,
-    pub blocked: SigSet,
-    pub actions: [KSigAction; SIG_MAX_NUM + 1],
-    pub group_exit_code: Option<i32>,
+    pending: SigSet,
+    blocked: SigSet,
+    actions: [KSigAction; SIG_MAX_NUM + 1],
+    group_exit_code: Option<i32>,
 }
 
 impl SigPendingInner {
@@ -54,7 +88,7 @@ impl SigPendingInner {
         Self {
             pending: SigSet::empty(),
             blocked: SigSet::empty(),
-            actions: [KSigAction::new(0, false); SIG_MAX_NUM + 1],
+            actions: [KSigAction::default(); SIG_MAX_NUM + 1],
             group_exit_code: None,
         }
     }

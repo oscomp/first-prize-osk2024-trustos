@@ -276,7 +276,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
         if let Some((idx, child)) = pair {
             let found_pid = child.pid();
             let child_inner = child.inner_lock();
-            let exit_code = child_inner.sig_pending.get_ref().group_exit_code.unwrap();
+            let exit_code = child_inner.sig_pending.exit_code();
             if wstatus as usize != 0x0 {
                 debug!(
                     "[sys_wait4] wait pid {}: child {} exit with code {}, wstatus= {:#x}",

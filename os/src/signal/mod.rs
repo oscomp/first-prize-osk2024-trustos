@@ -7,7 +7,7 @@ pub use pending::*;
 pub use signal::*;
 
 use crate::{
-    mm::{translated_ref, translated_refmut},
+    mm::{get_data, put_data, translated_ref, translated_refmut},
     task::{current_task, TaskControlBlock, THREAD_GROUP, TID_TO_TASK},
     trap::TrapContext,
     utils::{SysErrNo, SyscallRet},
@@ -42,7 +42,7 @@ pub fn ready_to_handle_signal(signo: usize) {
         signo,
         SigSet::from_sig(signo)
     );
-    let sig_act = task_inner.sig_pending.get_ref().actions[signo];
+    let sig_act = task_inner.sig_pending.action(signo);
     drop(task_inner);
     drop(task);
     handle_signal(signo, sig_act);
@@ -54,10 +54,14 @@ pub fn handle_signal(signo: usize, sig_action: KSigAction) {
         setup_frame(signo, sig_action);
         let task = current_task().unwrap();
         let task_inner = task.inner_lock();
-        let sig_pending = task_inner.sig_pending.get_mut();
-        sig_pending.blocked |= sig_action.act.sa_mask;
-        sig_pending.blocked |= SigSet::from_sig(signo);
-        sig_pending.pending ^= SigSet::from_sig(signo);
+        let blocked = task_inner.sig_pending.blocked_mut();
+        let pending = task_inner.sig_pending.pending_mut();
+        *blocked |= sig_action.act.sa_mask | SigSet::from_sig(signo);
+        *pending ^= SigSet::from_sig(signo);
+        // let sig_pending = task_inner.sig_pending.get_mut();
+        // sig_pending.blocked |= sig_action.act.sa_mask;
+        // sig_pending.blocked |= SigSet::from_sig(signo);
+        // sig_pending.pending ^= SigSet::from_sig(signo);
     } else {
         // 就在S模式运行,转换成fn(i32)
         debug!("sa_handler:{:#x}", sig_action.act.sa_handler);
@@ -80,15 +84,19 @@ pub fn setup_frame(_signo: usize, sig_action: KSigAction) {
     debug!("a");
     // 保存 Trap 上下文
     user_sp -= core::mem::size_of::<TrapContext>();
-    *translated_refmut(token, user_sp as *mut TrapContext) = *trap_cx;
+    put_data(token, user_sp as *mut TrapContext, *trap_cx);
 
     // signal mask
     user_sp -= core::mem::size_of::<SigSet>();
-    *translated_refmut(token, user_sp as *mut SigSet) = task_inner.sig_pending.get_ref().blocked;
+    put_data(
+        token,
+        user_sp as *mut SigSet,
+        task_inner.sig_pending.blocked(),
+    );
 
     // checkout(Magic Num)
     user_sp -= core::mem::size_of::<usize>();
-    *translated_refmut(token, user_sp as *mut usize) = 0xdeadbeef;
+    put_data(token, user_sp as *mut usize, 0xdeadbeef);
 
     debug!(
         "[setup_frame] sepc={:#x},user_sp={:#x}",
@@ -113,22 +121,21 @@ pub fn restore_frame() -> SyscallRet {
     let trap_cx = task_inner.trap_cx();
     let mut user_sp = trap_cx.x[2];
 
-    let checkout = *translated_ref(token, user_sp as *const usize);
+    let checkout = get_data(token, user_sp as *const usize);
     assert!(checkout == 0xdeadbeef, "restore frame checkout error!");
     user_sp += core::mem::size_of::<usize>();
     // signal mask
-    task_inner.sig_pending.get_mut().blocked = *translated_ref(token, user_sp as *const SigSet);
+    *task_inner.sig_pending.blocked_mut() = get_data(token, user_sp as *const SigSet);
     user_sp += core::mem::size_of::<SigSet>();
     // Trap cx
-    *trap_cx = *translated_ref(token, user_sp as *const TrapContext);
+    *trap_cx = get_data(token, user_sp as *const TrapContext);
     trap_cx.x[10] = trap_cx.origin_a0;
     Ok(trap_cx.x[10])
-    // user_sp += core::mem::size_of::<TrapContext>();
 }
 
 pub fn add_signal(task: Arc<TaskControlBlock>, signal: SigSet) {
     let task_inner = task.inner_lock();
-    task_inner.sig_pending.get_mut().pending |= signal;
+    *task_inner.sig_pending.pending_mut() |= signal;
 }
 
 pub fn send_signal_to_thread_group(pid: usize, sig: SigSet) {

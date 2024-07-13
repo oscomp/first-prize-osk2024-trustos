@@ -1,7 +1,7 @@
 use log::debug;
 
 use crate::{
-    mm::{translated_ref, translated_refmut},
+    mm::{get_data, put_data, translated_ref, translated_refmut},
     signal::{
         restore_frame, send_access_signal, send_signal_to_one_thread_of_thread_group,
         send_signal_to_thread, send_signal_to_thread_group, KSigAction, SigAction, SigOp, SigSet,
@@ -17,9 +17,6 @@ pub fn sys_rt_sigaction(
     act: *const SigAction,
     old_act: *mut SigAction,
 ) -> SyscallRet {
-    if signo > SIG_MAX_NUM {
-        return Err(SysErrNo::EINVAL);
-    }
     debug!(
         "[sys_rt_sigaction] sig is {:?}, act is {:x}, old_act is {:x}",
         SigSet::from_sig(signo),
@@ -30,21 +27,23 @@ pub fn sys_rt_sigaction(
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
     if old_act as usize != 0 {
-        let sig_handler = &task_inner.sig_pending.get_ref().actions[signo].act;
-        *translated_refmut(token, old_act) = *sig_handler;
+        let sig_act = task_inner.sig_pending.action(signo).act;
+        put_data(token, old_act, sig_act);
     }
     if act as usize != 0 {
-        let new_act = *translated_ref(token, act);
-        let new_sig: KSigAction = if new_act.sa_handler == 0 || new_act.sa_handler == 1 {
-            KSigAction::new(signo, false)
+        let new_act = get_data(token, act);
+        let new_sig: KSigAction = if new_act.sa_handler == 0 {
+            KSigAction::default()
+        } else if new_act.sa_handler == 1 {
+            // 忽略
+            KSigAction::ignore()
         } else {
             KSigAction {
                 act: new_act,
                 customed: true,
             }
         };
-        //debug!("signo is {}, new act is {:?}", signo, new_act);
-        task_inner.sig_pending.get_mut().actions[signo] = new_sig;
+        task_inner.sig_pending.set_action(signo, new_sig);
     }
     Ok(0)
 }
@@ -67,17 +66,15 @@ pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) ->
     );
 
     if old_set as usize != 0 {
-        *translated_refmut(token, old_set) = task_inner.sig_pending.get_ref().blocked;
+        put_data(token, old_set, task_inner.sig_pending.blocked())
     }
     if set as usize != 0 {
-        let mask = *translated_ref(token, set);
-
-        //debug!("mask sig: {:?}", mask);
-
+        let mask = get_data(token, set);
+        let blocked = task_inner.sig_pending.blocked_mut();
         match how {
-            SIG_BLOCK => task_inner.sig_pending.get_mut().blocked |= mask,
-            SIG_UNBLOCK => task_inner.sig_pending.get_mut().blocked &= !mask,
-            SIG_SETMASK => task_inner.sig_pending.get_mut().blocked = mask,
+            SIG_BLOCK => *blocked |= mask,
+            SIG_UNBLOCK => *blocked &= !mask,
+            SIG_SETMASK => *blocked = mask,
             _ => return Err(SysErrNo::EINVAL),
         }
     }
@@ -99,8 +96,8 @@ pub fn sys_rt_sigtimedwait(
         let task_inner = task.inner_lock();
         for signum in 1..(SIG_MAX_NUM + 1) {
             let signal = SigSet::from_sig(signum);
-            if sig.contains(signal) && task_inner.sig_pending.get_ref().pending.contains(signal) {
-                task_inner.sig_pending.get_mut().pending &= !signal;
+            if sig.contains(signal) && task_inner.sig_pending.is_pending(signal) {
+                *task_inner.sig_pending.pending_mut() &= !signal;
                 return Ok(signum);
             }
         }
@@ -117,13 +114,12 @@ pub fn sys_rt_sigtimedwait(
 /// 其操作是调用信号处理程序或终止进程
 /// 始终返回 -1
 pub fn sys_rt_sigsuspend(mask: *const SigSet) -> SyscallRet {
-    let token = current_token();
-    let mask = *translated_ref(token, mask);
-
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
-    let old_mask = task_inner.sig_pending.get_mut().blocked;
-    task_inner.sig_pending.get_mut().blocked = mask;
+    let token = task_inner.user_token();
+    let mask = get_data(token, mask);
+    let old_mask = task_inner.sig_pending.blocked();
+    *task_inner.sig_pending.blocked_mut() = mask;
     drop(task_inner);
     drop(task);
     loop {
@@ -131,8 +127,8 @@ pub fn sys_rt_sigsuspend(mask: *const SigSet) -> SyscallRet {
         let task_inner = task.inner_lock();
         for signum in 1..(SIG_MAX_NUM + 1) {
             let signal = SigSet::from_sig(signum);
-            if task_inner.sig_pending.get_ref().pending.contains(signal) {
-                let sigaction = task_inner.sig_pending.get_mut().actions[signum];
+            if task_inner.sig_pending.is_pending(signal) {
+                let sigaction = task_inner.sig_pending.action(signum);
                 match sigaction.act.sa_handler {
                     // 缺省操作
                     0 => {
@@ -144,7 +140,7 @@ pub fn sys_rt_sigsuspend(mask: *const SigSet) -> SyscallRet {
                     1 => {}
                     // 返回到用户的信号处理程序
                     _ => {
-                        task_inner.sig_pending.get_mut().blocked = old_mask;
+                        *task_inner.sig_pending.blocked_mut() = old_mask;
                         return Err(SysErrNo::EINTR);
                     }
                 };

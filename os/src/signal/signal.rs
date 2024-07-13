@@ -1,4 +1,7 @@
-use crate::task::exit_current_and_run_next;
+use crate::{
+    task::{exit_current_and_run_next, suspend_current_and_run_next},
+    utils::backtrace,
+};
 
 /// 仿照Linux signal实现
 pub const SIGHUP: usize = 1; /* Hangup.  */
@@ -108,7 +111,7 @@ impl SigSet {
         if terminate_signals.contains(*self) {
             SigOp::Terminate
         } else if dump_signals.contains(*self) {
-            SigOp::Dump
+            SigOp::CoreDump
         } else if ignore_signals.contains(*self) || self.bits == 0 {
             SigOp::Ignore
         } else if stop_signals.contains(*self) {
@@ -116,7 +119,7 @@ impl SigSet {
         } else if continue_signals.contains(*self) {
             SigOp::Continue
         } else {
-            println!("[kernel] signal {:?}: undefined default operation", self);
+            // println!("[kernel] signal {:?}: undefined default operation", self);
             SigOp::Terminate
         }
     }
@@ -126,13 +129,12 @@ impl SigSet {
     }
 }
 
-// typedef void (*__sighandler_t)(int);
-
 // struct sigaction {
-// 	__sighandler_t sa_handler;
-// 	unsigned long sa_flags;
-// 	void (*sa_restorer)(void);
-// 	sigset_t sa_mask;
+//     void     (*sa_handler)(int);
+//     void     (*sa_sigaction)(int, siginfo_t *, void *);
+//     sigset_t   sa_mask;
+//     int        sa_flags;
+//     void     (*sa_restorer)(void);
 // };
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -145,14 +147,10 @@ pub struct SigAction {
 
 impl SigAction {
     pub fn new(signo: usize) -> Self {
-        let handler: usize = if signo == 0 {
-            0
-        } else {
-            match SigSet::from_sig(signo).default_op() {
-                SigOp::Continue | SigOp::Ignore => 0,
-                SigOp::Stop => 0, // TODO(ZMY) imple StopCurrent
-                SigOp::Terminate | SigOp::Dump => exit_current_and_run_next as usize,
-            }
+        let handler: usize = match SigSet::from_sig(signo).default_op() {
+            SigOp::Continue | SigOp::Ignore => 1,
+            SigOp::Stop => 1,
+            SigOp::Terminate | SigOp::CoreDump => exit_current_and_run_next as usize,
         };
         Self {
             sa_handler: handler,
@@ -176,12 +174,34 @@ impl KSigAction {
             customed,
         }
     }
+    pub fn ignore() -> Self {
+        Self {
+            act: SigAction {
+                sa_handler: 1,
+                sa_flags: 0,
+                sa_restore: 0,
+                sa_mask: SigSet::empty(),
+            },
+            customed: false,
+        }
+    }
+    pub fn default() -> Self {
+        Self {
+            act: SigAction {
+                sa_handler: 0,
+                sa_flags: 0,
+                sa_restore: 0,
+                sa_mask: SigSet::empty(),
+            },
+            customed: false,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SigOp {
     Terminate,
-    Dump,
+    CoreDump,
     Ignore,
     Stop,
     Continue,

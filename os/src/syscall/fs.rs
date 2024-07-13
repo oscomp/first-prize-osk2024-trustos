@@ -1092,10 +1092,10 @@ pub fn sys_pselect6(
 
     debug!("[sys_pselect6] nfds is {}, readfds is {}, writefds is {}, exceptfds is {}, timeout is {}, sigmask is {}",nfds,readfds,writefds,exceptfds,timeout,sigmask);
 
-    let old_mask = inner.sig_pending.get_ref().blocked;
+    let old_mask = inner.sig_pending.blocked();
     if sigmask != 0 {
         // inner.sig_pending.get_mut().blocked = *translated_ref(token, sigmask as *const SigSet);
-        inner.sig_pending.get_mut().blocked = get_data(token, sigmask as *const SigSet);
+        *inner.sig_pending.blocked_mut() = get_data(token, sigmask as *const SigSet);
     }
 
     let nfds = min(nfds, inner.fd_table.get_soft_limit());
@@ -1132,7 +1132,7 @@ pub fn sys_pselect6(
     };
     if waittime == 0 {
         if sigmask != 0 {
-            inner.sig_pending.get_mut().blocked = old_mask;
+            *inner.sig_pending.blocked_mut() = old_mask;
         }
         return Ok(0);
     }
@@ -1226,7 +1226,8 @@ pub fn sys_pselect6(
                 put_data(token, exceptfds as *mut usize, using_exceptfds);
             }
             if sigmask != 0 {
-                inner.sig_pending.get_mut().blocked = old_mask;
+                // inner.sig_pending.get_mut().blocked = old_mask;
+                *inner.sig_pending.blocked_mut() = old_mask;
             }
             return Ok(num);
         }
@@ -1234,7 +1235,8 @@ pub fn sys_pselect6(
         //或者时间到了也可以返回
         if waittime > 0 && get_time_ms() * 1000000 - begin >= waittime as usize {
             if sigmask != 0 {
-                inner.sig_pending.get_mut().blocked = old_mask;
+                // inner.sig_pending.get_mut().blocked = old_mask;
+                *inner.sig_pending.blocked_mut() = old_mask;
             }
             return Ok(0);
         }

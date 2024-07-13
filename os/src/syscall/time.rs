@@ -60,7 +60,8 @@ pub fn sys_settimer(which: usize, new_value: *const u8, old_value: *const u8) ->
         (*timer_inner).timer = *new_timer;
         timer_inner.last_time = TimeVal::now();
         if new_timer.it_value == TimeVal::new(0, 0) {
-            task_inner.sig_pending.get_mut().pending |= SigSet::SIGALRM;
+            // task_inner.sig_pending.get_mut().pending |= SigSet::SIGALRM;
+            *task_inner.sig_pending.pending_mut() |= SigSet::SIGALRM;
             timer_inner.if_first = false;
         } else {
             timer_inner.if_first = true;

@@ -73,7 +73,7 @@ impl TaskControlBlockInner {
         self.status() == TaskStatus::Zombie
     }
     pub fn is_group_exit(&self) -> bool {
-        self.sig_pending.get_ref().group_exit_code.is_some()
+        self.sig_pending.is_exited()
     }
     pub fn alloc_user_res(&mut self) {
         let (_, ustack_top) = self.memory_set.insert_framed_area_with_hint(
@@ -471,18 +471,18 @@ impl TaskControlBlock {
             child_inner.user_stack_top = 0;
             // trap_cx.set_sp(ustack);
             // 设置运行的起始地址和参数以及stack
-            let token = parent_inner.user_token();
-            let entry_point = *translated_ref(token, stack as *const usize);
-            let arg = {
-                let arg_addr = stack + core::mem::size_of::<usize>();
-                *translated_ref(token, arg_addr as *const usize)
-            };
+            // let token = parent_inner.user_token();
+            // let entry_point = *translated_ref(token, stack as *const usize);
+            // let arg = {
+            //     let arg_addr = stack + core::mem::size_of::<usize>();
+            //     *translated_ref(token, arg_addr as *const usize)
+            // };
             // sepc/entry
-            trap_cx.sepc = entry_point;
+            // trap_cx.sepc = entry_point;
             //sp
             trap_cx.x[2] = stack;
             //a0
-            trap_cx.x[10] = arg;
+            // trap_cx.x[10] = arg;
         }
         if flags.contains(CloneFlags::CLONE_SETTLS) {
             // tp
@@ -576,14 +576,14 @@ impl TaskControlBlock {
         if timer_inner.if_first {
             //首次触发
             if now_timeval > timer_inner.last_time + timer_inner.timer.it_value {
-                inner.sig_pending.get_mut().pending |= SigSet::SIGALRM;
+                *inner.sig_pending.pending_mut() |= SigSet::SIGALRM;
                 timer_inner.if_first = false;
                 timer_inner.last_time = now_timeval;
             }
         } else if timer_inner.timer.it_interval != TimeVal::new(0, 0) {
             //间隔触发
             if now_timeval > timer_inner.last_time + timer_inner.timer.it_interval {
-                inner.sig_pending.get_mut().pending |= SigSet::SIGALRM;
+                *inner.sig_pending.pending_mut() |= SigSet::SIGALRM;
                 timer_inner.last_time = now_timeval;
             }
         }
