@@ -7,6 +7,7 @@ use alloc::{
     vec::Vec,
 };
 use lazy_static::*;
+use log::debug;
 use spin::Mutex;
 
 type WaitQueue = VecDeque<Weak<TaskControlBlock>>;
@@ -27,6 +28,7 @@ pub fn futex_wait(pa: PhysAddr) -> bool {
             queue
         });
     }
+    debug!("[futex_wait] blocked!");
     drop(current);
     drop(waitq);
     block_current_and_run_next();

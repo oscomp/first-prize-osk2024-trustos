@@ -140,7 +140,7 @@ impl SigSet {
 #[derive(Clone, Copy, Debug)]
 pub struct SigAction {
     pub sa_handler: usize,
-    pub sa_flags: usize,
+    pub sa_flags: SigActionFlags,
     pub sa_restore: usize,
     pub sa_mask: SigSet,
 }
@@ -149,12 +149,12 @@ impl SigAction {
     pub fn new(signo: usize) -> Self {
         let handler: usize = match SigSet::from_sig(signo).default_op() {
             SigOp::Continue | SigOp::Ignore => 1,
-            SigOp::Stop => 1,
+            SigOp::Stop => 1, // TODO(ZMY): 添加Stop状态和相关函数
             SigOp::Terminate | SigOp::CoreDump => exit_current_and_run_next as usize,
         };
         Self {
             sa_handler: handler,
-            sa_flags: 0,
+            sa_flags: SigActionFlags::empty(),
             sa_restore: 0,
             sa_mask: SigSet::empty(),
         }
@@ -178,7 +178,7 @@ impl KSigAction {
         Self {
             act: SigAction {
                 sa_handler: 1,
-                sa_flags: 0,
+                sa_flags: SigActionFlags::empty(),
                 sa_restore: 0,
                 sa_mask: SigSet::empty(),
             },
@@ -189,7 +189,7 @@ impl KSigAction {
         Self {
             act: SigAction {
                 sa_handler: 0,
-                sa_flags: 0,
+                sa_flags: SigActionFlags::empty(),
                 sa_restore: 0,
                 sa_mask: SigSet::empty(),
             },
@@ -205,4 +205,75 @@ pub enum SigOp {
     Ignore,
     Stop,
     Continue,
+}
+
+bitflags! {
+    /// Bits in `sa_flags' used to denote the default signal action.
+    pub struct SigActionFlags: usize{
+    /// Don't send SIGCHLD when children stop.
+        const SA_NOCLDSTOP = 1		   ;
+    /// Don't create zombie on child death.
+        const SA_NOCLDWAIT = 2		   ;
+    /// Invoke signal-catching function with three arguments instead of one.
+        const SA_SIGINFO   = 4		   ;
+    /// Use signal stack by using `sa_restorer'.
+        const SA_ONSTACK   = 0x08000000;
+    /// Restart syscall on signal return.
+        const SA_RESTART   = 0x10000000;
+    /// Don't automatically block the signal when its handler is being executed.
+        const SA_NODEFER   = 0x40000000;
+    /// Reset to SIG_DFL on entry to handler.
+        const SA_RESETHAND = 0x80000000;
+    /// Historical no-op.
+        const SA_INTERRUPT = 0x20000000;
+    /// Use signal trampoline provided by C library's wrapper function.
+        const SA_RESTORER  = 0x04000000;
+    }
+}
+
+bitflags! {
+    pub struct SignalStackFlags : u32 {
+        const ONSTACK = 1;
+        const DISABLE = 2;
+        const AUTODISARM = 0x80000000;
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct SignalStack {
+    pub sp: usize,
+    pub flags: u32,
+    pub size: usize,
+}
+
+impl SignalStack {
+    pub fn new(sp: usize, size: usize) -> Self {
+        SignalStack {
+            sp,
+            flags: SignalStackFlags::DISABLE.bits,
+            size,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SigInfo {
+    si_signo: u32,
+    si_errno: u32,
+    si_code: u32,
+    // unsupported fields
+    __pad: [u8; 128 - 3 * core::mem::size_of::<u32>()],
+}
+
+impl SigInfo {
+    pub fn new(si_signo: usize, si_errno: usize, si_code: usize) -> Self {
+        Self {
+            si_signo: si_signo as u32,
+            si_errno: si_errno as u32,
+            si_code: si_code as u32,
+            __pad: [0; 128 - 3 * core::mem::size_of::<u32>()],
+        }
+    }
 }

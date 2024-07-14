@@ -4,6 +4,7 @@ use alloc::collections::{BTreeMap, VecDeque};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use lazy_static::*;
+use log::debug;
 use spin::{Mutex, MutexGuard};
 ///A array of `TaskControlBlock` that is thread-safe
 pub struct TaskManager {
@@ -156,6 +157,7 @@ pub fn move_child_process_to_init(ppid: usize) {
 pub fn wakeup_task(task: Arc<TaskControlBlock>) {
     let mut task_inner = task.inner_lock();
     task_inner.task_status = TaskStatus::Ready;
+    debug!("[futex wakeup task] thread={}", task.tid());
     drop(task_inner);
     add_task(task);
 }

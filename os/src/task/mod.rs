@@ -29,7 +29,7 @@ mod tid;
 
 use crate::{
     fs::{open, remove_inode_idx, remove_proc_dir_and_file, root_inode, OpenFlags, NONE_MODE},
-    mm::{translated_refmut, VirtAddr},
+    mm::{put_data, translated_refmut, VirtAddr},
     signal::{send_signal_to_thread_group, SigSet},
 };
 use alloc::{boxed::Box, format, sync::Arc};
@@ -105,7 +105,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     // CLONE_CHILD_CLEARTID
     if inner.clear_child_tid != 0 {
         let token = inner.user_token();
-        *translated_refmut(token, inner.clear_child_tid as *mut u32) = 0;
+        put_data(token, inner.clear_child_tid as *mut u32, 0);
         // 唤醒等待在 child_tid 的进程
         let pa = inner
             .memory_set
@@ -128,7 +128,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
         if let Some(tasks) = thread_group.get(&task.pid()) {
             if tasks.iter().all(|task| task.inner_lock().is_zombie()) {
                 drop(thread_group);
-                // send_signal_to_thread_group(task.ppid(), SigSet::SIGCHLD);
+                send_signal_to_thread_group(task.ppid(), SigSet::SIGCHLD);
                 wakeup_parent(task.ppid());
                 let inner = task.inner_lock();
                 inner.memory_set.recycle_data_pages();

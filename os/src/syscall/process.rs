@@ -2,16 +2,16 @@ use crate::{
     fs::{open, OpenFlags, NONE_MODE},
     logger::{change_log_level, clear_log_buf, console_log_off, console_log_on, unread_size},
     mm::{
-        safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
-        translated_str, PhysAddr, UserBuffer, VirtAddr,
+        get_data, put_data, safe_translated_byte_buffer, translated_byte_buffer, translated_ref,
+        translated_refmut, translated_str, PhysAddr, UserBuffer, VirtAddr,
     },
-    signal::{check_if_any_sig_for_current_task, ready_to_handle_signal},
+    signal::{check_if_any_sig_for_current_task, handle_signal},
     syscall::{CloneFlags, Utsname},
     task::{
         add_task, current_task, current_token, exit_current_and_run_next,
         exit_current_group_and_run_next, futex_requeue, futex_wait, futex_wake_up,
-        move_child_process_to_init, remove_all_from_thread_group, suspend_current_and_run_next,
-        task_num, Sysinfo, PROCESS_GROUP,
+        move_child_process_to_init, ready_procs_num, remove_all_from_thread_group,
+        suspend_current_and_run_next, task_num, Sysinfo, PROCESS_GROUP,
     },
     timer::{add_timer, calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
     utils::{get_abs_path, trim_start_slash, SysErrNo, SyscallRet},
@@ -184,8 +184,8 @@ pub fn sys_futex(
 ) -> SyscallRet {
     let cmd = FutexCmd::try_from_primitive(futex_op & 0x7f).unwrap();
     debug!(
-        "[sys_futex] uaddr = {:#x}, cmd = {:?}, val = {}",
-        uaddr as usize, cmd, val
+        "[sys_futex] uaddr = {:#x}, cmd = {:?}, val = {},timeout={:#x}",
+        uaddr as usize, cmd, val, timeout as usize
     );
     if uaddr.align_offset(4) != 0 {
         return Err(SysErrNo::EINVAL);
@@ -209,13 +209,16 @@ pub fn sys_futex(
     drop(task);
     match cmd {
         FutexCmd::FUTEX_WAIT => {
-            let futex_word = *translated_ref(token, uaddr);
+            let futex_word = get_data(token, uaddr);
             if futex_word != val {
                 return Err(SysErrNo::EAGAIN);
             }
             if !timeout.is_null() {
-                let timeout = *translated_ref(token, timeout);
-                debug!("[sys_futex] timeout = {:?}", timeout);
+                let timeout = get_data(token, timeout);
+                debug!(
+                    "[sys_futex] futex_word = {},timeout={:?}",
+                    futex_word, timeout
+                );
                 add_timer(get_time_spec() + timeout, current_task().unwrap());
             }
             if futex_wait(pa) {
@@ -240,7 +243,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
     //assert!(options == 0, "not support options yet");
     //默认所有进程都在同一个组
     debug!(
-        "[sys_wait4] pid is {},wstatus is {}, options is {}",
+        "[sys_wait4] pid is {},wstatus is {:#x}, options is {}",
         pid, wstatus as usize, options
     );
     loop {
@@ -282,7 +285,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
                     "[sys_wait4] wait pid {}: child {} exit with code {}, wstatus= {:#x}",
                     pid, found_pid, exit_code, wstatus as usize
                 );
-                *translated_refmut(task_inner.memory_set.token(), wstatus) = exit_code << 8;
+                put_data(task_inner.memory_set.token(), wstatus, exit_code << 8);
             }
             drop(child_inner);
             // 从父进程的子进程组移除
@@ -337,7 +340,7 @@ pub fn sys_nanosleep(req: *const u8, rem: *const u8) -> SyscallRet {
                 );
                 buffer.write(calculate_left_timespec(endtime).as_bytes());
             }
-            ready_to_handle_signal(signo);
+            handle_signal(signo);
         }
         suspend_current_and_run_next();
     }
@@ -534,7 +537,7 @@ pub fn sys_clock_nanosleep(
                 );
                 buffer.write(calculate_left_timespec(endtime).as_bytes());
             }
-            ready_to_handle_signal(signo);
+            handle_signal(signo);
         }
         suspend_current_and_run_next();
     }

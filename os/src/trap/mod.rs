@@ -15,7 +15,7 @@ mod context;
 
 use crate::{
     mm::{VirtAddr, VirtPageNum},
-    signal::{check_if_any_sig_for_current_task, ready_to_handle_signal},
+    signal::{check_if_any_sig_for_current_task, handle_signal},
     syscall::{syscall, Syscall},
     task::{
         current_task, current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next,
@@ -32,6 +32,8 @@ use riscv::register::{
     sstatus::{self, FS},
     stval, stvec,
 };
+
+pub use context::*;
 
 global_asm!(include_str!("trap.S"));
 
@@ -85,15 +87,22 @@ pub fn trap_handler() {
             // jump to next instruction anyway
             let mut cx = current_trap_cx();
             cx.sepc += 4;
-            let syscall_id = Syscall::from(cx.x[17]);
+            let syscall_id = Syscall::from(cx.gp.x[17]);
             // get system call return value
             let result = syscall(
-                cx.x[17],
-                [cx.x[10], cx.x[11], cx.x[12], cx.x[13], cx.x[14], cx.x[15]],
+                cx.gp.x[17],
+                [
+                    cx.gp.x[10],
+                    cx.gp.x[11],
+                    cx.gp.x[12],
+                    cx.gp.x[13],
+                    cx.gp.x[14],
+                    cx.gp.x[15],
+                ],
             );
             // cx is changed during sys_exec, so we have to call it again
             cx = current_trap_cx();
-            cx.x[10] = match result {
+            cx.gp.x[10] = match result {
                 Ok(res) => res,
                 Err(errno) => -(errno as isize) as usize,
             };
@@ -181,10 +190,6 @@ pub fn trap_handler() {
     }
     //检查定时器
     current_task().unwrap().check_timer();
-    //检查信号
-    if let Some(signo) = check_if_any_sig_for_current_task() {
-        ready_to_handle_signal(signo);
-    }
 
     //记录内核空间花费CPU时间，同时准备用户空间花费CPU时间
     current_task()
@@ -192,6 +197,11 @@ pub fn trap_handler() {
         .inner_lock()
         .time_data
         .update_stime();
+
+    //检查信号
+    if let Some(signo) = check_if_any_sig_for_current_task() {
+        handle_signal(signo);
+    }
 
     // debug!("in trap handler,return to user space");
     // 手动内联trap_return
@@ -206,8 +216,6 @@ pub fn trap_handler() {
         __return_to_user(trap_cx);
     }
 }
-
-pub use context::TrapContext;
 
 #[no_mangle]
 /// set the new addr of __restore asm function in TRAMPOLINE page,

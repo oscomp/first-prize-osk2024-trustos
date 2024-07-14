@@ -29,7 +29,7 @@ use super::{
 };
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
-    debug!("[sys_write] fd is {}, len={}", fd, len);
+    // debug!("[sys_write] fd is {}, len={}", fd, len);
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
@@ -476,7 +476,7 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
 
     // let base_path = inner.get_cwd(dirfd, &path)?;
     let abs_path = inner.get_abs_path(dirfd, &path)?;
-    debug!("[sys_fstatat] abs_path={}", &abs_path);
+    // debug!("[sys_fstatat] abs_path={}", &abs_path);
     let file = open(&abs_path, OpenFlags::O_RDONLY, NONE_MODE)?.any();
     let kstat = file.fstat();
     kst.write(kstat.as_bytes());
@@ -577,7 +577,7 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
 
-    debug!("[sys_fcntl] fd is {}, cmd is {}, arg is {}", fd, cmd, arg);
+    // debug!("[sys_fcntl] fd is {}, cmd is {}, arg is {}", fd, cmd, arg);
 
     if fd >= inner.fd_table.len() || inner.fd_table.try_get_file(fd).is_none() {
         return Err(SysErrNo::EINVAL);

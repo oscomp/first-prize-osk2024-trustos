@@ -13,8 +13,9 @@ use crate::{
         DEFAULT_FILE_MODE,
     },
     mm::{
-        flush_tlb, translated_ref, translated_refmut, MapArea, MapAreaType, MapPermission, MapType,
-        MemorySet, MemorySetInner, PhysPageNum, UserBuffer, VPNRange, VirtAddr, VirtPageNum,
+        flush_tlb, get_data, translated_ref, translated_refmut, MapArea, MapAreaType,
+        MapPermission, MapType, MemorySet, MemorySetInner, PhysPageNum, UserBuffer, VPNRange,
+        VirtAddr, VirtPageNum,
     },
     signal::{SigPending, SigSet},
     syscall::{CloneFlags, MapedSharedMemory},
@@ -25,6 +26,7 @@ use crate::{
 };
 use alloc::{format, string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
+use log::debug;
 use spin::{Mutex, MutexGuard};
 
 pub struct TaskControlBlock {
@@ -457,11 +459,12 @@ impl TaskControlBlock {
             // fork
             child_inner.clone_user_res(&parent_inner);
             // for child process, fork returns 0
-            child_inner.trap_cx().x[10] = 0;
+            child_inner.trap_cx().gp.x[10] = 0;
         }
 
         let trap_cx = child_inner.trap_cx();
         trap_cx.kernel_sp = kernel_stack_top;
+
         if stack != 0 {
             // 移除分配的stack
             let ustack = child_inner.user_stack_top;
@@ -469,24 +472,21 @@ impl TaskControlBlock {
                 .memory_set
                 .remove_area_with_start_vpn(VirtAddr::from(ustack - USER_STACK_SIZE).floor());
             child_inner.user_stack_top = 0;
-            // trap_cx.set_sp(ustack);
             // 设置运行的起始地址和参数以及stack
-            // let token = parent_inner.user_token();
-            // let entry_point = *translated_ref(token, stack as *const usize);
-            // let arg = {
-            //     let arg_addr = stack + core::mem::size_of::<usize>();
-            //     *translated_ref(token, arg_addr as *const usize)
-            // };
+            let token = parent_inner.user_token();
+            let entry_point = get_data(token, stack as *const usize);
+            let arg = get_data(token, (stack + 8) as *const usize);
             // sepc/entry
-            // trap_cx.sepc = entry_point;
-            //sp
-            trap_cx.x[2] = stack;
+            debug!("[new thread] entry_point:{:#x}", entry_point);
+            trap_cx.sepc = entry_point;
             //a0
-            // trap_cx.x[10] = arg;
+            trap_cx.gp.x[10] = arg;
+            //sp
+            trap_cx.set_sp(stack + 16);
         }
         if flags.contains(CloneFlags::CLONE_SETTLS) {
             // tp
-            trap_cx.x[4] = tls;
+            trap_cx.gp.x[4] = tls;
         }
         // CLONE_CHILD_SETTID
         if flags.contains(CloneFlags::CLONE_CHILD_SETTID) {

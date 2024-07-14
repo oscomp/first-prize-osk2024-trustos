@@ -9,7 +9,7 @@ use crate::{
     },
     task::{current_task, current_token, suspend_current_and_run_next},
     timer::{get_time_spec, Timespec},
-    utils::{SysErrNo, SyscallRet},
+    utils::{backtrace, SysErrNo, SyscallRet},
 };
 
 pub fn sys_rt_sigaction(
@@ -33,7 +33,7 @@ pub fn sys_rt_sigaction(
     if act as usize != 0 {
         let new_act = get_data(token, act);
         let new_sig: KSigAction = if new_act.sa_handler == 0 {
-            KSigAction::default()
+            KSigAction::new(signo, false)
         } else if new_act.sa_handler == 1 {
             // 忽略
             KSigAction::ignore()
@@ -64,6 +64,7 @@ pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) ->
         "[sys_sigprocmask] how is {}, set is {:x}, old_set is {:x}",
         how, set as usize, old_set as usize
     );
+    backtrace();
 
     if old_set as usize != 0 {
         put_data(token, old_set, task_inner.sig_pending.blocked())
@@ -87,11 +88,15 @@ pub fn sys_rt_sigtimedwait(
     timeout: *const Timespec,
 ) -> SyscallRet {
     let token = current_token();
-    let sig = *translated_ref(token, sig);
-    let timeout = *translated_ref(token, timeout);
+    let sig = get_data(token, sig);
+    let timeout = get_data(token, timeout);
 
     let end_time = timeout + get_time_spec();
     loop {
+        // debug!(
+        //     "[sys_rt_sigtimedwait] sig={:?}, info:{:#x}, timeout={:?}",
+        //     sig, _info, timeout
+        // );
         let task = current_task().unwrap();
         let task_inner = task.inner_lock();
         for signum in 1..(SIG_MAX_NUM + 1) {
