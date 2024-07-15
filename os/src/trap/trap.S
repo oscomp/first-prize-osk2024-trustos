@@ -72,64 +72,13 @@ __trap_from_user:
     ld s10, 46*8(sp)
     ld s11, 47*8(sp)
     # load kernel fp
-    # ld fp, 48*8(sp)
+    ld fp, 48*8(sp)
     ld tp, 49*8(sp)
     ld sp, 34*8(sp)
     # return to kernel ra
     ret  
 
 # kernel -> user
-__return_to_user_for_new_task_once:
-    # a0: *TrapContext in user space(Constant); a1: user space token
-    # switch to user space
-
-    # let sscratch store the trap context's address
-    csrw sscratch, a0
-    # save kernel callee-saved regs
-    sd sp, 34*8(a0)
-    # sd ra, 35*8(a0)
-    sd s0, 36*8(a0)
-    sd s1, 37*8(a0)
-    sd s2, 38*8(a0)
-    sd s3, 39*8(a0)
-    sd s4, 40*8(a0)
-    sd s5, 41*8(a0)
-    sd s6, 42*8(a0)
-    sd s7, 43*8(a0)
-    sd s8, 44*8(a0)
-    sd s9, 45*8(a0)
-    sd s10, 46*8(a0)
-    sd s11, 47*8(a0)
-    # sd fp, 48*8(a0)
-    sd tp, 49*8(a0)
-
-    mv sp, a0
-    # now sp points to TrapContext in kernel space, start restoring based on it
-    # restore sstatus/sepc
-    ld t0, 83*8(sp)
-    csrw fcsr, t0
-    ld t0, 32*8(sp)
-    ld t1, 33*8(sp)
-    csrw sstatus, t0
-    csrw sepc, t1
-    # restore general purpose registers except x0/sp/
-    ld x1, 1*8(sp)
-    .set n, 3
-    .rept 29
-        LOAD_GP %n
-        .set n, n+1
-    .endr
-    .set n, 0
-    .set m, FP_START
-    .rept 32
-        LOAD_FP %n, %m
-        .set n, n+1
-        .set m, m+1
-    .endr
-    # back to user stack
-    ld sp, 2*8(sp)
-    sret
-    
 __return_to_user:
     # a0: *TrapContext in user space(Constant); a1: user space token
     # switch to user space
@@ -137,8 +86,8 @@ __return_to_user:
     # let sscratch store the trap context's address
     csrw sscratch, a0
     # save kernel callee-saved regs
-    sd s0, 34*8(a0)
-    # sd ra, 35*8(a0)
+    sd sp, 34*8(a0)
+    sd ra, 35*8(a0)
     sd s0, 36*8(a0)
     sd s1, 37*8(a0)
     sd s2, 38*8(a0)
@@ -151,7 +100,7 @@ __return_to_user:
     sd s9, 45*8(a0)
     sd s10, 46*8(a0)
     sd s11, 47*8(a0)
-    # sd fp, 48*8(a0)
+    sd fp, 48*8(a0)
     sd tp, 49*8(a0)
 
     mv sp, a0

@@ -3,14 +3,13 @@ use crate::{
     logger::{change_log_level, clear_log_buf, console_log_off, console_log_on, unread_size},
     mm::{
         get_data, put_data, safe_translated_byte_buffer, translated_byte_buffer, translated_ref,
-        translated_refmut, translated_str, PhysAddr, UserBuffer, VirtAddr,
+        translated_str, PhysAddr, UserBuffer, VirtAddr,
     },
     signal::{check_if_any_sig_for_current_task, handle_signal},
     syscall::{CloneFlags, Utsname},
     task::{
-        add_task, current_task, current_token, exit_current_and_run_next,
-        exit_current_group_and_run_next, futex_requeue, futex_wait, futex_wake_up,
-        move_child_process_to_init, ready_procs_num, remove_all_from_thread_group,
+        add_task, current_task, current_token, exit_current, exit_current_group, futex_requeue,
+        futex_wait, futex_wake_up, move_child_process_to_init, remove_all_from_thread_group,
         suspend_current_and_run_next, task_num, Sysinfo, PROCESS_GROUP,
     },
     timer::{add_timer, calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
@@ -24,14 +23,24 @@ use super::SyslogType;
 use crate::logger::{read_all_log_buf, read_clear_log_buf, read_log_buf, LOG_BUF_LEN};
 use log::debug;
 
-pub fn sys_exit(exit_code: i32) -> ! {
-    exit_current_and_run_next(exit_code);
-    panic!("Unreachable in sys_exit!");
+// pub fn sys_exit(exit_code: i32) -> ! {
+//     exit_current_and_run_next(exit_code);
+//     panic!("Unreachable in sys_exit!");
+// }
+
+// pub fn sys_exit_group(exit_code: i32) -> ! {
+//     exit_current_group_and_run_next(exit_code);
+//     panic!("Unreachable in sys_exit!");
+// }
+
+pub fn sys_exit(exit_code: i32) -> SyscallRet {
+    exit_current(exit_code);
+    Ok(0)
 }
 
-pub fn sys_exit_group(exit_code: i32) -> ! {
-    exit_current_group_and_run_next(exit_code);
-    panic!("Unreachable in sys_exit!");
+pub fn sys_exit_group(exit_code: i32) -> SyscallRet {
+    exit_current_group(exit_code);
+    Ok(0)
 }
 
 pub fn sys_sched_yield() -> SyscallRet {

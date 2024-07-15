@@ -1,6 +1,6 @@
 use alloc::sync::Arc;
 
-use crate::{drivers::BlockDeviceImpl, sync::SyncUnsafeCell};
+use crate::sync::SyncUnsafeCell;
 
 use super::{KSigAction, SigSet, SIG_MAX_NUM};
 // struct task_struct {

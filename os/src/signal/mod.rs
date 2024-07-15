@@ -11,11 +11,9 @@ pub use signal::*;
 
 use crate::{
     config::mm::USER_STACK_SIZE,
-    mm::{get_data, put_data, translated_ref, translated_refmut},
-    task::{
-        current_task, exit_current_group_and_run_next, TaskControlBlock, THREAD_GROUP, TID_TO_TASK,
-    },
-    trap::{MachineContext, TrapContext, UserContext},
+    mm::{get_data, put_data},
+    task::{current_task, TaskControlBlock, THREAD_GROUP, TID_TO_TASK},
+    trap::{MachineContext, UserContext},
     utils::{SysErrNo, SyscallRet},
 };
 
@@ -81,7 +79,7 @@ pub fn handle_signal(signo: usize) {
     } else {
         // 就在S模式运行,转换成fn(i32)
         debug!("sa_handler:{:#x}", sig_action.act.sa_handler);
-        if sig_action.act.sa_handler != 1 {
+        if sig_action.act.sa_handler != 1 && sig_action.act.sa_handler != 0 {
             let handler: fn(i32) =
                 unsafe { core::mem::transmute(sig_action.act.sa_handler as *const ()) };
             handler(signo as i32);
@@ -92,6 +90,8 @@ pub fn handle_signal(signo: usize) {
 /// 构建这个帧的目的就是为了执行完信号处理程序后返回到内核态，
 /// 并恢复原来内核栈的内容
 pub fn setup_frame(signo: usize, sig_action: KSigAction) {
+    debug!("customed sa_handler={:#x}", sig_action.act.sa_handler);
+
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
@@ -181,7 +181,6 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
     trap_cx.gp.x[10] = signo;
     // sp
     trap_cx.set_sp(user_sp);
-    debug!("customed sa_handler={:#x}", sig_action.act.sa_handler);
     // 修改Trap
     trap_cx.sepc = sig_action.act.sa_handler;
     // ra
@@ -193,7 +192,7 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
         sig_action.act.sa_restore
     } else {
         sigreturn_trampoline as usize
-    }
+    };
 }
 /// 恢复栈帧
 pub fn restore_frame() -> SyscallRet {

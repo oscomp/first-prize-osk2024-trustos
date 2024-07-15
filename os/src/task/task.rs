@@ -8,23 +8,19 @@ use crate::{
     config::mm::{
         PAGE_SIZE, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP, USER_TRAP_CONTEXT_TOP,
     },
-    fs::{
-        create_cmdline, create_proc_dir_and_file, open, FdTable, File, FsInfo, DEFAULT_DIR_MODE,
-        DEFAULT_FILE_MODE,
-    },
+    fs::{create_cmdline, create_proc_dir_and_file, FdTable, FsInfo},
     mm::{
-        flush_tlb, get_data, translated_ref, translated_refmut, MapArea, MapAreaType,
-        MapPermission, MapType, MemorySet, MemorySetInner, PhysPageNum, UserBuffer, VPNRange,
-        VirtAddr, VirtPageNum,
+        flush_tlb, get_data, translated_refmut, MapArea, MapAreaType, MapPermission, MapType,
+        MemorySet, MemorySetInner, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
     },
     signal::{SigPending, SigSet},
     syscall::{CloneFlags, MapedSharedMemory},
-    task::{insert_into_thread_group, OpenFlags},
-    timer::{get_time, TimeData, TimeVal, Timer},
-    trap::{trap_handler, TrapContext},
+    task::insert_into_thread_group,
+    timer::{TimeData, TimeVal, Timer},
+    trap::TrapContext,
     utils::{get_abs_path, is_abs_path, SysErrNo},
 };
-use alloc::{format, string::String, sync::Arc, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
 use log::debug;
 use spin::{Mutex, MutexGuard};
@@ -191,7 +187,7 @@ impl TaskControlBlock {
                 trap_cx_ppn: 0.into(),
                 trap_cx_bottom: 0,
                 user_stack_top: 0,
-                task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+                task_cx: TaskContext::goto_trap_loop(kernel_stack_top),
                 task_status: TaskStatus::Ready,
                 memory_set: Arc::new(MemorySet::new(memory_set)),
                 shms: Vec::new(),
@@ -215,7 +211,7 @@ impl TaskControlBlock {
             entry_point,
             task_inner.user_stack_top,
             kernel_stack_top,
-            trap_handler as usize,
+            // trap_handler as usize,
         );
         drop(task_inner);
         task
@@ -333,7 +329,7 @@ impl TaskControlBlock {
             entry_point,
             user_sp,
             self.kernel_stack.top(),
-            trap_handler as usize,
+            // trap_handler as usize,
         );
         *inner.trap_cx() = trap_cx;
         // debug!("task.exec.tid={}", self.tid.0);
@@ -428,7 +424,7 @@ impl TaskControlBlock {
                 trap_cx_ppn: 0.into(),
                 trap_cx_bottom: 0,
                 user_stack_top: 0,
-                task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+                task_cx: TaskContext::goto_trap_loop(kernel_stack_top),
                 task_status: TaskStatus::Ready,
                 memory_set,
                 shms: parent_inner.shms.clone(),

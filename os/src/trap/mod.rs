@@ -18,7 +18,7 @@ use crate::{
     signal::{check_if_any_sig_for_current_task, handle_signal},
     syscall::{syscall, Syscall},
     task::{
-        current_task, current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next,
+        current_task, current_trap_cx, exit_current, handle_exit, suspend_current_and_run_next,
     },
     timer::{check_timer, set_next_trigger},
     utils::{backtrace, hart_id},
@@ -137,7 +137,8 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
                 // page fault exit code
-                exit_current_and_run_next(-2);
+                // exit_current_and_run_next(-2);
+                exit_current(-2);
             }
         }
         Trap::Exception(Exception::StoreFault)
@@ -152,7 +153,8 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
             // page fault exit code
-            exit_current_and_run_next(-2);
+            // exit_current_and_run_next(-2);
+            exit_current(-2);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
             backtrace();
@@ -162,7 +164,8 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
             // illegal instruction exit code
-            exit_current_and_run_next(-3);
+            // exit_current_and_run_next(-3);
+            exit_current(-3);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
             // 检查futex操作是否超时
@@ -198,13 +201,34 @@ pub fn trap_handler() {
         .time_data
         .update_stime();
 
+    // trap_return();
+
+    //检查信号
+    // if let Some(signo) = check_if_any_sig_for_current_task() {
+    //     handle_signal(signo);
+    // }
+
+    // debug!("in trap handler,return to user space");
+    // 手动内联trap_return
+    // set_user_trap_entry();
+    // extern "C" {
+    //     #[allow(improper_ctypes)]
+    //     fn __return_to_user(cx: *mut TrapContext);
+    // }
+    // unsafe {
+    // 方便调试进入__return_to_user
+    //     let trap_cx = current_trap_cx();
+    //     __return_to_user(trap_cx);
+    // }
+}
+
+#[no_mangle]
+pub fn trap_return() {
     //检查信号
     if let Some(signo) = check_if_any_sig_for_current_task() {
         handle_signal(signo);
     }
 
-    // debug!("in trap handler,return to user space");
-    // 手动内联trap_return
     set_user_trap_entry();
     extern "C" {
         #[allow(improper_ctypes)]
@@ -218,19 +242,31 @@ pub fn trap_handler() {
 }
 
 #[no_mangle]
+pub fn trap_loop() -> ! {
+    loop {
+        trap_return();
+        trap_handler();
+        if current_task().unwrap().inner_lock().is_zombie() {
+            break;
+        }
+    }
+    handle_exit();
+}
+
+// #[no_mangle]
 /// set the new addr of __restore asm function in TRAMPOLINE page,
 /// set the reg a0 = trap_cx_ptr, reg a1 = phy addr of usr page table,
 /// finally, jump to new addr of __restore asm function
-pub fn trap_return_for_new_task_once() {
-    set_user_trap_entry();
-    extern "C" {
-        #[allow(improper_ctypes)]
-        fn __return_to_user_for_new_task_once(cx: *mut TrapContext);
-    }
-    unsafe {
-        __return_to_user_for_new_task_once(current_trap_cx());
-    }
-}
+// pub fn trap_return_for_new_task_once() {
+//     set_user_trap_entry();
+//     extern "C" {
+//         #[allow(improper_ctypes)]
+//         fn __return_to_user_for_new_task_once(cx: *mut TrapContext);
+//     }
+//     unsafe {
+//         __return_to_user_for_new_task_once(current_trap_cx());
+//     }
+// }
 
 #[no_mangle]
 pub fn trap_from_kernel() -> ! {

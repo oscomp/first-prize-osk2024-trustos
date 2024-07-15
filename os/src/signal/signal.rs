@@ -1,7 +1,4 @@
-use crate::{
-    task::{exit_current_and_run_next, suspend_current_and_run_next},
-    utils::backtrace,
-};
+use crate::task::exit_current;
 
 /// 仿照Linux signal实现
 pub const SIGHUP: usize = 1; /* Hangup.  */
@@ -150,7 +147,7 @@ impl SigAction {
         let handler: usize = match SigSet::from_sig(signo).default_op() {
             SigOp::Continue | SigOp::Ignore => 1,
             SigOp::Stop => 1, // TODO(ZMY): 添加Stop状态和相关函数
-            SigOp::Terminate | SigOp::CoreDump => exit_current_and_run_next as usize,
+            SigOp::Terminate | SigOp::CoreDump => exit_current as usize,
         };
         Self {
             sa_handler: handler,

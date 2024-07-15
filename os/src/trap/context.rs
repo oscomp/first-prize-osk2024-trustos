@@ -3,6 +3,8 @@ use riscv::register::sstatus::{self, Sstatus, SPP};
 
 use crate::signal::{SigSet, SignalStack};
 
+use super::trap_loop;
+
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy)]
 pub struct GeneralRegs {
@@ -72,7 +74,7 @@ impl TrapContext {
         entry: usize,
         sp: usize,
         kernel_sp: usize,
-        trap_handler: usize,
+        // trap_handler: usize,
     ) -> Self {
         let mut sstatus = sstatus::read();
         sstatus.set_spp(SPP::User);
@@ -82,7 +84,7 @@ impl TrapContext {
             sstatus,
             sepc: entry,
             kernel_sp,
-            kernel_ra: trap_handler,
+            kernel_ra: trap_loop as usize,
             kernel_s: [0; 12],
             kernel_fp: 0,
             kernel_tp: 0,

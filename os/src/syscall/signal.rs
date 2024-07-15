@@ -1,7 +1,7 @@
 use log::debug;
 
 use crate::{
-    mm::{get_data, put_data, translated_ref, translated_refmut},
+    mm::{get_data, put_data},
     signal::{
         restore_frame, send_access_signal, send_signal_to_one_thread_of_thread_group,
         send_signal_to_thread, send_signal_to_thread_group, KSigAction, SigAction, SigOp, SigSet,
@@ -9,7 +9,7 @@ use crate::{
     },
     task::{current_task, current_token, suspend_current_and_run_next},
     timer::{get_time_spec, Timespec},
-    utils::{backtrace, SysErrNo, SyscallRet},
+    utils::{SysErrNo, SyscallRet},
 };
 
 pub fn sys_rt_sigaction(
@@ -64,7 +64,7 @@ pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) ->
         "[sys_sigprocmask] how is {}, set is {:x}, old_set is {:x}",
         how, set as usize, old_set as usize
     );
-    backtrace();
+    // backtrace();
 
     if old_set as usize != 0 {
         put_data(token, old_set, task_inner.sig_pending.blocked())
