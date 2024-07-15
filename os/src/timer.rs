@@ -188,7 +188,7 @@ pub struct Timer {
 pub struct TimerInner {
     pub timer: Itimerval,
     pub last_time: TimeVal,
-    pub if_first: bool,
+    pub first: bool,
 }
 
 impl TimerInner {
@@ -196,7 +196,7 @@ impl TimerInner {
         Self {
             timer: Itimerval::new(),
             last_time: TimeVal::new(0, 0),
-            if_first: false,
+            first: false,
         }
     }
 }
@@ -207,14 +207,35 @@ impl Timer {
             inner: SyncUnsafeCell::new(TimerInner::new()),
         }
     }
-
-    pub fn get_mut(&self) -> &mut TimerInner {
-        self.inner.get_unchecked_mut()
+    pub fn as_bytes(&self) -> &[u8] {
+        self.inner.get_unchecked_ref().timer.as_bytes()
+    }
+    pub fn set_timer(&self, new: Itimerval) {
+        self.inner.get_unchecked_mut().timer = new;
+    }
+    pub fn set_last_time(&self, last_time: TimeVal) {
+        self.inner.get_unchecked_mut().last_time = last_time;
+    }
+    pub fn set_first_trigger(&self, first: bool) {
+        self.inner.get_unchecked_mut().first = first;
+    }
+    pub fn first_trigger(&self) -> bool {
+        self.inner.get_unchecked_ref().first
+    }
+    pub fn last_time(&self) -> TimeVal {
+        self.inner.get_unchecked_ref().last_time
+    }
+    pub fn timer(&self) -> Itimerval {
+        self.inner.get_unchecked_ref().timer
     }
 
-    pub fn get_ref(&self) -> &TimerInner {
-        self.inner.get_unchecked_ref()
-    }
+    // pub fn get_mut(&self) -> &mut TimerInner {
+    //     self.inner.get_unchecked_mut()
+    // }
+
+    // pub fn get_ref(&self) -> &TimerInner {
+    //     self.inner.get_unchecked_ref()
+    // }
 }
 
 bitflags! {

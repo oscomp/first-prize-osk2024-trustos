@@ -38,10 +38,7 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
         return Err(SysErrNo::EINVAL);
     }
     if let Some(file) = &inner.fd_table.try_get_file(fd) {
-        let file: Arc<dyn File> = match file {
-            FileClass::File(f) => f.clone(),
-            FileClass::Abs(f) => f.clone(),
-        };
+        let file: Arc<dyn File> = file.any();
         if !file.writable() {
             return Err(SysErrNo::EACCES);
         }
@@ -64,16 +61,13 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     //let token = inner.user_token();
     let memory_set = inner.memory_set.clone();
 
-    debug!("[sys_read] fd is {}, len is {}", fd, len);
+    // debug!("[sys_read] fd is {}, len is {}", fd, len);
 
     if fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
     }
     if let Some(file) = &inner.fd_table.try_get_file(fd) {
-        let file: Arc<dyn File> = match file {
-            FileClass::File(f) => f.clone(),
-            FileClass::Abs(f) => f.clone(),
-        };
+        let file: Arc<dyn File> = file.any();
         if !file.readable() {
             return Err(SysErrNo::EACCES);
         }
@@ -102,10 +96,7 @@ pub fn sys_writev(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
         return Err(SysErrNo::EINVAL);
     }
     if let Some(file) = &inner.fd_table.try_get_file(fd) {
-        let file = match file {
-            FileClass::File(f) => f.clone(),
-            FileClass::Abs(f) => f.clone(),
-        };
+        let file = file.any();
         if !file.writable() {
             return Err(SysErrNo::EACCES);
         }
@@ -141,10 +132,7 @@ pub fn sys_readv(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
         return Err(SysErrNo::EINVAL);
     }
     if let Some(file) = &inner.fd_table.try_get_file(fd) {
-        let file = match file {
-            FileClass::File(f) => f.clone(),
-            FileClass::Abs(f) => f.clone(),
-        };
+        let file = file.any();
         if !file.readable() {
             return Err(SysErrNo::EACCES);
         }
@@ -1087,15 +1075,15 @@ pub fn sys_pselect6(
     sigmask: usize,
 ) -> SyscallRet {
     let task = current_task().unwrap();
-    let inner = task.inner_lock();
+    let mut inner = task.inner_lock();
     let token = inner.user_token();
 
     debug!("[sys_pselect6] nfds is {}, readfds is {}, writefds is {}, exceptfds is {}, timeout is {}, sigmask is {}",nfds,readfds,writefds,exceptfds,timeout,sigmask);
 
-    let old_mask = inner.sig_pending.blocked();
+    let old_mask = inner.sig_mask;
     if sigmask != 0 {
         // inner.sig_pending.get_mut().blocked = *translated_ref(token, sigmask as *const SigSet);
-        *inner.sig_pending.blocked_mut() = get_data(token, sigmask as *const SigSet);
+        inner.sig_mask = get_data(token, sigmask as *const SigSet);
     }
 
     let nfds = min(nfds, inner.fd_table.get_soft_limit());
@@ -1132,7 +1120,8 @@ pub fn sys_pselect6(
     };
     if waittime == 0 {
         if sigmask != 0 {
-            *inner.sig_pending.blocked_mut() = old_mask;
+            // *inner.sig_table.blocked_mut() = old_mask;
+            inner.sig_mask = old_mask;
         }
         return Ok(0);
     }
@@ -1145,7 +1134,7 @@ pub fn sys_pselect6(
 
     loop {
         let task = current_task().unwrap();
-        let inner = task.inner_lock();
+        let mut inner = task.inner_lock();
         let mut num = 0;
 
         // 如果设置了监视是否可读的 fd
@@ -1227,7 +1216,8 @@ pub fn sys_pselect6(
             }
             if sigmask != 0 {
                 // inner.sig_pending.get_mut().blocked = old_mask;
-                *inner.sig_pending.blocked_mut() = old_mask;
+                // *inner.sig_table.blocked_mut() = old_mask;
+                inner.sig_mask = old_mask;
             }
             return Ok(num);
         }
@@ -1236,7 +1226,8 @@ pub fn sys_pselect6(
         if waittime > 0 && get_time_ms() * 1000000 - begin >= waittime as usize {
             if sigmask != 0 {
                 // inner.sig_pending.get_mut().blocked = old_mask;
-                *inner.sig_pending.blocked_mut() = old_mask;
+                // *inner.sig_table.blocked_mut() = old_mask;
+                inner.sig_mask = old_mask;
             }
             return Ok(0);
         }

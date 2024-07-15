@@ -14,17 +14,17 @@ use super::{KSigAction, SigSet, SIG_MAX_NUM};
 // 	struct sigaction sa;
 // };
 
-pub struct SigPending {
+pub struct SigTable {
     pub inner: SyncUnsafeCell<SigPendingInner>,
 }
 
-impl SigPending {
+impl SigTable {
     pub fn new() -> Self {
         Self {
             inner: SyncUnsafeCell::new(SigPendingInner::new()),
         }
     }
-    pub fn from_another(another: &Arc<SigPending>) -> Self {
+    pub fn from_another(another: &Arc<SigTable>) -> Self {
         Self {
             inner: SyncUnsafeCell::new(SigPendingInner::from_another(another.get_ref())),
         }
@@ -34,26 +34,6 @@ impl SigPending {
     }
     pub fn get_mut(&self) -> &mut SigPendingInner {
         self.inner.get_unchecked_mut()
-    }
-
-    pub fn need_handle(&self, sig: SigSet) -> bool {
-        let pend = &self.get_ref();
-        pend.pending.contains(sig) && !pend.blocked.contains(sig)
-    }
-    pub fn blocked(&self) -> SigSet {
-        self.get_ref().blocked
-    }
-    pub fn blocked_mut(&self) -> &mut SigSet {
-        &mut self.get_mut().blocked
-    }
-    pub fn pending(&self) -> SigSet {
-        self.get_mut().pending
-    }
-    pub fn pending_mut(&self) -> &mut SigSet {
-        &mut self.get_mut().pending
-    }
-    pub fn is_pending(&self, sig: SigSet) -> bool {
-        self.get_ref().pending.contains(sig)
     }
 
     pub fn action(&self, signo: usize) -> KSigAction {
@@ -77,8 +57,6 @@ impl SigPending {
 }
 
 pub struct SigPendingInner {
-    pending: SigSet,
-    blocked: SigSet,
     actions: [KSigAction; SIG_MAX_NUM + 1],
     group_exit_code: Option<i32>,
 }
@@ -86,16 +64,12 @@ pub struct SigPendingInner {
 impl SigPendingInner {
     pub fn new() -> Self {
         Self {
-            pending: SigSet::empty(),
-            blocked: SigSet::empty(),
             actions: [KSigAction::default(); SIG_MAX_NUM + 1],
             group_exit_code: None,
         }
     }
     pub fn from_another(other: &SigPendingInner) -> Self {
         Self {
-            pending: SigSet::empty(),
-            blocked: SigSet::empty(),
             actions: other.actions.clone(),
             group_exit_code: None,
         }

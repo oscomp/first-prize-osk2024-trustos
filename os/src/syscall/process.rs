@@ -248,20 +248,20 @@ pub fn sys_futex(
 ///0      meaning wait for any child process whose process group ID
 ///       is equal to that of the calling process at the time of the call to waitpid().
 ///> 0    meaning wait for the child whose process ID is equal to the value of pid.
-pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
+pub fn sys_wait4(pid: isize, wstatus: *mut i32, _options: i32) -> SyscallRet {
     //assert!(options == 0, "not support options yet");
     //默认所有进程都在同一个组
-    debug!(
-        "[sys_wait4] pid is {},wstatus is {:#x}, options is {}",
-        pid, wstatus as usize, options
-    );
+    // debug!(
+    //     "[sys_wait4] pid is {},wstatus is {:#x}, options is {}",
+    //     pid, wstatus as usize, options
+    // );
     loop {
         let mut process_group = PROCESS_GROUP.lock();
         let task = current_task().unwrap();
         let task_inner = task.inner_lock();
         // 暂时没有子进程,返回即可
         if !process_group.contains_key(&task.pid()) {
-            debug!("[sys_wait4] no child process");
+            // debug!("[sys_wait4] no child process");
             return Err(SysErrNo::ECHILD);
         }
         // 只有fork出来的子进程会被放入
@@ -270,7 +270,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
             .iter()
             .any(|p| pid == -1 || pid as usize == p.pid())
         {
-            debug!("[sys_wait4] no child process");
+            // debug!("[sys_wait4] no child process");
             return Err(SysErrNo::ECHILD);
         }
         // 寻找符合条件的进程组
@@ -288,7 +288,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
         if let Some((idx, child)) = pair {
             let found_pid = child.pid();
             let child_inner = child.inner_lock();
-            let exit_code = child_inner.sig_pending.exit_code();
+            let exit_code = child_inner.sig_table.exit_code();
             if wstatus as usize != 0x0 {
                 debug!(
                     "[sys_wait4] wait pid {}: child {} exit with code {}, wstatus= {:#x}",

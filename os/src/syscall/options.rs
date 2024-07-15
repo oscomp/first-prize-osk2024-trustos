@@ -350,3 +350,11 @@ pub struct RLimit {
     pub rlim_cur: usize, /* Soft limit */
     pub rlim_max: usize, /* Hard limit (ceiling for rlim_cur) */
 }
+
+bitflags! {
+    pub struct SignalMaskFlag: u32 {
+        const SIG_BLOCK = 0;
+        const SIG_UNBLOCK = 1;
+        const SIG_SETMASK = 2;
+    }
+}

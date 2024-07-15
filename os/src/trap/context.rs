@@ -43,7 +43,6 @@ pub struct UserContext {
 pub struct TrapContext {
     /// user trap to kernel need to save those regs
     /// general regs[0..31]
-    // pub x: [usize; 32],
     pub gp: GeneralRegs,
     /// CSR sstatus      
     pub sstatus: Sstatus, // 32
@@ -51,17 +50,15 @@ pub struct TrapContext {
     pub sepc: usize, // 33
     /// kernel return to user need to save those regs
     pub kernel_sp: usize, // 34
-    pub kernel_ra: usize,      // 35 trap_handler
+    pub kernel_ra: usize,      // 35 trap_loop
     pub kernel_s: [usize; 12], // 36 - 47
     pub kernel_fp: usize,      // 48
     /// kernel hart address
     pub kernel_tp: usize, // 49
     /// A copy of register a0, useful when we need to restart syscall
     pub origin_a0: usize, // 50
-    /// float regs
+    /// float regs 51-82, fcsr 83
     pub fp: FloatRegs,
-    // pub f: [usize; 32], // 51 - 82
-    // pub fcsr: u32,             // 83
 }
 
 impl TrapContext {
@@ -70,16 +67,10 @@ impl TrapContext {
         self.gp.x[2] = sp;
     }
     ///init app context
-    pub fn app_init_context(
-        entry: usize,
-        sp: usize,
-        kernel_sp: usize,
-        // trap_handler: usize,
-    ) -> Self {
+    pub fn app_init_context(entry: usize, sp: usize, kernel_sp: usize) -> Self {
         let mut sstatus = sstatus::read();
         sstatus.set_spp(SPP::User);
         let mut cx = Self {
-            // x: [0; 32],
             gp: GeneralRegs { x: [0; 32] },
             sstatus,
             sepc: entry,
@@ -93,8 +84,6 @@ impl TrapContext {
                 f: [0; 32],
                 fcsr: 0,
             },
-            // f: [0; 32],
-            // fcsr: 0,
         };
         cx.set_sp(sp);
         cx

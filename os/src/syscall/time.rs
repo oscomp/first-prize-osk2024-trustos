@@ -1,4 +1,4 @@
-use crate::mm::{translated_byte_buffer, translated_ref, UserBuffer};
+use crate::mm::{get_data, translated_byte_buffer, translated_ref, UserBuffer};
 use crate::syscall::SigSet;
 use crate::task::{current_task, current_token};
 use crate::timer::{
@@ -43,11 +43,10 @@ pub fn sys_settimer(which: usize, new_value: *const u8, old_value: *const u8) ->
         let mut buffer = UserBuffer::new(
             translated_byte_buffer(token, old_value, size_of::<Itimerval>()).unwrap(),
         );
-        buffer.write((*task_inner.timer.get_ref()).timer.as_bytes());
+        buffer.write(task_inner.timer.as_bytes());
     }
     if new_value as usize != 0 {
-        let timer_inner = task_inner.timer.get_mut();
-        let new_timer = translated_ref(token, new_value as *const Itimerval);
+        let new_timer = get_data(token, new_value as *const Itimerval);
 
         debug!(
             "set new timer : value: {}s + {}us, interval: {}s + {}us",
@@ -57,37 +56,18 @@ pub fn sys_settimer(which: usize, new_value: *const u8, old_value: *const u8) ->
             new_timer.it_interval.tv_usec
         );
 
-        (*timer_inner).timer = *new_timer;
-        timer_inner.last_time = TimeVal::now();
+        task_inner.timer.set_timer(new_timer);
+        task_inner.timer.set_last_time(TimeVal::now());
         if new_timer.it_value == TimeVal::new(0, 0) {
-            // task_inner.sig_pending.get_mut().pending |= SigSet::SIGALRM;
-            *task_inner.sig_pending.pending_mut() |= SigSet::SIGALRM;
-            timer_inner.if_first = false;
+            // task_inner.sig_pending |= SigSet::SIGALRM;
+            task_inner.timer.set_first_trigger(false);
         } else {
-            timer_inner.if_first = true;
+            task_inner.timer.set_first_trigger(true);
         }
     }
     Ok(0)
 }
-/*//暂时没办法实现，无法修改csr
-pub fn sys_clock_settime(clockid: usize, tp: *const u8) -> isize {
-    let task = current_task().unwrap();
-    let mut inner = task.inner_lock();
-    let token = inner.user_token();
 
-    let clockid = Clockid::from_bits(clockid as u32).unwrap();
-    let tp = translated_ref(token, tp as *const Timespec);
-
-    match clockid {
-        //当前可匹配实时时钟，单调时钟，进程CPU时钟，且三者返回值相同
-        Clockid::CLOCK_REALTIME | Clockid::CLOCK_MONOTONIC | Clockid::CLOCK_PROCESS_CPUTIME_ID => {
-            //修改csr
-            0
-        }
-        _ => -1,
-    }
-}
-*/
 pub fn sys_clock_gettime(clockid: usize, tp: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();

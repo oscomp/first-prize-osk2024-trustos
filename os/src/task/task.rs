@@ -13,7 +13,7 @@ use crate::{
         flush_tlb, get_data, translated_refmut, MapArea, MapAreaType, MapPermission, MapType,
         MemorySet, MemorySetInner, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
     },
-    signal::{SigPending, SigSet},
+    signal::{SigSet, SigTable},
     syscall::{CloneFlags, MapedSharedMemory},
     task::insert_into_thread_group,
     timer::{TimeData, TimeVal, Timer},
@@ -53,7 +53,9 @@ pub struct TaskControlBlockInner {
     pub user_heapbottom: usize, //堆底指针
     pub set_child_tid: usize,
     pub clear_child_tid: usize,
-    pub sig_pending: Arc<SigPending>,
+    pub sig_table: Arc<SigTable>,
+    pub sig_mask: SigSet,
+    pub sig_pending: SigSet,
     pub timer: Arc<Timer>,
 }
 
@@ -71,7 +73,7 @@ impl TaskControlBlockInner {
         self.status() == TaskStatus::Zombie
     }
     pub fn is_group_exit(&self) -> bool {
-        self.sig_pending.is_exited()
+        self.sig_table.is_exited()
     }
     pub fn alloc_user_res(&mut self) {
         let (_, ustack_top) = self.memory_set.insert_framed_area_with_hint(
@@ -198,7 +200,9 @@ impl TaskControlBlock {
                 user_heapbottom,
                 set_child_tid: 0,
                 clear_child_tid: 0,
-                sig_pending: Arc::new(SigPending::new()),
+                sig_table: Arc::new(SigTable::new()),
+                sig_mask: SigSet::empty(),
+                sig_pending: SigSet::empty(),
                 timer: Arc::new(Timer::new()),
             }),
         };
@@ -207,12 +211,8 @@ impl TaskControlBlock {
         task_inner.alloc_user_res();
         // prepare TrapContext in user space
         let trap_cx = task_inner.trap_cx();
-        *trap_cx = TrapContext::app_init_context(
-            entry_point,
-            task_inner.user_stack_top,
-            kernel_stack_top,
-            // trap_handler as usize,
-        );
+        *trap_cx =
+            TrapContext::app_init_context(entry_point, task_inner.user_stack_top, kernel_stack_top);
         drop(task_inner);
         task
     }
@@ -325,14 +325,8 @@ impl TaskControlBlock {
         //将设置了O_CLOEXEC位的文件描述符关闭
         inner.fd_table.close_on_exec();
 
-        let trap_cx = TrapContext::app_init_context(
-            entry_point,
-            user_sp,
-            self.kernel_stack.top(),
-            // trap_handler as usize,
-        );
+        let trap_cx = TrapContext::app_init_context(entry_point, user_sp, self.kernel_stack.top());
         *inner.trap_cx() = trap_cx;
-        // debug!("task.exec.tid={}", self.tid.0);
         inner.user_heappoint = user_hp;
         inner.user_heapbottom = user_hp;
 
@@ -384,10 +378,10 @@ impl TaskControlBlock {
             Arc::new(FdTable::from_another(&parent_inner.fd_table))
         };
         // 检查是否共享信号处理程序表
-        let sig_pending = if flags.contains(CloneFlags::CLONE_SIGHAND) {
-            Arc::clone(&parent_inner.sig_pending)
+        let sig_table = if flags.contains(CloneFlags::CLONE_SIGHAND) {
+            Arc::clone(&parent_inner.sig_table)
         } else {
-            Arc::new(SigPending::from_another(&parent_inner.sig_pending))
+            Arc::new(SigTable::from_another(&parent_inner.sig_table))
         };
         // 检查是否需要设置 parent_tid
         if flags.contains(CloneFlags::CLONE_PARENT_SETTID) {
@@ -404,16 +398,20 @@ impl TaskControlBlock {
         } else {
             0
         };
-        let (pid, ppid, timer);
+        let (pid, ppid, timer, sig_pending, sig_mask);
         // 检查是否创建线程
         if flags.contains(CloneFlags::CLONE_THREAD) {
             pid = self.pid;
             ppid = self.ppid;
             timer = Arc::clone(&parent_inner.timer);
+            sig_pending = SigSet::empty();
+            sig_mask = SigSet::empty();
         } else {
             pid = tid_handle.0;
             ppid = self.pid;
             timer = Arc::new(Timer::new());
+            sig_mask = parent_inner.sig_mask.clone();
+            sig_pending = SigSet::empty();
         }
         let child = Arc::new(TaskControlBlock {
             tid: tid_handle,
@@ -435,6 +433,8 @@ impl TaskControlBlock {
                 user_heapbottom: parent_inner.user_heapbottom,
                 set_child_tid,
                 clear_child_tid,
+                sig_table,
+                sig_mask,
                 sig_pending,
                 timer,
             }),
@@ -566,21 +566,20 @@ impl TaskControlBlock {
     }
 
     pub fn check_timer(&self) {
-        let inner = self.inner_lock();
-        let now_timeval = TimeVal::now();
-        let timer_inner = inner.timer.get_mut();
-        if timer_inner.if_first {
+        let task_inner = self.inner_lock();
+        let timer = task_inner.timer.clone();
+        let now = TimeVal::now();
+        if timer.first_trigger() {
             //首次触发
-            if now_timeval > timer_inner.last_time + timer_inner.timer.it_value {
-                *inner.sig_pending.pending_mut() |= SigSet::SIGALRM;
-                timer_inner.if_first = false;
-                timer_inner.last_time = now_timeval;
-            }
-        } else if timer_inner.timer.it_interval != TimeVal::new(0, 0) {
+            if now > timer.last_time() + timer.timer().it_value {}
+            // task_inner.sig_pending |= SigSet::SIGALRM;
+            timer.set_first_trigger(false);
+            timer.set_last_time(now);
+        } else {
             //间隔触发
-            if now_timeval > timer_inner.last_time + timer_inner.timer.it_interval {
-                *inner.sig_pending.pending_mut() |= SigSet::SIGALRM;
-                timer_inner.last_time = now_timeval;
+            if now > timer.last_time() + timer.timer().it_interval {
+                // task_inner.sig_pending |= SigSet::SIGALRM;
+                timer.set_last_time(now);
             }
         }
     }

@@ -359,11 +359,11 @@ impl MemorySetInner {
         } else {
             // 自行选择地址,计算已经使用的MMap地址
             let addr = self.find_insert_addr(MMAP_TOP, len);
-            debug!(
-                "[sys_mmap] start_vpn:{:#x},end_vpn:{:#x}",
-                VirtAddr::from(addr).floor().0,
-                VirtAddr::from(addr + len).floor().0
-            );
+            // debug!(
+            //     "[sys_mmap] start_vpn:{:#x},end_vpn:{:#x}",
+            //     VirtAddr::from(addr).floor().0,
+            //     VirtAddr::from(addr + len).floor().0
+            // );
             self.push_lazily(MapArea::new_mmap(
                 VirtAddr::from(addr),
                 VirtAddr::from(addr + len),

@@ -1,12 +1,12 @@
-pub mod pending;
+pub mod sigact;
 pub mod signal;
 
 use core::mem::size_of;
 
 use alloc::sync::Arc;
 use log::debug;
-pub use pending::*;
 use riscv::register::scause::{self, Exception, Trap};
+pub use sigact::*;
 pub use signal::*;
 
 use crate::{
@@ -31,26 +31,12 @@ pub fn check_if_any_sig_for_current_task() -> Option<usize> {
         let task = current_task().unwrap();
         let task_inner = task.inner_lock();
         let sig = SigSet::from_sig(signo);
-        if task_inner.sig_pending.need_handle(sig) {
+        if task_inner.sig_pending.contains(sig) && !task_inner.sig_mask.contains(sig) {
             return Some(signo);
         }
     }
     None
 }
-
-// pub fn ready_to_handle_signal(signo: usize) {
-//     let task = current_task().unwrap();
-//     let task_inner = task.inner_lock();
-//     debug!(
-//         "signo={},handle signal {:?}",
-//         signo,
-//         SigSet::from_sig(signo)
-//     );
-//     let sig_act = task_inner.sig_pending.action(signo);
-//     drop(task_inner);
-//     drop(task);
-//     handle_signal(signo, sig_act);
-// }
 
 pub fn handle_signal(signo: usize) {
     let task = current_task().unwrap();
@@ -60,26 +46,15 @@ pub fn handle_signal(signo: usize) {
         signo,
         SigSet::from_sig(signo)
     );
-    let sig_action = task_inner.sig_pending.action(signo);
+    let sig_action = task_inner.sig_table.action(signo);
     drop(task_inner);
     drop(task);
     if sig_action.customed {
-        // debug!("customed");
         setup_frame(signo, sig_action);
-        // let task = current_task().unwrap();
-        // let task_inner = task.inner_lock();
-        // let blocked = task_inner.sig_pending.blocked_mut();
-        // let pending = task_inner.sig_pending.pending_mut();
-        // *blocked |= sig_action.act.sa_mask | SigSet::from_sig(signo);
-        // *pending ^= SigSet::from_sig(signo);
-        // let sig_pending = task_inner.sig_pending.get_mut();
-        // sig_pending.blocked |= sig_action.act.sa_mask;
-        // sig_pending.blocked |= SigSet::from_sig(signo);
-        // sig_pending.pending ^= SigSet::from_sig(signo);
     } else {
         // 就在S模式运行,转换成fn(i32)
-        debug!("sa_handler:{:#x}", sig_action.act.sa_handler);
         if sig_action.act.sa_handler != 1 && sig_action.act.sa_handler != 0 {
+            debug!("sa_handler:{:#x}", sig_action.act.sa_handler);
             let handler: fn(i32) =
                 unsafe { core::mem::transmute(sig_action.act.sa_handler as *const ()) };
             handler(signo as i32);
@@ -93,13 +68,11 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
     debug!("customed sa_handler={:#x}", sig_action.act.sa_handler);
 
     let task = current_task().unwrap();
-    let task_inner = task.inner_lock();
+    let mut task_inner = task.inner_lock();
     let token = task_inner.user_token();
 
-    let blocked = task_inner.sig_pending.blocked_mut();
-    let pending = task_inner.sig_pending.pending_mut();
-    *blocked |= sig_action.act.sa_mask | SigSet::from_sig(signo);
-    *pending ^= SigSet::from_sig(signo);
+    task_inner.sig_mask |= sig_action.act.sa_mask | SigSet::from_sig(signo);
+    task_inner.sig_pending ^= SigSet::from_sig(signo);
 
     let trap_cx = task_inner.trap_cx();
     let mut user_sp = trap_cx.gp.x[2];
@@ -130,11 +103,7 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
 
         // signal mask
         user_sp = user_sp - size_of::<SigSet>();
-        put_data(
-            token,
-            user_sp as *mut SigSet,
-            task_inner.sig_pending.blocked(),
-        );
+        put_data(token, user_sp as *mut SigSet, task_inner.sig_mask);
 
         // 不是 sigInfo
         user_sp = user_sp - size_of::<usize>();
@@ -153,7 +122,7 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
                 flags: 0,
                 link: 0,
                 stack: SignalStack::new(sig_sp, sig_size),
-                sigmask: task_inner.sig_pending.blocked(),
+                sigmask: task_inner.sig_mask,
                 // __pad: [0u8; 128],
                 mcontext: trap_cx.as_mctx(),
             },
@@ -197,7 +166,7 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
 /// 恢复栈帧
 pub fn restore_frame() -> SyscallRet {
     let task = current_task().unwrap();
-    let task_inner = task.inner_lock();
+    let mut task_inner = task.inner_lock();
     let token = task_inner.user_token();
 
     let trap_cx = task_inner.trap_cx();
@@ -213,14 +182,15 @@ pub fn restore_frame() -> SyscallRet {
 
     if !sa_siginfo {
         // signal mask
-        *task_inner.sig_pending.blocked_mut() = get_data(token, user_sp as *const SigSet);
+        // *task_inner.sig_table.blocked_mut() = get_data(token, user_sp as *const SigSet);
+        task_inner.sig_mask = get_data(token, user_sp as *const SigSet);
         user_sp += size_of::<SigSet>();
         // Trap cx
         let mctx = get_data(token, user_sp as *const MachineContext);
         trap_cx.copy_from_mctx(mctx);
     } else {
         user_sp += size_of::<SigInfo>();
-        *task_inner.sig_pending.blocked_mut() = get_data(
+        task_inner.sig_mask = get_data(
             token,
             (user_sp + 2 * size_of::<usize>() + size_of::<SignalStack>()) as *const SigSet,
         );
@@ -231,13 +201,13 @@ pub fn restore_frame() -> SyscallRet {
         );
         trap_cx.copy_from_mctx(mctx);
     }
-    // trap_cx.gp.x[10] = trap_cx.origin_a0;
     Ok(trap_cx.gp.x[10])
 }
 
 pub fn add_signal(task: Arc<TaskControlBlock>, signal: SigSet) {
-    let task_inner = task.inner_lock();
-    *task_inner.sig_pending.pending_mut() |= signal;
+    let mut task_inner = task.inner_lock();
+    task_inner.sig_pending |= signal;
+    // *task_inner.sig_table.pending_mut() |= signal;
 }
 
 pub fn send_signal_to_thread_group(pid: usize, sig: SigSet) {
