@@ -201,6 +201,7 @@ pub fn restore_frame() -> SyscallRet {
         );
         trap_cx.copy_from_mctx(mctx);
     }
+    debug!("[restore_frame!] sepc= {:#x}", trap_cx.sepc);
     Ok(trap_cx.gp.x[10])
 }
 

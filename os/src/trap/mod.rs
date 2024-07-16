@@ -137,7 +137,6 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
                 // page fault exit code
-                // exit_current_and_run_next(-2);
                 exit_current(-2);
             }
         }
@@ -153,7 +152,6 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
             // page fault exit code
-            // exit_current_and_run_next(-2);
             exit_current(-2);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
@@ -164,7 +162,6 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
             // illegal instruction exit code
-            // exit_current_and_run_next(-3);
             exit_current(-3);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
@@ -192,7 +189,8 @@ pub fn trap_handler() {
         }
     }
     //检查定时器
-    current_task().unwrap().check_timer();
+    // TODO(ZMY) 这玩意有什么用? SIG_ALRM默认执行exit函数
+    // current_task().unwrap().check_timer();
 
     //记录内核空间花费CPU时间，同时准备用户空间花费CPU时间
     current_task()
@@ -200,26 +198,6 @@ pub fn trap_handler() {
         .inner_lock()
         .time_data
         .update_stime();
-
-    // trap_return();
-
-    //检查信号
-    // if let Some(signo) = check_if_any_sig_for_current_task() {
-    //     handle_signal(signo);
-    // }
-
-    // debug!("in trap handler,return to user space");
-    // 手动内联trap_return
-    // set_user_trap_entry();
-    // extern "C" {
-    //     #[allow(improper_ctypes)]
-    //     fn __return_to_user(cx: *mut TrapContext);
-    // }
-    // unsafe {
-    // 方便调试进入__return_to_user
-    //     let trap_cx = current_trap_cx();
-    //     __return_to_user(trap_cx);
-    // }
 }
 
 #[no_mangle]
@@ -252,21 +230,6 @@ pub fn trap_loop() -> ! {
     }
     handle_exit();
 }
-
-// #[no_mangle]
-/// set the new addr of __restore asm function in TRAMPOLINE page,
-/// set the reg a0 = trap_cx_ptr, reg a1 = phy addr of usr page table,
-/// finally, jump to new addr of __restore asm function
-// pub fn trap_return_for_new_task_once() {
-//     set_user_trap_entry();
-//     extern "C" {
-//         #[allow(improper_ctypes)]
-//         fn __return_to_user_for_new_task_once(cx: *mut TrapContext);
-//     }
-//     unsafe {
-//         __return_to_user_for_new_task_once(current_trap_cx());
-//     }
-// }
 
 #[no_mangle]
 pub fn trap_from_kernel() -> ! {

@@ -102,12 +102,12 @@ static struct {
 	const char *descr;
 } scenarios[] = {
 	{1, prepare_sem, execute_sem_wait, cleanup_sem, 0, "blocking sem_wait"},
-	// {1, prepare_sem, execute_sem_wait, cleanup_sem, (void*)1, "non-blocking sem_wait"},
-	// {1, prepare_sem, execute_sem_timedwait, cleanup_sem, 0, "blocking sem_timedwait"},
-	// {1, prepare_sem, execute_sem_timedwait, cleanup_sem, (void*)1, "non-blocking sem_timedwait"},
-	// {1, prepare_thread, execute_thread_join, cleanup_thread, 0, "blocking pthread_join"},
-	// {1, prepare_thread, execute_thread_join, cleanup_thread, (void*)1, "non-blocking pthread_join"},
-	// {0, prepare_dummy, execute_shm_open, cleanup_shm, &(int){0}, "shm_open"},
+	{1, prepare_sem, execute_sem_wait, cleanup_sem, (void*)1, "non-blocking sem_wait"},
+	{1, prepare_sem, execute_sem_timedwait, cleanup_sem, 0, "blocking sem_timedwait"},
+	{1, prepare_sem, execute_sem_timedwait, cleanup_sem, (void*)1, "non-blocking sem_timedwait"},
+	{1, prepare_thread, execute_thread_join, cleanup_thread, 0, "blocking pthread_join"},
+	{1, prepare_thread, execute_thread_join, cleanup_thread, (void*)1, "non-blocking pthread_join"},
+	{0, prepare_dummy, execute_shm_open, cleanup_shm, &(int){0}, "shm_open"},
 	{ 0 }
 }, *cur_sc = scenarios;
 
@@ -118,11 +118,10 @@ static void *run_execute(void *arg)
     t_printf("sem_wait\n");
 	while (sem_wait(&sem_seq));
     t_printf("enable cancel\n");
-    t_printf("aaaa\n");
-    t_printf("bbbb\n");
 	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, 0);
     t_printf("can cancel?\n");
 	seqno = 1;
+    t_printf("execute");
 	cur_sc->execute(cur_sc->arg);
 	seqno = 2;
 	return 0;

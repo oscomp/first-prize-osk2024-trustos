@@ -1,4 +1,7 @@
-use crate::mm::PhysAddr;
+use crate::{
+    mm::PhysAddr,
+    utils::{SysErrNo, SyscallRet},
+};
 
 use super::{block_current_and_run_next, current_task, wakeup_task, TaskControlBlock};
 use alloc::{
@@ -15,10 +18,9 @@ lazy_static! {
     pub static ref FUTEX_LIST: Mutex<BTreeMap<PhysAddr, WaitQueue>> = Mutex::new(BTreeMap::new());
 }
 
-pub fn futex_wait(pa: PhysAddr) -> bool {
+pub fn futex_wait(pa: PhysAddr) -> SyscallRet {
     let mut waitq = FUTEX_LIST.lock();
     let current = current_task().unwrap();
-    let current_tid = current.tid();
     if let Some(queue) = waitq.get_mut(&pa) {
         queue.push_back(Arc::downgrade(&current));
     } else {
@@ -32,15 +34,17 @@ pub fn futex_wait(pa: PhysAddr) -> bool {
     drop(current);
     drop(waitq);
     block_current_and_run_next();
-    let list = FUTEX_LIST.lock();
-    let queue = list.get(&pa).unwrap();
-    queue.iter().all(|weak_task| {
-        if let Some(task) = weak_task.upgrade() {
-            task.tid() != current_tid
-        } else {
-            true
-        }
-    })
+    let task = current_task().unwrap();
+    let task_inner = task.inner_lock();
+    // woke by signal
+    if !task_inner
+        .sig_pending
+        .difference(task_inner.sig_mask)
+        .is_empty()
+    {
+        return Err(SysErrNo::EINTR);
+    }
+    Ok(0)
 }
 
 pub fn futex_wake_up(pa: PhysAddr, max_num: i32) -> usize {

@@ -23,16 +23,6 @@ use super::SyslogType;
 use crate::logger::{read_all_log_buf, read_clear_log_buf, read_log_buf, LOG_BUF_LEN};
 use log::debug;
 
-// pub fn sys_exit(exit_code: i32) -> ! {
-//     exit_current_and_run_next(exit_code);
-//     panic!("Unreachable in sys_exit!");
-// }
-
-// pub fn sys_exit_group(exit_code: i32) -> ! {
-//     exit_current_group_and_run_next(exit_code);
-//     panic!("Unreachable in sys_exit!");
-// }
-
 pub fn sys_exit(exit_code: i32) -> SyscallRet {
     exit_current(exit_code);
     Ok(0)
@@ -206,14 +196,9 @@ pub fn sys_futex(
         .memory_set
         .translate_va(VirtAddr::from(uaddr as usize))
         .unwrap();
-    let pa2 = if !uaddr2.is_null() {
-        task_inner
-            .memory_set
-            .translate_va(VirtAddr::from(uaddr2 as usize))
-            .unwrap()
-    } else {
-        PhysAddr::from(0)
-    };
+    let pa2 = task_inner
+        .memory_set
+        .translate_va(VirtAddr::from(uaddr2 as usize));
     drop(task_inner);
     drop(task);
     match cmd {
@@ -230,14 +215,15 @@ pub fn sys_futex(
                 );
                 add_timer(get_time_spec() + timeout, current_task().unwrap());
             }
-            if futex_wait(pa) {
-                Ok(0)
-            } else {
-                Err(SysErrNo::ETIMEDOUT)
-            }
+            futex_wait(pa)
         }
         FutexCmd::FUTEX_WAKE => Ok(futex_wake_up(pa, val)),
-        FutexCmd::FUTEX_REQUEUE => Ok(futex_requeue(pa, val, pa2, timeout as i32)),
+        FutexCmd::FUTEX_REQUEUE => Ok(futex_requeue(
+            pa,
+            val,
+            pa2.ok_or(SysErrNo::EINVAL)?,
+            timeout as i32,
+        )),
     }
 }
 

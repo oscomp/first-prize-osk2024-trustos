@@ -20,14 +20,7 @@ SBI ?= rustsbi
 BOOTLOADER := ../bootloader/$(SBI)-$(BOARD).bin
 CPUS ?= 2 # default 2 cores for qemu
 
-# Building mode argument
-ifeq ($(MODE), release)
-	MODE_ARG := --release
-endif
-
-ifeq ($(MODE), debug)
-	MODE_ARG := 
-endif
+MODE_ARG := --release
 
 # KERNEL ENTRY
 KERNEL_ENTRY_PA := 0x80200000
@@ -35,6 +28,8 @@ KERNEL_ENTRY_PA := 0x80200000
 # Binutils
 OBJDUMP := rust-objdump --arch-name=riscv64
 OBJCOPY := rust-objcopy --binary-architecture=riscv64
+# GDB_PATH := /usr/local/bin/riscv64-unknown-elf-gdb
+# gdb := $(GDB_PATH) rust-gdb
 
 # Disassembly
 DISASM ?= -x
@@ -83,7 +78,6 @@ kernel:
 clean:
 	@cargo clean
 	@cd ../user && cargo clean
-# @cd ../$(FS) && cargo clean && rm *.img
 
 disasm: kernel
 	@$(OBJDUMP) $(DISASM) $(KERNEL_ELF) | less

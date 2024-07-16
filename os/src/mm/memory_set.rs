@@ -737,12 +737,6 @@ impl MemorySetInner {
         let mut memory_set = Self::new_from_kernel();
         // debug!("from_elf new stap={:#x}", memory_set.page_table.token());
         // map program headers of elf, with U flag
-        //let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
-        // let elf = if let Ok(elfhere) = xmas_elf::ElfFile::new(elf_data) {
-        //     elfhere
-        // } else {
-        //     return None;
-        // };
         let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
         let elf_header = elf.header;
         let magic = elf_header.pt1.magic;

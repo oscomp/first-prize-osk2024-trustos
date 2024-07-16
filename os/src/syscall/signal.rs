@@ -10,7 +10,7 @@ use crate::{
     syscall::SignalMaskFlag,
     task::{current_task, current_token, suspend_current_and_run_next},
     timer::{get_time_spec, Timespec},
-    utils::{SysErrNo, SyscallRet},
+    utils::{backtrace, SysErrNo, SyscallRet},
 };
 
 pub fn sys_rt_sigaction(
@@ -18,12 +18,6 @@ pub fn sys_rt_sigaction(
     act: *const SigAction,
     old_act: *mut SigAction,
 ) -> SyscallRet {
-    debug!(
-        "[sys_rt_sigaction] sig is {:?}, act is {:x}, old_act is {:x}",
-        SigSet::from_sig(signo),
-        act as usize,
-        old_act as usize
-    );
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
@@ -33,6 +27,11 @@ pub fn sys_rt_sigaction(
     }
     if act as usize != 0 {
         let new_act = get_data(token, act);
+        debug!(
+            "[sys_rt_sigaction] sig is {:?}, act is {:?}",
+            SigSet::from_sig(signo),
+            new_act
+        );
         let new_sig: KSigAction = if new_act.sa_handler == 0 {
             KSigAction::new(signo, false)
         } else if new_act.sa_handler == 1 {
@@ -121,8 +120,6 @@ pub fn sys_rt_sigsuspend(mask: *const SigSet) -> SyscallRet {
     let mut task_inner = task.inner_lock();
     let token = task_inner.user_token();
     let mask = get_data(token, mask);
-    // let old_mask = task_inner.sig_table.blocked();
-    // *task_inner.sig_table.blocked_mut() = mask;
     let old_mask = task_inner.sig_mask;
     task_inner.sig_mask = mask;
     drop(task_inner);
@@ -145,7 +142,6 @@ pub fn sys_rt_sigsuspend(mask: *const SigSet) -> SyscallRet {
                     1 => {}
                     // 返回到用户的信号处理程序
                     _ => {
-                        // *task_inner.sig_table.blocked_mut() = old_mask;
                         task_inner.sig_mask = old_mask;
                         return Err(SysErrNo::EINTR);
                     }

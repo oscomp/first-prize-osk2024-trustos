@@ -399,19 +399,18 @@ impl TaskControlBlock {
             0
         };
         let (pid, ppid, timer, sig_pending, sig_mask);
+        sig_pending = SigSet::empty();
         // 检查是否创建线程
         if flags.contains(CloneFlags::CLONE_THREAD) {
             pid = self.pid;
             ppid = self.ppid;
             timer = Arc::clone(&parent_inner.timer);
-            sig_pending = SigSet::empty();
             sig_mask = SigSet::empty();
         } else {
             pid = tid_handle.0;
             ppid = self.pid;
             timer = Arc::new(Timer::new());
             sig_mask = parent_inner.sig_mask.clone();
-            sig_pending = SigSet::empty();
         }
         let child = Arc::new(TaskControlBlock {
             tid: tid_handle,
@@ -478,7 +477,7 @@ impl TaskControlBlock {
             //a0
             trap_cx.gp.x[10] = arg;
             //sp
-            trap_cx.set_sp(stack + 16);
+            trap_cx.set_sp(stack);
         }
         if flags.contains(CloneFlags::CLONE_SETTLS) {
             // tp
