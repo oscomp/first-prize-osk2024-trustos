@@ -43,7 +43,7 @@ pub fn sys_mmap(
         return Ok(rv);
     }
     // check fd and map_permission
-    let file = task_inner.fd_table.get_file(fd).file()?;
+    let file = task_inner.fd_table.get(fd).file()?;
     // 读写权限
     if map_perm.contains(MapPermission::R) && !file.readable()
         || flags.contains(MmapFlags::MAP_SHARED)
@@ -100,8 +100,6 @@ pub fn sys_madvise(_addr: usize, _len: usize, _advice: usize) -> SyscallRet {
     Ok(0)
 }
 
-// const IPC_PRIVATE: usize = 0;
-
 pub fn sys_shmget(key: usize, size: usize, shmflag: u32) -> SyscallRet {
     debug!(
         "[sys_shmget] key is {}, size is {}, shmflag is {}",
@@ -113,7 +111,6 @@ pub fn sys_shmget(key: usize, size: usize, shmflag: u32) -> SyscallRet {
     }
     let mem = SHARED_MEMORY.lock().get(&key).cloned();
     if mem.is_some() {
-        //println!("return key is {}", key);
         return Ok(key);
     }
     let flag = ShmGetFlags::from_bits_truncate(shmflag as i32);
@@ -124,7 +121,6 @@ pub fn sys_shmget(key: usize, size: usize, shmflag: u32) -> SyscallRet {
         SHARED_MEMORY
             .lock()
             .insert(key, Arc::new(SharedMemory::new(shm)));
-        //println!("return key2 is {}", key);
         return Ok(key);
     }
     Err(SysErrNo::ENOENT)

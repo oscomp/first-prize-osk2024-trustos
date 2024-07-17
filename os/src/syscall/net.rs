@@ -1,4 +1,5 @@
 use crate::{
+    fs::{make_socket, FileClass, FileDescriptor},
     mm::put_data,
     task::current_task,
     utils::{SysErrNo, SyscallRet},
@@ -6,13 +7,13 @@ use crate::{
 
 pub fn sys_socket(_domain: u32, _type: u32, _protocol: u32) -> SyscallRet {
     let task = current_task().unwrap();
-    let inner = task.inner_lock();
-    let new_fd = inner.fd_table.alloc_fd()?;
+    let task_inner = task.inner_lock();
+    let new_fd = task_inner.fd_table.alloc_fd()?;
     let close_on_exec = (_type & 0o2000000) == 0o2000000;
-    inner.fd_table.set(new_fd, None, None);
-    if close_on_exec {
-        inner.fd_table.set_cloexec(new_fd);
-    }
+    task_inner.fd_table.set(
+        new_fd,
+        FileDescriptor::new(close_on_exec, false, FileClass::Abs(make_socket())),
+    );
     Ok(new_fd)
 }
 pub fn sys_bind(_sockfd: usize, _addr: *const u8, _addrlen: u32) -> SyscallRet {

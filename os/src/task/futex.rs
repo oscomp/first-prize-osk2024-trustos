@@ -7,7 +7,6 @@ use super::{block_current_and_run_next, current_task, wakeup_futex_task, TaskCon
 use alloc::{
     collections::{BTreeMap, VecDeque},
     sync::{Arc, Weak},
-    vec::Vec,
 };
 use lazy_static::*;
 use log::debug;

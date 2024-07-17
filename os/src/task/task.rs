@@ -124,7 +124,7 @@ impl TaskControlBlockInner {
         } else if dirfd != -100 {
             // AT_FDCWD=-100
             let dirfd = dirfd as usize;
-            if let Some(file) = self.fd_table.try_get_file(dirfd) {
+            if let Some(file) = self.fd_table.try_get(dirfd) {
                 let file = file.file()?;
                 Ok(file.inode.path())
             } else {
@@ -140,7 +140,7 @@ impl TaskControlBlockInner {
         } else if dirfd != -100 {
             // AT_FDCWD=-100
             let dirfd = dirfd as usize;
-            if let Some(file) = self.fd_table.try_get_file(dirfd) {
+            if let Some(file) = self.fd_table.try_get(dirfd) {
                 let base_path = file.file()?.inode.path();
                 Ok(get_abs_path(&base_path, path))
             } else {

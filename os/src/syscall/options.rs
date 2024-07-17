@@ -187,25 +187,6 @@ pub enum IoctlCommand {
     Default = 0,
 }
 
-// #[repr(isize)]
-// #[allow(non_camel_case_types)]
-// #[derive(Debug, PartialEq, FromPrimitive)]
-// pub enum SyslogType {
-//     SYSLOG_ACTION_CLOSE = 0,
-//     SYSLOG_ACTION_OPEN = 1,
-//     SYSLOG_ACTION_READ = 2,
-//     SYSLOG_ACTION_READ_ALL = 3,
-//     SYSLOG_ACTION_READ_CLEAR = 4,
-//     SYSLOG_ACTION_CLEAR = 5,
-//     SYSLOG_ACTION_CONSOLE_OFF = 6,
-//     SYSLOG_ACTION_CONSOLE_ON = 7,
-//     SYSLOG_ACTION_CONSOLE_LEVER = 8,
-//     SYSLOG_ACTION_SIZE_UNREAD = 9,
-//     SYSLOG_ACTION_SIZE_BUFFER = 10,
-//     #[num_enum(default)]
-//     Default = -1,
-// }
-
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct PollFd {
@@ -328,21 +309,7 @@ pub struct Iovec {
 unsafe impl Send for Iovec {}
 unsafe impl Sync for Iovec {}
 
-// utime
-pub const UTIME_NOW: usize = (1 << 30) - 1;
-pub const UTIME_OMIT: usize = (1 << 30) - 2;
-
-//  fcntl
-pub const F_DUPFD: usize = 0;
-pub const F_DUPFD_CLOEXEC: usize = 1030;
-pub const F_GETFD: usize = 1;
-pub const F_SETFD: usize = 2;
-pub const F_GETFL: usize = 3;
-pub const F_SETFL: usize = 4;
-pub const FD_CLOEXEC: usize = 1;
-
 // rlimit
-
 #[allow(unused)]
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -356,5 +323,16 @@ bitflags! {
         const SIG_BLOCK = 0;
         const SIG_UNBLOCK = 1;
         const SIG_SETMASK = 2;
+    }
+}
+
+bitflags! {
+    pub struct FcntlCmd:usize{
+        const F_DUPFD = 0;
+        const F_GETFD = 1;
+        const F_SETFD = 2;
+        const F_GETFL = 3;
+        const F_SETFL= 4;
+        const F_DUPFD_CLOEXEC= 1030;
     }
 }

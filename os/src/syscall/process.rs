@@ -395,67 +395,6 @@ pub fn sys_umask(_mask: u32) -> SyscallRet {
 
 pub fn sys_syslog(_logtype: isize, _bufp: *const u8, _len: usize) -> SyscallRet {
     Ok(0)
-    // let task = current_task().unwrap();
-    // let inner = task.inner_lock();
-
-    // debug!(
-    //     "[sys_syslog] logtype is {}, bufp is {:x}, len is {}",
-    //     logtype, bufp as usize, len
-    // );
-
-    // let logtype = SyslogType::from(logtype);
-
-    // match logtype {
-    //     SyslogType::SYSLOG_ACTION_READ => {
-    //         let mut bufp = UserBuffer::new(
-    //             safe_translated_byte_buffer(inner.memory_set.clone(), bufp, len).unwrap(),
-    //         );
-    //         let mut logbuf: [u8; LOG_BUF_LEN] = [0; LOG_BUF_LEN];
-    //         let logsize = read_log_buf(logbuf.as_mut_slice(), len);
-    //         bufp.write(&logbuf[0..logsize]);
-    //         Ok(logsize)
-    //     }
-    //     SyslogType::SYSLOG_ACTION_READ_ALL => {
-    //         let mut bufp = UserBuffer::new(
-    //             safe_translated_byte_buffer(inner.memory_set.clone(), bufp, len).unwrap(),
-    //         );
-    //         let mut logbuf: [u8; LOG_BUF_LEN] = [0; LOG_BUF_LEN];
-    //         let logsize = read_all_log_buf(logbuf.as_mut_slice(), len);
-    //         bufp.write(&logbuf[0..logsize]);
-    //         Ok(logsize)
-    //     }
-    //     SyslogType::SYSLOG_ACTION_READ_CLEAR => {
-    //         let mut bufp = UserBuffer::new(
-    //             safe_translated_byte_buffer(inner.memory_set.clone(), bufp, len).unwrap(),
-    //         );
-    //         let mut logbuf: [u8; LOG_BUF_LEN] = [0; LOG_BUF_LEN];
-    //         let logsize = read_clear_log_buf(logbuf.as_mut_slice(), len);
-    //         bufp.write(&logbuf[0..logsize]);
-    //         Ok(logsize)
-    //     }
-    //     SyslogType::SYSLOG_ACTION_CLEAR => {
-    //         clear_log_buf();
-    //         Ok(0)
-    //     }
-    //     SyslogType::SYSLOG_ACTION_CONSOLE_OFF => {
-    //         console_log_off();
-    //         Ok(0)
-    //     }
-    //     SyslogType::SYSLOG_ACTION_CONSOLE_ON => {
-    //         console_log_on();
-    //         Ok(0)
-    //     }
-    //     SyslogType::SYSLOG_ACTION_CONSOLE_LEVER => {
-    //         let result = change_log_level(len);
-    //         if result == -1 {
-    //             return Err(SysErrNo::EINVAL);
-    //         }
-    //         Ok(0)
-    //     }
-    //     SyslogType::SYSLOG_ACTION_SIZE_UNREAD => Ok(unread_size()),
-    //     SyslogType::SYSLOG_ACTION_SIZE_BUFFER => Ok(LOG_BUF_LEN),
-    //     _ => return Err(SysErrNo::EINVAL),
-    // }
 }
 
 pub fn sys_sched_setaffinity(_pid: usize, _cpusetsize: usize, _mask: usize) -> SyscallRet {
@@ -497,14 +436,13 @@ pub fn sys_sched_getparam(_pid: usize, _param: *const u8) -> SyscallRet {
     Ok(0)
 }
 
-const TIME_ABSTIME: u32 = 1;
-
 pub fn sys_clock_nanosleep(
     _clockid: usize,
     flags: u32,
     t: *const u8,
     remain: *const u8,
 ) -> SyscallRet {
+    const TIME_ABSTIME: u32 = 1;
     let token = current_token();
 
     // debug!(

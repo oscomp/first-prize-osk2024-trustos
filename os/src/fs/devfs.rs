@@ -1,8 +1,7 @@
 use crate::{
-    fs::FileClass,
     mm::{translated_byte_buffer, UserBuffer},
     syscall::{IoctlCommand, PollEvents},
-    task::{current_task, INITPROC},
+    task::current_task,
     utils::{SysErrNo, SyscallRet},
 };
 use alloc::{
@@ -16,7 +15,7 @@ use core::{cmp::min, mem::size_of};
 use lazy_static::lazy_static;
 use spin::{Mutex, RwLock};
 
-use super::{stat::S_IFCHR, File, Ioctl, Kstat, Stdout};
+use super::{stat::S_IFCHR, File, Ioctl, Kstat, Stdin, Stdout};
 
 pub struct DevZero;
 pub struct DevNull;
@@ -313,18 +312,10 @@ impl File for DevTty {
         true
     }
     fn read(&self, user_buf: UserBuffer) -> SyscallRet {
-        if let Some(FileClass::Abs(tty_device)) = INITPROC.inner_lock().fd_table.try_get_file(0) {
-            tty_device.read(user_buf)
-        } else {
-            panic!("get Stdin error!");
-        }
+        Stdin.read(user_buf)
     }
     fn write(&self, user_buf: UserBuffer) -> SyscallRet {
-        if let Some(FileClass::Abs(tty_device)) = INITPROC.inner_lock().fd_table.try_get_file(1) {
-            tty_device.write(user_buf)
-        } else {
-            panic!("get Stdout error!");
-        }
+        Stdout.write(user_buf)
     }
     fn fstat(&self) -> Kstat {
         let devno = get_devno("/dev/tty");
@@ -350,13 +341,7 @@ impl File for DevTty {
 
 impl Ioctl for DevTty {
     fn ioctl(&self, cmd: usize, arg: usize) -> isize {
-        if let Some(FileClass::Abs(tty_device)) = INITPROC.inner_lock().fd_table.try_get_file(1) {
-            // tty_device.ioctl(cmd, arg)
-            let tty_device = unsafe { Arc::from_raw(Arc::into_raw(tty_device) as *const Stdout) };
-            tty_device.ioctl(cmd, arg)
-        } else {
-            panic!("get Stdout error!");
-        }
+        Stdout.ioctl(cmd, arg)
     }
 }
 

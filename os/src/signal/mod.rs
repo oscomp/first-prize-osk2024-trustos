@@ -27,15 +27,6 @@ extern "C" {
 }
 
 pub fn check_if_any_sig_for_current_task() -> Option<usize> {
-    // for signo in 1..(SIG_MAX_NUM + 1) {
-    //     let task = current_task().unwrap();
-    //     let task_inner = task.inner_lock();
-    //     let sig = SigSet::from_sig(signo);
-    //     if task_inner.sig_pending.contains(sig) && !task_inner.sig_mask.contains(sig) {
-    //         return Some(signo);
-    //     }
-    // }
-    // None
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     task_inner
@@ -188,7 +179,6 @@ pub fn restore_frame() -> SyscallRet {
 
     if !sa_siginfo {
         // signal mask
-        // *task_inner.sig_table.blocked_mut() = get_data(token, user_sp as *const SigSet);
         task_inner.sig_mask = get_data(token, user_sp as *const SigSet);
         user_sp += size_of::<SigSet>();
         // Trap cx

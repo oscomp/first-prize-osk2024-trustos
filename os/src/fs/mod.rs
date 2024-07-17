@@ -28,7 +28,7 @@ use alloc::{sync::Arc, vec::Vec};
 pub use devfs::*;
 pub use dirent::Dirent;
 pub use fsidx::*;
-pub use fstruct::{FdTable, FdTableInner, FsInfo};
+pub use fstruct::*;
 use log::debug;
 pub use mount::MNT_TABLE;
 pub use net::*;
