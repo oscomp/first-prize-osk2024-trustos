@@ -179,10 +179,7 @@ pub fn sys_futex(
     _val3: i32,
 ) -> SyscallRet {
     let cmd = FutexCmd::try_from_primitive(futex_op & 0x7f).unwrap();
-    debug!(
-        "[sys_futex] uaddr = {:#x}, cmd = {:?}, val = {},timeout={:#x}",
-        uaddr as usize, cmd, val, timeout as usize
-    );
+
     if uaddr.align_offset(4) != 0 {
         return Err(SysErrNo::EINVAL);
     }
@@ -193,11 +190,12 @@ pub fn sys_futex(
         .memory_set
         .translate_va(VirtAddr::from(uaddr as usize))
         .unwrap();
-    let pa2 = task_inner
-        .memory_set
-        .translate_va(VirtAddr::from(uaddr2 as usize));
-    drop(task_inner);
-    drop(task);
+
+    debug!(
+        "[sys_futex] pa = {:#x}, cmd = {:?}, val = {}",
+        pa.0, cmd, val,
+    );
+
     match cmd {
         FutexCmd::FUTEX_WAIT => {
             let futex_word = get_data(token, uaddr);
@@ -212,15 +210,24 @@ pub fn sys_futex(
                 );
                 add_futex_timer(get_time_spec() + timeout, current_task().unwrap());
             }
+            drop(task_inner);
+            drop(task);
             futex_wait(pa)
         }
-        FutexCmd::FUTEX_WAKE => Ok(futex_wake_up(pa, val)),
-        FutexCmd::FUTEX_REQUEUE => Ok(futex_requeue(
-            pa,
-            val,
-            pa2.ok_or(SysErrNo::EINVAL)?,
-            timeout as i32,
-        )),
+        FutexCmd::FUTEX_WAKE => {
+            drop(task_inner);
+            drop(task);
+            Ok(futex_wake_up(pa, val))
+        }
+        FutexCmd::FUTEX_REQUEUE => {
+            let pa2 = task_inner
+                .memory_set
+                .translate_va(VirtAddr::from(uaddr2 as usize))
+                .ok_or(SysErrNo::EINVAL)?;
+            drop(task_inner);
+            drop(task);
+            Ok(futex_requeue(pa, val, pa2, timeout as i32))
+        }
     }
 }
 

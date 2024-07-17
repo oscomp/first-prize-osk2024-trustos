@@ -20,18 +20,18 @@ lazy_static! {
 
 pub fn futex_wait(pa: PhysAddr) -> SyscallRet {
     let mut waitq = FUTEX_LIST.lock();
-    let current = current_task().unwrap();
+    let task = current_task().unwrap();
     if let Some(queue) = waitq.get_mut(&pa) {
-        queue.push_back(Arc::downgrade(&current));
+        queue.push_back(Arc::downgrade(&task));
     } else {
         waitq.insert(pa, {
             let mut queue = VecDeque::new();
-            queue.push_back(Arc::downgrade(&current));
+            queue.push_back(Arc::downgrade(&task));
             queue
         });
     }
     debug!("[futex_wait] blocked!");
-    drop(current);
+    drop(task);
     drop(waitq);
     block_current_and_run_next();
     let task = current_task().unwrap();
@@ -48,8 +48,9 @@ pub fn futex_wait(pa: PhysAddr) -> SyscallRet {
 }
 
 pub fn futex_wake_up(pa: PhysAddr, max_num: i32) -> usize {
-    let mut num = 0;
+    debug!("[sys_futex] futex wakeup thread,max_num={}", max_num);
     let mut list = FUTEX_LIST.lock();
+    let mut num = 0;
     if let Some(queue) = list.get_mut(&pa) {
         loop {
             if num >= max_num as usize {
@@ -65,33 +66,33 @@ pub fn futex_wake_up(pa: PhysAddr, max_num: i32) -> usize {
             }
         }
     }
-    drop(list);
     num
 }
 
 pub fn futex_requeue(pa: PhysAddr, max_num: i32, pa2: PhysAddr, max_num2: i32) -> usize {
+    debug!(
+        "[futex_requeue],pa={:#x},max_num={},pa2={:#x},max_num2={}",
+        pa.0, max_num, pa2.0, max_num2
+    );
+    let mut list = FUTEX_LIST.lock();
     let mut num = 0;
     let mut num2 = 0;
-    let mut list = FUTEX_LIST.lock();
-    let mut tmp = Vec::new();
+    let mut tmp = VecDeque::new();
     if let Some(queue) = list.get_mut(&pa) {
         while let Some(weak_task) = queue.pop_front() {
             if let Some(task) = weak_task.upgrade() {
-                if num < max_num as usize {
+                if num < max_num {
                     wakeup_futex_task(task);
                     num += 1;
                 } else if num2 < max_num2 {
-                    tmp.push(task);
+                    tmp.push_back(Arc::downgrade(&task));
                     num2 += 1;
                 }
             }
         }
     }
-    if let Some(queue2) = list.get_mut(&pa2) {
-        for task in tmp {
-            queue2.push_back(Arc::downgrade(&task));
-        }
+    if !tmp.is_empty() {
+        list.entry(pa2).or_insert_with(VecDeque::new).extend(tmp);
     }
-    drop(list);
-    num
+    num as usize
 }
