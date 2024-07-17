@@ -3,13 +3,13 @@ use log::debug;
 use crate::{
     mm::{get_data, put_data},
     signal::{
-        restore_frame, send_access_signal, send_signal_to_thread, send_signal_to_thread_group,
-        KSigAction, SigAction, SigInfo, SigOp, SigSet, SIG_MAX_NUM,
+        restore_frame, send_signal_to_thread, send_signal_to_thread_group, KSigAction, SigAction,
+        SigInfo, SigSet,
     },
     syscall::SignalMaskFlag,
-    task::{current_task, current_token, suspend_current_and_run_next},
-    timer::{add_stopped_task_timer, get_time_spec, Timespec},
-    utils::{backtrace, SysErrNo, SyscallRet},
+    task::{current_task, suspend_current_and_run_next},
+    timer::Timespec,
+    utils::{SysErrNo, SyscallRet},
 };
 
 pub fn sys_rt_sigaction(

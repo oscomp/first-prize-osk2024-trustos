@@ -1,9 +1,8 @@
 use crate::{
     fs::{open, OpenFlags, NONE_MODE},
-    logger::{change_log_level, clear_log_buf, console_log_off, console_log_on, unread_size},
     mm::{
-        get_data, put_data, safe_translated_byte_buffer, translated_byte_buffer, translated_ref,
-        translated_str, PhysAddr, UserBuffer, VirtAddr,
+        get_data, put_data, translated_byte_buffer, translated_ref, translated_str, UserBuffer,
+        VirtAddr,
     },
     signal::{check_if_any_sig_for_current_task, handle_signal},
     syscall::{CloneFlags, Utsname},
@@ -19,8 +18,6 @@ use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
 use num_enum::TryFromPrimitive;
 
-use super::SyslogType;
-use crate::logger::{read_all_log_buf, read_clear_log_buf, read_log_buf, LOG_BUF_LEN};
 use log::debug;
 
 pub fn sys_exit(exit_code: i32) -> SyscallRet {
@@ -389,68 +386,69 @@ pub fn sys_umask(_mask: u32) -> SyscallRet {
     Ok(0)
 }
 
-pub fn sys_syslog(logtype: isize, bufp: *const u8, len: usize) -> SyscallRet {
-    let task = current_task().unwrap();
-    let inner = task.inner_lock();
+pub fn sys_syslog(_logtype: isize, _bufp: *const u8, _len: usize) -> SyscallRet {
+    Ok(0)
+    // let task = current_task().unwrap();
+    // let inner = task.inner_lock();
 
     // debug!(
     //     "[sys_syslog] logtype is {}, bufp is {:x}, len is {}",
     //     logtype, bufp as usize, len
     // );
 
-    let logtype = SyslogType::from(logtype);
+    // let logtype = SyslogType::from(logtype);
 
-    match logtype {
-        SyslogType::SYSLOG_ACTION_READ => {
-            let mut bufp = UserBuffer::new(
-                safe_translated_byte_buffer(inner.memory_set.clone(), bufp, len).unwrap(),
-            );
-            let mut logbuf: [u8; LOG_BUF_LEN] = [0; LOG_BUF_LEN];
-            let logsize = read_log_buf(logbuf.as_mut_slice(), len);
-            bufp.write(&logbuf[0..logsize]);
-            Ok(logsize)
-        }
-        SyslogType::SYSLOG_ACTION_READ_ALL => {
-            let mut bufp = UserBuffer::new(
-                safe_translated_byte_buffer(inner.memory_set.clone(), bufp, len).unwrap(),
-            );
-            let mut logbuf: [u8; LOG_BUF_LEN] = [0; LOG_BUF_LEN];
-            let logsize = read_all_log_buf(logbuf.as_mut_slice(), len);
-            bufp.write(&logbuf[0..logsize]);
-            Ok(logsize)
-        }
-        SyslogType::SYSLOG_ACTION_READ_CLEAR => {
-            let mut bufp = UserBuffer::new(
-                safe_translated_byte_buffer(inner.memory_set.clone(), bufp, len).unwrap(),
-            );
-            let mut logbuf: [u8; LOG_BUF_LEN] = [0; LOG_BUF_LEN];
-            let logsize = read_clear_log_buf(logbuf.as_mut_slice(), len);
-            bufp.write(&logbuf[0..logsize]);
-            Ok(logsize)
-        }
-        SyslogType::SYSLOG_ACTION_CLEAR => {
-            clear_log_buf();
-            Ok(0)
-        }
-        SyslogType::SYSLOG_ACTION_CONSOLE_OFF => {
-            console_log_off();
-            Ok(0)
-        }
-        SyslogType::SYSLOG_ACTION_CONSOLE_ON => {
-            console_log_on();
-            Ok(0)
-        }
-        SyslogType::SYSLOG_ACTION_CONSOLE_LEVER => {
-            let result = change_log_level(len);
-            if result == -1 {
-                return Err(SysErrNo::EINVAL);
-            }
-            Ok(0)
-        }
-        SyslogType::SYSLOG_ACTION_SIZE_UNREAD => Ok(unread_size()),
-        SyslogType::SYSLOG_ACTION_SIZE_BUFFER => Ok(LOG_BUF_LEN),
-        _ => return Err(SysErrNo::EINVAL),
-    }
+    // match logtype {
+    //     SyslogType::SYSLOG_ACTION_READ => {
+    //         let mut bufp = UserBuffer::new(
+    //             safe_translated_byte_buffer(inner.memory_set.clone(), bufp, len).unwrap(),
+    //         );
+    //         let mut logbuf: [u8; LOG_BUF_LEN] = [0; LOG_BUF_LEN];
+    //         let logsize = read_log_buf(logbuf.as_mut_slice(), len);
+    //         bufp.write(&logbuf[0..logsize]);
+    //         Ok(logsize)
+    //     }
+    //     SyslogType::SYSLOG_ACTION_READ_ALL => {
+    //         let mut bufp = UserBuffer::new(
+    //             safe_translated_byte_buffer(inner.memory_set.clone(), bufp, len).unwrap(),
+    //         );
+    //         let mut logbuf: [u8; LOG_BUF_LEN] = [0; LOG_BUF_LEN];
+    //         let logsize = read_all_log_buf(logbuf.as_mut_slice(), len);
+    //         bufp.write(&logbuf[0..logsize]);
+    //         Ok(logsize)
+    //     }
+    //     SyslogType::SYSLOG_ACTION_READ_CLEAR => {
+    //         let mut bufp = UserBuffer::new(
+    //             safe_translated_byte_buffer(inner.memory_set.clone(), bufp, len).unwrap(),
+    //         );
+    //         let mut logbuf: [u8; LOG_BUF_LEN] = [0; LOG_BUF_LEN];
+    //         let logsize = read_clear_log_buf(logbuf.as_mut_slice(), len);
+    //         bufp.write(&logbuf[0..logsize]);
+    //         Ok(logsize)
+    //     }
+    //     SyslogType::SYSLOG_ACTION_CLEAR => {
+    //         clear_log_buf();
+    //         Ok(0)
+    //     }
+    //     SyslogType::SYSLOG_ACTION_CONSOLE_OFF => {
+    //         console_log_off();
+    //         Ok(0)
+    //     }
+    //     SyslogType::SYSLOG_ACTION_CONSOLE_ON => {
+    //         console_log_on();
+    //         Ok(0)
+    //     }
+    //     SyslogType::SYSLOG_ACTION_CONSOLE_LEVER => {
+    //         let result = change_log_level(len);
+    //         if result == -1 {
+    //             return Err(SysErrNo::EINVAL);
+    //         }
+    //         Ok(0)
+    //     }
+    //     SyslogType::SYSLOG_ACTION_SIZE_UNREAD => Ok(unread_size()),
+    //     SyslogType::SYSLOG_ACTION_SIZE_BUFFER => Ok(LOG_BUF_LEN),
+    //     _ => return Err(SysErrNo::EINVAL),
+    // }
 }
 
 pub fn sys_sched_setaffinity(_pid: usize, _cpusetsize: usize, _mask: usize) -> SyscallRet {

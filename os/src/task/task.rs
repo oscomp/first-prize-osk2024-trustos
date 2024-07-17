@@ -22,7 +22,6 @@ use crate::{
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
-use log::debug;
 use spin::{Mutex, MutexGuard};
 
 pub struct TaskControlBlock {
@@ -472,7 +471,7 @@ impl TaskControlBlock {
             let entry_point = get_data(token, stack as *const usize);
             let arg = get_data(token, (stack + 8) as *const usize);
             // sepc/entry
-            debug!("[new thread] entry_point:{:#x}", entry_point);
+            // debug!("[new thread] entry_point:{:#x}", entry_point);
             trap_cx.sepc = entry_point;
             //a0
             trap_cx.gp.x[10] = arg;

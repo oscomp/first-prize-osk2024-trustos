@@ -18,7 +18,6 @@ use crate::{
 use alloc::{sync::Arc, vec::Vec};
 use core::arch::asm;
 use lazy_static::*;
-use log::debug;
 use riscv::register::{
     satp,
     scause::{Exception, Trap},

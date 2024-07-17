@@ -2,7 +2,7 @@ use alloc::sync::Arc;
 
 use crate::sync::SyncUnsafeCell;
 
-use super::{KSigAction, SigSet, SIG_MAX_NUM};
+use super::{KSigAction, SIG_MAX_NUM};
 // struct task_struct {
 //  int sigpending;
 //  struct signal_struct *sig;

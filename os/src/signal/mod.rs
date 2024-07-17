@@ -12,7 +12,7 @@ pub use signal::*;
 use crate::{
     config::mm::USER_STACK_SIZE,
     mm::{get_data, put_data},
-    task::{current_task, TaskControlBlock, TaskStatus, THREAD_GROUP, TID_TO_TASK},
+    task::{current_task, TaskControlBlock, THREAD_GROUP, TID_TO_TASK},
     trap::{MachineContext, UserContext},
     utils::{SysErrNo, SyscallRet},
 };

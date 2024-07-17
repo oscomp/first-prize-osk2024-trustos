@@ -1,5 +1,4 @@
-use crate::mm::{get_data, translated_byte_buffer, translated_ref, UserBuffer};
-use crate::syscall::SigSet;
+use crate::mm::{get_data, translated_byte_buffer, UserBuffer};
 use crate::task::{current_task, current_token};
 use crate::timer::{
     get_time_spec, Clockid, Itimerval, Rusage, TimeVal, Timespec, Tms, ITIMER_REAL,
