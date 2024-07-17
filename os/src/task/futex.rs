@@ -3,7 +3,7 @@ use crate::{
     utils::{SysErrNo, SyscallRet},
 };
 
-use super::{block_current_and_run_next, current_task, wakeup_task, TaskControlBlock};
+use super::{block_current_and_run_next, current_task, wakeup_futex_task, TaskControlBlock};
 use alloc::{
     collections::{BTreeMap, VecDeque},
     sync::{Arc, Weak},
@@ -57,7 +57,7 @@ pub fn futex_wake_up(pa: PhysAddr, max_num: i32) -> usize {
             }
             if let Some(weak_task) = queue.pop_front() {
                 if let Some(task) = weak_task.upgrade() {
-                    wakeup_task(task);
+                    wakeup_futex_task(task);
                     num += 1;
                 }
             } else {
@@ -78,7 +78,7 @@ pub fn futex_requeue(pa: PhysAddr, max_num: i32, pa2: PhysAddr, max_num2: i32) -
         while let Some(weak_task) = queue.pop_front() {
             if let Some(task) = weak_task.upgrade() {
                 if num < max_num as usize {
-                    wakeup_task(task);
+                    wakeup_futex_task(task);
                     num += 1;
                 } else if num2 < max_num2 {
                     tmp.push(task);

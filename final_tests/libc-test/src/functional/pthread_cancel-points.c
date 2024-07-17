@@ -113,15 +113,13 @@ static struct {
 
 static void *run_execute(void *arg)
 {
-    t_printf("run_execute?\n");
+    // t_printf("run_execute?\n");
 	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, 0);
-    t_printf("sem_wait\n");
+    // t_printf("sem_wait\n");
 	while (sem_wait(&sem_seq));
-    t_printf("enable cancel\n");
+    // t_printf("enable cancel\n");
 	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, 0);
-    t_printf("can cancel?\n");
 	seqno = 1;
-    t_printf("execute");
 	cur_sc->execute(cur_sc->arg);
 	seqno = 2;
 	return 0;
@@ -139,11 +137,11 @@ int main(void)
 		cur_sc->prepare(cur_sc->arg);
 		seqno = 0;
 		TESTR(pthread_create(&td, 0, run_execute, 0), "creating thread to be canceled");
-        t_printf("pthread cancel\n");
+        // t_printf("pthread cancel\n");
 		TESTR(pthread_cancel(td), "canceling");
-        t_printf("sem_post\n");
+        // t_printf("sem_post\n");
 		TESTR(sem_post(&sem_seq), "unblocking canceled thread");
-        t_printf("pthread_join\n");
+        // t_printf("pthread_join\n");
 		TESTR(pthread_join(td, &res), "joining canceled thread");
 		if (cur_sc->want_cancel) {
 			TESTC(res == PTHREAD_CANCELED, "canceled thread exit status")

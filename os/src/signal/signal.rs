@@ -124,6 +124,14 @@ impl SigSet {
     pub fn from_sig(signo: usize) -> Self {
         SigSet::from_bits(1 << (signo - 1)).unwrap()
     }
+    pub fn peek_front(&self) -> Option<usize> {
+        if self.is_empty() {
+            None
+        } else {
+            // SigSet::from_bits(1 << (self.bits().trailing_zeros() as usize))
+            Some(self.bits().trailing_zeros() as usize + 1)
+        }
+    }
 }
 
 // struct sigaction {

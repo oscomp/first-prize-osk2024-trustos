@@ -5,7 +5,7 @@ use core::ops::Add;
 use crate::sbi::set_timer;
 use crate::sync::SyncUnsafeCell;
 use crate::task::TaskControlBlock;
-use crate::{config::board::CLOCK_FREQ, task::wakeup_task};
+use crate::{config::board::CLOCK_FREQ, task::wakeup_futex_task};
 use alloc::{
     collections::BinaryHeap,
     sync::{Arc, Weak},
@@ -370,10 +370,17 @@ pub fn set_next_trigger() {
     set_timer(get_time() + CLOCK_FREQ / TICKS_PER_SEC);
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum TimerType {
+    Futex,
+    StoppedTask,
+}
+
 /// 时钟计数器，与 itimer 间隔定时器不同，用于阻塞唤醒进程
 pub struct TimerCondVar {
     pub expire: Timespec,
     pub task: Weak<TaskControlBlock>,
+    pub kind: TimerType,
 }
 impl PartialEq for TimerCondVar {
     fn eq(&self, other: &Self) -> bool {
@@ -399,11 +406,21 @@ lazy_static! {
         Mutex::new(BinaryHeap::<TimerCondVar>::new());
 }
 
-pub fn add_timer(expire: Timespec, task: Arc<TaskControlBlock>) {
+pub fn add_futex_timer(expire: Timespec, task: Arc<TaskControlBlock>) {
     let mut timers = TIMERS.lock();
     timers.push(TimerCondVar {
         expire,
         task: Arc::downgrade(&task),
+        kind: TimerType::Futex,
+    });
+}
+
+pub fn add_stopped_task_timer(expire: Timespec, task: Arc<TaskControlBlock>) {
+    let mut timers = TIMERS.lock();
+    timers.push(TimerCondVar {
+        expire,
+        task: Arc::downgrade(&task),
+        kind: TimerType::StoppedTask,
     });
 }
 
@@ -414,8 +431,13 @@ pub fn check_timer() {
         if timer.expire <= current {
             if let Some(task) = timer.task.upgrade() {
                 debug!("[check_timer] wake up task",);
-                // 调用 wakeup_task 唤醒超时线程
-                wakeup_task(Arc::clone(&task));
+                if timer.kind == TimerType::Futex {
+                    // 调用 wakeup_task 唤醒超时线程
+                    wakeup_futex_task(Arc::clone(&task));
+                } else if timer.kind == TimerType::StoppedTask {
+                    todo!()
+                    // wakeup_stopped_task(Arc::clone(&task));
+                }
             }
             timers.pop();
         } else {

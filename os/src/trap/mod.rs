@@ -190,7 +190,7 @@ pub fn trap_handler() {
     }
     //检查定时器
     // TODO(ZMY) 这玩意有什么用? SIG_ALRM默认执行exit函数
-    // current_task().unwrap().check_timer();
+    current_task().unwrap().check_timer();
 
     //记录内核空间花费CPU时间，同时准备用户空间花费CPU时间
     current_task()

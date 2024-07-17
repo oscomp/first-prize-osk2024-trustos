@@ -33,7 +33,7 @@ pub struct UserContext {
     pub link: usize,
     pub stack: SignalStack,
     pub sigmask: SigSet,
-    // pub __pad: [u8; 128],
+    pub __pad: [u8; 128],
     pub mcontext: MachineContext,
 }
 

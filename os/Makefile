@@ -28,8 +28,8 @@ KERNEL_ENTRY_PA := 0x80200000
 # Binutils
 OBJDUMP := rust-objdump --arch-name=riscv64
 OBJCOPY := rust-objcopy --binary-architecture=riscv64
-# GDB_PATH := /usr/local/bin/riscv64-unknown-elf-gdb
-# gdb := $(GDB_PATH) rust-gdb
+GDB_PATH := /usr/local/bin/riscv64-unknown-elf-gdb
+gdb := $(GDB_PATH) rust-gdb
 
 # Disassembly
 DISASM ?= -x
@@ -105,7 +105,7 @@ drun:
 debug: initrust build copy_to_fs
 	@tmux new-session -d \
 		"qemu-system-riscv64 $(QEMU_ARGS) -s -S" && \
-		tmux split-window -h "riscv64-unknown-elf-gdb -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'" && \
+		tmux split-window -h "$(gdb) -ex 'file $(KERNEL_ELF)' -ex 'set arch riscv:rv64' -ex 'target remote localhost:1234'" && \
 		tmux -2 attach-session 
 
 

@@ -67,7 +67,7 @@ pub enum Syscall {
     SigKill = 129,
     Tkill = 130,
     Tgkill = 131,
-    SigSupend = 133,
+    SigSuspend = 133,
     SigAction = 134,
     SigProcMask = 135,
     SigTimedWait = 137,
@@ -137,7 +137,7 @@ use time::*;
 
 use crate::{
     sbi::shutdown,
-    signal::{SigAction, SigSet},
+    signal::{SigAction, SigInfo, SigSet},
     timer::Timespec,
     utils::SyscallRet,
 };
@@ -287,7 +287,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::SigKill => sys_kill(args[0] as isize, args[0]),
         Syscall::Tkill => sys_tkill(args[0] as usize, args[1] as usize),
         Syscall::Tgkill => sys_tgkill(args[0] as usize, args[1] as usize, args[2] as usize),
-        Syscall::SigSupend => sys_rt_sigsuspend(args[0] as *const SigSet),
+        Syscall::SigSuspend => sys_rt_sigsuspend(args[0] as *const SigSet),
         Syscall::SigAction => sys_rt_sigaction(
             args[0],
             args[1] as *const SigAction,
@@ -300,7 +300,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         ),
         Syscall::SigTimedWait => sys_rt_sigtimedwait(
             args[0] as *const SigSet,
-            args[1],
+            args[1] as *mut SigInfo,
             args[2] as *const Timespec,
         ),
         Syscall::SigReturn => sys_rt_sigreturn(),

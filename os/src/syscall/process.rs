@@ -12,7 +12,7 @@ use crate::{
         futex_wait, futex_wake_up, move_child_process_to_init, remove_all_from_thread_group,
         suspend_current_and_run_next, task_num, Sysinfo, PROCESS_GROUP,
     },
-    timer::{add_timer, calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
+    timer::{add_futex_timer, calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
     utils::{get_abs_path, trim_start_slash, SysErrNo, SyscallRet},
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
@@ -213,7 +213,7 @@ pub fn sys_futex(
                     "[sys_futex] futex_word = {},timeout={:?}",
                     futex_word, timeout
                 );
-                add_timer(get_time_spec() + timeout, current_task().unwrap());
+                add_futex_timer(get_time_spec() + timeout, current_task().unwrap());
             }
             futex_wait(pa)
         }

@@ -12,7 +12,7 @@ pub use signal::*;
 use crate::{
     config::mm::USER_STACK_SIZE,
     mm::{get_data, put_data},
-    task::{current_task, TaskControlBlock, THREAD_GROUP, TID_TO_TASK},
+    task::{current_task, TaskControlBlock, TaskStatus, THREAD_GROUP, TID_TO_TASK},
     trap::{MachineContext, UserContext},
     utils::{SysErrNo, SyscallRet},
 };
@@ -27,26 +27,30 @@ extern "C" {
 }
 
 pub fn check_if_any_sig_for_current_task() -> Option<usize> {
-    for signo in 1..(SIG_MAX_NUM + 1) {
-        let task = current_task().unwrap();
-        let task_inner = task.inner_lock();
-        let sig = SigSet::from_sig(signo);
-        if task_inner.sig_pending.contains(sig) && !task_inner.sig_mask.contains(sig) {
-            return Some(signo);
-        }
-    }
-    None
+    // for signo in 1..(SIG_MAX_NUM + 1) {
+    //     let task = current_task().unwrap();
+    //     let task_inner = task.inner_lock();
+    //     let sig = SigSet::from_sig(signo);
+    //     if task_inner.sig_pending.contains(sig) && !task_inner.sig_mask.contains(sig) {
+    //         return Some(signo);
+    //     }
+    // }
+    // None
+    let task = current_task().unwrap();
+    let task_inner = task.inner_lock();
+    task_inner
+        .sig_pending
+        .difference(task_inner.sig_mask)
+        .peek_front()
 }
 
 pub fn handle_signal(signo: usize) {
     let task = current_task().unwrap();
-    let task_inner = task.inner_lock();
-    debug!(
-        "[handle_signal] signo={},handle signal {:?}",
-        signo,
-        SigSet::from_sig(signo)
-    );
+    let mut task_inner = task.inner_lock();
+    let signal = SigSet::from_sig(signo);
+    debug!("[handle_signal] signo={},handle signal {:?}", signo, signal);
     let sig_action = task_inner.sig_table.action(signo);
+    task_inner.sig_pending.remove(signal);
     drop(task_inner);
     drop(task);
     if sig_action.customed {
@@ -54,7 +58,10 @@ pub fn handle_signal(signo: usize) {
     } else {
         // 就在S模式运行,转换成fn(i32)
         if sig_action.act.sa_handler != 1 && sig_action.act.sa_handler != 0 {
-            debug!("sa_handler:{:#x}", sig_action.act.sa_handler);
+            debug!(
+                "sa_handler:{:#x},exit_current actually",
+                sig_action.act.sa_handler
+            );
             let handler: fn(i32) =
                 unsafe { core::mem::transmute(sig_action.act.sa_handler as *const ()) };
             handler(signo as i32);
@@ -72,7 +79,6 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
     let token = task_inner.user_token();
 
     task_inner.sig_mask |= sig_action.act.sa_mask | SigSet::from_sig(signo);
-    task_inner.sig_pending ^= SigSet::from_sig(signo);
 
     let trap_cx = task_inner.trap_cx();
     let mut user_sp = trap_cx.gp.x[2];
@@ -123,7 +129,7 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
                 link: 0,
                 stack: SignalStack::new(sig_sp, sig_size),
                 sigmask: task_inner.sig_mask,
-                // __pad: [0u8; 128],
+                __pad: [0u8; 128],
                 mcontext: trap_cx.as_mctx(),
             },
         );
@@ -196,8 +202,11 @@ pub fn restore_frame() -> SyscallRet {
         );
         let mctx = get_data(
             token,
-            (user_sp + 2 * size_of::<usize>() + size_of::<SignalStack>() + size_of::<SigSet>())
-                as *mut MachineContext,
+            (user_sp
+                + 2 * size_of::<usize>()
+                + size_of::<SignalStack>()
+                + size_of::<SigSet>()
+                + 128) as *mut MachineContext,
         );
         trap_cx.copy_from_mctx(mctx);
     }
@@ -208,7 +217,11 @@ pub fn restore_frame() -> SyscallRet {
 pub fn add_signal(task: Arc<TaskControlBlock>, signal: SigSet) {
     let mut task_inner = task.inner_lock();
     task_inner.sig_pending |= signal;
-    // *task_inner.sig_table.pending_mut() |= signal;
+    // if task_inner.task_status == TaskStatus::Stopped {
+    //     task_inner.task_status = TaskStatus::Ready
+    // }
+    // drop(task_inner);
+    // wakeup_stopped_task(task);
 }
 
 pub fn send_signal_to_thread_group(pid: usize, sig: SigSet) {
@@ -227,16 +240,16 @@ pub fn send_signal_to_thread(tid: usize, sig: SigSet) {
     }
 }
 
-pub fn send_signal_to_one_thread_of_thread_group(pid: usize, tid: usize, sig: SigSet) {
-    let thread_group = THREAD_GROUP.lock();
-    if let Some(tasks) = thread_group.get(&pid) {
-        for task in tasks.iter() {
-            if task.tid() == tid {
-                add_signal(task.clone(), sig);
-            }
-        }
-    }
-}
+// pub fn send_signal_to_one_thread_of_thread_group(pid: usize, tid: usize, sig: SigSet) {
+//     let thread_group = THREAD_GROUP.lock();
+//     if let Some(tasks) = thread_group.get(&pid) {
+//         for task in tasks.iter() {
+//             if task.tid() == tid {
+//                 add_signal(task.clone(), sig);
+//             }
+//         }
+//     }
+// }
 
 // 目前的进程组只是一个进程的所有子进程的集合
 pub fn send_signal_to_process_group(_pid: usize, _sig: SigSet) {

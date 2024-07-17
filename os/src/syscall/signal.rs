@@ -3,13 +3,12 @@ use log::debug;
 use crate::{
     mm::{get_data, put_data},
     signal::{
-        restore_frame, send_access_signal, send_signal_to_one_thread_of_thread_group,
-        send_signal_to_thread, send_signal_to_thread_group, KSigAction, SigAction, SigOp, SigSet,
-        SIG_MAX_NUM,
+        restore_frame, send_access_signal, send_signal_to_thread, send_signal_to_thread_group,
+        KSigAction, SigAction, SigInfo, SigOp, SigSet, SIG_MAX_NUM,
     },
     syscall::SignalMaskFlag,
     task::{current_task, current_token, suspend_current_and_run_next},
-    timer::{get_time_spec, Timespec},
+    timer::{add_stopped_task_timer, get_time_spec, Timespec},
     utils::{backtrace, SysErrNo, SyscallRet},
 };
 
@@ -79,43 +78,50 @@ pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) ->
 }
 /// 在指定时间内挂起给定信号
 pub fn sys_rt_sigtimedwait(
-    sig: *const SigSet,
-    _info: usize,
-    timeout: *const Timespec,
+    _sig: *const SigSet,
+    _info: *mut SigInfo,
+    _timeout: *const Timespec,
 ) -> SyscallRet {
-    let token = current_token();
-    let sig = get_data(token, sig);
-    let timeout = get_data(token, timeout);
+    Ok(0)
+    // if timeout.is_null() {
+    //     return Err(SysErrNo::EINVAL);
+    // }
+    // let task = current_task().unwrap();
+    // let task_inner = task.inner_lock();
+    // let token = task_inner.user_token();
+    // let sig = get_data(token, sig);
+    // let timeout = get_data(token, timeout);
 
-    let end_time = timeout + get_time_spec();
-    loop {
-        // debug!(
-        //     "[sys_rt_sigtimedwait] sig={:?}, info:{:#x}, timeout={:?}",
-        //     sig, _info, timeout
-        // );
-        let task = current_task().unwrap();
-        let mut task_inner = task.inner_lock();
-        for signum in 1..(SIG_MAX_NUM + 1) {
-            let signal = SigSet::from_sig(signum);
-            if sig.contains(signal) && task_inner.sig_pending.contains(signal) {
-                // *task_inner.sig_table.pending_mut() &= !signal;
-                task_inner.sig_pending &= !signal;
-                return Ok(signum);
-            }
-        }
-        if get_time_spec() > end_time {
-            return Err(SysErrNo::EAGAIN);
-        } else {
-            drop(task_inner);
-            drop(task);
-            suspend_current_and_run_next();
-        }
-    }
+    // debug!(
+    //     "[sys_rt_sigtimedwait] signal:{:?},timeout:{:?}",
+    //     sig, timeout
+    // );
+    // drop(task_inner);
+    // add_stopped_task_timer(get_time_spec() + timeout, task);
+
+    // stop_current_and_run_next();
+
+    // let task = current_task().unwrap();
+    // let task_inner = task.inner_lock();
+    // let token = task_inner.user_token();
+    // if !task_inner.sig_pending.is_empty() {
+    //     match (task_inner.sig_pending & sig).peek_front() {
+    //         Some(signo) => {
+    //             if !info.is_null() {
+    //                 put_data(token, info, SigInfo::new(signo, 0, 0));
+    //             }
+    //             Ok(signo)
+    //         }
+    //         None => Err(SysErrNo::EINTR),
+    //     }
+    // } else {
+    //     Err(SysErrNo::EAGAIN)
+    // }
 }
-///暂时将调用线程的信号掩码替换为 mask 给出的掩码，然后暂停线程，直到传递信号，
+/// 暂时将调用线程的信号掩码替换为 mask 给出的掩码，然后暂停线程，直到传递信号，
 /// 其操作是调用信号处理程序或终止进程
-/// 始终返回 -1
 pub fn sys_rt_sigsuspend(mask: *const SigSet) -> SyscallRet {
+    // TODO(ZMY): 暂停线程
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
     let token = task_inner.user_token();
@@ -127,26 +133,9 @@ pub fn sys_rt_sigsuspend(mask: *const SigSet) -> SyscallRet {
     loop {
         let task = current_task().unwrap();
         let mut task_inner = task.inner_lock();
-        for signum in 1..(SIG_MAX_NUM + 1) {
-            let signal = SigSet::from_sig(signum);
-            if task_inner.sig_pending.contains(signal) {
-                let sigaction = task_inner.sig_table.action(signum);
-                match sigaction.act.sa_handler {
-                    // 缺省操作
-                    0 => {
-                        if signal.default_op() == SigOp::Terminate {
-                            return Ok(usize::MAX);
-                        }
-                    }
-                    // 忽略信号
-                    1 => {}
-                    // 返回到用户的信号处理程序
-                    _ => {
-                        task_inner.sig_mask = old_mask;
-                        return Err(SysErrNo::EINTR);
-                    }
-                };
-            }
+        if !task_inner.sig_pending.is_empty() {
+            task_inner.sig_mask = old_mask;
+            return Err(SysErrNo::EINTR);
         }
         drop(task_inner);
         drop(task);
@@ -165,10 +154,17 @@ pub fn sys_kill(pid: isize, signo: usize) -> SyscallRet {
 
     match pid {
         _ if pid > 0 => send_signal_to_thread_group(pid as usize, sig),
-        0 => send_signal_to_thread_group(current_task().unwrap().pid(), sig),
-        -1 => send_access_signal(current_task().unwrap().tid(), sig),
+        0 => {
+            todo!()
+            // send_signal_to_thread_group(current_task().unwrap().pid(), sig)
+        }
+        -1 => {
+            todo!()
+            // send_access_signal(current_task().unwrap().tid(), sig)
+        }
         _ => {
-            send_signal_to_thread_group(-pid as usize, sig);
+            todo!()
+            // send_signal_to_thread_group(-pid as usize, sig);
         }
     }
     Ok(0)
@@ -189,6 +185,7 @@ pub fn sys_tgkill(tgid: usize, tid: usize, signo: usize) -> SyscallRet {
         tgid, tid, sig
     );
 
-    send_signal_to_one_thread_of_thread_group(tgid, tid, sig);
-    Ok(0)
+    unimplemented!();
+    // send_signal_to_one_thread_of_thread_group(tgid, tid, sig);
+    // Ok(0)
 }
