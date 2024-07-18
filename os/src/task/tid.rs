@@ -1,5 +1,8 @@
 //!Implementation of [`PidAllocator`]
-use crate::config::mm::{KERNEL_STACK_SIZE, KSTACK_TOP, PAGE_SIZE};
+use crate::{
+    config::mm::{KERNEL_STACK_SIZE, KSTACK_TOP, PAGE_SIZE},
+    mm::{MapAreaType, MapPermission, VirtAddr, KERNEL_SPACE},
+};
 use alloc::vec::Vec;
 use lazy_static::*;
 use spin::Mutex;
@@ -74,20 +77,16 @@ impl KernelStack {
         //     "kernel stack pos [{:#x},{:#x})",
         //     kernel_stack_bottom, kernel_stack_top
         // );
+        // KernelStack { tid: tid_handle.0 }
+
+        let (kernel_stack_bottom, kernel_stack_top) = kernel_stack_position(tid_handle.0);
+        KERNEL_SPACE.lock().insert_framed_area(
+            kernel_stack_bottom.into(),
+            kernel_stack_top.into(),
+            MapPermission::R | MapPermission::W,
+            MapAreaType::Stack,
+        );
         KernelStack { tid: tid_handle.0 }
-    }
-    #[allow(unused)]
-    ///Push a value on top of kernelstack
-    pub fn push_on_top<T>(&self, value: T) -> *mut T
-    where
-        T: Sized,
-    {
-        let kernel_stack_top = self.top();
-        let ptr_mut = (kernel_stack_top - core::mem::size_of::<T>()) as *mut T;
-        unsafe {
-            *ptr_mut = value;
-        }
-        ptr_mut
     }
     ///Get the value on the top of kernelstack
     pub fn top(&self) -> usize {
@@ -97,5 +96,17 @@ impl KernelStack {
     /// Return (bottom, top) of a kernel stack in kernel space.)
     pub fn pos(&self) -> (usize, usize) {
         kernel_stack_position(self.tid)
+    }
+    pub fn bottom(&self) -> usize {
+        let (kernel_stack_bottom, _) = kernel_stack_position(self.tid);
+        kernel_stack_bottom
+    }
+}
+
+impl Drop for KernelStack {
+    fn drop(&mut self) {
+        KERNEL_SPACE
+            .lock()
+            .remove_area_with_start_vpn(VirtAddr::from(self.bottom()).floor());
     }
 }

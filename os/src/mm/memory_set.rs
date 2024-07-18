@@ -102,10 +102,6 @@ impl MemorySet {
             .insert_given_framed_area(start_va, end_va, permission, area_type, frames)
     }
     #[inline(always)]
-    pub fn kernel_stack_frame(&self) -> Vec<Arc<FrameTracker>> {
-        self.inner.get_unchecked_mut().kernel_stack_frame()
-    }
-    #[inline(always)]
     pub fn remove_area_with_start_vpn(&self, start_vpn: VirtPageNum) {
         self.inner
             .get_unchecked_mut()
@@ -258,20 +254,6 @@ impl MemorySetInner {
             MapArea::new(start_va, end_va, MapType::Framed, permission, area_type),
             frames,
         );
-    }
-    /// return frames of kernel stack
-    pub fn kernel_stack_frame(&self) -> Vec<Arc<FrameTracker>> {
-        self.areas
-            .iter()
-            .find_map(|area| {
-                if area.area_type == MapAreaType::Stack && !area.map_perm.contains(MapPermission::U)
-                {
-                    Some(area.kernel_stack_frame())
-                } else {
-                    None
-                }
-            })
-            .unwrap()
     }
     ///Remove `MapArea` that starts with `start_vpn`
     pub fn remove_area_with_start_vpn(&mut self, start_vpn: VirtPageNum) {

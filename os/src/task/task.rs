@@ -236,29 +236,20 @@ impl TaskControlBlock {
         task
     }
     pub fn exec(&self, elf_data: &[u8], argv: &Vec<String>, env: &mut Vec<String>) {
-        let mut inner = self.inner_lock();
+        let mut task_inner = self.inner_lock();
         //用户栈高地址到低地址：环境变量字符串/参数字符串/aux辅助向量/环境变量地址数组/参数地址数组/参数数量
         // memory_set with elf program headers/trampoline/trap context/user stack
-        let (mut memory_set, user_hp, entry_point, mut auxv) = MemorySetInner::from_elf(elf_data);
+        let (memory_set, user_hp, entry_point, mut auxv) = MemorySetInner::from_elf(elf_data);
         let token = memory_set.token();
 
-        inner.time_data.clear();
+        task_inner.time_data.clear();
 
-        // map kernel stack
-        let (kernel_stack_bottom, kernel_stack_top) = self.kernel_stack.pos();
-        memory_set.insert_given_framed_area(
-            kernel_stack_bottom.into(),
-            kernel_stack_top.into(),
-            MapPermission::R | MapPermission::W,
-            MapAreaType::Stack,
-            inner.memory_set.kernel_stack_frame(),
-        );
         // substitute memory_set
-        inner.memory_set = Arc::new(MemorySet::new(memory_set));
+        task_inner.memory_set = Arc::new(MemorySet::new(memory_set));
         // 重新分配用户资源
-        inner.alloc_user_res();
+        task_inner.alloc_user_res();
 
-        let mut user_sp = inner.user_stack_top;
+        let mut user_sp = task_inner.user_stack_top;
 
         // println!("user_sp:{:#X}  argv:{:?}", user_sp, argv);
 
@@ -342,12 +333,12 @@ impl TaskControlBlock {
         //println!("user_sp:{:#X}", user_sp);
 
         //将设置了O_CLOEXEC位的文件描述符关闭
-        inner.fd_table.close_on_exec();
+        task_inner.fd_table.close_on_exec();
 
         let trap_cx = TrapContext::app_init_context(entry_point, user_sp, self.kernel_stack.top());
-        *inner.trap_cx() = trap_cx;
-        inner.user_heappoint = user_hp;
-        inner.user_heapbottom = user_hp;
+        *task_inner.trap_cx() = trap_cx;
+        task_inner.user_heappoint = user_hp;
+        task_inner.user_heapbottom = user_hp;
 
         //创建进程完整命令文件/proc/<pid>/cmdline
         create_cmdline(self.pid, argv);
@@ -365,7 +356,7 @@ impl TaskControlBlock {
 
         let tid_handle = tid_alloc();
         let kernel_stack = KernelStack::new(&tid_handle);
-        let (kernel_stack_bottom, kernel_stack_top) = kernel_stack.pos();
+        let kernel_stack_top = kernel_stack.top();
 
         // 检查是否共享虚拟内存
         let memory_set = if flags.contains(CloneFlags::CLONE_VM) {
@@ -375,13 +366,6 @@ impl TaskControlBlock {
                 &parent_inner.memory_set,
             )))
         };
-        // 无论如何都要插入内核栈
-        memory_set.insert_framed_area(
-            kernel_stack_bottom.into(),
-            kernel_stack_top.into(),
-            MapPermission::R | MapPermission::W,
-            MapAreaType::Stack,
-        );
         // 检查是否共享文件系统信息
         //filesystem information.  This includes the root
         //of the filesystem, the current working directory, and the umask
