@@ -556,7 +556,7 @@ pub fn sys_utimensat(
 
     let abs_path = inner.get_abs_path(dirfd, &path)?;
     let osfile = open(&abs_path, OpenFlags::O_RDONLY, NONE_MODE)?.file()?;
-    osfile.inode.set_timestamps(atime_sec, mtime_sec);
+    osfile.inode.set_timestamps(atime_sec, mtime_sec, None);
     return Ok(0);
 }
 

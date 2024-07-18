@@ -60,7 +60,12 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     ///
-    fn set_timestamps(&self, _atime: Option<u64>, _mtime: Option<u64>) -> SyscallRet {
+    fn set_timestamps(
+        &self,
+        _atime: Option<u64>,
+        _mtime: Option<u64>,
+        _ctime: Option<u64>,
+    ) -> SyscallRet {
         unimplemented!()
     }
     fn link_cnt(&self) -> SyscallRet {

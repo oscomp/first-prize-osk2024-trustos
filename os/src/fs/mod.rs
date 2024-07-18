@@ -218,7 +218,7 @@ pub fn init() {
     flush_preload();
     create_init_files();
     // TODO(ZMY):为了过libc-test utime的权宜之计,读取RTC太麻烦了
-    root_inode().set_timestamps(Some(0), Some(0));
+    root_inode().set_timestamps(Some(0), Some(0), Some(0));
 }
 
 pub fn list_apps() {

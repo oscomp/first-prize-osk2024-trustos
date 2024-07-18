@@ -119,9 +119,14 @@ impl Inode for Ext4Inode {
             .map_or(Err(SysErrNo::ENOENT), |_| Ok(0))
     }
 
-    fn set_timestamps(&self, atime: Option<u64>, mtime: Option<u64>) -> SyscallRet {
+    fn set_timestamps(
+        &self,
+        atime: Option<u64>,
+        mtime: Option<u64>,
+        ctime: Option<u64>,
+    ) -> SyscallRet {
         let file = &mut self.inner.get_unchecked_mut().f;
-        file.set_time(atime, mtime, None)
+        file.set_time(atime, mtime, ctime)
             .map_err(|e| SysErrNo::from(e))
     }
     fn sync(&self) {
