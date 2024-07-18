@@ -420,6 +420,7 @@ pub fn check_timer() {
     let current = get_time_spec();
     let mut timers = TIMERS.lock();
     while let Some(timer) = timers.peek() {
+        // debug!("expire={:?}, current={:?}", timer.expire, current);
         if timer.expire <= current {
             if let Some(task) = timer.task.upgrade() {
                 debug!("[check_timer] wake up task",);

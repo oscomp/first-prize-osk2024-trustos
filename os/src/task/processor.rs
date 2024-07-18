@@ -49,6 +49,7 @@ pub fn run_tasks() {
         let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
         if let Some(cur_task) = take_current_task() {
             let mut cur_task_inner = cur_task.inner_lock();
+            check_timer();
             if let Some(next_task) = fetch_task() {
                 // info!(
                 //     "drop task {},fetch task {}",
@@ -67,7 +68,6 @@ pub fn run_tasks() {
                     __switch(idle_task_cx_ptr, next_task_cx_ptr);
                 }
             } else {
-                check_timer();
                 cur_task_inner.task_status = TaskStatus::Running;
                 let cur_task_cx_ptr = &cur_task_inner.task_cx as *const TaskContext;
                 drop(cur_task_inner);
