@@ -48,11 +48,11 @@ pub fn unregister_device(abs_path: &str) {
 }
 
 pub fn find_device(abs_path: &str) -> bool {
-    DEVICES.lock().get(&abs_path.to_string()).is_some()
+    DEVICES.lock().get(abs_path).is_some()
 }
 
 pub fn get_devno(abs_path: &str) -> usize {
-    *DEVICES.lock().get(&abs_path.to_string()).unwrap()
+    *DEVICES.lock().get(abs_path).unwrap()
 }
 
 pub fn open_device_file(abs_path: &str) -> Result<Arc<dyn File>, SysErrNo> {

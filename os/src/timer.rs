@@ -207,9 +207,9 @@ impl Timer {
             inner: SyncUnsafeCell::new(TimerInner::new()),
         }
     }
-    pub fn as_bytes(&self) -> &[u8] {
-        self.inner.get_unchecked_ref().timer.as_bytes()
-    }
+    // pub fn as_bytes(&self) -> &[u8] {
+    //     self.inner.get_unchecked_ref().timer.as_bytes()
+    // }
     pub fn set_timer(&self, new: Itimerval) {
         self.inner.get_unchecked_mut().timer = new;
     }

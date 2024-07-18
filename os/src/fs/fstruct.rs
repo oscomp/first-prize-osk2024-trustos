@@ -59,6 +59,12 @@ impl FileDescriptor {
     pub fn non_block(&self) -> bool {
         self.non_block
     }
+    pub fn unset_nonblock(&mut self) {
+        self.non_block = false
+    }
+    pub fn set_nonblock(&mut self) {
+        self.non_block = true;
+    }
 }
 
 pub struct FdTableInner {
@@ -171,6 +177,14 @@ impl FdTable {
 
     pub fn unset_cloexec(&self, fd: usize) {
         self.get_mut().files[fd].as_mut().unwrap().unset_cloexec();
+    }
+
+    pub fn set_nonblock(&self, fd: usize) {
+        self.get_mut().files[fd].as_mut().unwrap().set_nonblock();
+    }
+
+    pub fn unset_nonblock(&self, fd: usize) {
+        self.get_mut().files[fd].as_mut().unwrap().unset_nonblock();
     }
 
     pub fn get_hard_limit(&self) -> usize {

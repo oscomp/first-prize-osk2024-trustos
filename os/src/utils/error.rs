@@ -2,7 +2,7 @@
 
 use num_enum::FromPrimitive;
 
-#[derive(Debug, Clone, Copy, FromPrimitive)]
+#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq)]
 #[repr(i32)]
 pub enum SysErrNo {
     /// Undefined

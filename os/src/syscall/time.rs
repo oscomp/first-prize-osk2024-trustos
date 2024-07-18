@@ -1,4 +1,4 @@
-use crate::mm::{get_data, translated_byte_buffer, UserBuffer};
+use crate::mm::{get_data, put_data, translated_byte_buffer, UserBuffer};
 use crate::task::{current_task, current_token};
 use crate::timer::{
     get_time_spec, Clockid, Itimerval, Rusage, TimeVal, Timespec, Tms, ITIMER_REAL,
@@ -7,27 +7,29 @@ use crate::utils::{SysErrNo, SyscallRet};
 use core::mem::size_of;
 use log::debug;
 
-pub fn sys_gettimeofday(ts: *const u8) -> SyscallRet {
-    let token = current_token();
-
-    let mut ts = UserBuffer::new(translated_byte_buffer(token, ts, size_of::<Timespec>()).unwrap());
-    let timespec = get_time_spec();
-    ts.write(timespec.as_bytes());
-    Ok(0)
-}
-
-pub fn sys_times(tms: *const u8) -> SyscallRet {
+pub fn sys_gettimeofday(ts: *mut Timespec) -> SyscallRet {
     let task = current_task().unwrap();
-    let inner = task.inner_lock();
-    let token = inner.user_token();
+    let task_inner = task.inner_lock();
+    let token = task_inner.user_token();
 
-    let mut tms = UserBuffer::new(translated_byte_buffer(token, tms, size_of::<Tms>()).unwrap());
-    let times = Tms::new(&inner.time_data);
-    tms.write(times.as_bytes());
+    put_data(token, ts, get_time_spec());
     Ok(0)
 }
 
-pub fn sys_settimer(which: usize, new_value: *const u8, old_value: *const u8) -> SyscallRet {
+pub fn sys_times(tms: *mut Tms) -> SyscallRet {
+    let task = current_task().unwrap();
+    let task_inner = task.inner_lock();
+    let token = task_inner.user_token();
+
+    put_data(token, tms, Tms::new(&task_inner.time_data));
+    Ok(0)
+}
+
+pub fn sys_settimer(
+    which: usize,
+    new_value: *const Itimerval,
+    old_value: *mut Itimerval,
+) -> SyscallRet {
     assert!(which == ITIMER_REAL, "only support Itimer Real");
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
@@ -39,21 +41,14 @@ pub fn sys_settimer(which: usize, new_value: *const u8, old_value: *const u8) ->
     );
 
     if old_value as usize != 0 {
-        let mut buffer = UserBuffer::new(
-            translated_byte_buffer(token, old_value, size_of::<Itimerval>()).unwrap(),
-        );
-        buffer.write(task_inner.timer.as_bytes());
+        // let mut buffer = UserBuffer::new(
+        //     translated_byte_buffer(token, old_value, size_of::<Itimerval>()).unwrap(),
+        // );
+        // buffer.write(task_inner.timer.as_bytes());
+        put_data(token, old_value, task_inner.timer.timer());
     }
     if new_value as usize != 0 {
-        let new_timer = get_data(token, new_value as *const Itimerval);
-
-        debug!(
-            "set new timer : value: {}s + {}us, interval: {}s + {}us",
-            new_timer.it_value.tv_sec,
-            new_timer.it_value.tv_usec,
-            new_timer.it_interval.tv_sec,
-            new_timer.it_interval.tv_usec
-        );
+        let new_timer = get_data(token, new_value);
 
         task_inner.timer.set_timer(new_timer);
         task_inner.timer.set_last_time(TimeVal::now());
@@ -67,35 +62,25 @@ pub fn sys_settimer(which: usize, new_value: *const u8, old_value: *const u8) ->
     Ok(0)
 }
 
-pub fn sys_clock_gettime(clockid: usize, tp: *const u8) -> SyscallRet {
+pub fn sys_clock_gettime(clockid: usize, tp: *mut Timespec) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
+
     let token = inner.user_token();
+    let time = get_time_spec();
 
-    // debug!(
-    //     "[sys_clock_gettime] clockid is {}, tp is {:x}",
-    //     clockid, tp as usize
-    // );
-
-    let clockid = Clockid::from_bits(clockid as u32).unwrap();
-    let mut tp = UserBuffer::new(translated_byte_buffer(token, tp, size_of::<Timespec>()).unwrap());
-
-    match clockid {
-        //当前可匹配实时时钟，单调时钟，进程CPU时钟，且三者返回值相同
-        Clockid::CLOCK_REALTIME | Clockid::CLOCK_MONOTONIC | Clockid::CLOCK_PROCESS_CPUTIME_ID => {
-            let timespec = get_time_spec();
-            //debug!("got timespec {:?}", timespec);
-            tp.write(timespec.as_bytes());
-            Ok(0)
-        }
-        _ => return Err(SysErrNo::EINVAL),
-    }
+    put_data(token, tp, time);
+    debug!(
+        "[sys_clock_gettime] clockid is {}, time={:?}",
+        clockid, time
+    );
+    Ok(0)
 }
 
-const RUSAGESELF: isize = 0;
-const RUSAGECHILDEN: isize = -1;
+pub fn sys_getrusage(who: isize, usage: *mut Rusage) -> SyscallRet {
+    const RUSAGESELF: isize = 0;
+    const RUSAGECHILDEN: isize = -1;
 
-pub fn sys_getrusage(who: isize, usage: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
@@ -105,20 +90,13 @@ pub fn sys_getrusage(who: isize, usage: *const u8) -> SyscallRet {
     //     who, usage as usize
     // );
 
-    let mut usage =
-        UserBuffer::new(translated_byte_buffer(token, usage, size_of::<Rusage>()).unwrap());
-
     match who {
         RUSAGESELF => {
             let gotusage = Rusage::new_from_ms(
                 inner.time_data.utime as usize,
                 inner.time_data.stime as usize,
             );
-            // debug!(
-            //     "got utime {:?}, stime {:?}",
-            //     gotusage.ru_utime, gotusage.ru_stime
-            // );
-            usage.write(gotusage.as_bytes());
+            put_data(token, usage, gotusage);
             Ok(0)
         }
         RUSAGECHILDEN => {
@@ -126,34 +104,36 @@ pub fn sys_getrusage(who: isize, usage: *const u8) -> SyscallRet {
                 inner.time_data.cutime as usize,
                 inner.time_data.cstime as usize,
             );
-            usage.write(gotusage.as_bytes());
+            put_data(token, usage, gotusage);
             Ok(0)
         }
         _ => return Err(SysErrNo::EINVAL),
     }
 }
 
-pub fn sys_clock_getres(clockid: usize, res: *const u8) -> SyscallRet {
-    let task = current_task().unwrap();
-    let inner = task.inner_lock();
-    let token = inner.user_token();
+pub fn sys_clock_getres(_clockid: usize, _res: *mut Timespec) -> SyscallRet {
+    unimplemented!();
+    // let task = current_task().unwrap();
+    // let inner = task.inner_lock();
+    // let token = inner.user_token();
 
-    // debug!(
-    //     "[sys_clock_getres] clockid is {}, res is {:x}",
-    //     clockid, res as usize
-    // );
+    // // debug!(
+    // //     "[sys_clock_getres] clockid is {}, res is {:x}",
+    // //     clockid, res as usize
+    // // );
 
-    let clockid = Clockid::from_bits(clockid as u32).unwrap();
-    let mut res =
-        UserBuffer::new(translated_byte_buffer(token, res, size_of::<Timespec>()).unwrap());
+    // let clockid = Clockid::from_bits(clockid as u32).unwrap();
+    // // let mut res =
+    // //     UserBuffer::new(translated_byte_buffer(token, res, size_of::<Timespec>()).unwrap());
 
-    match clockid {
-        //当前可匹配实时时钟，单调时钟，进程CPU时钟，且三者返回值相同
-        Clockid::CLOCK_REALTIME | Clockid::CLOCK_MONOTONIC | Clockid::CLOCK_PROCESS_CPUTIME_ID => {
-            let timespec = Timespec::new(0, 1);
-            res.write(timespec.as_bytes());
-            Ok(0)
-        }
-        _ => return Err(SysErrNo::EINVAL),
-    }
+    // match clockid {
+    //     //当前可匹配实时时钟，单调时钟，进程CPU时钟，且三者返回值相同
+    //     Clockid::CLOCK_REALTIME | Clockid::CLOCK_MONOTONIC | Clockid::CLOCK_PROCESS_CPUTIME_ID => {
+    //         let timespec = Timespec::new(0, 1);
+    //         // res.write(timespec.as_bytes());
+    //         put_data(token, res, timespec);
+    //         Ok(0)
+    //     }
+    //     _ => return Err(SysErrNo::EINVAL),
+    // }
 }

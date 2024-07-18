@@ -76,3 +76,7 @@ pub fn sys_connect(_sockfd: usize, _addr: *const u8, _addrlen: u32) -> SyscallRe
 pub fn sys_accept(_sockfd: usize, _addr: *const u8, _addrlen: u32) -> SyscallRet {
     Ok(0)
 }
+
+pub fn sys_sendmsg(_sockfd: usize, _addr: *const u8, _flags: u32) -> SyscallRet {
+    Ok(0)
+}

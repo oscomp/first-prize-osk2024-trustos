@@ -101,6 +101,7 @@ pub enum Syscall {
     SendTo = 206,
     RecvFrom = 207,
     SetSockOpt = 208,
+    SendMsg = 211,
     Brk = 214,
     Munmap = 215,
     Clone = 220,
@@ -138,7 +139,7 @@ use time::*;
 use crate::{
     sbi::shutdown,
     signal::{SigAction, SigInfo, SigSet},
-    timer::Timespec,
+    timer::{Itimerval, Rusage, Timespec, Tms},
     utils::SyscallRet,
 };
 
@@ -260,11 +261,13 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[5] as i32,
         ),
         Syscall::NanoSleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
-        Syscall::SetTimer => {
-            sys_settimer(args[0] as usize, args[1] as *const u8, args[2] as *const u8)
-        }
-        Syscall::ClockGettime => sys_clock_gettime(args[0], args[1] as *const u8),
-        Syscall::ClockGetres => sys_clock_getres(args[0] as usize, args[1] as *const u8),
+        Syscall::SetTimer => sys_settimer(
+            args[0] as usize,
+            args[1] as *const Itimerval,
+            args[2] as *mut Itimerval,
+        ),
+        Syscall::ClockGettime => sys_clock_gettime(args[0], args[1] as *mut Timespec),
+        Syscall::ClockGetres => sys_clock_getres(args[0] as usize, args[1] as *mut Timespec),
         Syscall::ClockNanosleep => sys_clock_nanosleep(
             args[0] as usize,
             args[1] as u32,
@@ -304,12 +307,12 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[2] as *const Timespec,
         ),
         Syscall::SigReturn => sys_rt_sigreturn(),
-        Syscall::Times => sys_times(args[0] as *const u8),
+        Syscall::Times => sys_times(args[0] as *mut Tms),
         Syscall::SetPGid => Ok(0),
         Syscall::GetPGid => Ok(0),
         Syscall::SetSid => sys_setsid(),
-        Syscall::GetRusage => sys_getrusage(args[0] as isize, args[1] as *const u8),
-        Syscall::GetTimeOfDay => sys_gettimeofday(args[0] as *const u8),
+        Syscall::GetRusage => sys_getrusage(args[0] as isize, args[1] as *mut Rusage),
+        Syscall::GetTimeOfDay => sys_gettimeofday(args[0] as *mut Timespec),
         Syscall::Umask => sys_umask(args[0] as u32),
         Syscall::Uname => sys_uname(args[0] as *mut u8),
         Syscall::GetPid => sys_getpid(),
@@ -357,6 +360,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[3] as *const u8,
             args[4] as u32,
         ),
+        Syscall::SendMsg => sys_sendmsg(args[0], args[1] as *const u8, args[2] as u32),
         Syscall::Clone => sys_clone(args[0], args[1], args[2], args[3], args[4]),
         Syscall::Brk => sys_brk(args[0]),
         Syscall::Execve => sys_execve(

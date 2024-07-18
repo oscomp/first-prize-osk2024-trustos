@@ -421,8 +421,8 @@ fn create_file(abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass,
 
 pub fn open(abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass, SysErrNo> {
     //判断是否是设备文件
-    if find_device(&abs_path) {
-        let device = open_device_file(&abs_path)?;
+    if find_device(abs_path) {
+        let device = open_device_file(abs_path)?;
         return Ok(FileClass::Abs(device));
     }
     let mut inode: Option<Arc<dyn Inode>> = None;
@@ -430,7 +430,7 @@ pub fn open(abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass, Sy
     if has_inode(abs_path) {
         inode = find_inode_idx(abs_path);
     } else {
-        if let Ok(t) = root_inode().find(&abs_path) {
+        if let Ok(t) = root_inode().find(abs_path) {
             insert_inode_idx(abs_path, t.clone());
             inode = Some(t);
         }
@@ -449,7 +449,7 @@ pub fn open(abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass, Sy
 
     // 节点不存在
     if flags.contains(OpenFlags::O_CREATE) {
-        return create_file(&abs_path, flags, mode);
+        return create_file(abs_path, flags, mode);
     }
     Err(SysErrNo::ENOENT)
 }
