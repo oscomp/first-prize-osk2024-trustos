@@ -1,3 +1,5 @@
+use alloc::{format, string::ToString};
+
 use crate::{
     fs::{make_socket, FileClass, FileDescriptor},
     mm::put_data,
@@ -10,10 +12,14 @@ pub fn sys_socket(_domain: u32, _type: u32, _protocol: u32) -> SyscallRet {
     let task_inner = task.inner_lock();
     let new_fd = task_inner.fd_table.alloc_fd()?;
     let close_on_exec = (_type & 0o2000000) == 0o2000000;
+    let non_block = (_type & 0o4000) == 0o4000;
     task_inner.fd_table.set(
         new_fd,
-        FileDescriptor::new(close_on_exec, false, FileClass::Abs(make_socket())),
+        FileDescriptor::new(close_on_exec, non_block, FileClass::Abs(make_socket())),
     );
+    task_inner
+        .fs_info
+        .insert(format!("socket{}", new_fd).to_string(), new_fd);
     Ok(new_fd)
 }
 pub fn sys_bind(_sockfd: usize, _addr: *const u8, _addrlen: u32) -> SyscallRet {
