@@ -10,5 +10,3 @@
 # 在执行.sh文件时报错ELF MAGIC ERROR
 原因：.sh文件不是可执行文件。
 解决方法：在遇到.sh文件的exec调用时进行特殊处理，改为调用busybox sh的方式来执行.sh文件。
-# 执行SHELL16的测试时报错frame_alloc失败
-原因：内存不够，无法继续分配frame。
