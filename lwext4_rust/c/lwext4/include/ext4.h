@@ -468,7 +468,7 @@ int ext4_owner_get(const char *path, uint32_t *uid, uint32_t *gid);
  * @param atime Access timestamp.
  *
  * @return  Standard error code.*/
-int ext4_atime_set(const char *path, uint32_t atime);
+int ext4_atime_set(const char *path, uint64_t atime);
 
 /**@brief Set file/directory/link modify time.
  *
@@ -476,7 +476,7 @@ int ext4_atime_set(const char *path, uint32_t atime);
  * @param mtime Modify timestamp.
  *
  * @return  Standard error code.*/
-int ext4_mtime_set(const char *path, uint32_t mtime);
+int ext4_mtime_set(const char *path, uint64_t mtime);
 
 /**@brief Set file/directory/link change time.
  *
@@ -484,7 +484,7 @@ int ext4_mtime_set(const char *path, uint32_t mtime);
  * @param ctime Change timestamp.
  *
  * @return  Standard error code.*/
-int ext4_ctime_set(const char *path, uint32_t ctime);
+int ext4_ctime_set(const char *path, uint64_t ctime);
 
 /**@brief Get file/directory/link access time.
  *
@@ -492,7 +492,7 @@ int ext4_ctime_set(const char *path, uint32_t ctime);
  * @param atime Access timestamp.
  *
  * @return  Standard error code.*/
-int ext4_atime_get(const char *path, uint32_t *atime);
+int ext4_atime_get(const char *path, uint64_t *atime);
 
 /**@brief Get file/directory/link modify time.
  *
@@ -500,7 +500,7 @@ int ext4_atime_get(const char *path, uint32_t *atime);
  * @param mtime Modify timestamp.
  *
  * @return  Standard error code.*/
-int ext4_mtime_get(const char *path, uint32_t *mtime);
+int ext4_mtime_get(const char *path, uint64_t *mtime);
 
 /**@brief Get file/directory/link change time.
  *
@@ -508,7 +508,7 @@ int ext4_mtime_get(const char *path, uint32_t *mtime);
  * @param ctime Change timestamp.
  *
  * @return  standard error code*/
-int ext4_ctime_get(const char *path, uint32_t *ctime);
+int ext4_ctime_get(const char *path, uint64_t *ctime);
 
 /**@brief Create symbolic link.
  *

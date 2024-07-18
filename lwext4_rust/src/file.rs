@@ -287,9 +287,9 @@ impl Ext4File {
 
     pub fn set_time(
         &mut self,
-        atime: Option<u32>,
-        mtime: Option<u32>,
-        ctime: Option<u32>,
+        atime: Option<u64>,
+        mtime: Option<u64>,
+        ctime: Option<u64>,
     ) -> Result<usize, i32> {
         let c_path = self.file_path.clone();
         let c_path = c_path.into_raw();
@@ -314,24 +314,24 @@ impl Ext4File {
         Ok(EOK as usize)
     }
     // Ok(atime,mtime,ctime)
-    pub fn time(&mut self) -> Result<(u32, u32, u32), i32> {
-        let (mut atime, mut mtime, mut ctime) = (0, 0, 0);
-        let c_path = self.file_path.clone();
-        let c_path = c_path.into_raw();
-        let r = unsafe {
-            ext4_atime_get(c_path, &mut atime)
-                | ext4_mtime_get(c_path, &mut mtime)
-                | ext4_ctime_get(c_path, &mut ctime)
-        };
-        unsafe {
-            drop(CString::from_raw(c_path));
-        }
-        if r != EOK as i32 {
-            error!("ext4_mode_get: rc = {}", r);
-            return Err(r);
-        }
-        Ok((atime, mtime, ctime))
-    }
+    // pub fn time(&mut self) -> Result<(u32, u32, u32), i32> {
+    //     let (mut atime, mut mtime, mut ctime) = (0, 0, 0);
+    //     let c_path = self.file_path.clone();
+    //     let c_path = c_path.into_raw();
+    //     let r = unsafe {
+    //         ext4_atime_get(c_path, &mut atime)
+    //             | ext4_mtime_get(c_path, &mut mtime)
+    //             | ext4_ctime_get(c_path, &mut ctime)
+    //     };
+    //     unsafe {
+    //         drop(CString::from_raw(c_path));
+    //     }
+    //     if r != EOK as i32 {
+    //         error!("ext4_mode_get: rc = {}", r);
+    //         return Err(r);
+    //     }
+    //     Ok((atime, mtime, ctime))
+    // }
     pub fn fstat(&mut self) -> Result<ext4_inode_stat, i32> {
         let c_path = self.file_path.clone();
         let c_path = c_path.into_raw();

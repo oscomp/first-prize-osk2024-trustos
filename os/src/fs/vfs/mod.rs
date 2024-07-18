@@ -5,7 +5,7 @@ use crate::{
     fs::String,
     mm::UserBuffer,
     syscall::PollEvents,
-    utils::{SysErrNo, SyscallRet},
+    utils::{backtrace, SysErrNo, SyscallRet},
 };
 use alloc::{sync::Arc, vec::Vec};
 
@@ -60,7 +60,7 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     ///
-    fn set_timestamps(&self, _atime: Option<u32>, _mtime: Option<u32>) -> SyscallRet {
+    fn set_timestamps(&self, _atime: Option<u64>, _mtime: Option<u64>) -> SyscallRet {
         unimplemented!()
     }
     fn link_cnt(&self) -> SyscallRet {

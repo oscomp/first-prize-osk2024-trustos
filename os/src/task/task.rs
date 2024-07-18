@@ -142,7 +142,11 @@ impl TaskControlBlockInner {
             let dirfd = dirfd as usize;
             if let Some(file) = self.fd_table.try_get(dirfd) {
                 let base_path = file.file()?.inode.path();
-                Ok(get_abs_path(&base_path, path))
+                if path.is_empty() {
+                    Ok(base_path)
+                } else {
+                    Ok(get_abs_path(&base_path, path))
+                }
             } else {
                 Err(SysErrNo::EINVAL)
             }

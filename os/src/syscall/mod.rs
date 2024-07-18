@@ -246,7 +246,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Utimensat => sys_utimensat(
             args[0] as isize,
             args[1] as *const u8,
-            args[2] as *const u8,
+            args[2] as *const Timespec,
             args[3] as usize,
         ),
         Syscall::Exit => sys_exit(args[0] as i32),
