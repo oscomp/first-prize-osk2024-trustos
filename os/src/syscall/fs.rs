@@ -21,7 +21,7 @@ use alloc::{
 };
 use core::cmp::min;
 use core::mem::size_of;
-use log::{debug, info};
+use log::debug;
 
 use super::{FcntlCmd, Iovec, RLimit};
 

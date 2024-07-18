@@ -228,23 +228,15 @@ impl Timer {
     pub fn timer(&self) -> Itimerval {
         self.inner.get_unchecked_ref().timer
     }
-
-    // pub fn get_mut(&self) -> &mut TimerInner {
-    //     self.inner.get_unchecked_mut()
-    // }
-
-    // pub fn get_ref(&self) -> &TimerInner {
-    //     self.inner.get_unchecked_ref()
-    // }
 }
 
-bitflags! {
-    pub struct Clockid: u32 {
-        const CLOCK_REALTIME = 0;
-        const CLOCK_MONOTONIC = 1 << 0;
-        const CLOCK_PROCESS_CPUTIME_ID = 1 << 1;
-    }
-}
+// bitflags! {
+//     pub struct Clockid: u32 {
+//         const CLOCK_REALTIME = 0;
+//         const CLOCK_MONOTONIC = 1 << 0;
+//         const CLOCK_PROCESS_CPUTIME_ID = 1 << 1;
+//     }
+// }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq)]

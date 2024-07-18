@@ -52,6 +52,8 @@ pub enum Syscall {
     ExitGroup = 94,
     SetTidAddress = 96,
     Futex = 98,
+    SetRobustList = 99,
+    GetRobustList = 100,
     NanoSleep = 101,
     SetTimer = 103,
     ClockGettime = 113,
@@ -259,6 +261,12 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[3] as *const Timespec,
             args[4] as *mut i32,
             args[5] as i32,
+        ),
+        Syscall::SetRobustList => sys_set_robust_list(args[0] as usize, args[1] as usize),
+        Syscall::GetRobustList => sys_get_robust_list(
+            args[0] as usize,
+            args[1] as *mut usize,
+            args[2] as *mut usize,
         ),
         Syscall::NanoSleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
         Syscall::SetTimer => sys_settimer(

@@ -40,7 +40,7 @@ use log::debug;
 pub use manager::*;
 use switch::__switch;
 pub use sysinfo::Sysinfo;
-pub use task::{TaskControlBlock, TaskStatus};
+pub use task::{RobustList, TaskControlBlock, TaskStatus};
 
 pub use aux::*;
 pub use processor::{

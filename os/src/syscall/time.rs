@@ -1,10 +1,7 @@
-use crate::mm::{get_data, put_data, translated_byte_buffer, UserBuffer};
-use crate::task::{current_task, current_token};
-use crate::timer::{
-    get_time_spec, Clockid, Itimerval, Rusage, TimeVal, Timespec, Tms, ITIMER_REAL,
-};
+use crate::mm::{get_data, put_data};
+use crate::task::current_task;
+use crate::timer::{get_time_spec, Itimerval, Rusage, TimeVal, Timespec, Tms, ITIMER_REAL};
 use crate::utils::{SysErrNo, SyscallRet};
-use core::mem::size_of;
 use log::debug;
 
 pub fn sys_gettimeofday(ts: *mut Timespec) -> SyscallRet {
@@ -41,10 +38,6 @@ pub fn sys_settimer(
     );
 
     if old_value as usize != 0 {
-        // let mut buffer = UserBuffer::new(
-        //     translated_byte_buffer(token, old_value, size_of::<Itimerval>()).unwrap(),
-        // );
-        // buffer.write(task_inner.timer.as_bytes());
         put_data(token, old_value, task_inner.timer.timer());
     }
     if new_value as usize != 0 {

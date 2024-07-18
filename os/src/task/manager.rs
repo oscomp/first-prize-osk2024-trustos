@@ -1,5 +1,5 @@
 //!Implementation of [`TaskManager`]
-use super::{TaskControlBlock, TaskStatus, INITPROC};
+use super::{current_task, TaskControlBlock, TaskStatus, INITPROC};
 use alloc::collections::{BTreeMap, VecDeque};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -68,6 +68,19 @@ pub fn wakeup_parent(pid: usize) {
 
 pub fn ready_procs_num() -> usize {
     TASK_MANAGER.lock().ready_procs_num()
+}
+
+pub fn find_task_by_tid(tid: usize) -> Option<Arc<TaskControlBlock>> {
+    if current_task().unwrap().tid() == tid {
+        current_task()
+    } else {
+        TASK_MANAGER
+            .lock()
+            .ready_queue
+            .iter()
+            .find(|t| t.tid() == tid)
+            .cloned()
+    }
 }
 
 // pub fn stop_task(task: Arc<TaskControlBlock>) {

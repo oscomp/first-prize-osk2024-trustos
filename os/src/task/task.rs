@@ -24,6 +24,20 @@ use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
 use spin::{Mutex, MutexGuard};
 
+#[derive(Clone, Copy, Debug)]
+pub struct RobustList {
+    pub head: usize,
+    pub len: usize,
+}
+
+impl RobustList {
+    // from strace
+    pub const HEAD_SIZE: usize = 24;
+    pub fn default() -> Self {
+        RobustList { head: 0, len: 24 }
+    }
+}
+
 pub struct TaskControlBlock {
     // immutable
     tid: TidHandle,
@@ -56,6 +70,7 @@ pub struct TaskControlBlockInner {
     pub sig_mask: SigSet,
     pub sig_pending: SigSet,
     pub timer: Arc<Timer>,
+    pub robust_list: RobustList,
 }
 
 impl TaskControlBlockInner {
@@ -207,6 +222,7 @@ impl TaskControlBlock {
                 sig_mask: SigSet::empty(),
                 sig_pending: SigSet::empty(),
                 timer: Arc::new(Timer::new()),
+                robust_list: RobustList::default(),
             }),
         };
 
@@ -439,6 +455,7 @@ impl TaskControlBlock {
                 sig_mask,
                 sig_pending,
                 timer,
+                robust_list: RobustList::default(),
             }),
         });
 

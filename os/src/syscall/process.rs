@@ -7,9 +7,10 @@ use crate::{
     signal::{check_if_any_sig_for_current_task, handle_signal},
     syscall::{CloneFlags, Utsname},
     task::{
-        add_task, current_task, current_token, exit_current, exit_current_group, futex_requeue,
-        futex_wait, futex_wake_up, move_child_process_to_init, remove_all_from_thread_group,
-        suspend_current_and_run_next, task_num, Sysinfo, PROCESS_GROUP,
+        add_task, current_task, current_token, exit_current, exit_current_group, find_task_by_tid,
+        futex_requeue, futex_wait, futex_wake_up, move_child_process_to_init,
+        remove_all_from_thread_group, suspend_current_and_run_next, task_num, Sysinfo,
+        PROCESS_GROUP,
     },
     timer::{add_futex_timer, calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
     utils::{get_abs_path, trim_start_slash, SysErrNo, SyscallRet},
@@ -480,4 +481,27 @@ pub fn sys_clock_nanosleep(
         suspend_current_and_run_next();
     }
     Ok(0)
+}
+
+pub fn sys_set_robust_list(head: usize, len: usize) -> SyscallRet {
+    if len != crate::task::RobustList::HEAD_SIZE {
+        return Err(SysErrNo::EINVAL);
+    }
+    let task = current_task().unwrap();
+    let mut task_inner = task.inner_lock();
+    task_inner.robust_list.head = head;
+    //inner.robust_list.len = len;
+    Ok(0)
+}
+
+pub fn sys_get_robust_list(pid: usize, head_ptr: *mut usize, len_ptr: *mut usize) -> SyscallRet {
+    if let Some(task) = find_task_by_tid(pid) {
+        let task_inner = task.inner_lock();
+        let token = task_inner.user_token();
+        put_data(token, head_ptr, task_inner.robust_list.head);
+        put_data(token, len_ptr, task_inner.robust_list.len);
+        Ok(0)
+    } else {
+        Err(SysErrNo::ESRCH)
+    }
 }
