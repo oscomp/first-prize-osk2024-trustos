@@ -3,7 +3,7 @@
 !.vscode/settings.json
 .idea
 
-**/target/
+target
 os/src/link_app.S
 os/src/linker.ld
 os/.gdb_history
