@@ -1,4 +1,4 @@
-use log::debug;
+use log::{debug, warn};
 use lwext4_rust::{
     bindings::{O_CREAT, O_RDONLY, O_RDWR, O_TRUNC, SEEK_SET},
     Ext4File, InodeTypes,
@@ -10,7 +10,8 @@ use crate::{
     utils::{SysErrNo, SyscallRet},
 };
 
-use alloc::{sync::Arc, vec, vec::Vec};
+use alloc::vec;
+use alloc::{format, sync::Arc, vec::Vec};
 
 pub struct Ext4Inode {
     inner: SyncUnsafeCell<Ext4InodeInner>,
@@ -135,18 +136,37 @@ impl Inode for Ext4Inode {
 
     fn read_all(&self) -> Result<Vec<u8>, SysErrNo> {
         let file = &mut self.inner.get_unchecked_mut().f;
-        let path = file.path();
-        let path = path.to_str().unwrap();
-        file.file_open(path, O_RDONLY)
-            .map_err(|e| SysErrNo::from(e))?;
-        let mut buf: Vec<u8> = vec![0; file.file_size() as usize];
-        file.file_seek(0, SEEK_SET).map_err(|e| SysErrNo::from(e))?;
-        let r = file.file_read(buf.as_mut_slice());
-        file.file_close()?;
-        if let Err(e) = r {
-            Err(SysErrNo::from(e))
+        let file_type = as_inode_type(file.types());
+
+        if file_type == InodeType::File {
+            let path = file.path();
+            let path = path.to_str().unwrap();
+            file.file_open(path, O_RDONLY)
+                .map_err(|e| SysErrNo::from(e))?;
+            let size = file.file_size() as usize;
+            let mut buf: Vec<u8> = vec![0; size];
+            file.file_seek(0, SEEK_SET).map_err(|e| SysErrNo::from(e))?;
+            let r = file.file_read(buf.as_mut_slice());
+            file.file_close()?;
+            if let Err(e) = r {
+                return Err(SysErrNo::from(e));
+            } else {
+                return Ok(buf);
+            }
         } else {
-            Ok(buf)
+            assert!(as_inode_type(file.types()) == InodeType::SymLink);
+            let mut real_path_buf = [0u8; 256];
+            file.file_readlink(&mut real_path_buf, 255)?;
+            let end = real_path_buf
+                .iter()
+                .enumerate()
+                .find(|(_, v)| **v == 0)
+                .map(|(idx, _)| idx)
+                .unwrap();
+            let real_path = format!("/{}", core::str::from_utf8(&real_path_buf[..end]).unwrap());
+            // debug!("[symlink] real_path= {}", real_path);
+            let real_file = self.find(&real_path)?;
+            real_file.read_all()
         }
     }
 
@@ -282,15 +302,15 @@ fn as_ext4_de_type(types: InodeType) -> InodeTypes {
 
 fn as_inode_type(types: InodeTypes) -> InodeType {
     match types {
-        InodeTypes::EXT4_INODE_MODE_FIFO => InodeType::Fifo,
-        InodeTypes::EXT4_INODE_MODE_CHARDEV => InodeType::CharDevice,
-        InodeTypes::EXT4_INODE_MODE_DIRECTORY => InodeType::Dir,
-        InodeTypes::EXT4_INODE_MODE_BLOCKDEV => InodeType::BlockDevice,
-        InodeTypes::EXT4_INODE_MODE_FILE => InodeType::File,
-        InodeTypes::EXT4_INODE_MODE_SOFTLINK => InodeType::SymLink,
-        InodeTypes::EXT4_INODE_MODE_SOCKET => InodeType::Socket,
+        InodeTypes::EXT4_INODE_MODE_FIFO | InodeTypes::EXT4_DE_FIFO => InodeType::Fifo,
+        InodeTypes::EXT4_INODE_MODE_CHARDEV | InodeTypes::EXT4_DE_CHRDEV => InodeType::CharDevice,
+        InodeTypes::EXT4_INODE_MODE_DIRECTORY | InodeTypes::EXT4_DE_DIR => InodeType::Dir,
+        InodeTypes::EXT4_INODE_MODE_BLOCKDEV | InodeTypes::EXT4_DE_BLKDEV => InodeType::BlockDevice,
+        InodeTypes::EXT4_INODE_MODE_FILE | InodeTypes::EXT4_DE_REG_FILE => InodeType::File,
+        InodeTypes::EXT4_INODE_MODE_SOFTLINK | InodeTypes::EXT4_DE_SYMLINK => InodeType::SymLink,
+        InodeTypes::EXT4_INODE_MODE_SOCKET | InodeTypes::EXT4_DE_SOCK => InodeType::Socket,
         _ => {
-            // warn!("unknown file type: {:?}", vtype);
+            warn!("unknown file type: {:?}", types);
             unreachable!()
         }
     }
