@@ -1,10 +1,6 @@
 /// 存放系统调用的各种Option
-use crate::mm::{FrameTracker, MapPermission};
-use alloc::collections::BTreeMap;
-use alloc::sync::Arc;
-use alloc::vec::Vec;
+use crate::mm::MapPermission;
 use num_enum::FromPrimitive;
-use spin::Mutex;
 
 bitflags! {
     pub struct WaitOption:u8{

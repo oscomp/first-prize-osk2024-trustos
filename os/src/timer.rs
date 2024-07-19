@@ -230,14 +230,6 @@ impl Timer {
     }
 }
 
-// bitflags! {
-//     pub struct Clockid: u32 {
-//         const CLOCK_REALTIME = 0;
-//         const CLOCK_MONOTONIC = 1 << 0;
-//         const CLOCK_PROCESS_CPUTIME_ID = 1 << 1;
-//     }
-// }
-
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TimeVal {

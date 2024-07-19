@@ -19,7 +19,6 @@ use crate::{
 use alloc::{sync::Arc, vec::Vec};
 use core::arch::asm;
 use lazy_static::*;
-use log::info;
 use riscv::register::{
     satp,
     scause::{Exception, Trap},
@@ -118,7 +117,7 @@ impl MemorySet {
         self.get_mut().shm(addr, size, map_perm, pages)
     }
     #[inline(always)]
-    pub fn munmap(&self, addr: usize, len: usize) {
+    pub fn munmap(&self, addr: usize, len: usize) -> SyscallRet {
         self.inner.get_unchecked_mut().munmap(addr, len)
     }
     #[inline(always)]
@@ -136,26 +135,12 @@ impl MemorySet {
             .mprotect(start_vpn, end_vpn, map_perm);
     }
     #[inline(always)]
-    fn push(&self, map_area: MapArea, data: Option<&[u8]>) {
-        self.inner.get_unchecked_mut().push(map_area, data)
-    }
-    #[inline(always)]
-    fn push_with_offset(&self, map_area: MapArea, offset: usize, data: Option<&[u8]>) {
-        self.inner
-            .get_unchecked_mut()
-            .push_with_offset(map_area, offset, data)
-    }
-    #[inline(always)]
-    fn push_lazily(&self, map_area: MapArea) {
-        self.inner.get_unchecked_mut().push_lazily(map_area)
-    }
-    #[inline(always)]
     pub fn activate(&self) {
         self.inner.get_unchecked_mut().activate();
     }
     #[inline(always)]
-    pub fn recycle_data_pages(&self) {
-        self.inner.get_unchecked_mut().recycle_data_pages();
+    pub fn recycle_data_pages(&self) -> SyscallRet {
+        self.inner.get_unchecked_mut().recycle_data_pages()
     }
     #[inline(always)]
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
@@ -350,7 +335,7 @@ impl MemorySetInner {
         // addr
     }
     /// munmap
-    pub fn munmap(&mut self, addr: usize, len: usize) {
+    pub fn munmap(&mut self, addr: usize, len: usize) -> SyscallRet {
         let start_vpn = VirtPageNum::from(VirtAddr::from(addr));
         let end_vpn = VirtPageNum::from(VirtAddr::from(addr + len));
         // debug!(
@@ -381,7 +366,7 @@ impl MemorySetInner {
                         mapped_len,
                     )
                     .unwrap(),
-                });
+                })?;
             }
             // debug!(
             //     "[area vpn_range] start:{:#x},end:{:#x}",
@@ -405,6 +390,7 @@ impl MemorySetInner {
             }
             flush_tlb();
         }
+        Ok(0)
     }
     pub fn lazy_page_fault(&mut self, vpn: VirtPageNum, scause: Trap) -> bool {
         let pte = self.page_table.translate(vpn);
@@ -582,11 +568,11 @@ impl MemorySetInner {
         self.areas.push(map_area);
     }
     ///仅initproc会用，将懒分配的全部分配
-    fn unlazy(&mut self) {
-        for map_area in self.areas.iter_mut() {
-            map_area.map(&mut self.page_table);
-        }
-    }
+    // fn unlazy(&mut self) {
+    //     for map_area in self.areas.iter_mut() {
+    //         map_area.map(&mut self.page_table);
+    //     }
+    // }
     /// Without kernel stacks.
     pub fn new_kernel() -> Self {
         let mut memory_set = Self::new_bare();
@@ -898,7 +884,7 @@ impl MemorySetInner {
         self.page_table.translate(vpn)
     }
     ///Remove all `MapArea`
-    pub fn recycle_data_pages(&mut self) {
+    pub fn recycle_data_pages(&mut self) -> SyscallRet {
         // 先检测是否需要munmap
         for area in self.areas.iter_mut() {
             if area.area_type == MapAreaType::Mmap {
@@ -920,11 +906,12 @@ impl MemorySetInner {
                             mapped_len,
                         )
                         .unwrap(),
-                    });
+                    })?;
                 }
             }
         }
         self.areas.clear();
+        Ok(0)
     }
 }
 

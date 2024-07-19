@@ -22,13 +22,11 @@ use num_enum::TryFromPrimitive;
 use log::debug;
 
 pub fn sys_exit(exit_code: i32) -> SyscallRet {
-    exit_current(exit_code);
-    Ok(0)
+    exit_current(exit_code)
 }
 
 pub fn sys_exit_group(exit_code: i32) -> SyscallRet {
-    exit_current_group(exit_code);
-    Ok(0)
+    exit_current_group(exit_code)
 }
 
 pub fn sys_sched_yield() -> SyscallRet {

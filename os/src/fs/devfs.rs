@@ -1,7 +1,6 @@
 use crate::{
-    mm::{translated_byte_buffer, UserBuffer},
-    syscall::{IoctlCommand, PollEvents},
-    task::current_task,
+    mm::UserBuffer,
+    syscall::PollEvents,
     utils::{SysErrNo, SyscallRet},
 };
 use alloc::{
@@ -11,11 +10,11 @@ use alloc::{
     string::{String, ToString},
     sync::Arc,
 };
-use core::{cmp::min, mem::size_of};
+use core::cmp::min;
 use lazy_static::lazy_static;
 use spin::{Mutex, RwLock};
 
-use super::{stat::S_IFCHR, File, Ioctl, Kstat, Stdin, Stdout};
+use super::{stat::S_IFCHR, File, Kstat, Stdin, Stdout};
 
 pub struct DevZero;
 pub struct DevNull;
@@ -172,10 +171,6 @@ impl RtcTime {
             second,
         }
     }
-    pub fn as_bytes(&self) -> &[u8] {
-        let size = core::mem::size_of::<Self>();
-        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
-    }
 }
 
 impl Debug for RtcTime {
@@ -232,27 +227,6 @@ impl File for DevRtc {
             revents |= PollEvents::OUT;
         }
         revents
-    }
-}
-
-impl Ioctl for DevRtc {
-    fn ioctl(&self, cmd: usize, arg: usize) -> isize {
-        let cmd = IoctlCommand::from(cmd);
-        let task = current_task().unwrap();
-        let inner = task.inner_lock();
-        let token = inner.user_token();
-
-        match cmd {
-            IoctlCommand::RTC_RD_TIME => {
-                let time = RtcTime::new(2000, 1, 1, 0, 0, 0);
-                let mut arg = UserBuffer::new(
-                    translated_byte_buffer(token, arg as *const u8, size_of::<RtcTime>()).unwrap(),
-                );
-                arg.write(time.as_bytes());
-            }
-            _ => return -1,
-        }
-        0
     }
 }
 
@@ -336,12 +310,6 @@ impl File for DevTty {
             revents |= PollEvents::OUT;
         }
         revents
-    }
-}
-
-impl Ioctl for DevTty {
-    fn ioctl(&self, cmd: usize, arg: usize) -> isize {
-        Stdout.ioctl(cmd, arg)
     }
 }
 

@@ -71,14 +71,6 @@ pub struct KernelStack {
 impl KernelStack {
     ///Create a kernelstack from pid
     pub fn new(tid_handle: &TidHandle) -> Self {
-        // let tid = tid_handle.0;
-        // let (kernel_stack_bottom, kernel_stack_top) = kernel_stack_position(tid);
-        // debug!(
-        //     "kernel stack pos [{:#x},{:#x})",
-        //     kernel_stack_bottom, kernel_stack_top
-        // );
-        // KernelStack { tid: tid_handle.0 }
-
         let (kernel_stack_bottom, kernel_stack_top) = kernel_stack_position(tid_handle.0);
         KERNEL_SPACE.lock().insert_framed_area(
             kernel_stack_bottom.into(),

@@ -26,11 +26,14 @@ pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut
     file.lseek(
         (va - start_addr.0 + vma.mmap_file.offset) as isize,
         SEEK_SET,
-    );
+    )
+    .expect("mmap_write_page_fault should not fail");
     file.read(UserBuffer {
         buffers: translated_byte_buffer(page_table.token(), va as *const u8, PAGE_SIZE).unwrap(),
-    });
-    file.lseek(old_offset as isize, SEEK_SET);
+    })
+    .expect("mmap_write_page_fault should not fail");
+    file.lseek(old_offset as isize, SEEK_SET)
+        .expect("mmap_write_page_fault should not fail");
     //设置为cow
     let vpn = VirtAddr::from(va).floor();
     let mut pte_flags = vma.flags();

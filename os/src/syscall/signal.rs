@@ -82,41 +82,8 @@ pub fn sys_rt_sigtimedwait(
     _info: *mut SigInfo,
     _timeout: *const Timespec,
 ) -> SyscallRet {
+    // TODO(ZMY): Linux实现与POSIX标准不同,只在部分pthread测试使用过,伪实现
     Ok(0)
-    // if timeout.is_null() {
-    //     return Err(SysErrNo::EINVAL);
-    // }
-    // let task = current_task().unwrap();
-    // let task_inner = task.inner_lock();
-    // let token = task_inner.user_token();
-    // let sig = get_data(token, sig);
-    // let timeout = get_data(token, timeout);
-
-    // debug!(
-    //     "[sys_rt_sigtimedwait] signal:{:?},timeout:{:?}",
-    //     sig, timeout
-    // );
-    // drop(task_inner);
-    // add_stopped_task_timer(get_time_spec() + timeout, task);
-
-    // stop_current_and_run_next();
-
-    // let task = current_task().unwrap();
-    // let task_inner = task.inner_lock();
-    // let token = task_inner.user_token();
-    // if !task_inner.sig_pending.is_empty() {
-    //     match (task_inner.sig_pending & sig).peek_front() {
-    //         Some(signo) => {
-    //             if !info.is_null() {
-    //                 put_data(token, info, SigInfo::new(signo, 0, 0));
-    //             }
-    //             Ok(signo)
-    //         }
-    //         None => Err(SysErrNo::EINTR),
-    //     }
-    // } else {
-    //     Err(SysErrNo::EAGAIN)
-    // }
 }
 /// 暂时将调用线程的信号掩码替换为 mask 给出的掩码，然后暂停线程，直到传递信号，
 /// 其操作是调用信号处理程序或终止进程

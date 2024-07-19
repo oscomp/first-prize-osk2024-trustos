@@ -9,7 +9,7 @@ use spin::Mutex;
 ///A array of `TaskControlBlock` that is thread-safe
 pub struct TaskManager {
     ready_queue: VecDeque<Arc<TaskControlBlock>>,
-    stopped_queue: VecDeque<Arc<TaskControlBlock>>,
+    // stopped_queue: VecDeque<Arc<TaskControlBlock>>,
 }
 
 /// A simple FIFO scheduler.
@@ -18,7 +18,7 @@ impl TaskManager {
     pub fn new() -> Self {
         Self {
             ready_queue: VecDeque::new(),
-            stopped_queue: VecDeque::new(),
+            // stopped_queue: VecDeque::new(),
         }
     }
     ///Remove the first task and return it,or `None` if `TaskManager` is empty

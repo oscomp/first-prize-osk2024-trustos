@@ -356,7 +356,7 @@ impl Ext4File {
             drop(CString::from_raw(c_path));
         }
         if r != EOK as i32 {
-            error!("ext4_links_cnt_get: rc = {}", r);
+            // error!("ext4_links_cnt_get: rc = {}", r);
             return Err(r);
         }
         Ok(cnt)

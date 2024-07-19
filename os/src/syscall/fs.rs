@@ -241,7 +241,7 @@ pub fn sys_dup3(old: usize, new: usize, flags: u32) -> SyscallRet {
     }
 
     if task_inner.fd_table.len() <= new {
-        task_inner.fd_table.resize(new + 1);
+        task_inner.fd_table.resize(new + 1)?;
     }
 
     let mut file = task_inner.fd_table.get(old);
@@ -356,7 +356,7 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, _flags: u32) -> SyscallRet {
         osfile.inode.delay();
         remove_inode_idx(&abs_path);
     } else {
-        osfile.inode.unlink(&abs_path);
+        osfile.inode.unlink(&abs_path)?;
         remove_inode_idx(&abs_path);
     }
 
@@ -497,7 +497,7 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
         |_| {
             if accmode.contains(FaccessatMode::F_OK) {
                 //使用which命令查找时再创建，避免内核启动时创建带来更多开销
-                open(&abs_path, OpenFlags::O_CREATE, mode);
+                open(&abs_path, OpenFlags::O_CREATE, mode)?;
                 return Ok(0);
                 //return Ok(usize::MAX);
             }
@@ -556,7 +556,7 @@ pub fn sys_utimensat(
 
     let abs_path = inner.get_abs_path(dirfd, &path)?;
     let osfile = open(&abs_path, OpenFlags::O_RDONLY, NONE_MODE)?.file()?;
-    osfile.inode.set_timestamps(atime_sec, mtime_sec, None);
+    osfile.inode.set_timestamps(atime_sec, mtime_sec, None)?;
     return Ok(0);
 }
 
@@ -700,7 +700,7 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
             return Err(SysErrNo::EINVAL);
         }
         // infile.set_offset(offset as usize);
-        infile.lseek(offset, SEEK_SET);
+        infile.lseek(offset, SEEK_SET)?;
         readcount = infile.read(inbuffer)?;
     }
 
@@ -742,11 +742,11 @@ pub fn sys_pwrite64(fd: usize, buf: *const u8, count: usize, offset: isize) -> S
         drop(inner);
         drop(task);
         let cur_offset = file.lseek(0, SEEK_CUR)? as isize;
-        file.lseek(offset, SEEK_SET);
+        file.lseek(offset, SEEK_SET)?;
         let ret = file.write(UserBuffer::new(
             translated_byte_buffer(token, buf, count).unwrap(),
         ))?;
-        file.lseek(cur_offset, SEEK_SET);
+        file.lseek(cur_offset, SEEK_SET)?;
         return Ok(ret);
     }
     Err(SysErrNo::EBADF)
@@ -770,11 +770,11 @@ pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: isize) -> Sy
         drop(inner);
         drop(task);
         let cur_offset = file.lseek(0, SEEK_CUR)? as isize;
-        file.lseek(offset, SEEK_SET);
+        file.lseek(offset, SEEK_SET)?;
         let ret = file.read(UserBuffer::new(
             safe_translated_byte_buffer(memory_set, buf, count).unwrap(),
         ))?;
-        file.lseek(cur_offset, SEEK_SET);
+        file.lseek(cur_offset, SEEK_SET)?;
         Ok(ret)
     } else {
         Err(SysErrNo::EBADF)
@@ -954,9 +954,9 @@ pub fn sys_copy_file_range(
             return Err(SysErrNo::EINVAL);
         }
         let in_offset = infile.lseek(0, SEEK_CUR)?;
-        infile.lseek(offset, SEEK_SET);
+        infile.lseek(offset, SEEK_SET)?;
         readcount = infile.read(inbuffer)?;
-        infile.lseek(in_offset as isize, SEEK_SET);
+        infile.lseek(in_offset as isize, SEEK_SET)?;
     }
 
     if readcount == 0 {
@@ -984,9 +984,9 @@ pub fn sys_copy_file_range(
             return Err(SysErrNo::EINVAL);
         }
         let out_offset = outfile.lseek(0, SEEK_CUR)?;
-        outfile.lseek(offset, SEEK_SET);
+        outfile.lseek(offset, SEEK_SET)?;
         writecount = outfile.write(outbuffer)?;
-        outfile.lseek(out_offset as isize, SEEK_SET);
+        outfile.lseek(out_offset as isize, SEEK_SET)?;
     }
     //如果系统调用执行成功，*off_in和*off_out将会增加复制的长度
     if off_in != 0 {

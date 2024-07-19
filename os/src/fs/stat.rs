@@ -55,22 +55,6 @@ pub struct Statfs {
 }
 
 impl Statfs {
-    // pub fn new(f_type: i64, f_bfree: i64, f_bavail: i64, f_files: i64, f_ffree: i64) -> Self {
-    //     Self {
-    //         f_type,
-    //         f_bsize: 512,
-    //         f_blocks: 262144,
-    //         f_bfree,
-    //         f_bavail,
-    //         f_files,
-    //         f_ffree,
-    //         f_fsid: 0,
-    //         f_name_len: 255,
-    //         f_frsize: 0,
-    //         f_flags: 0,
-    //         f_spare: [0; 4],
-    //     }
-    // }
     pub fn as_bytes(&self) -> &[u8] {
         let size = core::mem::size_of::<Self>();
         unsafe { core::slice::from_raw_parts(self as *const _ as *const u8, size) }

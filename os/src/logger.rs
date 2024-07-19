@@ -15,7 +15,7 @@ const LOG_LEVEL: log::LevelFilter = LevelFilter::Trace;
 struct SimpleLogger;
 impl log::Log for SimpleLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        unsafe { metadata.level() <= NOW_LEVEL }
+        metadata.level() <= NOW_LEVEL
     }
     fn log(&self, record: &Record) {
         let (pid, tid) = if let Some(task) = current_task() {
@@ -39,8 +39,7 @@ impl log::Log for SimpleLogger {
 }
 
 static LOGGER: SimpleLogger = SimpleLogger;
-static mut SAVED_LEVEL: log::LevelFilter = LevelFilter::Off;
-static mut NOW_LEVEL: log::LevelFilter = LOG_LEVEL;
+static NOW_LEVEL: log::LevelFilter = LOG_LEVEL;
 
 pub fn init() {
     log::set_logger(&LOGGER)

@@ -65,7 +65,7 @@ impl Inode for Ext4Inode {
             } else if let Err(e) = nfile.file_open(path, O_RDWR | O_CREAT | O_TRUNC) {
                 return Err(SysErrNo::from(e));
             } else {
-                nfile.file_close();
+                nfile.file_close()?;
             }
         }
         Ok(Arc::new(nf))
@@ -142,7 +142,7 @@ impl Inode for Ext4Inode {
         let mut buf: Vec<u8> = vec![0; file.file_size() as usize];
         file.file_seek(0, SEEK_SET).map_err(|e| SysErrNo::from(e))?;
         let r = file.file_read(buf.as_mut_slice());
-        file.file_close();
+        file.file_close()?;
         if let Err(e) = r {
             Err(SysErrNo::from(e))
         } else {
@@ -217,8 +217,15 @@ impl Inode for Ext4Inode {
 
     fn link_cnt(&self) -> SyscallRet {
         let file = &mut self.inner.get_unchecked_mut().f;
-        file.links_cnt()
-            .map_or(Err(SysErrNo::EIO), |cnt| Ok(cnt as usize))
+        let r = file.links_cnt();
+        if let Err(e) = r {
+            if e == 2 {
+                return Ok(0);
+            } else {
+                return Err(SysErrNo::from(e));
+            }
+        }
+        Ok(r.unwrap() as usize)
     }
 
     fn unlink(&self, path: &str) -> SyscallRet {

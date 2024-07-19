@@ -2,20 +2,14 @@
 
 use log::debug;
 
+use super::{MmapFlags, MmapProt};
 use crate::{
     config::mm::PAGE_SIZE,
     fs::File,
-    mm::{
-        frames_alloc_much, shm_attach, shm_create, shm_drop, shm_find, FrameTracker, MapArea,
-        MapAreaType, MapPermission, MapType, ShmFlags, VirtAddr,
-    },
+    mm::{shm_attach, shm_create, shm_drop, shm_find, MapPermission, ShmFlags, VirtAddr},
     task::current_task,
     utils::{page_round_up, SysErrNo, SyscallRet},
 };
-use alloc::sync::Arc;
-use alloc::vec::Vec;
-
-use super::{MmapFlags, MmapProt};
 
 pub fn sys_mmap(
     addr: usize,
@@ -66,9 +60,7 @@ pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let len = page_round_up(len);
-    task_inner.memory_set.munmap(addr, len);
-    // debug!("[sys_munmap] end");
-    Ok(0)
+    task_inner.memory_set.munmap(addr, len)
 }
 
 pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> SyscallRet {
@@ -146,8 +138,6 @@ pub fn sys_shmat(shmid: i32, shmaddr: usize, shmflag: i32) -> SyscallRet {
         _ => shm_attach(shmid as usize, shmaddr, permission),
     }
 }
-
-const IPCRMID: usize = 0;
 
 pub fn sys_shmctl(shmid: i32, cmd: i32, _buf: usize) -> SyscallRet {
     const IPC_RMID: i32 = 0;

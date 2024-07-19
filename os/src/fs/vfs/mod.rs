@@ -127,8 +127,3 @@ pub trait File: Send + Sync {
         unimplemented!("not support!");
     }
 }
-
-pub trait Ioctl: File {
-    /// ioctl处理
-    fn ioctl(&self, cmd: usize, arg: usize) -> isize;
-}

@@ -106,27 +106,4 @@ pub fn sys_getrusage(who: isize, usage: *mut Rusage) -> SyscallRet {
 
 pub fn sys_clock_getres(_clockid: usize, _res: *mut Timespec) -> SyscallRet {
     unimplemented!();
-    // let task = current_task().unwrap();
-    // let inner = task.inner_lock();
-    // let token = inner.user_token();
-
-    // // debug!(
-    // //     "[sys_clock_getres] clockid is {}, res is {:x}",
-    // //     clockid, res as usize
-    // // );
-
-    // let clockid = Clockid::from_bits(clockid as u32).unwrap();
-    // // let mut res =
-    // //     UserBuffer::new(translated_byte_buffer(token, res, size_of::<Timespec>()).unwrap());
-
-    // match clockid {
-    //     //当前可匹配实时时钟，单调时钟，进程CPU时钟，且三者返回值相同
-    //     Clockid::CLOCK_REALTIME | Clockid::CLOCK_MONOTONIC | Clockid::CLOCK_PROCESS_CPUTIME_ID => {
-    //         let timespec = Timespec::new(0, 1);
-    //         // res.write(timespec.as_bytes());
-    //         put_data(token, res, timespec);
-    //         Ok(0)
-    //     }
-    //     _ => return Err(SysErrNo::EINVAL),
-    // }
 }

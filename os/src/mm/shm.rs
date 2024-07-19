@@ -3,7 +3,6 @@ use spin::Mutex;
 
 use crate::{
     config::mm::PAGE_SIZE,
-    mm::{MapArea, PTEFlags},
     task::current_task,
     utils::{SysErrNo, SyscallRet},
 };

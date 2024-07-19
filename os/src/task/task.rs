@@ -10,8 +10,8 @@ use crate::{
     },
     fs::{create_cmdline, create_proc_dir_and_file, FdTable, FsInfo},
     mm::{
-        flush_tlb, get_data, translated_refmut, MapArea, MapAreaType, MapPermission, MapType,
-        MemorySet, MemorySetInner, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
+        flush_tlb, get_data, translated_refmut, MapAreaType, MapPermission, MemorySet,
+        MemorySetInner, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
     },
     signal::{SigSet, SigTable},
     syscall::CloneFlags,

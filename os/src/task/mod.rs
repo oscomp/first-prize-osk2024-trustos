@@ -31,6 +31,7 @@ use crate::{
     fs::{open, remove_proc_dir_and_file, OpenFlags, NONE_MODE},
     mm::{put_data, VirtAddr},
     signal::{send_signal_to_thread_group, SigSet},
+    utils::SyscallRet,
 };
 use alloc::{boxed::Box, sync::Arc};
 pub use context::TaskContext;
@@ -88,7 +89,7 @@ pub fn block_current_and_run_next() {
 pub const IDLE_PID: usize = 0;
 
 /// 杀死当前线程组的所有线程
-pub fn exit_current_group(exit_code: i32) {
+pub fn exit_current_group(exit_code: i32) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let mut exit_code = exit_code;
@@ -105,10 +106,10 @@ pub fn exit_current_group(exit_code: i32) {
         drop(task);
     }
 
-    exit_current(exit_code);
+    exit_current(exit_code)
 }
 
-pub fn exit_current(exit_code: i32) {
+pub fn exit_current(exit_code: i32) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
     debug!(
@@ -146,7 +147,7 @@ pub fn exit_current(exit_code: i32) {
                 send_signal_to_thread_group(task.ppid(), SigSet::SIGCHLD);
                 wakeup_parent(task.ppid());
                 let inner = task.inner_lock();
-                inner.memory_set.recycle_data_pages();
+                inner.memory_set.recycle_data_pages()?;
                 if inner.sig_table.not_exited() {
                     inner.sig_table.set_exit_code(exit_code);
                 }
@@ -157,6 +158,7 @@ pub fn exit_current(exit_code: i32) {
     }
 
     drop(task);
+    Ok(0)
 }
 
 pub fn handle_exit() -> ! {
