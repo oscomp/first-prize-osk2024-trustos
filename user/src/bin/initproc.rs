@@ -3,25 +3,21 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 
-#[macro_use]
 extern crate user_lib;
 
-use user_lib::{
-    close, exec, fork, openat, run_busyboxsh, run_libc_bench, shutdown, sleep, wait, write,
-    OpenFlags,
-};
+use user_lib::{fork, run_busyboxsh, run_finaltest, wait};
 
 #[no_mangle]
 fn main() -> i32 {
     // println!("initproc running...");
     if fork() == 0 {
         // exec("user_shell\0");
-        run_busyboxsh();
-        // run_libc_bench();
+        // run_busyboxsh();
+        run_finaltest();
     } else {
         loop {
             let mut exit_code: i32 = 0;
-            let pid = wait(&mut exit_code);
+            let _ = wait(&mut exit_code);
             // shutdown();
             // sleep(5000);
             // println!(

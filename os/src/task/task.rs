@@ -10,7 +10,7 @@ use crate::{
     },
     fs::{create_cmdline, create_proc_dir_and_file, FdTable, FsInfo},
     mm::{
-        flush_tlb, get_data, translated_refmut, MapAreaType, MapPermission, MemorySet,
+        flush_tlb, get_data, put_data, translated_refmut, MapAreaType, MapPermission, MemorySet,
         MemorySetInner, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
     },
     signal::{SigSet, SigTable},
@@ -258,25 +258,25 @@ impl TaskControlBlock {
         env.push(String::from("PATH=/"));
 
         //环境变量内容入栈
-        let mut env_ptr_vec = Vec::new();
+        let mut envp = Vec::new();
         for env in env.iter() {
             user_sp -= env.len() + 1;
-            env_ptr_vec.push(user_sp);
+            envp.push(user_sp);
             // println!("{:#X}:{}", user_sp, env);
             for (j, c) in env.as_bytes().iter().enumerate() {
                 *translated_refmut(token, (user_sp + j) as *mut u8) = *c;
             }
             *translated_refmut(token, (user_sp + env.len()) as *mut u8) = 0;
         }
-        user_sp -= user_sp % core::mem::size_of::<usize>();
-        env_ptr_vec.push(0);
+        envp.push(0);
+        user_sp -= user_sp % size_of::<usize>();
 
         //存放字符串首址的数组
-        let mut argv_ptr_vec = Vec::new();
+        let mut argvp = Vec::new();
         for arg in argv.iter() {
             // 计算字符串在栈上的地址
             user_sp -= arg.len() + 1;
-            argv_ptr_vec.push(user_sp);
+            argvp.push(user_sp);
             // println!("{:#X}:{}", user_sp, arg);
             for (j, c) in arg.as_bytes().iter().enumerate() {
                 *translated_refmut(token, (user_sp + j) as *mut u8) = *c;
@@ -284,8 +284,8 @@ impl TaskControlBlock {
             // 添加字符串末尾的 null 字符
             *translated_refmut(token, (user_sp + arg.len()) as *mut u8) = 0;
         }
-        user_sp -= user_sp % core::mem::size_of::<usize>(); //以8字节对齐
-        argv_ptr_vec.push(0);
+        user_sp -= user_sp % size_of::<usize>(); //以8字节对齐
+        argvp.push(0);
 
         //需要随便放16个字节，不知道干嘛用的。
         user_sp -= 16;
@@ -297,7 +297,7 @@ impl TaskControlBlock {
 
         // println!("aux:");
         //将auxv放入栈中
-        auxv.push(Aux::new(AuxType::EXECFN, argv_ptr_vec[0]));
+        auxv.push(Aux::new(AuxType::EXECFN, argvp[0]));
         auxv.push(Aux::new(AuxType::NULL, 0));
         for aux in auxv.iter().rev() {
             // println!("{:?}", aux);
@@ -308,19 +308,36 @@ impl TaskControlBlock {
 
         //将环境变量指针数组放入栈中
         // println!("env pointers:");
-        for p in env_ptr_vec.iter().rev() {
-            user_sp -= core::mem::size_of::<usize>();
-            *translated_refmut(token, user_sp as *mut usize) = *p;
-            // println!("{:#X}:{:#X}", user_sp, *p);
+        user_sp -= envp.len() * size_of::<usize>();
+        let envp_base = user_sp;
+        for i in 0..envp.len() {
+            put_data(
+                token,
+                (user_sp + i * size_of::<usize>()) as *mut usize,
+                envp[i],
+            );
         }
+        // for p in env_ptr_vec.iter().rev() {
+        //     user_sp -= size_of::<usize>();
+        //     *translated_refmut(token, user_sp as *mut usize) = *p;
+        //     // println!("{:#X}:{:#X}", user_sp, *p);
+        // }
         // println!("arg pointers:");
-
+        user_sp -= argvp.len() * size_of::<usize>();
+        let argv_base = user_sp;
         //将参数指针数组放入栈中
-        for p in argv_ptr_vec.iter().rev() {
-            user_sp -= size_of::<usize>();
-            *translated_refmut(token, user_sp as *mut usize) = *p;
-            // println!("{:#X}:{:#X} ", user_sp, *p);
+        for i in 0..argvp.len() {
+            put_data(
+                token,
+                (user_sp + i * size_of::<usize>()) as *mut usize,
+                argvp[i],
+            );
         }
+        // for p in argvp.iter().rev() {
+        //     user_sp -= size_of::<usize>();
+        //     *translated_refmut(token, user_sp as *mut usize) = *p;
+        //     // println!("{:#X}:{:#X} ", user_sp, *p);
+        // }
 
         //将argc放入栈中
         user_sp -= size_of::<usize>();
@@ -333,7 +350,11 @@ impl TaskControlBlock {
         //将设置了O_CLOEXEC位的文件描述符关闭
         task_inner.fd_table.close_on_exec();
 
-        let trap_cx = TrapContext::app_init_context(entry_point, user_sp, self.kernel_stack.top());
+        let mut trap_cx =
+            TrapContext::app_init_context(entry_point, user_sp, self.kernel_stack.top());
+        trap_cx.gp.x[10] = argv.len();
+        trap_cx.gp.x[11] = argv_base;
+        trap_cx.gp.x[12] = envp_base;
         *task_inner.trap_cx() = trap_cx;
         task_inner.user_heappoint = user_hp;
         task_inner.user_heapbottom = user_hp;

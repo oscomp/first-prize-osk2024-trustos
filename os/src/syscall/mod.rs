@@ -115,6 +115,7 @@ pub enum Syscall {
     Prlimit = 261,
     Renameat2 = 276,
     Getrandom = 278,
+    MemBarrier = 283,
     CopyFileRange = 285,
     // 非标准系统调用
     Shutdown = 1000,
@@ -363,6 +364,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[4] as u32,
         ),
         Syscall::Getrandom => sys_getrandom(args[0] as *const u8, args[1], args[2] as u32),
+        Syscall::MemBarrier => Ok(0),
         Syscall::CopyFileRange => {
             sys_copy_file_range(args[0], args[1], args[2], args[3], args[4], args[5] as u32)
         }

@@ -122,8 +122,8 @@ pub fn execve(args: &[&str]) -> isize {
 pub fn run_busyboxsh() -> isize {
     sys_busyboxsh()
 }
-pub fn run_libc_bench() -> isize {
-    sys_run_libc_bench()
+pub fn run_finaltest() -> isize {
+    sys_finaltest()
 }
 pub fn wait(exit_code: &mut i32) -> isize {
     sys_waitpid(-1, exit_code as *mut _, 0)
