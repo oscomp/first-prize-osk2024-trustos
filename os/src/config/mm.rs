@@ -27,7 +27,7 @@ pub const MMAP_TOP: usize = USER_TRAP_CONTEXT_TOP
     - PAGE_SIZE;
 
 /// Dynamic linked interpreter address range in user space
-pub const DL_INTERP_OFFSET: usize = 0x20_0000_0000;
+pub const DL_INTERP_OFFSET: usize = 0x15_0000_0000;
 /// Kernel Stack Start
 pub const KSTACK_TOP: usize = usize::MAX - PAGE_SIZE + 1;
 

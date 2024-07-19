@@ -11,7 +11,7 @@ use crate::{
     },
     fs::{open, File, OSInode, OpenFlags, NONE_MODE},
     mm::flush_tlb,
-    sync::{interrupt_get, SyncUnsafeCell},
+    sync::SyncUnsafeCell,
     syscall::MmapFlags,
     task::{Aux, AuxType},
     utils::SyscallRet,
@@ -313,7 +313,6 @@ impl MemorySetInner {
                 }
             }
             let interp_file = interp_inode.unwrap();
-            // let interp_file = interp_inode.open(interp_inode.clone()).ok().unwrap();
             let interp_elf_data = interp_file.inode.read_all().unwrap();
             let interp_elf = xmas_elf::ElfFile::new(&interp_elf_data).unwrap();
             self.map_elf(&interp_elf, DL_INTERP_OFFSET.into());
@@ -784,43 +783,6 @@ impl MemorySetInner {
         auxv.push(Aux::new(AuxType::CLKTCK, 100 as usize));
         auxv.push(Aux::new(AuxType::SECURE, 0 as usize));
         auxv.push(Aux::new(AuxType::NOTELF, 0x112d as usize));
-
-        // let mut max_end_vpn = VirtPageNum(0);
-        // for i in 0..ph_count {
-        //     let ph = elf.program_header(i).unwrap();
-        //     if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
-        //         let start_va: VirtAddr = (ph.virtual_addr() as usize).into();
-        //         let end_va: VirtAddr = ((ph.virtual_addr() + ph.mem_size()) as usize).into();
-        //         let offset = start_va.0 - start_va.floor().0 * PAGE_SIZE;
-        //         let mut map_perm = MapPermission::U;
-        //         let ph_flags = ph.flags();
-        //         if ph_flags.is_read() {
-        //             map_perm |= MapPermission::R;
-        //         }
-        //         if ph_flags.is_write() {
-        //             map_perm |= MapPermission::W;
-        //         }
-        //         if ph_flags.is_execute() {
-        //             map_perm |= MapPermission::X;
-        //         }
-        //         let map_area = MapArea::new(
-        //             start_va,
-        //             end_va,
-        //             MapType::Framed,
-        //             map_perm,
-        //             MapAreaType::Elf,
-        //         );
-        //         if offset == 0 {
-        //             head_va = start_va.into();
-        //         }
-        //         max_end_vpn = map_area.vpn_range.end();
-        //         memory_set.push_with_offset(
-        //             map_area,
-        //             offset,
-        //             Some(&elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
-        //         );
-        //     }
-        // }
 
         let (max_end_vpn, head_va) = memory_set.map_elf(&elf, VirtAddr(0));
 
