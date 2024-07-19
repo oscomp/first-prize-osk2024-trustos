@@ -154,8 +154,8 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Getcwd => sys_getcwd(args[0] as *const u8, args[1]),
         Syscall::Dup => sys_dup(args[0]),
         Syscall::Dup3 => sys_dup3(args[0], args[1], args[2] as u32),
-        Syscall::Fcntl => sys_fcntl(args[0] as usize, args[1] as usize, args[2] as usize),
-        Syscall::Ioctl => sys_ioctl(args[0] as usize, args[1] as usize, args[2] as usize),
+        Syscall::Fcntl => sys_fcntl(args[0], args[1], args[2]),
+        Syscall::Ioctl => sys_ioctl(args[0], args[1], args[2]),
         Syscall::Mkdirat => sys_mkdirat(args[0] as isize, args[1] as *const u8, args[2] as u32),
         Syscall::Unlinkat => sys_unlinkat(args[0] as isize, args[1] as *const u8, args[2] as u32),
         Syscall::Linkat => sys_linkat(
@@ -174,12 +174,12 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[4] as *const u8,
         ),
         Syscall::StatFs => sys_statfs(args[0] as *const u8, args[1] as *const u8),
-        Syscall::Ftruncate => sys_ftruncate(args[0] as usize, args[1] as i32),
+        Syscall::Ftruncate => sys_ftruncate(args[0], args[1] as i32),
         Syscall::Faccessat => sys_faccessat(
             args[0] as isize,
             args[1] as *const u8,
             args[2] as u32,
-            args[3] as usize,
+            args[3],
         ),
         Syscall::Chdir => sys_chdir(args[0] as *const u8),
         Syscall::Openat => sys_openat(
@@ -190,66 +190,37 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         ),
         Syscall::Close => sys_close(args[0]),
         Syscall::Pipe2 => sys_pipe2(args[0] as *mut u32),
-        Syscall::Getdents64 => {
-            sys_getdents64(args[0] as usize, args[1] as *const u8, args[2] as usize)
-        }
-        Syscall::Lseek => sys_lseek(args[0] as usize, args[1] as isize, args[2] as usize),
-        Syscall::Read => sys_read(args[0] as usize, args[1] as *const u8, args[2] as usize),
-        Syscall::Write => sys_write(args[0] as usize, args[1] as *const u8, args[2] as usize),
-        Syscall::Readv => sys_readv(args[0] as usize, args[1] as *const u8, args[2] as usize),
-        Syscall::Writev => sys_writev(args[0] as usize, args[1] as *const u8, args[2] as usize),
-        Syscall::Pread64 => sys_pread64(
-            args[0] as usize,
-            args[1] as *const u8,
-            args[2] as usize,
-            args[3] as isize,
-        ),
-        Syscall::Pwrite64 => sys_pwrite64(
-            args[0] as usize,
-            args[1] as *const u8,
-            args[2] as usize,
-            args[3] as isize,
-        ),
-        Syscall::SendFile => sys_sendfile(
-            args[0] as usize,
-            args[1] as usize,
-            args[2] as usize,
-            args[3] as usize,
-        ),
-        Syscall::Pselect6 => sys_pselect6(
-            args[0] as usize,
-            args[1] as usize,
-            args[2] as usize,
-            args[3] as usize,
-            args[4] as usize,
-            args[5] as usize,
-        ),
-        Syscall::Ppoll => sys_ppoll(
-            args[0] as usize,
-            args[1] as usize,
-            args[2] as usize,
-            args[3] as usize,
-        ),
+        Syscall::Getdents64 => sys_getdents64(args[0], args[1] as *const u8, args[2]),
+        Syscall::Lseek => sys_lseek(args[0], args[1] as isize, args[2]),
+        Syscall::Read => sys_read(args[0], args[1] as *const u8, args[2]),
+        Syscall::Write => sys_write(args[0], args[1] as *const u8, args[2]),
+        Syscall::Readv => sys_readv(args[0], args[1] as *const u8, args[2]),
+        Syscall::Writev => sys_writev(args[0], args[1] as *const u8, args[2]),
+        Syscall::Pread64 => sys_pread64(args[0], args[1] as *const u8, args[2], args[3] as isize),
+        Syscall::Pwrite64 => sys_pwrite64(args[0], args[1] as *const u8, args[2], args[3] as isize),
+        Syscall::SendFile => sys_sendfile(args[0], args[1], args[2], args[3]),
+        Syscall::Pselect6 => sys_pselect6(args[0], args[1], args[2], args[3], args[4], args[5]),
+        Syscall::Ppoll => sys_ppoll(args[0], args[1], args[2], args[3]),
         Syscall::ReadLinkat => sys_readlinkat(
             args[0] as isize,
             args[1] as *const u8,
             args[2] as *const u8,
-            args[3] as usize,
+            args[3],
         ),
         Syscall::Fstatat => sys_fstatat(
             args[0] as isize,
             args[1] as *const u8,
             args[2] as *const u8,
-            args[3] as usize,
+            args[3],
         ),
-        Syscall::Fstat => sys_fstat(args[0] as usize, args[1] as *const u8),
+        Syscall::Fstat => sys_fstat(args[0], args[1] as *const u8),
         Syscall::Sync => sys_sync(),
-        Syscall::Fsync => sys_fsync(args[0] as usize),
+        Syscall::Fsync => sys_fsync(args[0]),
         Syscall::Utimensat => sys_utimensat(
             args[0] as isize,
             args[1] as *const u8,
             args[2] as *const Timespec,
-            args[3] as usize,
+            args[3],
         ),
         Syscall::Exit => sys_exit(args[0] as i32),
         Syscall::ExitGroup => sys_exit_group(args[0] as i32),
@@ -262,12 +233,10 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[4] as *mut i32,
             args[5] as i32,
         ),
-        Syscall::SetRobustList => sys_set_robust_list(args[0] as usize, args[1] as usize),
-        Syscall::GetRobustList => sys_get_robust_list(
-            args[0] as usize,
-            args[1] as *mut usize,
-            args[2] as *mut usize,
-        ),
+        Syscall::SetRobustList => sys_set_robust_list(args[0], args[1]),
+        Syscall::GetRobustList => {
+            sys_get_robust_list(args[0], args[1] as *mut usize, args[2] as *mut usize)
+        }
         Syscall::NanoSleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
         Syscall::SetTimer => sys_settimer(
             args[0] as usize,
@@ -277,27 +246,23 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::ClockGettime => sys_clock_gettime(args[0], args[1] as *mut Timespec),
         Syscall::ClockGetres => sys_clock_getres(args[0] as usize, args[1] as *mut Timespec),
         Syscall::ClockNanosleep => sys_clock_nanosleep(
-            args[0] as usize,
+            args[0],
             args[1] as u32,
             args[2] as *const u8,
             args[3] as *const u8,
         ),
-        Syscall::SysLog => sys_syslog(args[0] as isize, args[1] as *const u8, args[2] as usize),
+        Syscall::SysLog => sys_syslog(args[0] as isize, args[1] as *const u8, args[2]),
         Syscall::SchedSetScheduler => {
-            sys_sched_setscheduler(args[0] as usize, args[1] as usize, args[2] as *const u8)
+            sys_sched_setscheduler(args[0], args[1], args[2] as *const u8)
         }
-        Syscall::SchedGetScheduler => sys_sched_getscheduler(args[0] as usize),
-        Syscall::SchedGetParam => sys_sched_getparam(args[0] as usize, args[1] as *const u8),
-        Syscall::SchedSetaffinity => {
-            sys_sched_setaffinity(args[0] as usize, args[1] as usize, args[2] as usize)
-        }
-        Syscall::SchedGetaffinity => {
-            sys_sched_getaffinity(args[0] as usize, args[1] as usize, args[2] as usize)
-        }
+        Syscall::SchedGetScheduler => sys_sched_getscheduler(args[0]),
+        Syscall::SchedGetParam => sys_sched_getparam(args[0], args[1] as *const u8),
+        Syscall::SchedSetaffinity => sys_sched_setaffinity(args[0], args[1], args[2]),
+        Syscall::SchedGetaffinity => sys_sched_getaffinity(args[0], args[1], args[2]),
         Syscall::SchedYield => sys_sched_yield(),
         Syscall::SigKill => sys_kill(args[0] as isize, args[0]),
-        Syscall::Tkill => sys_tkill(args[0] as usize, args[1] as usize),
-        Syscall::Tgkill => sys_tgkill(args[0] as usize, args[1] as usize, args[2] as usize),
+        Syscall::Tkill => sys_tkill(args[0], args[1]),
+        Syscall::Tgkill => sys_tgkill(args[0], args[1], args[2]),
         Syscall::SigSuspend => sys_rt_sigsuspend(args[0] as *const SigSet),
         Syscall::SigAction => sys_rt_sigaction(
             args[0],
@@ -331,38 +296,34 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::GetEGid => sys_getegid(),
         Syscall::GetTid => sys_gettid(),
         Syscall::SysInfo => sys_sysinfo(args[0] as *const u8),
-        Syscall::Shmget => sys_shmget(args[0] as usize, args[1] as usize, args[2] as u32),
-        Syscall::Shmctl => sys_shmctl(args[0] as usize, args[1] as usize, args[2] as usize),
-        Syscall::Shmat => sys_shmat(args[0] as usize, args[1] as usize, args[2] as u32),
+        Syscall::Shmget => sys_shmget(args[0] as i32, args[1], args[2] as i32),
+        Syscall::Shmctl => sys_shmctl(args[0] as i32, args[1] as i32, args[2]),
+        Syscall::Shmat => sys_shmat(args[0] as i32, args[1], args[2] as i32),
         Syscall::Socket => sys_socket(args[0] as u32, args[1] as u32, args[2] as u32),
-        Syscall::Bind => sys_bind(args[0] as usize, args[1] as *const u8, args[2] as u32),
-        Syscall::Listen => sys_listen(args[0] as usize, args[1] as u32),
-        Syscall::Accept => sys_accept(args[0] as usize, args[1] as *const u8, args[2] as u32),
-        Syscall::Connect => sys_connect(args[0] as usize, args[1] as *const u8, args[2] as u32),
-        Syscall::GetSockName => {
-            sys_getsockname(args[0] as usize, args[1] as *const u8, args[2] as u32)
-        }
-        Syscall::GetPeerName => {
-            sys_getpeername(args[0] as usize, args[1] as *const u8, args[2] as u32)
-        }
+        Syscall::Bind => sys_bind(args[0], args[1] as *const u8, args[2] as u32),
+        Syscall::Listen => sys_listen(args[0], args[1] as u32),
+        Syscall::Accept => sys_accept(args[0], args[1] as *const u8, args[2] as u32),
+        Syscall::Connect => sys_connect(args[0], args[1] as *const u8, args[2] as u32),
+        Syscall::GetSockName => sys_getsockname(args[0], args[1] as *const u8, args[2] as u32),
+        Syscall::GetPeerName => sys_getpeername(args[0], args[1] as *const u8, args[2] as u32),
         Syscall::SendTo => sys_sendto(
-            args[0] as usize,
+            args[0],
             args[1] as *const u8,
-            args[2] as usize,
+            args[2],
             args[3] as u32,
             args[4] as *const u8,
             args[5] as u32,
         ),
         Syscall::RecvFrom => sys_recvfrom(
-            args[0] as usize,
+            args[0],
             args[1] as *mut u8,
-            args[2] as usize,
+            args[2],
             args[3] as u32,
             args[4] as *const u8,
             args[5] as u32,
         ),
         Syscall::SetSockOpt => sys_setsockopt(
-            args[0] as usize,
+            args[0],
             args[1] as u32,
             args[2] as u32,
             args[3] as *const u8,
@@ -386,10 +347,10 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         ),
         Syscall::Munmap => sys_munmap(args[0], args[1]),
         Syscall::Mprotect => sys_mprotect(args[0], args[1], args[2] as u32),
-        Syscall::Madvise => sys_madvise(args[0] as usize, args[1] as usize, args[2] as usize),
+        Syscall::Madvise => sys_madvise(args[0], args[1], args[2]),
         Syscall::Wait4 => sys_wait4(args[0] as isize, args[1] as *mut i32, args[2] as i32),
         Syscall::Prlimit => sys_prlimit(
-            args[0] as usize,
+            args[0],
             args[1] as u32,
             args[2] as *const RLimit,
             args[3] as *mut RLimit,
@@ -401,15 +362,10 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[3] as *const u8,
             args[4] as u32,
         ),
-        Syscall::Getrandom => sys_getrandom(args[0] as *const u8, args[1] as usize, args[2] as u32),
-        Syscall::CopyFileRange => sys_copy_file_range(
-            args[0] as usize,
-            args[1] as usize,
-            args[2] as usize,
-            args[3] as usize,
-            args[4] as usize,
-            args[5] as u32,
-        ),
+        Syscall::Getrandom => sys_getrandom(args[0] as *const u8, args[1], args[2] as u32),
+        Syscall::CopyFileRange => {
+            sys_copy_file_range(args[0], args[1], args[2], args[3], args[4], args[5] as u32)
+        }
         Syscall::Shutdown => shutdown(false),
         _ => panic!("Unsupported syscall_id: {}", id),
     }

@@ -14,10 +14,12 @@ use crate::{
     sync::SyncUnsafeCell,
     syscall::MmapFlags,
     task::{Aux, AuxType},
+    utils::SyscallRet,
 };
 use alloc::{sync::Arc, vec::Vec};
 use core::arch::asm;
 use lazy_static::*;
+use log::info;
 use riscv::register::{
     satp,
     scause::{Exception, Trap},
@@ -73,9 +75,6 @@ impl MemorySet {
     pub fn token(&self) -> usize {
         self.inner.get_unchecked_mut().token()
     }
-    pub fn alloc_addr_va(&self, len: usize) -> (VirtAddr, VirtAddr) {
-        self.inner.get_unchecked_mut().alloc_addr_va(len)
-    }
     #[inline(always)]
     pub fn insert_framed_area(
         &self,
@@ -87,19 +86,6 @@ impl MemorySet {
         self.inner
             .get_unchecked_mut()
             .insert_framed_area(start_va, end_va, permission, area_type)
-    }
-    #[inline(always)]
-    pub fn insert_given_framed_area(
-        &self,
-        start_va: VirtAddr,
-        end_va: VirtAddr,
-        permission: MapPermission,
-        area_type: MapAreaType,
-        frames: Vec<Arc<FrameTracker>>,
-    ) {
-        self.inner
-            .get_unchecked_mut()
-            .insert_given_framed_area(start_va, end_va, permission, area_type, frames)
     }
     #[inline(always)]
     pub fn remove_area_with_start_vpn(&self, start_vpn: VirtPageNum) {
@@ -120,6 +106,16 @@ impl MemorySet {
         self.inner
             .get_unchecked_mut()
             .mmap(addr, len, map_perm, flags, file, off)
+    }
+    #[inline(always)]
+    pub fn shm(
+        &self,
+        addr: usize,
+        size: usize,
+        map_perm: MapPermission,
+        pages: Vec<Arc<FrameTracker>>,
+    ) -> usize {
+        self.get_mut().shm(addr, size, map_perm, pages)
     }
     #[inline(always)]
     pub fn munmap(&self, addr: usize, len: usize) {
@@ -148,17 +144,6 @@ impl MemorySet {
         self.inner
             .get_unchecked_mut()
             .push_with_offset(map_area, offset, data)
-    }
-    // #[inline(always)]
-    // fn push_with_given_frames(&self, map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
-    //     self.inner
-    //         .get_unchecked_mut()
-    //         .push_with_given_frames(map_area, frames)
-    // }
-    pub fn map_given_frames(&self, map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
-        self.inner
-            .get_unchecked_mut()
-            .map_given_frames(map_area, frames);
     }
     #[inline(always)]
     fn push_lazily(&self, map_area: MapArea) {
@@ -224,11 +209,6 @@ impl MemorySetInner {
     pub fn page_table_mut(self: &mut MemorySetInner) -> &mut PageTable {
         &mut self.page_table
     }
-    ///分配一块合适的内存段
-    pub fn alloc_addr_va(&self, len: usize) -> (VirtAddr, VirtAddr) {
-        let addr = self.find_insert_addr(MMAP_TOP, len);
-        (VirtAddr::from(addr), VirtAddr::from(addr + len))
-    }
     /// Assume that no conflicts.
     pub fn insert_framed_area(
         &mut self,
@@ -240,19 +220,6 @@ impl MemorySetInner {
         self.push(
             MapArea::new(start_va, end_va, MapType::Framed, permission, area_type),
             None,
-        );
-    }
-    pub fn insert_given_framed_area(
-        &mut self,
-        start_va: VirtAddr,
-        end_va: VirtAddr,
-        permission: MapPermission,
-        area_type: MapAreaType,
-        frames: Vec<Arc<FrameTracker>>,
-    ) {
-        self.push_with_given_frames(
-            MapArea::new(start_va, end_va, MapType::Framed, permission, area_type),
-            frames,
         );
     }
     ///Remove `MapArea` that starts with `start_vpn`
@@ -313,6 +280,29 @@ impl MemorySetInner {
                     .copy_from_slice(src_ppn.bytes_array());
             }
         }
+    }
+    pub fn shm(
+        &mut self,
+        addr: usize,
+        size: usize,
+        map_perm: MapPermission,
+        pages: Vec<Arc<FrameTracker>>,
+    ) -> usize {
+        if addr == 0 {
+            let va = self.find_insert_addr(MMAP_TOP, size);
+            self.push_with_given_frames(
+                MapArea::new(
+                    va.into(),
+                    (va + size).into(),
+                    MapType::Framed,
+                    map_perm,
+                    MapAreaType::Shm,
+                ),
+                pages,
+            );
+            return va;
+        }
+        panic!("[shm_attach] unimplement attach addr");
     }
     /// mmap
     pub fn mmap(
@@ -586,9 +576,6 @@ impl MemorySetInner {
     fn push_with_given_frames(&mut self, mut map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
         map_area.map_given_frames(&mut self.page_table, frames);
         self.areas.push(map_area);
-    }
-    fn map_given_frames(&mut self, mut map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
-        map_area.map_given_frames(&mut self.page_table, frames);
     }
     /// 不映射MapArea里的虚拟页面
     pub fn push_lazily(&mut self, map_area: MapArea) {
@@ -875,7 +862,14 @@ impl MemorySetInner {
                 memory_set.push_lazily(new_area);
                 continue;
             }
-            //既不是cow也不是mmap
+            // 映射相同的Frame
+            if area.area_type == MapAreaType::Shm {
+                let frames = area.data_frames.values().cloned().collect();
+                memory_set.push_with_given_frames(new_area, frames);
+                continue;
+            }
+
+            //既不是cow也不是mmap还不是shm
             memory_set.push(new_area, None);
 
             // copy data from another space

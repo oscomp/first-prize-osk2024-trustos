@@ -14,7 +14,7 @@ use crate::{
         MemorySet, MemorySetInner, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
     },
     signal::{SigSet, SigTable},
-    syscall::{CloneFlags, MapedSharedMemory},
+    syscall::CloneFlags,
     task::insert_into_thread_group,
     timer::{TimeData, TimeVal, Timer},
     trap::TrapContext,
@@ -58,7 +58,6 @@ pub struct TaskControlBlockInner {
     pub task_cx: TaskContext,
     pub task_status: TaskStatus,
     pub memory_set: Arc<MemorySet>,
-    pub shms: Vec<MapedSharedMemory>,
     pub fd_table: Arc<FdTable>,
     pub fs_info: Arc<FsInfo>,
     pub time_data: TimeData,
@@ -210,7 +209,6 @@ impl TaskControlBlock {
                 task_cx: TaskContext::goto_trap_loop(kernel_stack_top),
                 task_status: TaskStatus::Ready,
                 memory_set: Arc::new(MemorySet::new(memory_set)),
-                shms: Vec::new(),
                 fd_table: Arc::new(FdTable::new_with_stdio()),
                 fs_info: Arc::new(FsInfo::new(String::from("/"))),
                 time_data: TimeData::new(),
@@ -427,7 +425,6 @@ impl TaskControlBlock {
                 task_cx: TaskContext::goto_trap_loop(kernel_stack_top),
                 task_status: TaskStatus::Ready,
                 memory_set,
-                shms: parent_inner.shms.clone(),
                 fd_table,
                 fs_info,
                 time_data: TimeData::new(),
@@ -494,19 +491,6 @@ impl TaskControlBlock {
         }
 
         if flags.contains(CloneFlags::SIGCHLD) {
-            //子进程映射共享内存
-            parent_inner.shms.iter().for_each(|x| {
-                child_inner.memory_set.map_given_frames(
-                    MapArea::new(
-                        VirtAddr::from(x.start),
-                        VirtAddr::from(x.end),
-                        MapType::Framed,
-                        MapPermission::all(),
-                        MapAreaType::Shm,
-                    ),
-                    x.mem.trackers.clone(),
-                );
-            });
             //创建进程专属目录，路径为/proc/<pid>
             create_proc_dir_and_file(pid, ppid);
         }

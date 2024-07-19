@@ -5,15 +5,17 @@ use log::debug;
 use crate::{
     config::mm::PAGE_SIZE,
     fs::File,
-    mm::{frames_alloc_much, FrameTracker, MapArea, MapAreaType, MapPermission, MapType, VirtAddr},
-    syscall::MapedSharedMemory,
+    mm::{
+        frames_alloc_much, shm_attach, shm_create, shm_drop, shm_find, FrameTracker, MapArea,
+        MapAreaType, MapPermission, MapType, ShmFlags, VirtAddr,
+    },
     task::current_task,
     utils::{page_round_up, SysErrNo, SyscallRet},
 };
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use super::{MmapFlags, MmapProt, SharedMemory, ShmGetFlags, SHARED_MEMORY};
+use super::{MmapFlags, MmapProt};
 
 pub fn sys_mmap(
     addr: usize,
@@ -100,89 +102,62 @@ pub fn sys_madvise(_addr: usize, _len: usize, _advice: usize) -> SyscallRet {
     Ok(0)
 }
 
-pub fn sys_shmget(key: usize, size: usize, shmflag: u32) -> SyscallRet {
-    debug!(
-        "[sys_shmget] key is {}, size is {}, shmflag is {}",
-        key, size, shmflag
-    );
-    let mut key = key;
-    if key == 0 {
-        key = SHARED_MEMORY.lock().keys().cloned().max().unwrap_or(0) + 1;
+pub fn sys_shmget(key: i32, size: usize, shmflag: i32) -> SyscallRet {
+    const IPC_PRIVATE: i32 = 0;
+    // 忽略权限位
+    let flags = ShmFlags::from_bits(shmflag & !0x1ff).unwrap();
+    match key {
+        IPC_PRIVATE => Ok(shm_create(size)),
+        key if key > 0 => {
+            if shm_find(key as usize) {
+                if flags.contains(ShmFlags::IPC_CREAT | ShmFlags::IPC_EXCL) {
+                    Err(SysErrNo::EEXIST)
+                } else {
+                    Ok(key as usize)
+                }
+            } else {
+                if flags.contains(ShmFlags::IPC_CREAT) {
+                    Ok(shm_create(size))
+                } else {
+                    Err(SysErrNo::ENOENT)
+                }
+            }
+        }
+        _ => Err(SysErrNo::ENOENT),
     }
-    let mem = SHARED_MEMORY.lock().get(&key).cloned();
-    if mem.is_some() {
-        return Ok(key);
-    }
-    let flag = ShmGetFlags::from_bits_truncate(shmflag as i32);
-    if flag.contains(ShmGetFlags::IPC_CREAT) {
-        let pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
-        let shm: Vec<Arc<FrameTracker>> =
-            frames_alloc_much(pages).expect("can't alloc pages in shm");
-        SHARED_MEMORY
-            .lock()
-            .insert(key, Arc::new(SharedMemory::new(shm)));
-        return Ok(key);
-    }
-    Err(SysErrNo::ENOENT)
 }
 
-pub fn sys_shmat(shmid: usize, shmaddr: usize, shmflag: u32) -> SyscallRet {
-    let task = current_task().unwrap();
-    let mut task_inner = task.inner_lock();
-
-    debug!(
-        "[sys_shmat] shmid is {}, shmaddr is {}, shmflag is {}",
-        shmid, shmaddr, shmflag
-    );
-
-    let trackers = SHARED_MEMORY.lock().get(&shmid).cloned();
-    if trackers.is_none() {
-        return Err(SysErrNo::ENOENT);
-    }
-    //映射frames
-    let size = trackers.as_ref().unwrap().trackers.len() * PAGE_SIZE;
-    let (start_va, end_va) = if shmaddr == 0 {
-        task_inner.memory_set.alloc_addr_va(size)
+pub fn sys_shmat(shmid: i32, shmaddr: usize, shmflag: i32) -> SyscallRet {
+    let mut permission = MapPermission::U | MapPermission::R;
+    if shmflag == 0 {
+        permission |= MapPermission::W | MapPermission::X
     } else {
-        (VirtAddr::from(shmaddr), VirtAddr::from(shmaddr + size))
-    };
-    task_inner.memory_set.map_given_frames(
-        MapArea::new(
-            start_va,
-            end_va,
-            MapType::Framed,
-            MapPermission::all(),
-            MapAreaType::Shm,
-        ),
-        trackers.as_ref().unwrap().trackers.clone(),
-    );
-    //将共享内存段存入task中
-    task_inner.shms.push(MapedSharedMemory {
-        key: shmid,
-        mem: trackers.unwrap(),
-        start: start_va.into(),
-        end: end_va.into(),
-        size,
-    });
-    Ok(start_va.into())
+        let shmflg = ShmFlags::from_bits(shmflag).unwrap();
+        if shmflg.contains(ShmFlags::SHM_EXEC) {
+            permission |= MapPermission::X;
+        }
+        if !shmflg.contains(ShmFlags::SHM_RDONLY) {
+            permission |= MapPermission::W;
+        }
+    }
+
+    match shmid {
+        key if key < 0 => Err(SysErrNo::EINVAL),
+        _ => shm_attach(shmid as usize, shmaddr, permission),
+    }
 }
 
 const IPCRMID: usize = 0;
 
-pub fn sys_shmctl(shmid: usize, cmd: usize, buf: usize) -> SyscallRet {
-    //用于控制共享内存
-    debug!(
-        "[sys_shmctl] shmid is {}, cmd is {}, buf is {}",
-        shmid, cmd, buf
-    );
-
+pub fn sys_shmctl(shmid: i32, cmd: i32, _buf: usize) -> SyscallRet {
+    const IPC_RMID: i32 = 0;
     match cmd {
-        IPCRMID => {
-            if let Some(map) = SHARED_MEMORY.lock().get_mut(&shmid) {
-                *map.deleted.lock() = true;
-            }
-            return Ok(0);
+        IPC_RMID => {
+            shm_drop(shmid as usize);
+            Ok(0)
         }
-        _ => return Err(SysErrNo::EINVAL),
+        _ => {
+            panic!("[sys_shmctl] unsupport cmd");
+        }
     }
 }

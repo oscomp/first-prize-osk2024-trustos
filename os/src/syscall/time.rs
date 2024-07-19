@@ -55,7 +55,7 @@ pub fn sys_settimer(
     Ok(0)
 }
 
-pub fn sys_clock_gettime(clockid: usize, tp: *mut Timespec) -> SyscallRet {
+pub fn sys_clock_gettime(_clockid: usize, tp: *mut Timespec) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
 
@@ -63,10 +63,10 @@ pub fn sys_clock_gettime(clockid: usize, tp: *mut Timespec) -> SyscallRet {
     let time = get_time_spec();
 
     put_data(token, tp, time);
-    debug!(
-        "[sys_clock_gettime] clockid is {}, time={:?}",
-        clockid, time
-    );
+    // debug!(
+    //     "[sys_clock_gettime] clockid is {}, time={:?}",
+    //     clockid, time
+    // );
     Ok(0)
 }
 

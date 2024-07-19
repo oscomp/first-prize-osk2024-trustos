@@ -244,60 +244,6 @@ impl Utsname {
     }
 }
 
-pub struct SharedMemory {
-    pub trackers: Vec<Arc<FrameTracker>>,
-    pub deleted: Mutex<bool>,
-}
-
-impl SharedMemory {
-    pub const fn new(trackers: Vec<Arc<FrameTracker>>) -> Self {
-        Self {
-            trackers,
-            deleted: Mutex::new(false),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct MapedSharedMemory {
-    pub key: usize,
-    pub mem: Arc<SharedMemory>,
-    pub start: usize,
-    pub end: usize,
-    pub size: usize,
-}
-
-impl Drop for MapedSharedMemory {
-    fn drop(&mut self) {
-        // self.mem.trackers.remove(self.key);
-        if Arc::strong_count(&self.mem) == 1 && *self.mem.deleted.lock() == true {
-            SHARED_MEMORY.lock().remove(&self.key);
-        }
-    }
-}
-
-pub static SHARED_MEMORY: Mutex<BTreeMap<usize, Arc<SharedMemory>>> = Mutex::new(BTreeMap::new());
-
-bitflags! {
-    pub struct ShmGetFlags: i32 {
-        ///
-        const SHM_R = 0o400;
-        ///
-        const SHM_W = 0o200;
-        /// Create a new segment. If this flag is not used, then shmget() will find the segment associated with key and check to see if the user has permission to access the segment.
-        const IPC_CREAT = 0o1000;
-        /// This flag is used with IPC_CREAT to ensure that this call creates the segment.  If the segment already exists, the call fails.
-        const IPC_EXCL = 0o2000;
-        /// segment will use huge TLB pages
-        const SHM_HUGETLB = 0o4000;
-        /// don't check for reservations
-        const SHM_NORESERVE = 0o10000;
-    }
-}
-
-pub const AT_FDCWD: isize = -100;
-pub const AT_REMOVEDIR: u32 = 0x200;
-
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct Iovec {

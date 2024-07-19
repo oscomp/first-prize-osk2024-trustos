@@ -13,6 +13,7 @@ mod map_area;
 mod memory_set;
 mod page_fault_handler;
 mod page_table;
+mod shm;
 
 pub use address::{KernelAddr, PhysAddr, PhysPageNum, StepByOne, VPNRange, VirtAddr, VirtPageNum};
 pub use frame_allocator::{frame_alloc, frame_dealloc, frames_alloc_much, FrameTracker};
@@ -25,6 +26,7 @@ pub use page_table::{
     translated_ref, translated_refmut, translated_str, PTEFlags, PageTable, PageTableEntry,
     UserBuffer, UserBufferIterator,
 };
+pub use shm::*;
 
 /// initiate heap allocator, frame allocator and kernel space
 pub fn init() {

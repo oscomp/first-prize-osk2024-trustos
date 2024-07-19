@@ -99,16 +99,6 @@ impl MapArea {
         let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
         page_table.map(vpn, ppn, pte_flags);
     }
-    pub fn map_given_one(
-        &mut self,
-        page_table: &mut PageTable,
-        vpn: VirtPageNum,
-        frame: Arc<FrameTracker>,
-    ) {
-        let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
-        page_table.map(vpn, frame.ppn, pte_flags);
-        self.data_frames.insert(vpn, frame);
-    }
     pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         if self.map_type == MapType::Framed {
             self.data_frames.remove(&vpn);
@@ -122,7 +112,9 @@ impl MapArea {
     }
     pub fn map_given_frames(&mut self, page_table: &mut PageTable, frames: Vec<Arc<FrameTracker>>) {
         for (vpn, frame) in self.vpn_range.clone().into_iter().zip(frames.into_iter()) {
-            self.map_given_one(page_table, vpn, frame);
+            let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
+            page_table.map(vpn, frame.ppn, pte_flags);
+            self.data_frames.insert(vpn, frame);
         }
     }
     pub fn unmap(&mut self, page_table: &mut PageTable) {

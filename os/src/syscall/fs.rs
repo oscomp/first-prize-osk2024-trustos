@@ -564,10 +564,10 @@ pub fn sys_lseek(fd: usize, offset: isize, whence: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
 
-    debug!(
-        "[sys_lseek] fd is {}, offset is {}, whence is {}",
-        fd, offset, whence
-    );
+    // debug!(
+    //     "[sys_lseek] fd is {}, offset is {}, whence is {}",
+    //     fd, offset, whence
+    // );
 
     if fd >= inner.fd_table.len() || inner.fd_table.try_get(fd).is_none() {
         return Err(SysErrNo::EINVAL);
