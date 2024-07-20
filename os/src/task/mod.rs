@@ -28,7 +28,7 @@ mod task;
 mod tid;
 
 use crate::{
-    fs::{open, remove_proc_dir_and_file, OpenFlags, NONE_MODE},
+    fs::{open, OpenFlags, NONE_MODE},
     mm::{put_data, VirtAddr},
     signal::{send_signal_to_thread_group, SigSet},
     utils::SyscallRet,
@@ -152,7 +152,7 @@ pub fn exit_current(exit_code: i32) -> SyscallRet {
                     inner.sig_table.set_exit_code(exit_code);
                 }
                 // 删除进程的专属目录
-                remove_proc_dir_and_file(task.pid());
+                // remove_proc_dir_and_file(task.pid());
             }
         }
     }

@@ -8,7 +8,7 @@ use crate::{
     config::mm::{
         PAGE_SIZE, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP, USER_TRAP_CONTEXT_TOP,
     },
-    fs::{create_cmdline, create_proc_dir_and_file, FdTable, FsInfo},
+    fs::{FdTable, FsInfo},
     mm::{
         flush_tlb, get_data, put_data, translated_refmut, MapAreaType, MapPermission, MemorySet,
         MemorySetInner, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
@@ -251,13 +251,13 @@ impl TaskControlBlock {
 
         // println!("user_sp:{:#X}  argv:{:?}", user_sp, argv);
 
-        if env.is_empty() {
-            //一些初始的环境变量
-            env.push(String::from("SHELL=/user_shell"));
-            env.push(String::from("PWD=/"));
-            env.push(String::from("HOME=/"));
-            env.push(String::from("PATH=/"));
-        }
+        // if env.is_empty() {
+        //     //一些初始的环境变量
+        //     env.push(String::from("SHELL=/user_shell"));
+        //     env.push(String::from("PWD=/"));
+        //     env.push(String::from("HOME=/"));
+        //     env.push(String::from("PATH=/"));
+        // }
 
         //环境变量内容入栈
         let mut envp = Vec::new();
@@ -362,7 +362,7 @@ impl TaskControlBlock {
         task_inner.user_heapbottom = user_hp;
 
         //创建进程完整命令文件/proc/<pid>/cmdline
-        create_cmdline(self.pid, argv);
+        // create_cmdline(self.pid, argv);
     }
     ///
     pub fn clone_process(
@@ -513,10 +513,10 @@ impl TaskControlBlock {
             *translated_refmut(child_token, child_tid) = child.tid() as u32;
         }
 
-        if flags.contains(CloneFlags::SIGCHLD) {
-            //创建进程专属目录，路径为/proc/<pid>
-            create_proc_dir_and_file(pid, ppid);
-        }
+        // if flags.contains(CloneFlags::SIGCHLD) {
+        //     //创建进程专属目录，路径为/proc/<pid>
+        //     create_proc_dir_and_file(pid, ppid);
+        // }
 
         drop(child_inner);
         drop(parent_inner);

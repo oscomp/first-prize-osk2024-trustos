@@ -140,6 +140,7 @@ use signal::*;
 use time::*;
 
 use crate::{
+    fs::Kstat,
     sbi::shutdown,
     signal::{SigAction, SigInfo, SigSet},
     timer::{Itimerval, Rusage, Timespec, Tms},
@@ -151,7 +152,7 @@ use log::debug;
 pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
     let id = syscall_id;
     let syscall_id: Syscall = Syscall::from(syscall_id);
-    debug!("syscall:{:?}", syscall_id);
+    // debug!("syscall:{:?}", syscall_id);
     match syscall_id {
         Syscall::Getcwd => sys_getcwd(args[0] as *const u8, args[1]),
         Syscall::Dup => sys_dup(args[0]),
@@ -215,7 +216,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[2] as *const u8,
             args[3],
         ),
-        Syscall::Fstat => sys_fstat(args[0], args[1] as *const u8),
+        Syscall::Fstat => sys_fstat(args[0], args[1] as *mut Kstat),
         Syscall::Sync => sys_sync(),
         Syscall::Fsync => sys_fsync(args[0]),
         Syscall::Utimensat => sys_utimensat(

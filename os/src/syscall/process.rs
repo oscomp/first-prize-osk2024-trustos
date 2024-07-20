@@ -13,9 +13,13 @@ use crate::{
         PROCESS_GROUP,
     },
     timer::{add_futex_timer, calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
-    utils::{find_command_in_busybox, get_abs_path, trim_start_slash, SysErrNo, SyscallRet},
+    utils::{get_abs_path, trim_start_slash, SysErrNo, SyscallRet},
 };
-use alloc::{string::String, sync::Arc, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    sync::Arc,
+    vec::Vec,
+};
 use core::mem::size_of;
 use num_enum::TryFromPrimitive;
 
@@ -128,11 +132,11 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
         argv_vec.insert(0, String::from("busybox"));
         path = String::from("/busybox");
     }
-    if find_command_in_busybox(path.trim_start_matches("/")) {
-        //如果执行环境变量中的命令的可执行文件，则改为用busybox启动该命令
-        argv_vec.insert(0, String::from("busybox"));
-        path = String::from("/busybox");
-    }
+    // if find_command_in_busybox(path.trim_start_matches("/")) {
+    //     //如果执行环境变量中的命令的可执行文件，则改为用busybox启动该命令
+    //     argv_vec.insert(0, String::from("busybox"));
+    //     path = String::from("/busybox");
+    // }
     debug!("[sys_execve] path is {},arg is {:?}", path, argv_vec);
     let mut env = Vec::<String>::new();
     loop {
@@ -148,6 +152,8 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
             envp = envp.add(1);
         }
     }
+    env.push("PATH=/:/bin:".to_string());
+    env.push("LD_LIBRARY_PATH=/:/lib:/lib/musl:/lib/glibc:".to_string());
 
     debug!("[sys_execve] env is {:?}", env);
 

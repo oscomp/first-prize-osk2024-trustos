@@ -357,38 +357,52 @@ impl MemorySetInner {
         off: usize,
     ) -> usize {
         // 映射到固定地址
+        // 如果已经映射的部分和需要固定映射的部分冲突,已经映射的部分将被拆分
         if flags.contains(MmapFlags::MAP_FIXED) {
-            self.push_lazily(MapArea::new_mmap(
-                VirtAddr::from(addr),
-                VirtAddr::from(addr + len),
-                MapType::Framed,
-                map_perm,
-                MapAreaType::Mmap,
-                file,
-                off,
-                flags,
-            ));
-            addr
-        } else {
-            // 自行选择地址,计算已经使用的MMap地址
-            let addr = self.find_insert_addr(MMAP_TOP, len);
-            // debug!(
-            //     "[sys_mmap] start_vpn:{:#x},end_vpn:{:#x}",
-            //     VirtAddr::from(addr).floor().0,
-            //     VirtAddr::from(addr + len).floor().0
-            // );
-            self.push_lazily(MapArea::new_mmap(
-                VirtAddr::from(addr),
-                VirtAddr::from(addr + len),
-                MapType::Framed,
-                map_perm,
-                MapAreaType::Mmap,
-                file,
-                off,
-                flags,
-            ));
-            addr
+            let start_vpn = VirtAddr::from(addr).floor();
+            let end_vpn = VirtAddr::from(addr + len).ceil();
+            let need_split = self.areas.iter().any(|area| {
+                let (l, r) = area.vpn_range.range();
+                if l <= start_vpn && end_vpn <= r {
+                    !(l == start_vpn && r == end_vpn && map_perm == area.map_perm)
+                } else {
+                    false
+                }
+            });
+            if need_split {
+                self.mprotect(start_vpn, end_vpn, map_perm);
+            } else {
+                self.push_lazily(MapArea::new_mmap(
+                    VirtAddr::from(addr),
+                    VirtAddr::from(addr + len),
+                    MapType::Framed,
+                    map_perm,
+                    MapAreaType::Mmap,
+                    file,
+                    off,
+                    flags,
+                ));
+            }
+            return addr;
         }
+        // 自行选择地址,计算已经使用的MMap地址
+        let addr = self.find_insert_addr(MMAP_TOP, len);
+        debug!(
+            "[sys_mmap] start_va:{:#x},end_va:{:#x}",
+            VirtAddr::from(addr).0,
+            VirtAddr::from(addr + len).0
+        );
+        self.push_lazily(MapArea::new_mmap(
+            VirtAddr::from(addr),
+            VirtAddr::from(addr + len),
+            MapType::Framed,
+            map_perm,
+            MapAreaType::Mmap,
+            file,
+            off,
+            flags,
+        ));
+        addr
         // addr
     }
     /// munmap
