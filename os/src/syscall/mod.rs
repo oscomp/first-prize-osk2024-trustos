@@ -140,7 +140,7 @@ use signal::*;
 use time::*;
 
 use crate::{
-    fs::Kstat,
+    fs::{Kstat, Statfs},
     sbi::shutdown,
     signal::{SigAction, SigInfo, SigSet},
     timer::{Itimerval, Rusage, Timespec, Tms},
@@ -175,7 +175,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[3] as u32,
             args[4] as *const u8,
         ),
-        Syscall::StatFs => sys_statfs(args[0] as *const u8, args[1] as *const u8),
+        Syscall::StatFs => sys_statfs(args[0] as *const u8, args[1] as *mut Statfs),
         Syscall::Ftruncate => sys_ftruncate(args[0], args[1] as i32),
         Syscall::Faccessat => sys_faccessat(
             args[0] as isize,
@@ -212,7 +212,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Fstatat => sys_fstatat(
             args[0] as isize,
             args[1] as *const u8,
-            args[2] as *const u8,
+            args[2] as *mut Kstat,
             args[3],
         ),
         Syscall::Fstat => sys_fstat(args[0], args[1] as *mut Kstat),

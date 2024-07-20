@@ -115,9 +115,7 @@ pub trait File: Send + Sync {
         unimplemented!()
     }
     /// 获得文件信息
-    fn fstat(&self) -> Kstat {
-        unimplemented!()
-    }
+    fn fstat(&self) -> Kstat;
     /// ppoll处理
     fn poll(&self, _events: PollEvents) -> PollEvents {
         unimplemented!()

@@ -446,30 +446,25 @@ pub fn sys_pipe2(fd: *mut u32) -> SyscallRet {
     Ok(0)
 }
 
-pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize) -> SyscallRet {
+pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *mut Kstat, _flags: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
     let path = trim_start_slash(translated_str(token, path));
-    let mut kst = UserBuffer::new(translated_byte_buffer(token, kst, size_of::<Kstat>()).unwrap());
 
     let abs_path = inner.get_abs_path(dirfd, &path)?;
-    debug!("[sys_fstatat] abs_path={}", &abs_path);
+    // debug!("[sys_fstatat] abs_path={}", &abs_path);
+
     let file = open(&abs_path, OpenFlags::O_RDONLY, NONE_MODE)?.any();
-    let kstat = file.fstat();
-    kst.write(kstat.as_bytes());
+    put_data(token, kst, file.fstat());
     return Ok(0);
 }
 
-pub fn sys_statfs(_path: *const u8, statfs: *const u8) -> SyscallRet {
+pub fn sys_statfs(_path: *const u8, statfs: *mut Statfs) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
-    let mut statfs =
-        UserBuffer::new(translated_byte_buffer(token, statfs, size_of::<Statfs>()).unwrap());
-
-    let ourstatfs = fs_stat();
-    statfs.write(ourstatfs.as_bytes());
+    put_data(token, statfs, fs_stat());
     Ok(0)
 }
 

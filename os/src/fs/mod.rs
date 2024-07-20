@@ -31,7 +31,7 @@ use log::debug;
 pub use mount::MNT_TABLE;
 pub use net::*;
 pub use pipe::{make_pipe, Pipe};
-pub use stat::{Kstat, Statfs};
+pub use stat::*;
 pub use stdio::{Stdin, Stdout};
 pub use vfs::*;
 
