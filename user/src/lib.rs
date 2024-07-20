@@ -129,6 +129,10 @@ pub fn wait(exit_code: &mut i32) -> isize {
     sys_waitpid(-1, exit_code as *mut _, 0)
 }
 
+pub fn run_libc_bench() -> isize {
+    sys_run_libc_bench()
+}
+
 pub fn waitpid(pid: usize, exit_code: &mut i32) -> isize {
     sys_waitpid(pid as isize, exit_code as *mut _, 0)
 }

@@ -192,11 +192,12 @@ impl PageTable {
     }
     /// Delete a mapping form `vpn`
     pub fn unmap(&mut self, vpn: VirtPageNum) {
-        let pte = self.find_pte(vpn).unwrap();
-        if pte.is_valid() {
-            *pte = PageTableEntry::empty();
-        }
         // 如果不存在,即lazy allocation,跳过即可
+        if let Some(pte) = self.find_pte(vpn) {
+            if pte.is_valid() {
+                *pte = PageTableEntry::empty();
+            }
+        }
     }
     /// Translate `VirtPageNum` to `PageTableEntry`
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {

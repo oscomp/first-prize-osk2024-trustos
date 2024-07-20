@@ -5,7 +5,7 @@
 
 extern crate user_lib;
 
-use user_lib::{fork, run_busyboxsh, run_finaltest, wait};
+use user_lib::{fork, run_busyboxsh, run_finaltest, run_libc_bench, wait};
 
 #[no_mangle]
 fn main() -> i32 {
@@ -14,6 +14,7 @@ fn main() -> i32 {
         // exec("user_shell\0");
         // run_busyboxsh();
         run_finaltest();
+        // run_libc_bench();
     } else {
         loop {
             let mut exit_code: i32 = 0;

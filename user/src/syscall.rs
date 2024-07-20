@@ -192,6 +192,13 @@ pub fn sys_busyboxsh() -> isize {
     )
 }
 
+pub fn sys_run_libc_bench() -> isize {
+    syscall(
+        SYSCALL_EXECVE,
+        ["/libc-bench\0".as_ptr() as isize, 0, 0, 0, 0, 0],
+    )
+}
+
 pub fn sys_finaltest() -> isize {
     syscall(
         SYSCALL_EXECVE,
@@ -200,7 +207,7 @@ pub fn sys_finaltest() -> isize {
             [
                 "busybox\0".as_ptr() as isize,
                 "sh\0".as_ptr() as isize,
-                "test-all.sh\0".as_ptr() as isize,
+                "test_all.sh\0".as_ptr() as isize,
                 0,
             ]
             .as_ptr() as isize,
