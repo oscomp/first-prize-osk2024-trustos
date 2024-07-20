@@ -455,10 +455,6 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *const u8, _flags: usize)
 
     let abs_path = inner.get_abs_path(dirfd, &path)?;
     debug!("[sys_fstatat] abs_path={}", &abs_path);
-    // if find_command_in_busybox(abs_path.trim_start_matches("/")) {
-    //     //如果查询了busybox命令的可执行文件
-    //     open(&abs_path, OpenFlags::O_CREATE, 0);
-    // }
     let file = open(&abs_path, OpenFlags::O_RDONLY, NONE_MODE)?.any();
     let kstat = file.fstat();
     kst.write(kstat.as_bytes());
@@ -488,24 +484,9 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
         dirfd, path, mode
     );
 
-    // let accmode = FaccessatMode::from_bits(mode).unwrap();
     let abs_path = inner.get_abs_path(dirfd, &path)?;
     open(&abs_path, OpenFlags::O_RDWR, NONE_MODE)?;
     Ok(0)
-    // open(&abs_path, OpenFlags::O_RDWR, NONE_MODE).map_or_else(
-    //     |_| {
-    //         if accmode.contains(FaccessatMode::F_OK) {
-    //             if find_command_in_busybox(abs_path.trim_start_matches("/")) {
-    //                 //使用which命令查找时再创建，避免内核启动时创建带来更多开销
-    //                 open(&abs_path, OpenFlags::O_CREATE, 0);
-    //                 return Ok(0);
-    //             }
-    //             return Ok(usize::MAX);
-    //         }
-    //         Err(SysErrNo::ENOENT)
-    //     },
-    //     |_| Ok(0),
-    // )
 }
 
 pub fn sys_utimensat(

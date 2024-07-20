@@ -146,7 +146,6 @@ use crate::{
     timer::{Itimerval, Rusage, Timespec, Tms},
     utils::SyscallRet,
 };
-use log::debug;
 
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {

@@ -251,14 +251,6 @@ impl TaskControlBlock {
 
         // println!("user_sp:{:#X}  argv:{:?}", user_sp, argv);
 
-        // if env.is_empty() {
-        //     //一些初始的环境变量
-        //     env.push(String::from("SHELL=/user_shell"));
-        //     env.push(String::from("PWD=/"));
-        //     env.push(String::from("HOME=/"));
-        //     env.push(String::from("PATH=/"));
-        // }
-
         //环境变量内容入栈
         let mut envp = Vec::new();
         for env in env.iter() {
@@ -319,11 +311,7 @@ impl TaskControlBlock {
                 envp[i],
             );
         }
-        // for p in env_ptr_vec.iter().rev() {
-        //     user_sp -= size_of::<usize>();
-        //     *translated_refmut(token, user_sp as *mut usize) = *p;
-        //     // println!("{:#X}:{:#X}", user_sp, *p);
-        // }
+
         // println!("arg pointers:");
         user_sp -= argvp.len() * size_of::<usize>();
         let argv_base = user_sp;
@@ -335,11 +323,6 @@ impl TaskControlBlock {
                 argvp[i],
             );
         }
-        // for p in argvp.iter().rev() {
-        //     user_sp -= size_of::<usize>();
-        //     *translated_refmut(token, user_sp as *mut usize) = *p;
-        //     // println!("{:#X}:{:#X} ", user_sp, *p);
-        // }
 
         //将argc放入栈中
         user_sp -= size_of::<usize>();
@@ -360,9 +343,6 @@ impl TaskControlBlock {
         *task_inner.trap_cx() = trap_cx;
         task_inner.user_heappoint = user_hp;
         task_inner.user_heapbottom = user_hp;
-
-        //创建进程完整命令文件/proc/<pid>/cmdline
-        // create_cmdline(self.pid, argv);
     }
     ///
     pub fn clone_process(
@@ -512,11 +492,6 @@ impl TaskControlBlock {
             let child_token = child_inner.user_token();
             *translated_refmut(child_token, child_tid) = child.tid() as u32;
         }
-
-        // if flags.contains(CloneFlags::SIGCHLD) {
-        //     //创建进程专属目录，路径为/proc/<pid>
-        //     create_proc_dir_and_file(pid, ppid);
-        // }
 
         drop(child_inner);
         drop(parent_inner);

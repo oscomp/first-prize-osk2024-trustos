@@ -132,11 +132,6 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
         argv_vec.insert(0, String::from("busybox"));
         path = String::from("/busybox");
     }
-    // if find_command_in_busybox(path.trim_start_matches("/")) {
-    //     //如果执行环境变量中的命令的可执行文件，则改为用busybox启动该命令
-    //     argv_vec.insert(0, String::from("busybox"));
-    //     path = String::from("/busybox");
-    // }
     debug!("[sys_execve] path is {},arg is {:?}", path, argv_vec);
     let mut env = Vec::<String>::new();
     loop {

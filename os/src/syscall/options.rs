@@ -122,24 +122,6 @@ bitflags! {
     }
 }
 
-bitflags! {
-    pub struct FaccessatMode: u32 {
-        const F_OK = 0;
-        const X_OK = 1<<0;
-        const W_OK = 1<<1;
-        const R_OK = 1<<2;
-    }
-}
-
-bitflags! {
-     /// renameat flag
-    pub struct Renameat2Flags: u32 {
-        const RENAME_NOREPLACE = 1 << 0;
-        const RENAME_EXCHANGE = 1 << 1;
-        const RENAME_WHITEOUT = 1 << 2;
-    }
-}
-
 #[repr(usize)]
 #[allow(non_camel_case_types)]
 #[derive(Debug, PartialEq, FromPrimitive)]

@@ -1,4 +1,3 @@
-mod command;
 mod error;
 mod hart;
 mod string;
