@@ -28,11 +28,12 @@ mod task;
 mod tid;
 
 use crate::{
-    fs::{open, remove_inode_idx, remove_proc_dir_and_file, root_inode, OpenFlags, NONE_MODE},
-    mm::{translated_refmut, VirtAddr},
+    fs::{open, remove_proc_dir_and_file, OpenFlags, NONE_MODE},
+    mm::{put_data, VirtAddr},
     signal::{send_signal_to_thread_group, SigSet},
+    utils::SyscallRet,
 };
-use alloc::{boxed::Box, format, sync::Arc};
+use alloc::{boxed::Box, sync::Arc};
 pub use context::TaskContext;
 pub use futex::*;
 use lazy_static::*;
@@ -40,7 +41,7 @@ use log::debug;
 pub use manager::*;
 use switch::__switch;
 pub use sysinfo::Sysinfo;
-pub use task::{TaskControlBlock, TaskStatus};
+pub use task::{RobustList, TaskControlBlock, TaskStatus};
 
 pub use aux::*;
 pub use processor::{
@@ -73,40 +74,54 @@ pub fn block_current_and_run_next() {
     schedule(task_cx_ptr);
 }
 
+// pub fn stop_current_and_run_next() {
+//     let task = take_current_task().unwrap();
+//     let mut task_inner = task.inner_lock();
+//     let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
+//     task_inner.task_status = TaskStatus::Stopped;
+//     drop(task_inner);
+//     // drop(task);
+//     stop_task(task);
+//     schedule(task_cx_ptr);
+// }
+
 /// pid of usertests app in make run TEST=1
 pub const IDLE_PID: usize = 0;
 
 /// 杀死当前线程组的所有线程
-pub fn exit_current_group_and_run_next(exit_code: i32) {
+pub fn exit_current_group(exit_code: i32) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
-    let sig_pending = task_inner.sig_pending.get_mut();
     let mut exit_code = exit_code;
-    if sig_pending.group_exit_code.is_none() {
+    if task_inner.sig_table.not_exited() {
         //设置进程的SIGNAL_GROUP_EXIT标志并把终止代号放到current->signal->group_exit_code字段
-        sig_pending.group_exit_code = Some(exit_code);
+        task_inner.sig_table.set_exit_code(exit_code);
         let pid = task.pid();
         drop(task_inner);
         drop(task);
         send_signal_to_thread_group(pid, SigSet::SIGKILL);
     } else {
-        exit_code = sig_pending.group_exit_code.unwrap();
+        exit_code = task_inner.sig_table.exit_code();
         drop(task_inner);
         drop(task);
     }
 
-    exit_current_and_run_next(exit_code);
+    exit_current(exit_code)
 }
 
-pub fn exit_current_and_run_next(exit_code: i32) {
-    let task = take_current_task().unwrap();
+pub fn exit_current(exit_code: i32) -> SyscallRet {
+    let task = current_task().unwrap();
     let mut inner = task.inner_lock();
-    debug!("[sys_exit] thread {}", task.tid());
+    debug!(
+        "[sys_exit] thread {} exit, exit_code = {}",
+        task.tid(),
+        exit_code
+    );
 
     // CLONE_CHILD_CLEARTID
     if inner.clear_child_tid != 0 {
         let token = inner.user_token();
-        *translated_refmut(token, inner.clear_child_tid as *mut u32) = 0;
+        put_data(token, inner.clear_child_tid as *mut u32, 0);
         // 唤醒等待在 child_tid 的进程
         let pa = inner
             .memory_set
@@ -129,12 +144,12 @@ pub fn exit_current_and_run_next(exit_code: i32) {
         if let Some(tasks) = thread_group.get(&task.pid()) {
             if tasks.iter().all(|task| task.inner_lock().is_zombie()) {
                 drop(thread_group);
-                // send_signal_to_thread_group(task.ppid(), SigSet::SIGCHLD);
+                send_signal_to_thread_group(task.ppid(), SigSet::SIGCHLD);
                 wakeup_parent(task.ppid());
                 let inner = task.inner_lock();
-                inner.memory_set.recycle_data_pages();
-                if inner.sig_pending.get_mut().group_exit_code.is_none() {
-                    inner.sig_pending.get_mut().group_exit_code = Some(exit_code);
+                inner.memory_set.recycle_data_pages()?;
+                if inner.sig_table.not_exited() {
+                    inner.sig_table.set_exit_code(exit_code);
                 }
                 // 删除进程的专属目录
                 remove_proc_dir_and_file(task.pid());
@@ -143,14 +158,24 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     }
 
     drop(task);
+    Ok(0)
+}
+
+pub fn handle_exit() -> ! {
+    let task = take_current_task();
+    drop(task);
     let mut _unused = TaskContext::zero_init();
     schedule(&mut _unused as *mut _);
+    panic!("Unreachable in handle_exit!");
 }
 
 lazy_static! {
     ///Globle process that init user shell
     pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new({
-        let initproc= open("/initproc", OpenFlags::O_RDONLY,NONE_MODE).expect("open initproc error!").file().expect("initproc can not be abs file!");
+        let initproc= open("/initproc", OpenFlags::O_RDONLY,NONE_MODE)
+            .expect("open initproc error!")
+            .file()
+            .expect("initproc can not be abs file!");
         let elf_data = initproc.inode.read_all().unwrap();
         let res=TaskControlBlock::new(&elf_data);
         res

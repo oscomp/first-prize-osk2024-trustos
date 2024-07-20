@@ -1915,27 +1915,27 @@ extern "C" {
 }
 extern "C" {
     #[doc = "@brief Set file/directory/link access time.\n\n @param path  Path to file/dir/link.\n @param atime Access timestamp.\n\n @return  Standard error code."]
-    pub fn ext4_atime_set(path: *const ::core::ffi::c_char, atime: u32) -> ::core::ffi::c_int;
+    pub fn ext4_atime_set(path: *const ::core::ffi::c_char, atime: u64) -> ::core::ffi::c_int;
 }
 extern "C" {
     #[doc = "@brief Set file/directory/link modify time.\n\n @param path  Path to file/dir/link.\n @param mtime Modify timestamp.\n\n @return  Standard error code."]
-    pub fn ext4_mtime_set(path: *const ::core::ffi::c_char, mtime: u32) -> ::core::ffi::c_int;
+    pub fn ext4_mtime_set(path: *const ::core::ffi::c_char, mtime: u64) -> ::core::ffi::c_int;
 }
 extern "C" {
     #[doc = "@brief Set file/directory/link change time.\n\n @param path  Path to file/dir/link.\n @param ctime Change timestamp.\n\n @return  Standard error code."]
-    pub fn ext4_ctime_set(path: *const ::core::ffi::c_char, ctime: u32) -> ::core::ffi::c_int;
+    pub fn ext4_ctime_set(path: *const ::core::ffi::c_char, ctime: u64) -> ::core::ffi::c_int;
 }
 extern "C" {
     #[doc = "@brief Get file/directory/link access time.\n\n @param path  Path to file/dir/link.\n @param atime Access timestamp.\n\n @return  Standard error code."]
-    pub fn ext4_atime_get(path: *const ::core::ffi::c_char, atime: *mut u32) -> ::core::ffi::c_int;
+    pub fn ext4_atime_get(path: *const ::core::ffi::c_char, atime: *mut u64) -> ::core::ffi::c_int;
 }
 extern "C" {
     #[doc = "@brief Get file/directory/link modify time.\n\n @param path  Path to file/dir/link.\n @param mtime Modify timestamp.\n\n @return  Standard error code."]
-    pub fn ext4_mtime_get(path: *const ::core::ffi::c_char, mtime: *mut u32) -> ::core::ffi::c_int;
+    pub fn ext4_mtime_get(path: *const ::core::ffi::c_char, mtime: *mut u64) -> ::core::ffi::c_int;
 }
 extern "C" {
     #[doc = "@brief Get file/directory/link change time.\n\n @param path  Pathto file/dir/link.\n @param ctime Change timestamp.\n\n @return  standard error code"]
-    pub fn ext4_ctime_get(path: *const ::core::ffi::c_char, ctime: *mut u32) -> ::core::ffi::c_int;
+    pub fn ext4_ctime_get(path: *const ::core::ffi::c_char, ctime: *mut u64) -> ::core::ffi::c_int;
 }
 extern "C" {
     pub fn ext4_get_links_cnt(

@@ -1,6 +1,3 @@
-# 卡在pselect一直重复循环
-原因：处于共享地址的子进程状态结构体child_stat的flag字段一直未被父进程改变，问题定位在共享地址未完全实现。
-解决方法：shmat系统调用中需要对之前生成的frames进行页表映射，同时在父进程clone子进程的时候同时也要在子进程的页表中对共享地址进行映射。
 # lseek返回INVALID ARGUMENT
 原因：lseek未正确处理从末尾往回计算offset的情况。
 解决方法：去掉对offset小于0的判断，对SEEK_CUR和SEEK_END两种情况添加小于0的offset计算方法。

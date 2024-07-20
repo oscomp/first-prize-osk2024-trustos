@@ -1,8 +1,6 @@
 use crate::{
-    fs::FileClass,
-    mm::{translated_byte_buffer, UserBuffer},
-    syscall::{IoctlCommand, PollEvents},
-    task::{current_task, INITPROC},
+    mm::UserBuffer,
+    syscall::PollEvents,
     utils::{SysErrNo, SyscallRet},
 };
 use alloc::{
@@ -12,11 +10,11 @@ use alloc::{
     string::{String, ToString},
     sync::Arc,
 };
-use core::{cmp::min, mem::size_of};
+use core::cmp::min;
 use lazy_static::lazy_static;
 use spin::{Mutex, RwLock};
 
-use super::{stat::S_IFCHR, File, Ioctl, Kstat, Stdout};
+use super::{stat::S_IFCHR, File, Kstat, Stdin, Stdout};
 
 pub struct DevZero;
 pub struct DevNull;
@@ -49,11 +47,11 @@ pub fn unregister_device(abs_path: &str) {
 }
 
 pub fn find_device(abs_path: &str) -> bool {
-    DEVICES.lock().get(&abs_path.to_string()).is_some()
+    DEVICES.lock().get(abs_path).is_some()
 }
 
 pub fn get_devno(abs_path: &str) -> usize {
-    *DEVICES.lock().get(&abs_path.to_string()).unwrap()
+    *DEVICES.lock().get(abs_path).unwrap()
 }
 
 pub fn open_device_file(abs_path: &str) -> Result<Arc<dyn File>, SysErrNo> {
@@ -173,10 +171,6 @@ impl RtcTime {
             second,
         }
     }
-    pub fn as_bytes(&self) -> &[u8] {
-        let size = core::mem::size_of::<Self>();
-        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
-    }
 }
 
 impl Debug for RtcTime {
@@ -236,27 +230,6 @@ impl File for DevRtc {
     }
 }
 
-impl Ioctl for DevRtc {
-    fn ioctl(&self, cmd: usize, arg: usize) -> isize {
-        let cmd = IoctlCommand::from(cmd);
-        let task = current_task().unwrap();
-        let inner = task.inner_lock();
-        let token = inner.user_token();
-
-        match cmd {
-            IoctlCommand::RTC_RD_TIME => {
-                let time = RtcTime::new(2000, 1, 1, 0, 0, 0);
-                let mut arg = UserBuffer::new(
-                    translated_byte_buffer(token, arg as *const u8, size_of::<RtcTime>()).unwrap(),
-                );
-                arg.write(time.as_bytes());
-            }
-            _ => return -1,
-        }
-        0
-    }
-}
-
 impl DevRandom {
     pub fn new() -> Self {
         Self
@@ -313,18 +286,10 @@ impl File for DevTty {
         true
     }
     fn read(&self, user_buf: UserBuffer) -> SyscallRet {
-        if let Some(FileClass::Abs(tty_device)) = INITPROC.inner_lock().fd_table.try_get_file(0) {
-            tty_device.read(user_buf)
-        } else {
-            panic!("get Stdin error!");
-        }
+        Stdin.read(user_buf)
     }
     fn write(&self, user_buf: UserBuffer) -> SyscallRet {
-        if let Some(FileClass::Abs(tty_device)) = INITPROC.inner_lock().fd_table.try_get_file(1) {
-            tty_device.write(user_buf)
-        } else {
-            panic!("get Stdout error!");
-        }
+        Stdout.write(user_buf)
     }
     fn fstat(&self) -> Kstat {
         let devno = get_devno("/dev/tty");
@@ -345,18 +310,6 @@ impl File for DevTty {
             revents |= PollEvents::OUT;
         }
         revents
-    }
-}
-
-impl Ioctl for DevTty {
-    fn ioctl(&self, cmd: usize, arg: usize) -> isize {
-        if let Some(FileClass::Abs(tty_device)) = INITPROC.inner_lock().fd_table.try_get_file(1) {
-            // tty_device.ioctl(cmd, arg)
-            let tty_device = unsafe { Arc::from_raw(Arc::into_raw(tty_device) as *const Stdout) };
-            tty_device.ioctl(cmd, arg)
-        } else {
-            panic!("get Stdout error!");
-        }
     }
 }
 

@@ -1,37 +1,32 @@
 use crate::{
     fs::{open, OpenFlags, NONE_MODE},
-    logger::{change_log_level, clear_log_buf, console_log_off, console_log_on, unread_size},
     mm::{
-        safe_translated_byte_buffer, translated_byte_buffer, translated_ref, translated_refmut,
-        translated_str, PhysAddr, UserBuffer, VirtAddr,
+        get_data, put_data, translated_byte_buffer, translated_ref, translated_str, UserBuffer,
+        VirtAddr,
     },
-    signal::{check_if_any_sig_for_current_task, ready_to_handle_signal},
+    signal::{check_if_any_sig_for_current_task, handle_signal},
     syscall::{CloneFlags, Utsname},
     task::{
-        add_task, current_task, current_token, exit_current_and_run_next,
-        exit_current_group_and_run_next, futex_requeue, futex_wait, futex_wake_up,
-        move_child_process_to_init, remove_all_from_thread_group, suspend_current_and_run_next,
-        task_num, Sysinfo, PROCESS_GROUP,
+        add_task, current_task, current_token, exit_current, exit_current_group, find_task_by_tid,
+        futex_requeue, futex_wait, futex_wake_up, move_child_process_to_init,
+        remove_all_from_thread_group, suspend_current_and_run_next, task_num, Sysinfo,
+        PROCESS_GROUP,
     },
-    timer::{add_timer, calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
+    timer::{add_futex_timer, calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
     utils::{find_command_in_busybox, get_abs_path, trim_start_slash, SysErrNo, SyscallRet},
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
 use num_enum::TryFromPrimitive;
 
-use super::SyslogType;
-use crate::logger::{read_all_log_buf, read_clear_log_buf, read_log_buf, LOG_BUF_LEN};
 use log::debug;
 
-pub fn sys_exit(exit_code: i32) -> ! {
-    exit_current_and_run_next(exit_code);
-    panic!("Unreachable in sys_exit!");
+pub fn sys_exit(exit_code: i32) -> SyscallRet {
+    exit_current(exit_code)
 }
 
-pub fn sys_exit_group(exit_code: i32) -> ! {
-    exit_current_group_and_run_next(exit_code);
-    panic!("Unreachable in sys_exit!");
+pub fn sys_exit_group(exit_code: i32) -> SyscallRet {
+    exit_current_group(exit_code)
 }
 
 pub fn sys_sched_yield() -> SyscallRet {
@@ -189,10 +184,7 @@ pub fn sys_futex(
     _val3: i32,
 ) -> SyscallRet {
     let cmd = FutexCmd::try_from_primitive(futex_op & 0x7f).unwrap();
-    debug!(
-        "[sys_futex] uaddr = {:#x}, cmd = {:?}, val = {}",
-        uaddr as usize, cmd, val
-    );
+
     if uaddr.align_offset(4) != 0 {
         return Err(SysErrNo::EINVAL);
     }
@@ -203,35 +195,44 @@ pub fn sys_futex(
         .memory_set
         .translate_va(VirtAddr::from(uaddr as usize))
         .unwrap();
-    let pa2 = if !uaddr2.is_null() {
-        task_inner
-            .memory_set
-            .translate_va(VirtAddr::from(uaddr2 as usize))
-            .unwrap()
-    } else {
-        PhysAddr::from(0)
-    };
-    drop(task_inner);
-    drop(task);
+
+    debug!(
+        "[sys_futex] pa = {:#x}, cmd = {:?}, val = {}",
+        pa.0, cmd, val,
+    );
+
     match cmd {
         FutexCmd::FUTEX_WAIT => {
-            let futex_word = *translated_ref(token, uaddr);
+            let futex_word = get_data(token, uaddr);
             if futex_word != val {
                 return Err(SysErrNo::EAGAIN);
             }
             if !timeout.is_null() {
-                let timeout = *translated_ref(token, timeout);
-                debug!("[sys_futex] timeout = {:?}", timeout);
-                add_timer(get_time_spec() + timeout, current_task().unwrap());
+                let timeout = get_data(token, timeout);
+                debug!(
+                    "[sys_futex] futex_word = {},timeout={:?}",
+                    futex_word, timeout
+                );
+                add_futex_timer(get_time_spec() + timeout, current_task().unwrap());
             }
-            if futex_wait(pa) {
-                Ok(0)
-            } else {
-                Err(SysErrNo::ETIMEDOUT)
-            }
+            drop(task_inner);
+            drop(task);
+            futex_wait(pa)
         }
-        FutexCmd::FUTEX_WAKE => Ok(futex_wake_up(pa, val)),
-        FutexCmd::FUTEX_REQUEUE => Ok(futex_requeue(pa, val, pa2, timeout as i32)),
+        FutexCmd::FUTEX_WAKE => {
+            drop(task_inner);
+            drop(task);
+            Ok(futex_wake_up(pa, val))
+        }
+        FutexCmd::FUTEX_REQUEUE => {
+            let pa2 = task_inner
+                .memory_set
+                .translate_va(VirtAddr::from(uaddr2 as usize))
+                .ok_or(SysErrNo::EINVAL)?;
+            drop(task_inner);
+            drop(task);
+            Ok(futex_requeue(pa, val, pa2, timeout as i32))
+        }
     }
 }
 
@@ -242,20 +243,20 @@ pub fn sys_futex(
 ///0      meaning wait for any child process whose process group ID
 ///       is equal to that of the calling process at the time of the call to waitpid().
 ///> 0    meaning wait for the child whose process ID is equal to the value of pid.
-pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
+pub fn sys_wait4(pid: isize, wstatus: *mut i32, _options: i32) -> SyscallRet {
     //assert!(options == 0, "not support options yet");
     //默认所有进程都在同一个组
-    debug!(
-        "[sys_wait4] pid is {},wstatus is {}, options is {}",
-        pid, wstatus as usize, options
-    );
+    // debug!(
+    //     "[sys_wait4] pid is {},wstatus is {:#x}, options is {}",
+    //     pid, wstatus as usize, options
+    // );
     loop {
         let mut process_group = PROCESS_GROUP.lock();
         let task = current_task().unwrap();
         let task_inner = task.inner_lock();
         // 暂时没有子进程,返回即可
         if !process_group.contains_key(&task.pid()) {
-            debug!("[sys_wait4] no child process");
+            // debug!("[sys_wait4] no child process");
             return Err(SysErrNo::ECHILD);
         }
         // 只有fork出来的子进程会被放入
@@ -264,7 +265,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
             .iter()
             .any(|p| pid == -1 || pid as usize == p.pid())
         {
-            debug!("[sys_wait4] no child process");
+            // debug!("[sys_wait4] no child process");
             return Err(SysErrNo::ECHILD);
         }
         // 寻找符合条件的进程组
@@ -282,13 +283,13 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
         if let Some((idx, child)) = pair {
             let found_pid = child.pid();
             let child_inner = child.inner_lock();
-            let exit_code = child_inner.sig_pending.get_ref().group_exit_code.unwrap();
+            let exit_code = child_inner.sig_table.exit_code();
             if wstatus as usize != 0x0 {
                 debug!(
                     "[sys_wait4] wait pid {}: child {} exit with code {}, wstatus= {:#x}",
                     pid, found_pid, exit_code, wstatus as usize
                 );
-                *translated_refmut(task_inner.memory_set.token(), wstatus) = exit_code << 8;
+                put_data(task_inner.memory_set.token(), wstatus, exit_code << 8);
             }
             drop(child_inner);
             // 从父进程的子进程组移除
@@ -343,7 +344,7 @@ pub fn sys_nanosleep(req: *const u8, rem: *const u8) -> SyscallRet {
                 );
                 buffer.write(calculate_left_timespec(endtime).as_bytes());
             }
-            ready_to_handle_signal(signo);
+            handle_signal(signo);
         }
         suspend_current_and_run_next();
     }
@@ -397,68 +398,8 @@ pub fn sys_umask(_mask: u32) -> SyscallRet {
     Ok(0)
 }
 
-pub fn sys_syslog(logtype: isize, bufp: *const u8, len: usize) -> SyscallRet {
-    let task = current_task().unwrap();
-    let inner = task.inner_lock();
-
-    // debug!(
-    //     "[sys_syslog] logtype is {}, bufp is {:x}, len is {}",
-    //     logtype, bufp as usize, len
-    // );
-
-    let logtype = SyslogType::from(logtype);
-
-    match logtype {
-        SyslogType::SYSLOG_ACTION_READ => {
-            let mut bufp = UserBuffer::new(
-                safe_translated_byte_buffer(inner.memory_set.clone(), bufp, len).unwrap(),
-            );
-            let mut logbuf: [u8; LOG_BUF_LEN] = [0; LOG_BUF_LEN];
-            let logsize = read_log_buf(logbuf.as_mut_slice(), len);
-            bufp.write(&logbuf[0..logsize]);
-            Ok(logsize)
-        }
-        SyslogType::SYSLOG_ACTION_READ_ALL => {
-            let mut bufp = UserBuffer::new(
-                safe_translated_byte_buffer(inner.memory_set.clone(), bufp, len).unwrap(),
-            );
-            let mut logbuf: [u8; LOG_BUF_LEN] = [0; LOG_BUF_LEN];
-            let logsize = read_all_log_buf(logbuf.as_mut_slice(), len);
-            bufp.write(&logbuf[0..logsize]);
-            Ok(logsize)
-        }
-        SyslogType::SYSLOG_ACTION_READ_CLEAR => {
-            let mut bufp = UserBuffer::new(
-                safe_translated_byte_buffer(inner.memory_set.clone(), bufp, len).unwrap(),
-            );
-            let mut logbuf: [u8; LOG_BUF_LEN] = [0; LOG_BUF_LEN];
-            let logsize = read_clear_log_buf(logbuf.as_mut_slice(), len);
-            bufp.write(&logbuf[0..logsize]);
-            Ok(logsize)
-        }
-        SyslogType::SYSLOG_ACTION_CLEAR => {
-            clear_log_buf();
-            Ok(0)
-        }
-        SyslogType::SYSLOG_ACTION_CONSOLE_OFF => {
-            console_log_off();
-            Ok(0)
-        }
-        SyslogType::SYSLOG_ACTION_CONSOLE_ON => {
-            console_log_on();
-            Ok(0)
-        }
-        SyslogType::SYSLOG_ACTION_CONSOLE_LEVER => {
-            let result = change_log_level(len);
-            if result == -1 {
-                return Err(SysErrNo::EINVAL);
-            }
-            Ok(0)
-        }
-        SyslogType::SYSLOG_ACTION_SIZE_UNREAD => Ok(unread_size()),
-        SyslogType::SYSLOG_ACTION_SIZE_BUFFER => Ok(LOG_BUF_LEN),
-        _ => return Err(SysErrNo::EINVAL),
-    }
+pub fn sys_syslog(_logtype: isize, _bufp: *const u8, _len: usize) -> SyscallRet {
+    Ok(0)
 }
 
 pub fn sys_sched_setaffinity(_pid: usize, _cpusetsize: usize, _mask: usize) -> SyscallRet {
@@ -500,14 +441,13 @@ pub fn sys_sched_getparam(_pid: usize, _param: *const u8) -> SyscallRet {
     Ok(0)
 }
 
-const TIME_ABSTIME: u32 = 1;
-
 pub fn sys_clock_nanosleep(
     _clockid: usize,
     flags: u32,
     t: *const u8,
     remain: *const u8,
 ) -> SyscallRet {
+    const TIME_ABSTIME: u32 = 1;
     let token = current_token();
 
     // debug!(
@@ -540,9 +480,32 @@ pub fn sys_clock_nanosleep(
                 );
                 buffer.write(calculate_left_timespec(endtime).as_bytes());
             }
-            ready_to_handle_signal(signo);
+            handle_signal(signo);
         }
         suspend_current_and_run_next();
     }
     Ok(0)
+}
+
+pub fn sys_set_robust_list(head: usize, len: usize) -> SyscallRet {
+    if len != crate::task::RobustList::HEAD_SIZE {
+        return Err(SysErrNo::EINVAL);
+    }
+    let task = current_task().unwrap();
+    let mut task_inner = task.inner_lock();
+    task_inner.robust_list.head = head;
+    //inner.robust_list.len = len;
+    Ok(0)
+}
+
+pub fn sys_get_robust_list(pid: usize, head_ptr: *mut usize, len_ptr: *mut usize) -> SyscallRet {
+    if let Some(task) = find_task_by_tid(pid) {
+        let task_inner = task.inner_lock();
+        let token = task_inner.user_token();
+        put_data(token, head_ptr, task_inner.robust_list.head);
+        put_data(token, len_ptr, task_inner.robust_list.len);
+        Ok(0)
+    } else {
+        Err(SysErrNo::ESRCH)
+    }
 }

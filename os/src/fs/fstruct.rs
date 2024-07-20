@@ -10,16 +10,67 @@ use alloc::{
 };
 use hashbrown::HashMap;
 
-use super::{FileClass, OpenFlags, Stdin, Stdout};
+use super::{File, FileClass, OSInode, Stdin, Stdout};
 pub struct FdTable {
     inner: SyncUnsafeCell<FdTableInner>,
+}
+
+#[derive(Clone)]
+pub struct FileDescriptor {
+    close_on_exec: bool,
+    non_block: bool,
+    pub file: FileClass,
+}
+
+impl FileDescriptor {
+    pub fn new(close_on_exec: bool, non_block: bool, file: FileClass) -> Self {
+        Self {
+            close_on_exec,
+            non_block,
+            file,
+        }
+    }
+    pub fn default(file: FileClass) -> Self {
+        Self {
+            close_on_exec: false,
+            non_block: false,
+            file,
+        }
+    }
+    pub fn file(&self) -> Result<Arc<OSInode>, SysErrNo> {
+        self.file.file()
+    }
+    pub fn abs(&self) -> Result<Arc<dyn File>, SysErrNo> {
+        self.file.abs()
+    }
+    pub fn any(&self) -> Arc<dyn File> {
+        self.file.any()
+    }
+
+    pub fn unset_cloexec(&mut self) {
+        self.close_on_exec = false
+    }
+    pub fn set_cloexec(&mut self) {
+        self.close_on_exec = true;
+    }
+    pub fn cloexec(&self) -> bool {
+        self.close_on_exec
+    }
+    pub fn non_block(&self) -> bool {
+        self.non_block
+    }
+    pub fn unset_nonblock(&mut self) {
+        self.non_block = false
+    }
+    pub fn set_nonblock(&mut self) {
+        self.non_block = true;
+    }
 }
 
 pub struct FdTableInner {
     soft_limit: usize,
     hard_limit: usize,
-    flags: Vec<Option<OpenFlags>>,
-    table: Vec<Option<FileClass>>,
+    files: Vec<Option<FileDescriptor>>,
 }
 
 impl FdTableInner {
@@ -27,21 +78,14 @@ impl FdTableInner {
         Self {
             soft_limit: 64,
             hard_limit: 256,
-            flags: Vec::new(),
-            table: Vec::new(),
+            files: Vec::new(),
         }
     }
-    pub fn new(
-        flags: Vec<Option<OpenFlags>>,
-        table: Vec<Option<FileClass>>,
-        soft_limit: usize,
-        hard_limit: usize,
-    ) -> Self {
-        FdTableInner {
-            flags,
-            table,
+    pub fn new(soft_limit: usize, hard_limit: usize, files: Vec<Option<FileDescriptor>>) -> Self {
+        Self {
             soft_limit,
             hard_limit,
+            files,
         }
     }
 }
@@ -54,37 +98,27 @@ impl FdTable {
     }
     pub fn new_with_stdio() -> Self {
         FdTable::new(FdTableInner::new(
-            vec![
-                Some(OpenFlags::O_RDONLY),
-                Some(OpenFlags::O_WRONLY),
-                Some(OpenFlags::O_WRONLY),
-            ],
-            vec![
-                // 0 -> stdin
-                Some(FileClass::Abs(Arc::new(Stdin))),
-                // 1 -> stdout
-                Some(FileClass::Abs(Arc::new(Stdout))),
-                // 2 -> stderr
-                Some(FileClass::Abs(Arc::new(Stdout))),
-            ],
             64,
             256,
+            vec![
+                Some(FileDescriptor::default(FileClass::Abs(Arc::new(Stdin)))),
+                Some(FileDescriptor::default(FileClass::Abs(Arc::new(Stdout)))),
+                Some(FileDescriptor::default(FileClass::Abs(Arc::new(Stdout)))),
+            ],
         ))
     }
     pub fn from_another(another: &Arc<FdTable>) -> Self {
         let other = another.get_ref();
         Self {
-            inner: SyncUnsafeCell::new(FdTableInner::new(
-                other.flags.clone(),
-                other.table.clone(),
-                other.soft_limit,
-                other.hard_limit,
-            )),
+            inner: SyncUnsafeCell::new(FdTableInner {
+                soft_limit: other.soft_limit,
+                hard_limit: other.hard_limit,
+                files: other.files.clone(),
+            }),
         }
     }
     pub fn alloc_fd(&self) -> SyscallRet {
-        let fd_table = &mut self.get_mut().table;
-        let flags = &mut self.get_mut().flags;
+        let fd_table = &mut self.get_mut().files;
         if let Some(fd) = (0..fd_table.len()).find(|fd| fd_table[*fd].is_none()) {
             return Ok(fd);
         }
@@ -92,86 +126,65 @@ impl FdTable {
             return Err(SysErrNo::EMFILE);
         }
         fd_table.push(None);
-        flags.push(None);
         Ok(fd_table.len() - 1)
     }
     pub fn alloc_fd_larger_than(&self, arg: usize) -> SyscallRet {
-        let fd_table = &mut self.get_mut().table;
-        let flags = &mut self.get_mut().flags;
+        let fd_table = &mut self.get_mut().files;
         if arg >= self.get_soft_limit() {
             return Err(SysErrNo::EMFILE);
         }
         if fd_table.len() < arg {
             fd_table.resize(arg, None);
-            flags.resize(arg, None);
         }
         if let Some(fd) = (arg..fd_table.len()).find(|fd| fd_table[*fd].is_none()) {
             Ok(fd)
         } else {
             fd_table.push(None);
-            flags.push(None);
             Ok(fd_table.len() - 1)
         }
     }
     pub fn close_on_exec(&self) {
-        let inner = self.get_mut();
-        for idx in 0..inner.flags.len() {
-            if let Some(flag) = inner.flags[idx] {
-                if flag.contains(OpenFlags::O_CLOEXEC) {
-                    inner.flags[idx].take();
-                    inner.table[idx].take();
-                }
+        let fd_table = &mut self.get_mut().files;
+        for idx in 0..fd_table.len() {
+            if fd_table[idx].is_some() && fd_table[idx].as_ref().unwrap().cloexec() {
+                fd_table[idx].take();
             }
         }
     }
     pub fn len(&self) -> usize {
-        self.get_ref().table.len()
+        self.get_ref().files.len()
     }
 
     pub fn resize(&self, size: usize) -> GeneralRet {
         if size >= self.get_soft_limit() {
             return Err(SysErrNo::EMFILE);
         }
-        self.get_mut().table.resize(size, None);
-        self.get_mut().flags.resize(size, None);
+        self.get_mut().files.resize(size, None);
         Ok(())
     }
 
-    pub fn try_get_file(&self, fd: usize) -> Option<FileClass> {
-        self.get_mut().table[fd].clone()
+    pub fn try_get(&self, fd: usize) -> Option<FileDescriptor> {
+        self.get_mut().files[fd].clone()
     }
 
-    pub fn try_get_flag(&self, fd: usize) -> Option<OpenFlags> {
-        self.get_mut().flags[fd].clone()
-    }
-
-    pub fn try_get(&self, fd: usize) -> (Option<FileClass>, Option<OpenFlags>) {
-        (self.try_get_file(fd), self.try_get_flag(fd))
-    }
-
-    pub fn get_file(&self, fd: usize) -> FileClass {
-        self.get_mut().table[fd].clone().unwrap()
-    }
-
-    pub fn get_flag(&self, fd: usize) -> OpenFlags {
-        self.get_mut().flags[fd].clone().unwrap()
+    pub fn get(&self, fd: usize) -> FileDescriptor {
+        self.get_mut().files[fd].clone().unwrap()
     }
 
     pub fn set_cloexec(&self, fd: usize) {
-        let flags = self.try_get_flag(fd).unwrap() | OpenFlags::O_CLOEXEC;
-        self.get_mut().flags[fd] = Some(flags);
+        self.get_mut().files[fd].as_mut().unwrap().set_cloexec();
     }
 
     pub fn unset_cloexec(&self, fd: usize) {
-        let flags = self.try_get_flag(fd).unwrap() & !OpenFlags::O_CLOEXEC;
-        self.get_mut().flags[fd] = Some(flags);
+        self.get_mut().files[fd].as_mut().unwrap().unset_cloexec();
     }
 
-    pub fn contain_cloexec(&self, fd: usize) -> bool {
-        self.get_mut().flags[fd]
-            .as_ref()
-            .unwrap()
-            .contains(OpenFlags::O_CLOEXEC)
+    pub fn set_nonblock(&self, fd: usize) {
+        self.get_mut().files[fd].as_mut().unwrap().set_nonblock();
+    }
+
+    pub fn unset_nonblock(&self, fd: usize) {
+        self.get_mut().files[fd].as_mut().unwrap().unset_nonblock();
     }
 
     pub fn get_hard_limit(&self) -> usize {
@@ -188,18 +201,16 @@ impl FdTable {
         inner.hard_limit = hard_limit;
     }
 
-    pub fn set(&self, fd: usize, value: Option<FileClass>, flags: Option<OpenFlags>) {
-        self.get_mut().table[fd] = value;
-        self.get_mut().flags[fd] = flags;
+    pub fn set(&self, fd: usize, file: FileDescriptor) {
+        self.get_mut().files[fd] = Some(file);
     }
 
-    pub fn set_flags(&self, fd: usize, flags: Option<OpenFlags>) {
-        self.get_mut().flags[fd] = flags;
+    pub fn set_flags(&self, fd: usize, file: FileDescriptor) {
+        self.get_mut().files[fd] = Some(file);
     }
 
-    pub fn take(&self, fd: usize) -> Option<FileClass> {
-        self.get_mut().flags[fd].take();
-        self.get_mut().table[fd].take()
+    pub fn take(&self, fd: usize) -> Option<FileDescriptor> {
+        self.get_mut().files[fd].take()
     }
 
     fn get_mut(&self) -> &mut FdTableInner {

@@ -340,12 +340,8 @@ pub fn translated_str(token: usize, ptr: *const u8) -> String {
 ///Translate a generic through page table and return a reference
 pub fn translated_ref<T>(token: usize, ptr: *const T) -> &'static T {
     let page_table = PageTable::from_token(token);
-    KernelAddr::from(
-        page_table
-            .translate_va(VirtAddr::from(ptr as usize))
-            .unwrap(),
-    )
-    .as_ref()
+    let va = ptr as usize;
+    KernelAddr::from(page_table.translate_va(VirtAddr::from(va)).unwrap()).as_ref()
 }
 ///Translate a generic through page table and return a mutable reference
 pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
@@ -367,7 +363,7 @@ pub fn get_data<T: 'static + Copy>(token: usize, ptr: *const T) -> T {
     if (pa + size - 1).floor() != pa.floor() {
         let mut bytes = vec![0u8; size];
         for i in 0..size {
-            bytes[i] = *(page_table.translate_va(va).unwrap().get_ref());
+            bytes[i] = *(page_table.translate_va(va).unwrap().as_ref());
             va = va + 1;
         }
         unsafe { *(bytes.as_slice().as_ptr() as usize as *const T) }
@@ -388,7 +384,7 @@ pub fn put_data<T: 'static>(token: usize, ptr: *mut T, data: T) {
         let bytes =
             unsafe { core::slice::from_raw_parts(&data as *const _ as usize as *const u8, size) };
         for i in 0..size {
-            *(page_table.translate_va(va).unwrap().get_mut()) = bytes[i];
+            *(page_table.translate_va(va).unwrap().as_mut()) = bytes[i];
             va = va + 1;
         }
     } else {

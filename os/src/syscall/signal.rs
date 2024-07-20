@@ -1,14 +1,14 @@
 use log::debug;
 
 use crate::{
-    mm::{translated_ref, translated_refmut},
+    mm::{get_data, put_data},
     signal::{
-        restore_frame, send_access_signal, send_signal_to_one_thread_of_thread_group,
-        send_signal_to_thread, send_signal_to_thread_group, KSigAction, SigAction, SigOp, SigSet,
-        SIG_MAX_NUM,
+        restore_frame, send_signal_to_thread, send_signal_to_thread_group, KSigAction, SigAction,
+        SigInfo, SigSet,
     },
-    task::{current_task, current_token, suspend_current_and_run_next},
-    timer::{get_time_spec, Timespec},
+    syscall::SignalMaskFlag,
+    task::{current_task, suspend_current_and_run_next},
+    timer::Timespec,
     utils::{SysErrNo, SyscallRet},
 };
 
@@ -17,34 +17,32 @@ pub fn sys_rt_sigaction(
     act: *const SigAction,
     old_act: *mut SigAction,
 ) -> SyscallRet {
-    if signo > SIG_MAX_NUM {
-        return Err(SysErrNo::EINVAL);
-    }
-    debug!(
-        "[sys_rt_sigaction] sig is {:?}, act is {:x}, old_act is {:x}",
-        SigSet::from_sig(signo),
-        act as usize,
-        old_act as usize
-    );
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
     if old_act as usize != 0 {
-        let sig_handler = &task_inner.sig_pending.get_ref().actions[signo].act;
-        *translated_refmut(token, old_act) = *sig_handler;
+        let sig_act = task_inner.sig_table.action(signo).act;
+        put_data(token, old_act, sig_act);
     }
     if act as usize != 0 {
-        let new_act = *translated_ref(token, act);
-        let new_sig: KSigAction = if new_act.sa_handler == 0 || new_act.sa_handler == 1 {
+        let new_act = get_data(token, act);
+        debug!(
+            "[sys_rt_sigaction] sig is {:?}, act is {:?}",
+            SigSet::from_sig(signo),
+            new_act
+        );
+        let new_sig: KSigAction = if new_act.sa_handler == 0 {
             KSigAction::new(signo, false)
+        } else if new_act.sa_handler == 1 {
+            // 忽略
+            KSigAction::ignore()
         } else {
             KSigAction {
                 act: new_act,
                 customed: true,
             }
         };
-        //debug!("signo is {}, new act is {:?}", signo, new_act);
-        task_inner.sig_pending.get_mut().actions[signo] = new_sig;
+        task_inner.sig_table.set_action(signo, new_sig);
     }
     Ok(0)
 }
@@ -54,30 +52,25 @@ pub fn sys_rt_sigreturn() -> SyscallRet {
 }
 
 pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) -> SyscallRet {
-    const SIG_BLOCK: u32 = 0;
-    const SIG_UNBLOCK: u32 = 1;
-    const SIG_SETMASK: u32 = 2;
     let task = current_task().unwrap();
-    let task_inner = task.inner_lock();
+    let mut task_inner = task.inner_lock();
     let token = task_inner.user_token();
-
-    debug!(
-        "[sys_sigprocmask] how is {}, set is {:x}, old_set is {:x}",
-        how, set as usize, old_set as usize
-    );
+    let how = SignalMaskFlag::from_bits(how).ok_or(SysErrNo::EINVAL)?;
 
     if old_set as usize != 0 {
-        *translated_refmut(token, old_set) = task_inner.sig_pending.get_ref().blocked;
+        put_data(token, old_set, task_inner.sig_mask)
     }
     if set as usize != 0 {
-        let mask = *translated_ref(token, set);
-
-        //debug!("mask sig: {:?}", mask);
-
+        let mask = get_data(token, set);
+        debug!(
+            "[sys_sigprocmask] how is {:?}, mask is {:?}, old_set is {:x}",
+            how, mask, old_set as usize
+        );
+        // let mut blocked = &mut task_inner.sig_mask;
         match how {
-            SIG_BLOCK => task_inner.sig_pending.get_mut().blocked |= mask,
-            SIG_UNBLOCK => task_inner.sig_pending.get_mut().blocked &= !mask,
-            SIG_SETMASK => task_inner.sig_pending.get_mut().blocked = mask,
+            SignalMaskFlag::SIG_BLOCK => task_inner.sig_mask |= mask,
+            SignalMaskFlag::SIG_UNBLOCK => task_inner.sig_mask &= !mask,
+            SignalMaskFlag::SIG_SETMASK => task_inner.sig_mask = mask,
             _ => return Err(SysErrNo::EINVAL),
         }
     }
@@ -85,70 +78,31 @@ pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) ->
 }
 /// 在指定时间内挂起给定信号
 pub fn sys_rt_sigtimedwait(
-    sig: *const SigSet,
-    _info: usize,
-    timeout: *const Timespec,
+    _sig: *const SigSet,
+    _info: *mut SigInfo,
+    _timeout: *const Timespec,
 ) -> SyscallRet {
-    let token = current_token();
-    let sig = *translated_ref(token, sig);
-    let timeout = *translated_ref(token, timeout);
-
-    let end_time = timeout + get_time_spec();
-    loop {
-        let task = current_task().unwrap();
-        let task_inner = task.inner_lock();
-        for signum in 1..(SIG_MAX_NUM + 1) {
-            let signal = SigSet::from_sig(signum);
-            if sig.contains(signal) && task_inner.sig_pending.get_ref().pending.contains(signal) {
-                task_inner.sig_pending.get_mut().pending &= !signal;
-                return Ok(signum);
-            }
-        }
-        if get_time_spec() > end_time {
-            return Err(SysErrNo::EAGAIN);
-        } else {
-            drop(task_inner);
-            drop(task);
-            suspend_current_and_run_next();
-        }
-    }
+    // TODO(ZMY): Linux实现与POSIX标准不同,只在部分pthread测试使用过,伪实现
+    Ok(0)
 }
-///暂时将调用线程的信号掩码替换为 mask 给出的掩码，然后暂停线程，直到传递信号，
+/// 暂时将调用线程的信号掩码替换为 mask 给出的掩码，然后暂停线程，直到传递信号，
 /// 其操作是调用信号处理程序或终止进程
-/// 始终返回 -1
 pub fn sys_rt_sigsuspend(mask: *const SigSet) -> SyscallRet {
-    let token = current_token();
-    let mask = *translated_ref(token, mask);
-
+    // TODO(ZMY): 暂停线程
     let task = current_task().unwrap();
-    let task_inner = task.inner_lock();
-    let old_mask = task_inner.sig_pending.get_mut().blocked;
-    task_inner.sig_pending.get_mut().blocked = mask;
+    let mut task_inner = task.inner_lock();
+    let token = task_inner.user_token();
+    let mask = get_data(token, mask);
+    let old_mask = task_inner.sig_mask;
+    task_inner.sig_mask = mask;
     drop(task_inner);
     drop(task);
     loop {
         let task = current_task().unwrap();
-        let task_inner = task.inner_lock();
-        for signum in 1..(SIG_MAX_NUM + 1) {
-            let signal = SigSet::from_sig(signum);
-            if task_inner.sig_pending.get_ref().pending.contains(signal) {
-                let sigaction = task_inner.sig_pending.get_mut().actions[signum];
-                match sigaction.act.sa_handler {
-                    // 缺省操作
-                    0 => {
-                        if signal.default_op() == SigOp::Terminate {
-                            return Ok(usize::MAX);
-                        }
-                    }
-                    // 忽略信号
-                    1 => {}
-                    // 返回到用户的信号处理程序
-                    _ => {
-                        task_inner.sig_pending.get_mut().blocked = old_mask;
-                        return Err(SysErrNo::EINTR);
-                    }
-                };
-            }
+        let mut task_inner = task.inner_lock();
+        if !task_inner.sig_pending.is_empty() {
+            task_inner.sig_mask = old_mask;
+            return Err(SysErrNo::EINTR);
         }
         drop(task_inner);
         drop(task);
@@ -167,10 +121,17 @@ pub fn sys_kill(pid: isize, signo: usize) -> SyscallRet {
 
     match pid {
         _ if pid > 0 => send_signal_to_thread_group(pid as usize, sig),
-        0 => send_signal_to_thread_group(current_task().unwrap().pid(), sig),
-        -1 => send_access_signal(current_task().unwrap().tid(), sig),
+        0 => {
+            todo!()
+            // send_signal_to_thread_group(current_task().unwrap().pid(), sig)
+        }
+        -1 => {
+            todo!()
+            // send_access_signal(current_task().unwrap().tid(), sig)
+        }
         _ => {
-            send_signal_to_thread_group(-pid as usize, sig);
+            todo!()
+            // send_signal_to_thread_group(-pid as usize, sig);
         }
     }
     Ok(0)
@@ -178,6 +139,7 @@ pub fn sys_kill(pid: isize, signo: usize) -> SyscallRet {
 
 pub fn sys_tkill(tid: usize, signo: usize) -> SyscallRet {
     let sig = SigSet::from_sig(signo);
+    debug!("[sys_tkill] thread {} receive signal {:?}", tid, sig);
     send_signal_to_thread(tid, sig);
     Ok(0)
 }
@@ -190,6 +152,7 @@ pub fn sys_tgkill(tgid: usize, tid: usize, signo: usize) -> SyscallRet {
         tgid, tid, sig
     );
 
-    send_signal_to_one_thread_of_thread_group(tgid, tid, sig);
-    Ok(0)
+    unimplemented!();
+    // send_signal_to_one_thread_of_thread_group(tgid, tid, sig);
+    // Ok(0)
 }

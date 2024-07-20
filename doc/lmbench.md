@@ -13,18 +13,3 @@
 # pid3卡在管道写端，pid2发送了SIGQUIT后卡住
 原因：管道的阻塞等待也需要可以处理信号的机制。
 解决方法：在管道的读写等待处添加信号处理代码。
-# 很多输出没有打印
-目前打印：
-latency measurements
-File /var/tmp/XXX write bandwidth:311 KB/sec
-file system latency
-0k	-1	-1	-1
-1k	-1	-1	-1
-4k	-1	-1	-1
-10k	-1	-1	-1
-Bandwidth measurements
-0.524288 inf
-0.524288 inf
-0.524288 inf
-0.524288 inf
-context switch overhead

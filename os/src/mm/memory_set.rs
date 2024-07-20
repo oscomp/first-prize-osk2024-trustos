@@ -7,15 +7,21 @@ use super::{
 use crate::{
     config::{
         board::{MEMORY_END, MMIO},
-        mm::{KERNEL_ADDR_OFFSET, MMAP_TOP, PAGE_SIZE},
+        mm::{DL_INTERP_OFFSET, KERNEL_ADDR_OFFSET, MMAP_TOP, PAGE_SIZE},
     },
-    fs::{File, OSInode},
+    fs::{open, File, OSInode, OpenFlags, NONE_MODE},
     mm::flush_tlb,
     sync::SyncUnsafeCell,
     syscall::MmapFlags,
     task::{Aux, AuxType},
+    utils::SyscallRet,
 };
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    sync::Arc,
+    vec,
+    vec::Vec,
+};
 use core::arch::asm;
 use lazy_static::*;
 use log::debug;
@@ -24,6 +30,7 @@ use riscv::register::{
     scause::{Exception, Trap},
 };
 use spin::Mutex;
+use xmas_elf::ElfFile;
 
 extern "C" {
     fn stext();
@@ -74,9 +81,6 @@ impl MemorySet {
     pub fn token(&self) -> usize {
         self.inner.get_unchecked_mut().token()
     }
-    pub fn alloc_addr_va(&self, len: usize) -> (VirtAddr, VirtAddr) {
-        self.inner.get_unchecked_mut().alloc_addr_va(len)
-    }
     #[inline(always)]
     pub fn insert_framed_area(
         &self,
@@ -88,23 +92,6 @@ impl MemorySet {
         self.inner
             .get_unchecked_mut()
             .insert_framed_area(start_va, end_va, permission, area_type)
-    }
-    #[inline(always)]
-    pub fn insert_given_framed_area(
-        &self,
-        start_va: VirtAddr,
-        end_va: VirtAddr,
-        permission: MapPermission,
-        area_type: MapAreaType,
-        frames: Vec<Arc<FrameTracker>>,
-    ) {
-        self.inner
-            .get_unchecked_mut()
-            .insert_given_framed_area(start_va, end_va, permission, area_type, frames)
-    }
-    #[inline(always)]
-    pub fn kernel_stack_frame(&self) -> Vec<Arc<FrameTracker>> {
-        self.inner.get_unchecked_mut().kernel_stack_frame()
     }
     #[inline(always)]
     pub fn remove_area_with_start_vpn(&self, start_vpn: VirtPageNum) {
@@ -127,7 +114,17 @@ impl MemorySet {
             .mmap(addr, len, map_perm, flags, file, off)
     }
     #[inline(always)]
-    pub fn munmap(&self, addr: usize, len: usize) {
+    pub fn shm(
+        &self,
+        addr: usize,
+        size: usize,
+        map_perm: MapPermission,
+        pages: Vec<Arc<FrameTracker>>,
+    ) -> usize {
+        self.get_mut().shm(addr, size, map_perm, pages)
+    }
+    #[inline(always)]
+    pub fn munmap(&self, addr: usize, len: usize) -> SyscallRet {
         self.inner.get_unchecked_mut().munmap(addr, len)
     }
     #[inline(always)]
@@ -145,37 +142,12 @@ impl MemorySet {
             .mprotect(start_vpn, end_vpn, map_perm);
     }
     #[inline(always)]
-    fn push(&self, map_area: MapArea, data: Option<&[u8]>) {
-        self.inner.get_unchecked_mut().push(map_area, data)
-    }
-    #[inline(always)]
-    fn push_with_offset(&self, map_area: MapArea, offset: usize, data: Option<&[u8]>) {
-        self.inner
-            .get_unchecked_mut()
-            .push_with_offset(map_area, offset, data)
-    }
-    // #[inline(always)]
-    // fn push_with_given_frames(&self, map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
-    //     self.inner
-    //         .get_unchecked_mut()
-    //         .push_with_given_frames(map_area, frames)
-    // }
-    pub fn map_given_frames(&self, map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
-        self.inner
-            .get_unchecked_mut()
-            .map_given_frames(map_area, frames);
-    }
-    #[inline(always)]
-    fn push_lazily(&self, map_area: MapArea) {
-        self.inner.get_unchecked_mut().push_lazily(map_area)
-    }
-    #[inline(always)]
     pub fn activate(&self) {
         self.inner.get_unchecked_mut().activate();
     }
     #[inline(always)]
-    pub fn recycle_data_pages(&self) {
-        self.inner.get_unchecked_mut().recycle_data_pages();
+    pub fn recycle_data_pages(&self) -> SyscallRet {
+        self.inner.get_unchecked_mut().recycle_data_pages()
     }
     #[inline(always)]
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
@@ -229,11 +201,6 @@ impl MemorySetInner {
     pub fn page_table_mut(self: &mut MemorySetInner) -> &mut PageTable {
         &mut self.page_table
     }
-    ///分配一块合适的内存段
-    pub fn alloc_addr_va(&self, len: usize) -> (VirtAddr, VirtAddr) {
-        let addr = self.find_insert_addr(MMAP_TOP, len);
-        (VirtAddr::from(addr), VirtAddr::from(addr + len))
-    }
     /// Assume that no conflicts.
     pub fn insert_framed_area(
         &mut self,
@@ -246,33 +213,6 @@ impl MemorySetInner {
             MapArea::new(start_va, end_va, MapType::Framed, permission, area_type),
             None,
         );
-    }
-    pub fn insert_given_framed_area(
-        &mut self,
-        start_va: VirtAddr,
-        end_va: VirtAddr,
-        permission: MapPermission,
-        area_type: MapAreaType,
-        frames: Vec<Arc<FrameTracker>>,
-    ) {
-        self.push_with_given_frames(
-            MapArea::new(start_va, end_va, MapType::Framed, permission, area_type),
-            frames,
-        );
-    }
-    /// return frames of kernel stack
-    pub fn kernel_stack_frame(&self) -> Vec<Arc<FrameTracker>> {
-        self.areas
-            .iter()
-            .find_map(|area| {
-                if area.area_type == MapAreaType::Stack && !area.map_perm.contains(MapPermission::U)
-                {
-                    Some(area.kernel_stack_frame())
-                } else {
-                    None
-                }
-            })
-            .unwrap()
     }
     ///Remove `MapArea` that starts with `start_vpn`
     pub fn remove_area_with_start_vpn(&mut self, start_vpn: VirtPageNum) {
@@ -333,6 +273,79 @@ impl MemorySetInner {
             }
         }
     }
+    fn load_dl_interp_if_needed(&mut self, elf: &ElfFile) -> Option<usize> {
+        let elf_header = elf.header;
+        let ph_count = elf_header.pt2.ph_count();
+
+        let mut is_dl = false;
+        for i in 0..ph_count {
+            let ph = elf.program_header(i).unwrap();
+            if ph.get_type().unwrap() == xmas_elf::program::Type::Interp {
+                is_dl = true;
+                break;
+            }
+        }
+
+        if is_dl {
+            debug!("[load_dl] encounter a dl elf");
+            let section = elf.find_section_by_name(".interp").unwrap();
+            let mut interp = String::from_utf8(section.raw_data(&elf).to_vec()).unwrap();
+            interp = interp.strip_suffix("\0").unwrap_or(&interp).to_string();
+            debug!("[load_dl] interp {}", interp);
+
+            let mut interps: Vec<String> = vec![interp.clone()];
+
+            debug!("interp {}", interp);
+
+            if interp.eq("/lib/ld-musl-riscv64-sf.so.1") || interp.eq("/lib/ld-musl-riscv64.so.1") {
+                // interp = "/lib/libc.so".to_string();
+                // interps.push("/libc.so".to_string());
+                // interps.push("/musl/libc.so".to_string());
+                interps.insert(0, "/lib/musl/libc.so".to_string());
+            }
+
+            let mut interp_inode = None;
+            for interp in interps {
+                if let Ok(inode) = open(&interp, OpenFlags::O_RDONLY, NONE_MODE) {
+                    debug!("read interp from {}", &interp);
+                    interp_inode = inode.file().ok();
+                    break;
+                }
+            }
+            let interp_file = interp_inode.unwrap();
+            let interp_elf_data = interp_file.inode.read_all().unwrap();
+            let interp_elf = xmas_elf::ElfFile::new(&interp_elf_data).unwrap();
+            self.map_elf(&interp_elf, DL_INTERP_OFFSET.into());
+
+            Some(interp_elf.header.pt2.entry_point() as usize + DL_INTERP_OFFSET)
+        } else {
+            debug!("[load_dl] encounter a static elf");
+            None
+        }
+    }
+    pub fn shm(
+        &mut self,
+        addr: usize,
+        size: usize,
+        map_perm: MapPermission,
+        pages: Vec<Arc<FrameTracker>>,
+    ) -> usize {
+        if addr == 0 {
+            let va = self.find_insert_addr(MMAP_TOP, size);
+            self.push_with_given_frames(
+                MapArea::new(
+                    va.into(),
+                    (va + size).into(),
+                    MapType::Framed,
+                    map_perm,
+                    MapAreaType::Shm,
+                ),
+                pages,
+            );
+            return va;
+        }
+        panic!("[shm_attach] unimplement attach addr");
+    }
     /// mmap
     pub fn mmap(
         &mut self,
@@ -359,11 +372,11 @@ impl MemorySetInner {
         } else {
             // 自行选择地址,计算已经使用的MMap地址
             let addr = self.find_insert_addr(MMAP_TOP, len);
-            debug!(
-                "[sys_mmap] start_vpn:{:#x},end_vpn:{:#x}",
-                VirtAddr::from(addr).floor().0,
-                VirtAddr::from(addr + len).floor().0
-            );
+            // debug!(
+            //     "[sys_mmap] start_vpn:{:#x},end_vpn:{:#x}",
+            //     VirtAddr::from(addr).floor().0,
+            //     VirtAddr::from(addr + len).floor().0
+            // );
             self.push_lazily(MapArea::new_mmap(
                 VirtAddr::from(addr),
                 VirtAddr::from(addr + len),
@@ -379,7 +392,7 @@ impl MemorySetInner {
         // addr
     }
     /// munmap
-    pub fn munmap(&mut self, addr: usize, len: usize) {
+    pub fn munmap(&mut self, addr: usize, len: usize) -> SyscallRet {
         let start_vpn = VirtPageNum::from(VirtAddr::from(addr));
         let end_vpn = VirtPageNum::from(VirtAddr::from(addr + len));
         // debug!(
@@ -410,7 +423,7 @@ impl MemorySetInner {
                         mapped_len,
                     )
                     .unwrap(),
-                });
+                })?;
             }
             // debug!(
             //     "[area vpn_range] start:{:#x},end:{:#x}",
@@ -434,6 +447,7 @@ impl MemorySetInner {
             }
             flush_tlb();
         }
+        Ok(0)
     }
     pub fn lazy_page_fault(&mut self, vpn: VirtPageNum, scause: Trap) -> bool {
         let pte = self.page_table.translate(vpn);
@@ -606,19 +620,16 @@ impl MemorySetInner {
         map_area.map_given_frames(&mut self.page_table, frames);
         self.areas.push(map_area);
     }
-    fn map_given_frames(&mut self, mut map_area: MapArea, frames: Vec<Arc<FrameTracker>>) {
-        map_area.map_given_frames(&mut self.page_table, frames);
-    }
     /// 不映射MapArea里的虚拟页面
     pub fn push_lazily(&mut self, map_area: MapArea) {
         self.areas.push(map_area);
     }
     ///仅initproc会用，将懒分配的全部分配
-    fn unlazy(&mut self) {
-        for map_area in self.areas.iter_mut() {
-            map_area.map(&mut self.page_table);
-        }
-    }
+    // fn unlazy(&mut self) {
+    //     for map_area in self.areas.iter_mut() {
+    //         map_area.map(&mut self.page_table);
+    //     }
+    // }
     /// Without kernel stacks.
     pub fn new_kernel() -> Self {
         let mut memory_set = Self::new_bare();
@@ -737,18 +748,13 @@ impl MemorySetInner {
         let mut memory_set = Self::new_from_kernel();
         // debug!("from_elf new stap={:#x}", memory_set.page_table.token());
         // map program headers of elf, with U flag
-        //let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
-        // let elf = if let Ok(elfhere) = xmas_elf::ElfFile::new(elf_data) {
-        //     elfhere
-        // } else {
-        //     return None;
-        // };
         let elf = xmas_elf::ElfFile::new(elf_data).unwrap();
         let elf_header = elf.header;
         let magic = elf_header.pt1.magic;
         assert_eq!(magic, [0x7f, 0x45, 0x4c, 0x46], "invalid elf!");
         let ph_count = elf_header.pt2.ph_count();
-        let mut head_va = 0; // top va of ELF which points to ELF header
+        // let mut head_va = 0; // top va of ELF which points to ELF header
+        let mut entry_point = elf.header.pt2.entry_point() as usize;
 
         auxv.push(Aux::new(
             AuxType::PHENT,
@@ -756,7 +762,13 @@ impl MemorySetInner {
         )); // ELF64 header 64bytes
         auxv.push(Aux::new(AuxType::PHNUM, ph_count as usize));
         auxv.push(Aux::new(AuxType::PAGESZ, PAGE_SIZE as usize));
-        auxv.push(Aux::new(AuxType::BASE, 0 as usize));
+        // 设置动态链接
+        if let Some(interp_entry_point) = memory_set.load_dl_interp_if_needed(&elf) {
+            auxv.push(Aux::new(AuxType::BASE, DL_INTERP_OFFSET));
+            entry_point = interp_entry_point;
+        } else {
+            auxv.push(Aux::new(AuxType::BASE, 0));
+        }
         auxv.push(Aux::new(AuxType::FLAGS, 0 as usize));
         auxv.push(Aux::new(
             AuxType::ENTRY,
@@ -771,46 +783,11 @@ impl MemorySetInner {
         auxv.push(Aux::new(AuxType::CLKTCK, 100 as usize));
         auxv.push(Aux::new(AuxType::SECURE, 0 as usize));
         auxv.push(Aux::new(AuxType::NOTELF, 0x112d as usize));
-        let mut max_end_vpn = VirtPageNum(0);
-        for i in 0..ph_count {
-            let ph = elf.program_header(i).unwrap();
-            if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
-                let start_va: VirtAddr = (ph.virtual_addr() as usize).into();
-                let end_va: VirtAddr = ((ph.virtual_addr() + ph.mem_size()) as usize).into();
-                let offset = start_va.0 - start_va.floor().0 * PAGE_SIZE;
-                let mut map_perm = MapPermission::U;
-                let ph_flags = ph.flags();
-                if ph_flags.is_read() {
-                    map_perm |= MapPermission::R;
-                }
-                if ph_flags.is_write() {
-                    map_perm |= MapPermission::W;
-                }
-                if ph_flags.is_execute() {
-                    map_perm |= MapPermission::X;
-                }
-                let map_area = MapArea::new(
-                    start_va,
-                    end_va,
-                    MapType::Framed,
-                    map_perm,
-                    MapAreaType::Elf,
-                );
-                if offset == 0 {
-                    head_va = start_va.into();
-                }
-                max_end_vpn = map_area.vpn_range.end();
-                memory_set.push_with_offset(
-                    map_area,
-                    offset,
-                    Some(&elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
-                );
-                //memory_set.push_lazily(map_area);
-            }
-        }
+
+        let (max_end_vpn, head_va) = memory_set.map_elf(&elf, VirtAddr(0));
 
         // Get ph_head addr for auxv
-        let ph_head_addr = head_va + elf.header.pt2.ph_offset() as usize;
+        let ph_head_addr = head_va.0 + elf.header.pt2.ph_offset() as usize;
         auxv.push(Aux {
             aux_type: AuxType::PHDR,
             value: ph_head_addr as usize,
@@ -830,12 +807,54 @@ impl MemorySetInner {
         ));
 
         // println!("start:{:#X}", elf.header.pt2.entry_point() as usize);
-        (
-            memory_set,
-            user_heap_bottom,
-            elf.header.pt2.entry_point() as usize,
-            auxv,
-        )
+        (memory_set, user_heap_bottom, entry_point, auxv)
+    }
+    fn map_elf(&mut self, elf: &ElfFile, offset: VirtAddr) -> (VirtPageNum, VirtAddr) {
+        let elf_header = elf.header;
+        let ph_count = elf_header.pt2.ph_count();
+
+        let mut max_end_vpn = offset.floor();
+        let mut header_va = 0;
+        let mut has_found_header_va = false;
+
+        for i in 0..ph_count {
+            let ph = elf.program_header(i).unwrap();
+            if ph.get_type().unwrap() == xmas_elf::program::Type::Load {
+                let start_va: VirtAddr = (ph.virtual_addr() as usize + offset.0).into();
+                let end_va: VirtAddr =
+                    ((ph.virtual_addr() + ph.mem_size()) as usize + offset.0).into();
+                if !has_found_header_va {
+                    header_va = start_va.0;
+                    has_found_header_va = true;
+                }
+                let mut map_perm = MapPermission::U;
+                let ph_flags = ph.flags();
+                if ph_flags.is_read() {
+                    map_perm |= MapPermission::R;
+                }
+                if ph_flags.is_write() {
+                    map_perm |= MapPermission::W;
+                }
+                if ph_flags.is_execute() {
+                    map_perm |= MapPermission::X;
+                }
+                let map_area = MapArea::new(
+                    start_va,
+                    end_va,
+                    MapType::Framed,
+                    map_perm,
+                    MapAreaType::Elf,
+                );
+                let data_offset = start_va.0 - start_va.floor().0 * PAGE_SIZE;
+                max_end_vpn = map_area.vpn_range.end();
+                self.push_with_offset(
+                    map_area,
+                    data_offset,
+                    Some(&elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
+                );
+            }
+        }
+        (max_end_vpn, header_va.into())
     }
     ///Clone a same `MemorySet`
     pub fn from_existed_user(user_space: &Arc<MemorySet>) -> MemorySetInner {
@@ -900,7 +919,14 @@ impl MemorySetInner {
                 memory_set.push_lazily(new_area);
                 continue;
             }
-            //既不是cow也不是mmap
+            // 映射相同的Frame
+            if area.area_type == MapAreaType::Shm {
+                let frames = area.data_frames.values().cloned().collect();
+                memory_set.push_with_given_frames(new_area, frames);
+                continue;
+            }
+
+            //既不是cow也不是mmap还不是shm
             memory_set.push(new_area, None);
 
             // copy data from another space
@@ -929,7 +955,7 @@ impl MemorySetInner {
         self.page_table.translate(vpn)
     }
     ///Remove all `MapArea`
-    pub fn recycle_data_pages(&mut self) {
+    pub fn recycle_data_pages(&mut self) -> SyscallRet {
         // 先检测是否需要munmap
         for area in self.areas.iter_mut() {
             if area.area_type == MapAreaType::Mmap {
@@ -951,11 +977,12 @@ impl MemorySetInner {
                             mapped_len,
                         )
                         .unwrap(),
-                    });
+                    })?;
                 }
             }
         }
         self.areas.clear();
+        Ok(0)
     }
 }
 

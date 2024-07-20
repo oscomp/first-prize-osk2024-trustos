@@ -1,13 +1,15 @@
 //!Implementation of [`TaskManager`]
-use super::{TaskControlBlock, TaskStatus, INITPROC};
+use super::{current_task, TaskControlBlock, TaskStatus, INITPROC};
 use alloc::collections::{BTreeMap, VecDeque};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use lazy_static::*;
-use spin::{Mutex, MutexGuard};
+use log::debug;
+use spin::Mutex;
 ///A array of `TaskControlBlock` that is thread-safe
 pub struct TaskManager {
     ready_queue: VecDeque<Arc<TaskControlBlock>>,
+    // stopped_queue: VecDeque<Arc<TaskControlBlock>>,
 }
 
 /// A simple FIFO scheduler.
@@ -16,18 +18,12 @@ impl TaskManager {
     pub fn new() -> Self {
         Self {
             ready_queue: VecDeque::new(),
+            // stopped_queue: VecDeque::new(),
         }
-    }
-    ///Add a task to `TaskManager`
-    pub fn add(&mut self, task: Arc<TaskControlBlock>) {
-        self.ready_queue.push_back(task);
     }
     ///Remove the first task and return it,or `None` if `TaskManager` is empty
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
         self.ready_queue.pop_front()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.ready_queue.is_empty()
     }
     pub fn ready_procs_num(&self) -> usize {
         self.ready_queue.len()
@@ -60,7 +56,7 @@ lazy_static! {
 }
 ///Interface offered to add task
 pub fn add_task(task: Arc<TaskControlBlock>) {
-    TASK_MANAGER.lock().add(task);
+    TASK_MANAGER.lock().ready_queue.push_back(task);
 }
 ///Interface offered to pop the first task
 pub fn fetch_task() -> Option<Arc<TaskControlBlock>> {
@@ -69,13 +65,43 @@ pub fn fetch_task() -> Option<Arc<TaskControlBlock>> {
 pub fn wakeup_parent(pid: usize) {
     TASK_MANAGER.lock().wakeup_parent(pid);
 }
-///Lock TaskManager
-pub fn lock_task_manager() -> MutexGuard<'static, TaskManager> {
-    TASK_MANAGER.lock()
-}
+
 pub fn ready_procs_num() -> usize {
     TASK_MANAGER.lock().ready_procs_num()
 }
+
+pub fn find_task_by_tid(tid: usize) -> Option<Arc<TaskControlBlock>> {
+    if current_task().unwrap().tid() == tid {
+        current_task()
+    } else {
+        TASK_MANAGER
+            .lock()
+            .ready_queue
+            .iter()
+            .find(|t| t.tid() == tid)
+            .cloned()
+    }
+}
+
+// pub fn stop_task(task: Arc<TaskControlBlock>) {
+//     TASK_MANAGER.lock().stopped_queue.push_back(task);
+// }
+
+// pub fn wakeup_stopped_task(task: Arc<TaskControlBlock>) {
+//     let mut manager = TASK_MANAGER.lock();
+//     manager
+//         .stopped_queue
+//         .retain(|t| Arc::as_ptr(t) != Arc::as_ptr(&task));
+//     if manager
+//         .ready_queue
+//         .iter()
+//         .find(|t| t.tid() == task.tid())
+//         .is_none()
+//     {
+//         manager.ready_queue.push_back(task);
+//     }
+// }
+
 lazy_static! {
     pub static ref TID_TO_TASK: Mutex<BTreeMap<usize, Arc<TaskControlBlock>>> =
         Mutex::new(BTreeMap::new());
@@ -153,9 +179,10 @@ pub fn move_child_process_to_init(ppid: usize) {
     }
 }
 
-pub fn wakeup_task(task: Arc<TaskControlBlock>) {
+pub fn wakeup_futex_task(task: Arc<TaskControlBlock>) {
     let mut task_inner = task.inner_lock();
     task_inner.task_status = TaskStatus::Ready;
+    debug!("[futex wakeup task] thread={}", task.tid());
     drop(task_inner);
     add_task(task);
 }

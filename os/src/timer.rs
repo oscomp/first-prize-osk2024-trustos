@@ -5,7 +5,7 @@ use core::ops::Add;
 use crate::sbi::set_timer;
 use crate::sync::SyncUnsafeCell;
 use crate::task::TaskControlBlock;
-use crate::{config::board::CLOCK_FREQ, task::wakeup_task};
+use crate::{config::board::CLOCK_FREQ, task::wakeup_futex_task};
 use alloc::{
     collections::BinaryHeap,
     sync::{Arc, Weak},
@@ -188,7 +188,7 @@ pub struct Timer {
 pub struct TimerInner {
     pub timer: Itimerval,
     pub last_time: TimeVal,
-    pub if_first: bool,
+    pub first: bool,
 }
 
 impl TimerInner {
@@ -196,7 +196,7 @@ impl TimerInner {
         Self {
             timer: Itimerval::new(),
             last_time: TimeVal::new(0, 0),
-            if_first: false,
+            first: false,
         }
     }
 }
@@ -207,21 +207,26 @@ impl Timer {
             inner: SyncUnsafeCell::new(TimerInner::new()),
         }
     }
-
-    pub fn get_mut(&self) -> &mut TimerInner {
-        self.inner.get_unchecked_mut()
+    // pub fn as_bytes(&self) -> &[u8] {
+    //     self.inner.get_unchecked_ref().timer.as_bytes()
+    // }
+    pub fn set_timer(&self, new: Itimerval) {
+        self.inner.get_unchecked_mut().timer = new;
     }
-
-    pub fn get_ref(&self) -> &TimerInner {
-        self.inner.get_unchecked_ref()
+    pub fn set_last_time(&self, last_time: TimeVal) {
+        self.inner.get_unchecked_mut().last_time = last_time;
     }
-}
-
-bitflags! {
-    pub struct Clockid: u32 {
-        const CLOCK_REALTIME = 0;
-        const CLOCK_MONOTONIC = 1 << 0;
-        const CLOCK_PROCESS_CPUTIME_ID = 1 << 1;
+    pub fn set_first_trigger(&self, first: bool) {
+        self.inner.get_unchecked_mut().first = first;
+    }
+    pub fn first_trigger(&self) -> bool {
+        self.inner.get_unchecked_ref().first
+    }
+    pub fn last_time(&self) -> TimeVal {
+        self.inner.get_unchecked_ref().last_time
+    }
+    pub fn timer(&self) -> Itimerval {
+        self.inner.get_unchecked_ref().timer
     }
 }
 
@@ -349,10 +354,17 @@ pub fn set_next_trigger() {
     set_timer(get_time() + CLOCK_FREQ / TICKS_PER_SEC);
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum TimerType {
+    Futex,
+    StoppedTask,
+}
+
 /// 时钟计数器，与 itimer 间隔定时器不同，用于阻塞唤醒进程
 pub struct TimerCondVar {
     pub expire: Timespec,
     pub task: Weak<TaskControlBlock>,
+    pub kind: TimerType,
 }
 impl PartialEq for TimerCondVar {
     fn eq(&self, other: &Self) -> bool {
@@ -378,11 +390,21 @@ lazy_static! {
         Mutex::new(BinaryHeap::<TimerCondVar>::new());
 }
 
-pub fn add_timer(expire: Timespec, task: Arc<TaskControlBlock>) {
+pub fn add_futex_timer(expire: Timespec, task: Arc<TaskControlBlock>) {
     let mut timers = TIMERS.lock();
     timers.push(TimerCondVar {
         expire,
         task: Arc::downgrade(&task),
+        kind: TimerType::Futex,
+    });
+}
+
+pub fn add_stopped_task_timer(expire: Timespec, task: Arc<TaskControlBlock>) {
+    let mut timers = TIMERS.lock();
+    timers.push(TimerCondVar {
+        expire,
+        task: Arc::downgrade(&task),
+        kind: TimerType::StoppedTask,
     });
 }
 
@@ -390,11 +412,17 @@ pub fn check_timer() {
     let current = get_time_spec();
     let mut timers = TIMERS.lock();
     while let Some(timer) = timers.peek() {
+        // debug!("expire={:?}, current={:?}", timer.expire, current);
         if timer.expire <= current {
             if let Some(task) = timer.task.upgrade() {
                 debug!("[check_timer] wake up task",);
-                // 调用 wakeup_task 唤醒超时线程
-                wakeup_task(Arc::clone(&task));
+                if timer.kind == TimerType::Futex {
+                    // 调用 wakeup_task 唤醒超时线程
+                    wakeup_futex_task(Arc::clone(&task));
+                } else if timer.kind == TimerType::StoppedTask {
+                    todo!()
+                    // wakeup_stopped_task(Arc::clone(&task));
+                }
             }
             timers.pop();
         } else {

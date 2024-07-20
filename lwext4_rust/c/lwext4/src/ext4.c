@@ -2240,7 +2240,7 @@ Finish:
 	return r;
 }
 
-int ext4_atime_set(const char *path, uint32_t atime)
+int ext4_atime_set(const char *path, uint64_t atime)
 {
 	struct ext4_inode_ref inode_ref;
 	struct ext4_mountpoint *mp = ext4_get_mount(path);
@@ -2268,7 +2268,7 @@ Finish:
 	return r;
 }
 
-int ext4_mtime_set(const char *path, uint32_t mtime)
+int ext4_mtime_set(const char *path, uint64_t mtime)
 {
 	struct ext4_inode_ref inode_ref;
 	struct ext4_mountpoint *mp = ext4_get_mount(path);
@@ -2296,7 +2296,7 @@ Finish:
 	return r;
 }
 
-int ext4_ctime_set(const char *path, uint32_t ctime)
+int ext4_ctime_set(const char *path, uint64_t ctime)
 {
 	struct ext4_inode_ref inode_ref;
 	struct ext4_mountpoint *mp = ext4_get_mount(path);
@@ -2324,7 +2324,7 @@ Finish:
 	return r;
 }
 
-int ext4_atime_get(const char *path, uint32_t *atime)
+int ext4_atime_get(const char *path, uint64_t *atime)
 {
 	struct ext4_inode_ref inode_ref;
 	struct ext4_mountpoint *mp = ext4_get_mount(path);
@@ -2353,7 +2353,7 @@ Finish:
 	return r;
 }
 
-int ext4_mtime_get(const char *path, uint32_t *mtime)
+int ext4_mtime_get(const char *path, uint64_t *mtime)
 {
 	struct ext4_inode_ref inode_ref;
 	struct ext4_mountpoint *mp = ext4_get_mount(path);
@@ -2382,7 +2382,7 @@ Finish:
 	return r;
 }
 
-int ext4_ctime_get(const char *path, uint32_t *ctime)
+int ext4_ctime_get(const char *path, uint64_t *ctime)
 {
 	struct ext4_inode_ref inode_ref;
 	struct ext4_mountpoint *mp = ext4_get_mount(path);

@@ -60,7 +60,12 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     ///
-    fn set_timestamps(&self, _atime: Option<u32>, _mtime: Option<u32>) -> SyscallRet {
+    fn set_timestamps(
+        &self,
+        _atime: Option<u64>,
+        _mtime: Option<u64>,
+        _ctime: Option<u64>,
+    ) -> SyscallRet {
         unimplemented!()
     }
     fn link_cnt(&self) -> SyscallRet {
@@ -121,9 +126,4 @@ pub trait File: Send + Sync {
     fn lseek(&self, _offset: isize, _whence: usize) -> SyscallRet {
         unimplemented!("not support!");
     }
-}
-
-pub trait Ioctl: File {
-    /// ioctl处理
-    fn ioctl(&self, cmd: usize, arg: usize) -> isize;
 }

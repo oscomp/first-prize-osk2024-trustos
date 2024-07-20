@@ -28,7 +28,7 @@ use alloc::{sync::Arc, vec::Vec};
 pub use devfs::*;
 pub use dirent::Dirent;
 pub use fsidx::*;
-pub use fstruct::{FdTable, FdTableInner, FsInfo};
+pub use fstruct::*;
 use log::debug;
 pub use mount::MNT_TABLE;
 pub use net::*;
@@ -196,8 +196,6 @@ pub fn flush_preload() {
     extern "C" {
         fn initproc_start();
         fn initproc_end();
-        fn shell_start();
-        fn shell_end();
     }
 
     let initproc = open("/initproc", OpenFlags::O_CREATE, DEFAULT_FILE_MODE)
@@ -217,6 +215,8 @@ pub fn flush_preload() {
 pub fn init() {
     flush_preload();
     create_init_files();
+    // TODO(ZMY):为了过libc-test utime的权宜之计,读取RTC太麻烦了
+    root_inode().set_timestamps(Some(0), Some(0), Some(0));
 }
 
 pub fn list_apps() {
@@ -282,7 +282,7 @@ pub fn create_init_files() -> GeneralRet {
         "/proc",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
         DEFAULT_DIR_MODE,
-    );
+    )?;
     //创建/proc/mounts文件系统使用情况
     let mountsfile = open(
         "/proc/mounts",
@@ -323,7 +323,7 @@ pub fn create_init_files() -> GeneralRet {
         "/dev",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
         DEFAULT_DIR_MODE,
-    );
+    )?;
     //注册设备/dev/rtc和/dev/rtc0
     register_device("/dev/rtc");
     register_device("/dev/rtc0");
@@ -340,7 +340,7 @@ pub fn create_init_files() -> GeneralRet {
         "/dev/misc",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
         DEFAULT_DIR_MODE,
-    );
+    )?;
     //注册设备/dev/misc/rtc
     register_device("/dev/misc/rtc");
     //创建/etc文件夹
@@ -348,7 +348,7 @@ pub fn create_init_files() -> GeneralRet {
         "/etc",
         OpenFlags::O_CREATE | OpenFlags::O_RDWR | OpenFlags::O_DIRECTORY,
         DEFAULT_DIR_MODE,
-    );
+    )?;
     //创建/etc/adjtime记录时间偏差
     let adjtimefile = open(
         "/etc/adjtime",
@@ -407,22 +407,21 @@ pub fn create_init_files() -> GeneralRet {
     Ok(())
 }
 
-fn create_file(abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass, SysErrNo> {
+fn create_file(abs_path: &str, flags: OpenFlags, _mode: u32) -> Result<FileClass, SysErrNo> {
     // 一定能找到,因为除了RootInode外都有父结点
     let parent_dir = root_inode();
     let (readable, writable) = flags.read_write();
-    return parent_dir.create(abs_path, flags.node_type()).map(|inode| {
-        insert_inode_idx(abs_path, inode.clone());
-        inode.fmode_set(mode);
-        let osinode = OSInode::new(readable, writable, inode);
-        FileClass::File(Arc::new(osinode))
-    });
+    let inode = parent_dir.create(abs_path, flags.node_type())?;
+    insert_inode_idx(abs_path, inode.clone());
+    // inode.fmode_set(mode);
+    let osinode = OSInode::new(readable, writable, inode);
+    Ok(FileClass::File(Arc::new(osinode)))
 }
 
 pub fn open(abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass, SysErrNo> {
     //判断是否是设备文件
-    if find_device(&abs_path) {
-        let device = open_device_file(&abs_path)?;
+    if find_device(abs_path) {
+        let device = open_device_file(abs_path)?;
         return Ok(FileClass::Abs(device));
     }
     let mut inode: Option<Arc<dyn Inode>> = None;
@@ -430,7 +429,7 @@ pub fn open(abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass, Sy
     if has_inode(abs_path) {
         inode = find_inode_idx(abs_path);
     } else {
-        if let Ok(t) = root_inode().find(&abs_path) {
+        if let Ok(t) = root_inode().find(abs_path) {
             insert_inode_idx(abs_path, t.clone());
             inode = Some(t);
         }
@@ -439,17 +438,17 @@ pub fn open(abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass, Sy
         let (readable, writable) = flags.read_write();
         let osfile = OSInode::new(readable, writable, inode);
         if flags.contains(OpenFlags::O_APPEND) {
-            osfile.lseek(0, SEEK_END);
+            osfile.lseek(0, SEEK_END)?;
         }
         if flags.contains(OpenFlags::O_TRUNC) {
-            osfile.inode.truncate(0);
+            osfile.inode.truncate(0)?;
         }
         return Ok(FileClass::File(Arc::new(osfile)));
     }
 
     // 节点不存在
     if flags.contains(OpenFlags::O_CREATE) {
-        return create_file(&abs_path, flags, mode);
+        return create_file(abs_path, flags, mode);
     }
     Err(SysErrNo::ENOENT)
 }

@@ -42,7 +42,7 @@ pub fn path2vec(path: &str) -> Vec<&str> {
 
 #[inline(always)]
 pub fn is_abs_path(path: &str) -> bool {
-    unsafe { *path.as_ptr() == '/' as u8 }
+    path.starts_with("/")
 }
 /// 用于路径拆分
 pub fn rsplit_once<'a>(s: &'a str, delimiter: &str) -> (&'a str, &'a str) {

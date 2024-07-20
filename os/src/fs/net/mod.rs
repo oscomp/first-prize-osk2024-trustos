@@ -1,4 +1,4 @@
-use alloc::sync::{Arc, Weak};
+use alloc::sync::Arc;
 
 use super::File;
 
@@ -7,4 +7,8 @@ pub fn make_socket() -> Arc<dyn File> {
     Arc::new(Socket {})
 }
 
-impl File for Socket {}
+impl File for Socket {
+    fn readable(&self) -> bool {
+        false
+    }
+}

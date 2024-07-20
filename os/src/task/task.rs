@@ -8,24 +8,35 @@ use crate::{
     config::mm::{
         PAGE_SIZE, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP, USER_TRAP_CONTEXT_TOP,
     },
-    fs::{
-        create_cmdline, create_proc_dir_and_file, open, FdTable, File, FsInfo, DEFAULT_DIR_MODE,
-        DEFAULT_FILE_MODE,
-    },
+    fs::{create_cmdline, create_proc_dir_and_file, FdTable, FsInfo},
     mm::{
-        flush_tlb, translated_ref, translated_refmut, MapArea, MapAreaType, MapPermission, MapType,
-        MemorySet, MemorySetInner, PhysPageNum, UserBuffer, VPNRange, VirtAddr, VirtPageNum,
+        flush_tlb, get_data, put_data, translated_refmut, MapAreaType, MapPermission, MemorySet,
+        MemorySetInner, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
     },
-    signal::{SigPending, SigSet},
-    syscall::{CloneFlags, MapedSharedMemory},
-    task::{insert_into_thread_group, OpenFlags},
-    timer::{get_time, TimeData, TimeVal, Timer},
-    trap::{trap_handler, TrapContext},
+    signal::{SigSet, SigTable},
+    syscall::CloneFlags,
+    task::insert_into_thread_group,
+    timer::{TimeData, TimeVal, Timer},
+    trap::TrapContext,
     utils::{get_abs_path, is_abs_path, SysErrNo},
 };
-use alloc::{format, string::String, sync::Arc, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
 use spin::{Mutex, MutexGuard};
+
+#[derive(Clone, Copy, Debug)]
+pub struct RobustList {
+    pub head: usize,
+    pub len: usize,
+}
+
+impl RobustList {
+    // from strace
+    pub const HEAD_SIZE: usize = 24;
+    pub fn default() -> Self {
+        RobustList { head: 0, len: 24 }
+    }
+}
 
 pub struct TaskControlBlock {
     // immutable
@@ -47,7 +58,6 @@ pub struct TaskControlBlockInner {
     pub task_cx: TaskContext,
     pub task_status: TaskStatus,
     pub memory_set: Arc<MemorySet>,
-    pub shms: Vec<MapedSharedMemory>,
     pub fd_table: Arc<FdTable>,
     pub fs_info: Arc<FsInfo>,
     pub time_data: TimeData,
@@ -55,8 +65,11 @@ pub struct TaskControlBlockInner {
     pub user_heapbottom: usize, //堆底指针
     pub set_child_tid: usize,
     pub clear_child_tid: usize,
-    pub sig_pending: Arc<SigPending>,
+    pub sig_table: Arc<SigTable>,
+    pub sig_mask: SigSet,
+    pub sig_pending: SigSet,
     pub timer: Arc<Timer>,
+    pub robust_list: RobustList,
 }
 
 impl TaskControlBlockInner {
@@ -73,7 +86,7 @@ impl TaskControlBlockInner {
         self.status() == TaskStatus::Zombie
     }
     pub fn is_group_exit(&self) -> bool {
-        self.sig_pending.get_ref().group_exit_code.is_some()
+        self.sig_table.is_exited()
     }
     pub fn alloc_user_res(&mut self) {
         let (_, ustack_top) = self.memory_set.insert_framed_area_with_hint(
@@ -125,7 +138,7 @@ impl TaskControlBlockInner {
         } else if dirfd != -100 {
             // AT_FDCWD=-100
             let dirfd = dirfd as usize;
-            if let Some(file) = self.fd_table.try_get_file(dirfd) {
+            if let Some(file) = self.fd_table.try_get(dirfd) {
                 let file = file.file()?;
                 Ok(file.inode.path())
             } else {
@@ -141,9 +154,13 @@ impl TaskControlBlockInner {
         } else if dirfd != -100 {
             // AT_FDCWD=-100
             let dirfd = dirfd as usize;
-            if let Some(file) = self.fd_table.try_get_file(dirfd) {
+            if let Some(file) = self.fd_table.try_get(dirfd) {
                 let base_path = file.file()?.inode.path();
-                Ok(get_abs_path(&base_path, path))
+                if path.is_empty() {
+                    Ok(base_path)
+                } else {
+                    Ok(get_abs_path(&base_path, path))
+                }
             } else {
                 Err(SysErrNo::EINVAL)
             }
@@ -189,10 +206,9 @@ impl TaskControlBlock {
                 trap_cx_ppn: 0.into(),
                 trap_cx_bottom: 0,
                 user_stack_top: 0,
-                task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+                task_cx: TaskContext::goto_trap_loop(kernel_stack_top),
                 task_status: TaskStatus::Ready,
                 memory_set: Arc::new(MemorySet::new(memory_set)),
-                shms: Vec::new(),
                 fd_table: Arc::new(FdTable::new_with_stdio()),
                 fs_info: Arc::new(FsInfo::new(String::from("/"))),
                 time_data: TimeData::new(),
@@ -200,8 +216,11 @@ impl TaskControlBlock {
                 user_heapbottom,
                 set_child_tid: 0,
                 clear_child_tid: 0,
-                sig_pending: Arc::new(SigPending::new()),
+                sig_table: Arc::new(SigTable::new()),
+                sig_mask: SigSet::empty(),
+                sig_pending: SigSet::empty(),
                 timer: Arc::new(Timer::new()),
+                robust_list: RobustList::default(),
             }),
         };
 
@@ -209,39 +228,26 @@ impl TaskControlBlock {
         task_inner.alloc_user_res();
         // prepare TrapContext in user space
         let trap_cx = task_inner.trap_cx();
-        *trap_cx = TrapContext::app_init_context(
-            entry_point,
-            task_inner.user_stack_top,
-            kernel_stack_top,
-            trap_handler as usize,
-        );
+        *trap_cx =
+            TrapContext::app_init_context(entry_point, task_inner.user_stack_top, kernel_stack_top);
         drop(task_inner);
         task
     }
     pub fn exec(&self, elf_data: &[u8], argv: &Vec<String>, env: &mut Vec<String>) {
-        let mut inner = self.inner_lock();
+        let mut task_inner = self.inner_lock();
         //用户栈高地址到低地址：环境变量字符串/参数字符串/aux辅助向量/环境变量地址数组/参数地址数组/参数数量
         // memory_set with elf program headers/trampoline/trap context/user stack
-        let (mut memory_set, user_hp, entry_point, mut auxv) = MemorySetInner::from_elf(elf_data);
+        let (memory_set, user_hp, entry_point, mut auxv) = MemorySetInner::from_elf(elf_data);
         let token = memory_set.token();
 
-        inner.time_data.clear();
+        task_inner.time_data.clear();
 
-        // map kernel stack
-        let (kernel_stack_bottom, kernel_stack_top) = self.kernel_stack.pos();
-        memory_set.insert_given_framed_area(
-            kernel_stack_bottom.into(),
-            kernel_stack_top.into(),
-            MapPermission::R | MapPermission::W,
-            MapAreaType::Stack,
-            inner.memory_set.kernel_stack_frame(),
-        );
         // substitute memory_set
-        inner.memory_set = Arc::new(MemorySet::new(memory_set));
+        task_inner.memory_set = Arc::new(MemorySet::new(memory_set));
         // 重新分配用户资源
-        inner.alloc_user_res();
+        task_inner.alloc_user_res();
 
-        let mut user_sp = inner.user_stack_top;
+        let mut user_sp = task_inner.user_stack_top;
 
         // println!("user_sp:{:#X}  argv:{:?}", user_sp, argv);
 
@@ -254,25 +260,25 @@ impl TaskControlBlock {
         }
 
         //环境变量内容入栈
-        let mut env_ptr_vec = Vec::new();
+        let mut envp = Vec::new();
         for env in env.iter() {
             user_sp -= env.len() + 1;
-            env_ptr_vec.push(user_sp);
+            envp.push(user_sp);
             // println!("{:#X}:{}", user_sp, env);
             for (j, c) in env.as_bytes().iter().enumerate() {
                 *translated_refmut(token, (user_sp + j) as *mut u8) = *c;
             }
             *translated_refmut(token, (user_sp + env.len()) as *mut u8) = 0;
         }
-        user_sp -= user_sp % core::mem::size_of::<usize>();
-        env_ptr_vec.push(0);
+        envp.push(0);
+        user_sp -= user_sp % size_of::<usize>();
 
         //存放字符串首址的数组
-        let mut argv_ptr_vec = Vec::new();
+        let mut argvp = Vec::new();
         for arg in argv.iter() {
             // 计算字符串在栈上的地址
             user_sp -= arg.len() + 1;
-            argv_ptr_vec.push(user_sp);
+            argvp.push(user_sp);
             // println!("{:#X}:{}", user_sp, arg);
             for (j, c) in arg.as_bytes().iter().enumerate() {
                 *translated_refmut(token, (user_sp + j) as *mut u8) = *c;
@@ -280,8 +286,8 @@ impl TaskControlBlock {
             // 添加字符串末尾的 null 字符
             *translated_refmut(token, (user_sp + arg.len()) as *mut u8) = 0;
         }
-        user_sp -= user_sp % core::mem::size_of::<usize>(); //以8字节对齐
-        argv_ptr_vec.push(0);
+        user_sp -= user_sp % size_of::<usize>(); //以8字节对齐
+        argvp.push(0);
 
         //需要随便放16个字节，不知道干嘛用的。
         user_sp -= 16;
@@ -293,7 +299,7 @@ impl TaskControlBlock {
 
         // println!("aux:");
         //将auxv放入栈中
-        auxv.push(Aux::new(AuxType::EXECFN, argv_ptr_vec[0]));
+        auxv.push(Aux::new(AuxType::EXECFN, argvp[0]));
         auxv.push(Aux::new(AuxType::NULL, 0));
         for aux in auxv.iter().rev() {
             // println!("{:?}", aux);
@@ -304,19 +310,36 @@ impl TaskControlBlock {
 
         //将环境变量指针数组放入栈中
         // println!("env pointers:");
-        for p in env_ptr_vec.iter().rev() {
-            user_sp -= core::mem::size_of::<usize>();
-            *translated_refmut(token, user_sp as *mut usize) = *p;
-            // println!("{:#X}:{:#X}", user_sp, *p);
+        user_sp -= envp.len() * size_of::<usize>();
+        let envp_base = user_sp;
+        for i in 0..envp.len() {
+            put_data(
+                token,
+                (user_sp + i * size_of::<usize>()) as *mut usize,
+                envp[i],
+            );
         }
+        // for p in env_ptr_vec.iter().rev() {
+        //     user_sp -= size_of::<usize>();
+        //     *translated_refmut(token, user_sp as *mut usize) = *p;
+        //     // println!("{:#X}:{:#X}", user_sp, *p);
+        // }
         // println!("arg pointers:");
-
+        user_sp -= argvp.len() * size_of::<usize>();
+        let argv_base = user_sp;
         //将参数指针数组放入栈中
-        for p in argv_ptr_vec.iter().rev() {
-            user_sp -= size_of::<usize>();
-            *translated_refmut(token, user_sp as *mut usize) = *p;
-            // println!("{:#X}:{:#X} ", user_sp, *p);
+        for i in 0..argvp.len() {
+            put_data(
+                token,
+                (user_sp + i * size_of::<usize>()) as *mut usize,
+                argvp[i],
+            );
         }
+        // for p in argvp.iter().rev() {
+        //     user_sp -= size_of::<usize>();
+        //     *translated_refmut(token, user_sp as *mut usize) = *p;
+        //     // println!("{:#X}:{:#X} ", user_sp, *p);
+        // }
 
         //将argc放入栈中
         user_sp -= size_of::<usize>();
@@ -327,18 +350,16 @@ impl TaskControlBlock {
         //println!("user_sp:{:#X}", user_sp);
 
         //将设置了O_CLOEXEC位的文件描述符关闭
-        inner.fd_table.close_on_exec();
+        task_inner.fd_table.close_on_exec();
 
-        let trap_cx = TrapContext::app_init_context(
-            entry_point,
-            user_sp,
-            self.kernel_stack.top(),
-            trap_handler as usize,
-        );
-        *inner.trap_cx() = trap_cx;
-        // debug!("task.exec.tid={}", self.tid.0);
-        inner.user_heappoint = user_hp;
-        inner.user_heapbottom = user_hp;
+        let mut trap_cx =
+            TrapContext::app_init_context(entry_point, user_sp, self.kernel_stack.top());
+        trap_cx.gp.x[10] = argv.len();
+        trap_cx.gp.x[11] = argv_base;
+        trap_cx.gp.x[12] = envp_base;
+        *task_inner.trap_cx() = trap_cx;
+        task_inner.user_heappoint = user_hp;
+        task_inner.user_heapbottom = user_hp;
 
         //创建进程完整命令文件/proc/<pid>/cmdline
         create_cmdline(self.pid, argv);
@@ -356,7 +377,7 @@ impl TaskControlBlock {
 
         let tid_handle = tid_alloc();
         let kernel_stack = KernelStack::new(&tid_handle);
-        let (kernel_stack_bottom, kernel_stack_top) = kernel_stack.pos();
+        let kernel_stack_top = kernel_stack.top();
 
         // 检查是否共享虚拟内存
         let memory_set = if flags.contains(CloneFlags::CLONE_VM) {
@@ -366,13 +387,6 @@ impl TaskControlBlock {
                 &parent_inner.memory_set,
             )))
         };
-        // 无论如何都要插入内核栈
-        memory_set.insert_framed_area(
-            kernel_stack_bottom.into(),
-            kernel_stack_top.into(),
-            MapPermission::R | MapPermission::W,
-            MapAreaType::Stack,
-        );
         // 检查是否共享文件系统信息
         //filesystem information.  This includes the root
         //of the filesystem, the current working directory, and the umask
@@ -388,10 +402,10 @@ impl TaskControlBlock {
             Arc::new(FdTable::from_another(&parent_inner.fd_table))
         };
         // 检查是否共享信号处理程序表
-        let sig_pending = if flags.contains(CloneFlags::CLONE_SIGHAND) {
-            Arc::clone(&parent_inner.sig_pending)
+        let sig_table = if flags.contains(CloneFlags::CLONE_SIGHAND) {
+            Arc::clone(&parent_inner.sig_table)
         } else {
-            Arc::new(SigPending::from_another(&parent_inner.sig_pending))
+            Arc::new(SigTable::from_another(&parent_inner.sig_table))
         };
         // 检查是否需要设置 parent_tid
         if flags.contains(CloneFlags::CLONE_PARENT_SETTID) {
@@ -408,16 +422,19 @@ impl TaskControlBlock {
         } else {
             0
         };
-        let (pid, ppid, timer);
+        let (pid, ppid, timer, sig_pending, sig_mask);
+        sig_pending = SigSet::empty();
         // 检查是否创建线程
         if flags.contains(CloneFlags::CLONE_THREAD) {
             pid = self.pid;
             ppid = self.ppid;
             timer = Arc::clone(&parent_inner.timer);
+            sig_mask = SigSet::empty();
         } else {
             pid = tid_handle.0;
             ppid = self.pid;
             timer = Arc::new(Timer::new());
+            sig_mask = parent_inner.sig_mask.clone();
         }
         let child = Arc::new(TaskControlBlock {
             tid: tid_handle,
@@ -428,10 +445,9 @@ impl TaskControlBlock {
                 trap_cx_ppn: 0.into(),
                 trap_cx_bottom: 0,
                 user_stack_top: 0,
-                task_cx: TaskContext::goto_trap_return(kernel_stack_top),
+                task_cx: TaskContext::goto_trap_loop(kernel_stack_top),
                 task_status: TaskStatus::Ready,
                 memory_set,
-                shms: parent_inner.shms.clone(),
                 fd_table,
                 fs_info,
                 time_data: TimeData::new(),
@@ -439,8 +455,11 @@ impl TaskControlBlock {
                 user_heapbottom: parent_inner.user_heapbottom,
                 set_child_tid,
                 clear_child_tid,
+                sig_table,
+                sig_mask,
                 sig_pending,
                 timer,
+                robust_list: RobustList::default(),
             }),
         });
 
@@ -459,11 +478,12 @@ impl TaskControlBlock {
             // fork
             child_inner.clone_user_res(&parent_inner);
             // for child process, fork returns 0
-            child_inner.trap_cx().x[10] = 0;
+            child_inner.trap_cx().gp.x[10] = 0;
         }
 
         let trap_cx = child_inner.trap_cx();
         trap_cx.kernel_sp = kernel_stack_top;
+
         if stack != 0 {
             // 移除分配的stack
             let ustack = child_inner.user_stack_top;
@@ -471,24 +491,21 @@ impl TaskControlBlock {
                 .memory_set
                 .remove_area_with_start_vpn(VirtAddr::from(ustack - USER_STACK_SIZE).floor());
             child_inner.user_stack_top = 0;
-            // trap_cx.set_sp(ustack);
             // 设置运行的起始地址和参数以及stack
             let token = parent_inner.user_token();
-            let entry_point = *translated_ref(token, stack as *const usize);
-            let arg = {
-                let arg_addr = stack + core::mem::size_of::<usize>();
-                *translated_ref(token, arg_addr as *const usize)
-            };
+            let entry_point = get_data(token, stack as *const usize);
+            let arg = get_data(token, (stack + 8) as *const usize);
             // sepc/entry
+            // debug!("[new thread] entry_point:{:#x}", entry_point);
             trap_cx.sepc = entry_point;
-            //sp
-            trap_cx.x[2] = stack;
             //a0
-            trap_cx.x[10] = arg;
+            trap_cx.gp.x[10] = arg;
+            //sp
+            trap_cx.set_sp(stack);
         }
         if flags.contains(CloneFlags::CLONE_SETTLS) {
             // tp
-            trap_cx.x[4] = tls;
+            trap_cx.gp.x[4] = tls;
         }
         // CLONE_CHILD_SETTID
         if flags.contains(CloneFlags::CLONE_CHILD_SETTID) {
@@ -497,19 +514,6 @@ impl TaskControlBlock {
         }
 
         if flags.contains(CloneFlags::SIGCHLD) {
-            //子进程映射共享内存
-            parent_inner.shms.iter().for_each(|x| {
-                child_inner.memory_set.map_given_frames(
-                    MapArea::new(
-                        VirtAddr::from(x.start),
-                        VirtAddr::from(x.end),
-                        MapType::Framed,
-                        MapPermission::all(),
-                        MapAreaType::Shm,
-                    ),
-                    x.mem.trackers.clone(),
-                );
-            });
             //创建进程专属目录，路径为/proc/<pid>
             create_proc_dir_and_file(pid, ppid);
         }
@@ -572,21 +576,20 @@ impl TaskControlBlock {
     }
 
     pub fn check_timer(&self) {
-        let inner = self.inner_lock();
-        let now_timeval = TimeVal::now();
-        let timer_inner = inner.timer.get_mut();
-        if timer_inner.if_first {
+        let task_inner = self.inner_lock();
+        let timer = task_inner.timer.clone();
+        let now = TimeVal::now();
+        if timer.first_trigger() {
             //首次触发
-            if now_timeval > timer_inner.last_time + timer_inner.timer.it_value {
-                inner.sig_pending.get_mut().pending |= SigSet::SIGALRM;
-                timer_inner.if_first = false;
-                timer_inner.last_time = now_timeval;
-            }
-        } else if timer_inner.timer.it_interval != TimeVal::new(0, 0) {
+            if now > timer.last_time() + timer.timer().it_value {}
+            // task_inner.sig_pending |= SigSet::SIGALRM;
+            timer.set_first_trigger(false);
+            timer.set_last_time(now);
+        } else {
             //间隔触发
-            if now_timeval > timer_inner.last_time + timer_inner.timer.it_interval {
-                inner.sig_pending.get_mut().pending |= SigSet::SIGALRM;
-                timer_inner.last_time = now_timeval;
+            if now > timer.last_time() + timer.timer().it_interval {
+                // task_inner.sig_pending |= SigSet::SIGALRM;
+                timer.set_last_time(now);
             }
         }
     }
@@ -598,4 +601,5 @@ pub enum TaskStatus {
     Running,
     Zombie,
     Blocked,
+    Stopped,
 }

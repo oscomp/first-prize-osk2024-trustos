@@ -15,10 +15,10 @@ mod context;
 
 use crate::{
     mm::{VirtAddr, VirtPageNum},
-    signal::{check_if_any_sig_for_current_task, ready_to_handle_signal},
+    signal::{check_if_any_sig_for_current_task, handle_signal},
     syscall::{syscall, Syscall},
     task::{
-        current_task, current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next,
+        current_task, current_trap_cx, exit_current, handle_exit, suspend_current_and_run_next,
     },
     timer::{check_timer, set_next_trigger},
     utils::{backtrace, hart_id},
@@ -32,6 +32,8 @@ use riscv::register::{
     sstatus::{self, FS},
     stval, stvec,
 };
+
+pub use context::*;
 
 global_asm!(include_str!("trap.S"));
 
@@ -85,15 +87,22 @@ pub fn trap_handler() {
             // jump to next instruction anyway
             let mut cx = current_trap_cx();
             cx.sepc += 4;
-            let syscall_id = Syscall::from(cx.x[17]);
+            let syscall_id = Syscall::from(cx.gp.x[17]);
             // get system call return value
             let result = syscall(
-                cx.x[17],
-                [cx.x[10], cx.x[11], cx.x[12], cx.x[13], cx.x[14], cx.x[15]],
+                cx.gp.x[17],
+                [
+                    cx.gp.x[10],
+                    cx.gp.x[11],
+                    cx.gp.x[12],
+                    cx.gp.x[13],
+                    cx.gp.x[14],
+                    cx.gp.x[15],
+                ],
             );
             // cx is changed during sys_exec, so we have to call it again
             cx = current_trap_cx();
-            cx.x[10] = match result {
+            cx.gp.x[10] = match result {
                 Ok(res) => res,
                 Err(errno) => -(errno as isize) as usize,
             };
@@ -128,7 +137,7 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
                 // page fault exit code
-                exit_current_and_run_next(-2);
+                exit_current(-2);
             }
         }
         Trap::Exception(Exception::StoreFault)
@@ -143,7 +152,7 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
             // page fault exit code
-            exit_current_and_run_next(-2);
+            exit_current(-2);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
             backtrace();
@@ -153,7 +162,7 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
             // illegal instruction exit code
-            exit_current_and_run_next(-3);
+            exit_current(-3);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
             // 检查futex操作是否超时
@@ -180,11 +189,8 @@ pub fn trap_handler() {
         }
     }
     //检查定时器
+    // TODO(ZMY) 这玩意有什么用? SIG_ALRM默认执行exit函数
     current_task().unwrap().check_timer();
-    //检查信号
-    if let Some(signo) = check_if_any_sig_for_current_task() {
-        ready_to_handle_signal(signo);
-    }
 
     //记录内核空间花费CPU时间，同时准备用户空间花费CPU时间
     current_task()
@@ -192,9 +198,15 @@ pub fn trap_handler() {
         .inner_lock()
         .time_data
         .update_stime();
+}
 
-    // debug!("in trap handler,return to user space");
-    // 手动内联trap_return
+#[no_mangle]
+pub fn trap_return() {
+    //检查信号
+    if let Some(signo) = check_if_any_sig_for_current_task() {
+        handle_signal(signo);
+    }
+
     set_user_trap_entry();
     extern "C" {
         #[allow(improper_ctypes)]
@@ -207,21 +219,16 @@ pub fn trap_handler() {
     }
 }
 
-pub use context::TrapContext;
-
 #[no_mangle]
-/// set the new addr of __restore asm function in TRAMPOLINE page,
-/// set the reg a0 = trap_cx_ptr, reg a1 = phy addr of usr page table,
-/// finally, jump to new addr of __restore asm function
-pub fn trap_return_for_new_task_once() {
-    set_user_trap_entry();
-    extern "C" {
-        #[allow(improper_ctypes)]
-        fn __return_to_user_for_new_task_once(cx: *mut TrapContext);
+pub fn trap_loop() -> ! {
+    loop {
+        trap_return();
+        trap_handler();
+        if current_task().unwrap().inner_lock().is_zombie() {
+            break;
+        }
     }
-    unsafe {
-        __return_to_user_for_new_task_once(current_trap_cx());
-    }
+    handle_exit();
 }
 
 #[no_mangle]

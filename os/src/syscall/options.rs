@@ -1,10 +1,6 @@
 /// 存放系统调用的各种Option
-use crate::mm::{FrameTracker, MapPermission};
-use alloc::collections::BTreeMap;
-use alloc::sync::Arc;
-use alloc::vec::Vec;
+use crate::mm::MapPermission;
 use num_enum::FromPrimitive;
-use spin::Mutex;
 
 bitflags! {
     pub struct WaitOption:u8{
@@ -187,25 +183,6 @@ pub enum IoctlCommand {
     Default = 0,
 }
 
-#[repr(isize)]
-#[allow(non_camel_case_types)]
-#[derive(Debug, PartialEq, FromPrimitive)]
-pub enum SyslogType {
-    SYSLOG_ACTION_CLOSE = 0,
-    SYSLOG_ACTION_OPEN = 1,
-    SYSLOG_ACTION_READ = 2,
-    SYSLOG_ACTION_READ_ALL = 3,
-    SYSLOG_ACTION_READ_CLEAR = 4,
-    SYSLOG_ACTION_CLEAR = 5,
-    SYSLOG_ACTION_CONSOLE_OFF = 6,
-    SYSLOG_ACTION_CONSOLE_ON = 7,
-    SYSLOG_ACTION_CONSOLE_LEVER = 8,
-    SYSLOG_ACTION_SIZE_UNREAD = 9,
-    SYSLOG_ACTION_SIZE_BUFFER = 10,
-    #[num_enum(default)]
-    Default = -1,
-}
-
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct PollFd {
@@ -263,60 +240,6 @@ impl Utsname {
     }
 }
 
-pub struct SharedMemory {
-    pub trackers: Vec<Arc<FrameTracker>>,
-    pub deleted: Mutex<bool>,
-}
-
-impl SharedMemory {
-    pub const fn new(trackers: Vec<Arc<FrameTracker>>) -> Self {
-        Self {
-            trackers,
-            deleted: Mutex::new(false),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct MapedSharedMemory {
-    pub key: usize,
-    pub mem: Arc<SharedMemory>,
-    pub start: usize,
-    pub end: usize,
-    pub size: usize,
-}
-
-impl Drop for MapedSharedMemory {
-    fn drop(&mut self) {
-        // self.mem.trackers.remove(self.key);
-        if Arc::strong_count(&self.mem) == 1 && *self.mem.deleted.lock() == true {
-            SHARED_MEMORY.lock().remove(&self.key);
-        }
-    }
-}
-
-pub static SHARED_MEMORY: Mutex<BTreeMap<usize, Arc<SharedMemory>>> = Mutex::new(BTreeMap::new());
-
-bitflags! {
-    pub struct ShmGetFlags: i32 {
-        ///
-        const SHM_R = 0o400;
-        ///
-        const SHM_W = 0o200;
-        /// Create a new segment. If this flag is not used, then shmget() will find the segment associated with key and check to see if the user has permission to access the segment.
-        const IPC_CREAT = 0o1000;
-        /// This flag is used with IPC_CREAT to ensure that this call creates the segment.  If the segment already exists, the call fails.
-        const IPC_EXCL = 0o2000;
-        /// segment will use huge TLB pages
-        const SHM_HUGETLB = 0o4000;
-        /// don't check for reservations
-        const SHM_NORESERVE = 0o10000;
-    }
-}
-
-pub const AT_FDCWD: isize = -100;
-pub const AT_REMOVEDIR: u32 = 0x200;
-
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct Iovec {
@@ -328,25 +251,30 @@ pub struct Iovec {
 unsafe impl Send for Iovec {}
 unsafe impl Sync for Iovec {}
 
-// utime
-pub const UTIME_NOW: usize = (1 << 30) - 1;
-pub const UTIME_OMIT: usize = (1 << 30) - 2;
-
-//  fcntl
-pub const F_DUPFD: usize = 0;
-pub const F_DUPFD_CLOEXEC: usize = 1030;
-pub const F_GETFD: usize = 1;
-pub const F_SETFD: usize = 2;
-pub const F_GETFL: usize = 3;
-pub const F_SETFL: usize = 4;
-pub const FD_CLOEXEC: usize = 1;
-
 // rlimit
-
 #[allow(unused)]
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct RLimit {
     pub rlim_cur: usize, /* Soft limit */
     pub rlim_max: usize, /* Hard limit (ceiling for rlim_cur) */
+}
+
+bitflags! {
+    pub struct SignalMaskFlag: u32 {
+        const SIG_BLOCK = 0;
+        const SIG_UNBLOCK = 1;
+        const SIG_SETMASK = 2;
+    }
+}
+
+bitflags! {
+    pub struct FcntlCmd:usize{
+        const F_DUPFD = 0;
+        const F_GETFD = 1;
+        const F_SETFD = 2;
+        const F_GETFL = 3;
+        const F_SETFL= 4;
+        const F_DUPFD_CLOEXEC= 1030;
+    }
 }
