@@ -6,7 +6,8 @@ use super::{
 };
 use crate::{
     config::mm::{
-        PAGE_SIZE, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP, USER_TRAP_CONTEXT_TOP,
+        PAGE_SIZE, PRE_ALLOC_PAGES, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP,
+        USER_TRAP_CONTEXT_TOP,
     },
     fs::{FdTable, FsInfo},
     mm::{
@@ -120,10 +121,12 @@ impl TaskControlBlockInner {
             .iter_mut()
             .find(|area| area.area_type == MapAreaType::Stack)
             .unwrap();
-        let vpn = (area.vpn_range.range().1 .0 - 1).into();
-        let pte = page_table.translate(vpn);
-        if pte.is_none() || !pte.unwrap().is_valid() {
-            area.map_one(&mut page_table, vpn);
+        for i in 1..=PRE_ALLOC_PAGES {
+            let vpn = (area.vpn_range.range().1 .0 - i).into();
+            let pte: Option<crate::mm::PageTableEntry> = page_table.translate(vpn);
+            if pte.is_none() || !pte.unwrap().is_valid() {
+                area.map_one(&mut page_table, vpn);
+            }
         }
     }
     pub fn clone_user_res(&mut self, another: &TaskControlBlockInner) {
