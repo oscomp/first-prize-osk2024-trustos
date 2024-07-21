@@ -205,9 +205,9 @@ pub fn sys_close(fd: usize) -> SyscallRet {
 pub fn sys_getcwd(buf: *const u8, size: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
 
-    let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, size).unwrap());
+    let mut buffer =
+        UserBuffer::new(safe_translated_byte_buffer(inner.memory_set.clone(), buf, size).unwrap());
     buffer.write(inner.fs_info.cwd_as_bytes());
     Ok(buf as usize)
 }

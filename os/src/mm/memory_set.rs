@@ -1,6 +1,6 @@
 //! Implementation of [`MapArea`] and [`MemorySet`].
 use super::{
-    brk_page_fault, cow_page_fault, frame_alloc, mmap_read_page_fault, mmap_write_page_fault,
+    cow_page_fault, frame_alloc, lazy_page_fault, mmap_read_page_fault, mmap_write_page_fault,
     translated_byte_buffer, FrameTracker, MapArea, MapAreaType, MapPermission, MapType, PTEFlags,
     PageTable, PageTableEntry, PhysAddr, UserBuffer, VPNRange, VirtAddr, VirtPageNum, GROUP_SHARE,
 };
@@ -165,8 +165,23 @@ impl MemorySet {
             .insert_framed_area_with_hint(hint, size, map_perm, area_type)
     }
     #[inline(always)]
+    pub fn lazy_insert_framed_area_with_hint(
+        &self,
+        hint: usize,
+        size: usize,
+        map_perm: MapPermission,
+        area_type: MapAreaType,
+    ) -> (usize, usize) {
+        self.get_mut()
+            .lazy_insert_framed_area_with_hint(hint, size, map_perm, area_type)
+    }
+    #[inline(always)]
     pub fn clone_area(&self, start_vpn: VirtPageNum, another: &MemorySetInner) {
         self.get_mut().clone_area(start_vpn, another)
+    }
+    #[inline(always)]
+    pub fn lazy_clone_area(&self, start_vpn: VirtPageNum, another: &MemorySetInner) {
+        self.get_mut().lazy_clone_area(start_vpn, another)
     }
     pub fn translate_va(&self, va: VirtAddr) -> Option<PhysAddr> {
         self.get_mut().page_table.translate_va(va)
@@ -214,6 +229,21 @@ impl MemorySetInner {
             None,
         );
     }
+    pub fn lazy_insert_framed_area(
+        &mut self,
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+        permission: MapPermission,
+        area_type: MapAreaType,
+    ) {
+        self.push_lazily(MapArea::new(
+            start_va,
+            end_va,
+            MapType::Framed,
+            permission,
+            area_type,
+        ));
+    }
     ///Remove `MapArea` that starts with `start_vpn`
     pub fn remove_area_with_start_vpn(&mut self, start_vpn: VirtPageNum) {
         if let Some((idx, area)) = self
@@ -245,6 +275,23 @@ impl MemorySetInner {
         );
         (start_va, end_va)
     }
+    pub fn lazy_insert_framed_area_with_hint(
+        &mut self,
+        hint: usize,
+        size: usize,
+        map_perm: MapPermission,
+        area_type: MapAreaType,
+    ) -> (usize, usize) {
+        let start_va = self.find_insert_addr(hint, size);
+        let end_va = start_va + size;
+        self.lazy_insert_framed_area(
+            VirtAddr::from(start_va),
+            VirtAddr::from(end_va),
+            map_perm,
+            area_type,
+        );
+        (start_va, end_va)
+    }
     pub fn find_insert_addr(&self, hint: usize, size: usize) -> usize {
         let end_vpn = VirtAddr::from(hint).floor();
         let start_vpn = VirtAddr::from(hint - size).floor();
@@ -265,12 +312,51 @@ impl MemorySetInner {
             .find(|area| area.vpn_range.start() == start_vpn)
         {
             for vpn in area.vpn_range {
-                let src_ppn = another.page_table.translate(vpn).unwrap().ppn();
+                let src_ppn = another.translate(vpn).unwrap().ppn();
                 let dst_ppn = self.translate(vpn).unwrap().ppn();
                 dst_ppn
                     .bytes_array_mut()
                     .copy_from_slice(src_ppn.bytes_array());
             }
+        }
+    }
+    /// 复制懒分配的逻辑段内容
+    pub fn lazy_clone_area(&mut self, start_vpn: VirtPageNum, another: &MemorySetInner) {
+        let another_area = if let Some(area) = another
+            .areas
+            .iter()
+            .find(|area| area.vpn_range.start() == start_vpn)
+        {
+            area
+        } else {
+            return;
+        };
+        let this_area = if let Some(area) = self
+            .areas
+            .iter_mut()
+            .find(|area| area.vpn_range.start() == start_vpn)
+        {
+            area
+        } else {
+            return;
+        };
+        let mut this_page_table = PageTable::from_token(self.page_table.token());
+        let another_page_table = PageTable::from_token(another.page_table.token());
+        for vpn in another_area.vpn_range {
+            let src_pte = another_page_table.translate(vpn);
+            if src_pte.is_none() || !src_pte.unwrap().is_valid() {
+                continue;
+            }
+            let src_ppn = src_pte.unwrap().ppn();
+
+            let dst_pte = this_page_table.translate(vpn);
+            if dst_pte.is_none() || !dst_pte.unwrap().is_valid() {
+                this_area.map_one(&mut this_page_table, vpn);
+            }
+            let dst_ppn = this_page_table.translate(vpn).unwrap().ppn();
+            dst_ppn
+                .bytes_array_mut()
+                .copy_from_slice(src_ppn.bytes_array());
         }
     }
     fn load_dl_interp_if_needed(&mut self, elf: &ElfFile) -> Option<usize> {
@@ -489,13 +575,15 @@ impl MemorySetInner {
         if let Some(area) = self
             .areas
             .iter_mut()
-            .filter(|area| area.area_type == MapAreaType::Brk)
+            .filter(|area| {
+                area.area_type == MapAreaType::Brk || area.area_type == MapAreaType::Stack
+            })
             .find(|area| {
                 let (start, end) = area.vpn_range.range();
                 start <= vpn && vpn < end
             })
         {
-            brk_page_fault(vpn.into(), &mut self.page_table, area);
+            lazy_page_fault(vpn.into(), &mut self.page_table, area);
             return true;
         }
         false

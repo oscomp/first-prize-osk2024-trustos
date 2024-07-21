@@ -71,7 +71,7 @@ pub fn mmap_read_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut 
     }
 }
 ///堆触发的lazy alocation，必是写
-pub fn brk_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapArea) {
+pub fn lazy_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapArea) {
     // 仅映射页面
     vma.map_one(page_table, va.into());
 }
