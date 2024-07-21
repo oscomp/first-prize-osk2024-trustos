@@ -241,11 +241,17 @@ impl TaskControlBlock {
         let token = memory_set.token();
 
         task_inner.time_data.clear();
-
+        if task_inner.clear_child_tid != 0 {
+            put_data(token, task_inner.clear_child_tid as *mut u32, 0);
+        }
         // substitute memory_set
         task_inner.memory_set = Arc::new(MemorySet::new(memory_set));
         // 重新分配用户资源
         task_inner.alloc_user_res();
+        task_inner.sig_table = Arc::new(SigTable::new());
+        let fd_table = Arc::new(FdTable::from_another(&task_inner.fd_table));
+        task_inner.fd_table = fd_table;
+        task_inner.fd_table.close_on_exec();
 
         let mut user_sp = task_inner.user_stack_top;
 
