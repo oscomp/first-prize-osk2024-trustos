@@ -108,7 +108,7 @@ pub fn trap_handler() {
             };
             // handle error
             match result {
-                Ok(ret) => trace!("[syscall ret] {:?} ret = {}", syscall_id, ret),
+                Ok(ret) => debug!("[syscall ret] {:?} ret = {}", syscall_id, ret),
                 Err(errno) => debug!("[syscall ret] {:?} ret = {}", syscall_id, errno.str()),
             }
         }
@@ -204,6 +204,7 @@ pub fn trap_handler() {
 pub fn trap_return() {
     //检查信号
     if let Some(signo) = check_if_any_sig_for_current_task() {
+        debug!("found signo in trap_return");
         handle_signal(signo);
     }
 
@@ -223,6 +224,9 @@ pub fn trap_return() {
 pub fn trap_loop() -> ! {
     loop {
         trap_return();
+        if current_task().unwrap().inner_lock().is_zombie() {
+            break;
+        }
         trap_handler();
         if current_task().unwrap().inner_lock().is_zombie() {
             break;

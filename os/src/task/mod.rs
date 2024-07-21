@@ -145,6 +145,7 @@ pub fn exit_current(exit_code: i32) -> SyscallRet {
             if tasks.iter().all(|task| task.inner_lock().is_zombie()) {
                 drop(thread_group);
                 send_signal_to_thread_group(task.ppid(), SigSet::SIGCHLD);
+                debug!("wake up parent {}", task.ppid());
                 wakeup_parent(task.ppid());
                 let inner = task.inner_lock();
                 inner.memory_set.recycle_data_pages()?;
@@ -163,6 +164,7 @@ pub fn exit_current(exit_code: i32) -> SyscallRet {
 
 pub fn handle_exit() -> ! {
     let task = take_current_task();
+    //debug!("exit in hanle_exit");
     drop(task);
     let mut _unused = TaskContext::zero_init();
     schedule(&mut _unused as *mut _);

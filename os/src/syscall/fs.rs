@@ -57,7 +57,7 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let inner = task.inner_lock();
     let memory_set = inner.memory_set.clone();
 
-    // debug!("[sys_read] fd is {}, len is {}", fd, len);
+    debug!("[sys_read] fd is {}, len is {}", fd, len);
 
     if fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
@@ -1089,17 +1089,17 @@ pub fn sys_pselect6(
     let nfds = min(nfds, inner.fd_table.get_soft_limit());
 
     let mut using_readfds = if readfds != 0 {
-        get_data(token, readfds as *mut usize)
+        get_data(token, readfds as *mut u128)
     } else {
         0
     };
     let mut using_writefds = if writefds != 0 {
-        get_data(token, writefds as *mut usize)
+        get_data(token, writefds as *mut u128)
     } else {
         0
     };
     let mut using_exceptfds = if exceptfds != 0 {
-        get_data(token, exceptfds as *mut usize)
+        get_data(token, exceptfds as *mut u128)
     } else {
         0
     };
@@ -1118,13 +1118,6 @@ pub fn sys_pselect6(
 
         (timespec.tv_sec * 1000000000 + timespec.tv_nsec) as isize
     };
-    if waittime == 0 {
-        if sigmask != 0 {
-            // *inner.sig_table.blocked_mut() = old_mask;
-            inner.sig_mask = old_mask;
-        }
-        return Ok(0);
-    }
 
     let begin = get_time_ms() * 1000000;
 
@@ -1144,17 +1137,13 @@ pub fn sys_pselect6(
                     if let Some(file) = &inner.fd_table.try_get(i) {
                         let file: Arc<dyn File> = file.any();
                         let event = file.poll(PollEvents::IN);
-                        if event.contains(PollEvents::IN) {
-                            using_readfds |= 1 << i;
-                            num += 1;
-                        } else {
+                        if !event.contains(PollEvents::IN) {
                             using_readfds &= !(1 << i);
                         }
+                        num += 1;
                     } else {
                         using_readfds &= !(1 << i);
                     }
-                } else {
-                    using_readfds &= !(1 << i);
                 }
             }
         }
@@ -1166,17 +1155,13 @@ pub fn sys_pselect6(
                     if let Some(file) = &inner.fd_table.try_get(i) {
                         let file: Arc<dyn File> = file.any();
                         let event = file.poll(PollEvents::OUT);
-                        if event.contains(PollEvents::OUT) {
-                            using_writefds |= 1 << i;
-                            num += 1;
-                        } else {
+                        if !event.contains(PollEvents::OUT) {
                             using_writefds &= !(1 << i);
                         }
+                        num += 1;
                     } else {
                         using_writefds &= !(1 << i);
                     }
-                } else {
-                    using_writefds &= !(1 << i);
                 }
             }
         }
@@ -1188,31 +1173,31 @@ pub fn sys_pselect6(
                     if let Some(file) = &inner.fd_table.try_get(i) {
                         let file: Arc<dyn File> = file.any();
                         let event = file.poll(PollEvents::ERR);
-                        if event.contains(PollEvents::ERR) {
-                            using_exceptfds |= 1 << i;
-                            num += 1;
-                        } else {
+                        if !event.contains(PollEvents::ERR) {
                             using_exceptfds &= !(1 << i);
                         }
+                        num += 1;
                     } else {
                         using_exceptfds &= !(1 << i);
                     }
-                } else {
-                    using_exceptfds &= !(1 << i);
                 }
             }
         }
 
-        //如果有响应了则返回
-        if num > 0 {
-            if using_readfds != 0 {
-                put_data(token, readfds as *mut usize, using_readfds);
+        //如果有响应了则返回,或者如果时间是0，0，也需要返回结果
+        if num > 0 || waittime == 0 {
+            debug!(
+                "[sys_pselect6] ret for num:{},waittime:{} with readfds:{:x}, writefds:{:x}, exceptfds:{:x}",
+                num,waittime,using_readfds, using_writefds, using_exceptfds
+            );
+            if readfds != 0 {
+                put_data(token, readfds as *mut u128, using_readfds);
             }
-            if using_writefds != 0 {
-                put_data(token, writefds as *mut usize, using_writefds);
+            if writefds != 0 {
+                put_data(token, writefds as *mut u128, using_writefds);
             }
-            if using_exceptfds != 0 {
-                put_data(token, exceptfds as *mut usize, using_exceptfds);
+            if exceptfds != 0 {
+                put_data(token, exceptfds as *mut u128, using_exceptfds);
             }
             if sigmask != 0 {
                 // inner.sig_pending.get_mut().blocked = old_mask;
@@ -1224,6 +1209,10 @@ pub fn sys_pselect6(
 
         //或者时间到了也可以返回
         if waittime > 0 && get_time_ms() * 1000000 - begin >= waittime as usize {
+            debug!(
+                "[sys_pselect6] ret for timeout with readfds:{:x}, writefds:{:x}, exceptfds:{:x}",
+                using_readfds, using_writefds, using_exceptfds
+            );
             if sigmask != 0 {
                 // inner.sig_pending.get_mut().blocked = old_mask;
                 // *inner.sig_table.blocked_mut() = old_mask;

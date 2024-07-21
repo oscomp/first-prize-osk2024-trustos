@@ -12,7 +12,7 @@ pub use signal::*;
 use crate::{
     config::mm::USER_STACK_SIZE,
     mm::{get_data, put_data},
-    task::{current_task, TaskControlBlock, THREAD_GROUP, TID_TO_TASK},
+    task::{current_task, exit_current, handle_exit, TaskControlBlock, THREAD_GROUP, TID_TO_TASK},
     trap::{MachineContext, UserContext},
     utils::{SysErrNo, SyscallRet},
 };
@@ -53,9 +53,14 @@ pub fn handle_signal(signo: usize) {
                 "sa_handler:{:#x},exit_current actually",
                 sig_action.act.sa_handler
             );
-            let handler: fn(i32) =
-                unsafe { core::mem::transmute(sig_action.act.sa_handler as *const ()) };
-            handler(signo as i32);
+            if sig_action.act.sa_handler == exit_current as usize {
+                exit_current(signo as i32);
+            } /*
+              let handler: fn(i32) =
+                  unsafe { core::mem::transmute(sig_action.act.sa_handler as *const ()) };
+              debug!("ready to get into handler with {}", signo as i32);
+              handler(signo as i32);
+              */
         }
     }
 }

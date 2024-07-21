@@ -14,6 +14,7 @@ use crate::signal::{check_if_any_sig_for_current_task, handle_signal};
 use crate::task::suspend_current_and_run_next;
 use crate::{mm::UserBuffer, syscall::PollEvents, utils::SyscallRet};
 use alloc::sync::{Arc, Weak};
+use log::debug;
 use spin::{Mutex, MutexGuard};
 
 /// ### 管道
@@ -250,13 +251,13 @@ impl File for Pipe {
     }
     fn poll(&self, events: PollEvents) -> PollEvents {
         let mut revents = PollEvents::empty();
-        if events.contains(PollEvents::IN) && self.readable {
+        let ring_buffer = self.inner_lock();
+        if events.contains(PollEvents::IN) && self.readable && ring_buffer.available_read() > 0 {
             revents |= PollEvents::IN;
         }
-        if events.contains(PollEvents::OUT) && self.writable {
+        if events.contains(PollEvents::OUT) && self.writable && ring_buffer.available_write() > 0 {
             revents |= PollEvents::OUT;
         }
-        let ring_buffer = self.inner_lock();
         if self.readable && ring_buffer.all_write_ends_closed() {
             revents |= PollEvents::HUP;
         }

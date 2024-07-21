@@ -57,6 +57,7 @@ pub fn futex_wake_up(pa: PhysAddr, max_num: i32) -> usize {
             }
             if let Some(weak_task) = queue.pop_front() {
                 if let Some(task) = weak_task.upgrade() {
+                    //debug!("wake up task {}", task.pid());
                     wakeup_futex_task(task);
                     num += 1;
                 }
