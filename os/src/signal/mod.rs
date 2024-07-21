@@ -55,12 +55,16 @@ pub fn handle_signal(signo: usize) {
             );
             if sig_action.act.sa_handler == exit_current as usize {
                 exit_current(signo as i32);
-            } /*
-              let handler: fn(i32) =
-                  unsafe { core::mem::transmute(sig_action.act.sa_handler as *const ()) };
-              debug!("ready to get into handler with {}", signo as i32);
-              handler(signo as i32);
-              */
+            } else {
+                panic!("other Smode handler not implement!");
+            }
+            //用fn(i32)传入的参数会被改变
+            /*
+            let handler: fn(i32) =
+                unsafe { core::mem::transmute(sig_action.act.sa_handler as *const ()) };
+            debug!("ready to get into handler with {}", signo as i32);
+            handler(signo as i32);
+            */
         }
     }
 }

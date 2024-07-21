@@ -1,4 +1,4 @@
-use super::File;
+use super::{File, Kstat, StMode};
 use crate::utils::{SysErrNo, SyscallRet};
 use crate::{
     mm::UserBuffer, sbi::console_getchar, syscall::PollEvents, task::suspend_current_and_run_next,
@@ -89,6 +89,13 @@ impl File for Stdin {
         }
         revents
     }
+    fn fstat(&self) -> Kstat {
+        Kstat {
+            st_mode: StMode::FCHR.bits(),
+            st_nlink: 1,
+            ..Kstat::default()
+        }
+    }
 }
 
 impl File for Stdout {
@@ -113,5 +120,12 @@ impl File for Stdout {
             revents |= PollEvents::OUT;
         }
         revents
+    }
+    fn fstat(&self) -> Kstat {
+        Kstat {
+            st_mode: StMode::FCHR.bits(),
+            st_nlink: 1,
+            ..Kstat::default()
+        }
     }
 }

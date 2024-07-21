@@ -6,12 +6,13 @@ use super::{
 };
 use crate::{
     config::mm::{
-        PAGE_SIZE, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP, USER_TRAP_CONTEXT_TOP,
+        PAGE_SIZE, PRE_ALLOC_PAGES, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP,
+        USER_TRAP_CONTEXT_TOP,
     },
     fs::{FdTable, FsInfo},
     mm::{
         flush_tlb, get_data, put_data, translated_refmut, MapAreaType, MapPermission, MemorySet,
-        MemorySetInner, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
+        MemorySetInner, PageTable, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
     },
     signal::{SigSet, SigTable},
     syscall::CloneFlags,
@@ -22,6 +23,7 @@ use crate::{
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
+use log::debug;
 use spin::{Mutex, MutexGuard};
 
 #[derive(Clone, Copy, Debug)]
@@ -89,7 +91,7 @@ impl TaskControlBlockInner {
         self.sig_table.is_exited()
     }
     pub fn alloc_user_res(&mut self) {
-        let (_, ustack_top) = self.memory_set.insert_framed_area_with_hint(
+        let (_, ustack_top) = self.memory_set.lazy_insert_framed_area_with_hint(
             USER_STACK_TOP,
             USER_STACK_SIZE,
             MapPermission::R | MapPermission::W | MapPermission::U,
@@ -109,10 +111,27 @@ impl TaskControlBlockInner {
         self.user_stack_top = ustack_top;
         self.trap_cx_ppn = trap_cx_ppn;
         self.trap_cx_bottom = trap_cx_bottom;
+
+        //预先为栈顶分配几页，用于环境变量等初始数据
+        let mut page_table = PageTable::from_token(self.memory_set.get_ref().page_table.token());
+        let area = self
+            .memory_set
+            .get_mut()
+            .areas
+            .iter_mut()
+            .find(|area| area.area_type == MapAreaType::Stack)
+            .unwrap();
+        for i in 1..=PRE_ALLOC_PAGES {
+            let vpn = (area.vpn_range.range().1 .0 - i).into();
+            let pte: Option<crate::mm::PageTableEntry> = page_table.translate(vpn);
+            if pte.is_none() || !pte.unwrap().is_valid() {
+                area.map_one(&mut page_table, vpn);
+            }
+        }
     }
     pub fn clone_user_res(&mut self, another: &TaskControlBlockInner) {
         self.alloc_user_res();
-        self.memory_set.clone_area(
+        self.memory_set.lazy_clone_area(
             VirtAddr::from(self.user_stack_top - USER_STACK_SIZE).floor(),
             another.memory_set.get_ref(),
         );
@@ -241,11 +260,17 @@ impl TaskControlBlock {
         let token = memory_set.token();
 
         task_inner.time_data.clear();
-
+        if task_inner.clear_child_tid != 0 {
+            put_data(token, task_inner.clear_child_tid as *mut u32, 0);
+        }
         // substitute memory_set
         task_inner.memory_set = Arc::new(MemorySet::new(memory_set));
         // 重新分配用户资源
         task_inner.alloc_user_res();
+        task_inner.sig_table = Arc::new(SigTable::new());
+        let fd_table = Arc::new(FdTable::from_another(&task_inner.fd_table));
+        task_inner.fd_table = fd_table;
+        task_inner.fd_table.close_on_exec();
 
         let mut user_sp = task_inner.user_stack_top;
 
@@ -460,7 +485,6 @@ impl TaskControlBlock {
             // for child process, fork returns 0
             child_inner.trap_cx().gp.x[10] = 0;
         }
-
         let trap_cx = child_inner.trap_cx();
         trap_cx.kernel_sp = kernel_stack_top;
 

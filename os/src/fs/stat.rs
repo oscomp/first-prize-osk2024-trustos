@@ -1,10 +1,14 @@
-pub const S_IFIFO: u32 = 0x1000; //管道设备文件
-pub const S_IFCHR: u32 = 0x2000; //字符设备文件
-pub const S_IFDIR: u32 = 0x4000; //目录文件
-pub const S_IFBLK: u32 = 0x6000; //块设备文件
-pub const S_IFREG: u32 = 0x8000; //普通文件
-pub const S_IFLINK: u32 = 0xA000; //符号链接文件
-pub const S_IFSOCK: u32 = 0xC000; //套接字设备文件
+bitflags! {
+    pub struct StMode: u32 {
+        const FIFO= 0x1000; //管道设备文件
+        const FCHR = 0x2000; //字符设备文件
+        const FDIR = 0x4000; //目录文件
+        const FBLK = 0x6000; //块设备文件
+        const FREG = 0x8000; //普通文件
+        const FLINK = 0xA000; //符号链接文件
+        const FSOCK = 0xC000; //套接字设备文件
+    }
+}
 
 #[repr(C)]
 #[derive(Debug, Default)]
@@ -30,13 +34,6 @@ pub struct Kstat {
     pub __unused: [u32; 2],
 }
 
-impl Kstat {
-    pub fn as_bytes(&self) -> &[u8] {
-        let size = core::mem::size_of::<Self>();
-        unsafe { core::slice::from_raw_parts(self as *const _ as *const u8, size) }
-    }
-}
-
 #[repr(C)]
 #[derive(Debug, Default)]
 pub struct Statfs {
@@ -52,11 +49,4 @@ pub struct Statfs {
     pub f_frsize: i64,     // Fragment size
     pub f_flags: i64,      // Mount flags of filesystem
     pub f_spare: [i64; 4], // Padding bytes
-}
-
-impl Statfs {
-    pub fn as_bytes(&self) -> &[u8] {
-        let size = core::mem::size_of::<Self>();
-        unsafe { core::slice::from_raw_parts(self as *const _ as *const u8, size) }
-    }
 }

@@ -8,8 +8,8 @@
 /// pub fn make_pipe()
 /// ```
 //
-use super::File;
-use crate::fs::{stat::S_IFIFO, Kstat};
+use super::{File, StMode};
+use crate::fs::Kstat;
 use crate::signal::{check_if_any_sig_for_current_task, handle_signal};
 use crate::task::suspend_current_and_run_next;
 use crate::{mm::UserBuffer, syscall::PollEvents, utils::SyscallRet};
@@ -244,7 +244,7 @@ impl File for Pipe {
     }
     fn fstat(&self) -> Kstat {
         Kstat {
-            st_mode: S_IFIFO,
+            st_mode: StMode::FIFO.bits(),
             st_nlink: 1,
             ..Kstat::default()
         }
