@@ -20,7 +20,6 @@ use alloc::{
     vec::Vec,
 };
 use core::cmp::min;
-use core::mem::size_of;
 use log::debug;
 
 use super::{FcntlCmd, Iovec, RLimit};
@@ -1198,8 +1197,6 @@ pub fn sys_pselect6(
                 put_data(token, exceptfds as *mut FdSet, using_exceptfds.unwrap());
             }
             if sigmask != 0 {
-                // inner.sig_pending.get_mut().blocked = old_mask;
-                // *inner.sig_table.blocked_mut() = old_mask;
                 inner.sig_mask = old_mask;
             }
             return Ok(num);
@@ -1209,8 +1206,6 @@ pub fn sys_pselect6(
         if waittime > 0 && get_time_ms() * 1000000 - begin >= waittime as usize {
             debug!("[sys_pselect6] ret for timeout");
             if sigmask != 0 {
-                // inner.sig_pending.get_mut().blocked = old_mask;
-                // *inner.sig_table.blocked_mut() = old_mask;
                 inner.sig_mask = old_mask;
             }
             return Ok(0);

@@ -12,7 +12,7 @@ pub use signal::*;
 use crate::{
     config::mm::USER_STACK_SIZE,
     mm::{get_data, put_data},
-    task::{current_task, exit_current, handle_exit, TaskControlBlock, THREAD_GROUP, TID_TO_TASK},
+    task::{current_task, exit_current_and_run_next, TaskControlBlock, THREAD_GROUP, TID_TO_TASK},
     trap::{MachineContext, UserContext},
     utils::{SysErrNo, SyscallRet},
 };
@@ -47,24 +47,12 @@ pub fn handle_signal(signo: usize) {
     if sig_action.customed {
         setup_frame(signo, sig_action);
     } else {
+        debug!("sa_handler:{:#x}", sig_action.act.sa_handler);
         // 就在S模式运行,转换成fn(i32)
-        if sig_action.act.sa_handler != 1 && sig_action.act.sa_handler != 0 {
-            debug!(
-                "sa_handler:{:#x},exit_current actually",
-                sig_action.act.sa_handler
-            );
-            if sig_action.act.sa_handler == exit_current as usize {
-                exit_current(signo as i32);
-            } else {
-                panic!("other Smode handler not implement!");
+        if sig_action.act.sa_handler != 1 {
+            if sig_action.act.sa_handler == exit_current_and_run_next as usize {
+                exit_current_and_run_next(signo as i32);
             }
-            //用fn(i32)传入的参数会被改变
-            /*
-            let handler: fn(i32) =
-                unsafe { core::mem::transmute(sig_action.act.sa_handler as *const ()) };
-            debug!("ready to get into handler with {}", signo as i32);
-            handler(signo as i32);
-            */
         }
     }
 }

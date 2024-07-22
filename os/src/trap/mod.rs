@@ -18,7 +18,7 @@ use crate::{
     signal::{check_if_any_sig_for_current_task, handle_signal},
     syscall::{syscall, Syscall},
     task::{
-        current_task, current_trap_cx, exit_current, handle_exit, suspend_current_and_run_next,
+        current_task, current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next,
     },
     timer::{check_timer, set_next_trigger},
     utils::{backtrace, hart_id},
@@ -108,7 +108,7 @@ pub fn trap_handler() {
             };
             // handle error
             match result {
-                Ok(ret) => debug!("[syscall ret] {:?} ret = {}", syscall_id, ret),
+                Ok(ret) => trace!("[syscall ret] {:?} ret = {}", syscall_id, ret),
                 Err(errno) => debug!("[syscall ret] {:?} ret = {}", syscall_id, errno.str()),
             }
         }
@@ -137,7 +137,7 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
                 // page fault exit code
-                exit_current(-2);
+                exit_current_and_run_next(-2);
             }
         }
         Trap::Exception(Exception::StoreFault)
@@ -152,7 +152,7 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
             // page fault exit code
-            exit_current(-2);
+            exit_current_and_run_next(-2);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
             backtrace();
@@ -162,7 +162,7 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
             // illegal instruction exit code
-            exit_current(-3);
+            exit_current_and_run_next(-3);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
             // 检查futex操作是否超时
@@ -221,18 +221,11 @@ pub fn trap_return() {
 }
 
 #[no_mangle]
-pub fn trap_loop() -> ! {
+pub fn trap_loop() {
     loop {
         trap_return();
-        if current_task().unwrap().inner_lock().is_zombie() {
-            break;
-        }
         trap_handler();
-        if current_task().unwrap().inner_lock().is_zombie() {
-            break;
-        }
     }
-    handle_exit();
 }
 
 #[no_mangle]
