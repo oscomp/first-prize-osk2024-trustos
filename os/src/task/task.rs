@@ -23,7 +23,6 @@ use crate::{
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
-use log::debug;
 use spin::{Mutex, MutexGuard};
 
 #[derive(Clone, Copy, Debug)]

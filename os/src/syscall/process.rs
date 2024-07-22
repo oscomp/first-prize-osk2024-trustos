@@ -7,10 +7,10 @@ use crate::{
     signal::{check_if_any_sig_for_current_task, handle_signal},
     syscall::{CloneFlags, Utsname},
     task::{
-        add_task, current_task, current_token, exit_current, exit_current_group, find_task_by_tid,
-        futex_requeue, futex_wait, futex_wake_up, move_child_process_to_init,
-        remove_all_from_thread_group, suspend_current_and_run_next, task_num, Sysinfo,
-        PROCESS_GROUP,
+        add_task, current_task, current_token, exit_current_and_run_next,
+        exit_current_group_and_run_next, find_task_by_tid, futex_requeue, futex_wait,
+        futex_wake_up, move_child_process_to_init, remove_all_from_thread_group,
+        suspend_current_and_run_next, task_num, Sysinfo, PROCESS_GROUP,
     },
     timer::{add_futex_timer, calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
     utils::{get_abs_path, trim_start_slash, SysErrNo, SyscallRet},
@@ -25,12 +25,14 @@ use num_enum::TryFromPrimitive;
 
 use log::debug;
 
-pub fn sys_exit(exit_code: i32) -> SyscallRet {
-    exit_current(exit_code)
+pub fn sys_exit(exit_code: i32) -> ! {
+    exit_current_and_run_next(exit_code);
+    unreachable!();
 }
 
 pub fn sys_exit_group(exit_code: i32) -> SyscallRet {
-    exit_current_group(exit_code)
+    exit_current_group_and_run_next(exit_code);
+    unreachable!();
 }
 
 pub fn sys_sched_yield() -> SyscallRet {

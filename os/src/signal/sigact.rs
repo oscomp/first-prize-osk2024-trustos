@@ -1,3 +1,5 @@
+use core::array::from_fn;
+
 use alloc::sync::Arc;
 
 use crate::sync::SyncUnsafeCell;
@@ -64,7 +66,7 @@ pub struct SigPendingInner {
 impl SigPendingInner {
     pub fn new() -> Self {
         Self {
-            actions: [KSigAction::default(); SIG_MAX_NUM + 1],
+            actions: from_fn(|signo| KSigAction::new(signo, false)),
             group_exit_code: None,
         }
     }

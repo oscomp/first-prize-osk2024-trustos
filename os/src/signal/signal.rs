@@ -1,4 +1,4 @@
-use crate::task::exit_current;
+use crate::task::exit_current_and_run_next;
 
 /// 仿照Linux signal实现
 pub const SIGHUP: usize = 1; /* Hangup.  */
@@ -152,10 +152,14 @@ pub struct SigAction {
 
 impl SigAction {
     pub fn new(signo: usize) -> Self {
-        let handler: usize = match SigSet::from_sig(signo).default_op() {
-            SigOp::Continue | SigOp::Ignore => 1,
-            SigOp::Stop => 1, // TODO(ZMY): 添加Stop状态和相关函数
-            SigOp::Terminate | SigOp::CoreDump => exit_current as usize,
+        let handler: usize = if signo == 0 {
+            1
+        } else {
+            match SigSet::from_sig(signo).default_op() {
+                SigOp::Continue | SigOp::Ignore => 1,
+                SigOp::Stop => 1, // TODO(ZMY): 添加Stop状态和相关函数
+                SigOp::Terminate | SigOp::CoreDump => exit_current_and_run_next as usize,
+            }
         };
         Self {
             sa_handler: handler,
@@ -190,17 +194,17 @@ impl KSigAction {
             customed: false,
         }
     }
-    pub fn default() -> Self {
-        Self {
-            act: SigAction {
-                sa_handler: 0,
-                sa_flags: SigActionFlags::empty(),
-                sa_restore: 0,
-                sa_mask: SigSet::empty(),
-            },
-            customed: false,
-        }
-    }
+    // pub fn default() -> Self {
+    //     Self {
+    //         act: SigAction {
+    //             sa_handler: 0,
+    //             sa_flags: SigActionFlags::empty(),
+    //             sa_restore: 0,
+    //             sa_mask: SigSet::empty(),
+    //         },
+    //         customed: false,
+    //     }
+    // }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
