@@ -1,5 +1,6 @@
 /// 存放系统调用的各种Option
 use crate::mm::MapPermission;
+use log::debug;
 use num_enum::FromPrimitive;
 
 bitflags! {
@@ -258,5 +259,39 @@ bitflags! {
         const F_GETFL = 3;
         const F_SETFL= 4;
         const F_DUPFD_CLOEXEC= 1030;
+    }
+}
+
+pub const FD_SET_SIZE: usize = 1024;
+pub const FD_SET_LEN: usize = FD_SET_SIZE / (8 * core::mem::size_of::<usize>());
+
+#[derive(Debug, Copy, Clone)]
+#[repr(C)]
+pub struct FdSet {
+    pub fds_bits: [usize; FD_SET_LEN],
+}
+
+impl FdSet {
+    pub fn clear_all(&mut self) {
+        self.fds_bits.fill(0);
+    }
+    pub fn got_fd(&mut self, fd: usize) -> bool {
+        assert!(fd < FD_SET_SIZE);
+        let offset = fd % FD_SET_LEN;
+        (self.fds_bits[fd / FD_SET_LEN] & (1 << offset)) != 0
+    }
+    pub fn mark_fd(&mut self, fd: usize, value: bool) {
+        if fd >= FD_SET_SIZE {
+            return;
+        }
+        let offset = fd % FD_SET_LEN;
+        if value {
+            self.fds_bits[fd / FD_SET_LEN] |= 1 << offset;
+        } else {
+            debug!("offset is {}", offset);
+            debug!("{:?}", self);
+            self.fds_bits[fd / FD_SET_LEN] &= !(1 << offset);
+            debug!("{:?}", self);
+        }
     }
 }

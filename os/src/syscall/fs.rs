@@ -8,7 +8,7 @@ use crate::{
         get_data, put_data, safe_translated_byte_buffer, translated_byte_buffer, translated_ref,
         translated_refmut, translated_str, UserBuffer,
     },
-    syscall::{PollEvents, PollFd, SigSet},
+    syscall::{FdSet, PollEvents, PollFd, SigSet},
     task::{current_task, current_token, suspend_current_and_run_next},
     timer::{get_time_ms, Timespec},
     utils::{get_abs_path, trim_start_slash, SysErrNo, SyscallRet},
@@ -1083,20 +1083,20 @@ pub fn sys_pselect6(
 
     let nfds = min(nfds, inner.fd_table.get_soft_limit());
 
-    let mut using_readfds = if readfds != 0 {
-        get_data(token, readfds as *mut u128)
+    let using_readfds = if readfds != 0 {
+        Some(get_data(token, readfds as *mut FdSet))
     } else {
-        0
+        None
     };
-    let mut using_writefds = if writefds != 0 {
-        get_data(token, writefds as *mut u128)
+    let using_writefds = if writefds != 0 {
+        Some(get_data(token, writefds as *mut FdSet))
     } else {
-        0
+        None
     };
-    let mut using_exceptfds = if exceptfds != 0 {
-        get_data(token, exceptfds as *mut u128)
+    let using_exceptfds = if exceptfds != 0 {
+        Some(get_data(token, exceptfds as *mut FdSet))
     } else {
-        0
+        None
     };
 
     // pselect 不会更新 timeout 的值，而 select 会
@@ -1126,54 +1126,57 @@ pub fn sys_pselect6(
         let mut num = 0;
 
         // 如果设置了监视是否可读的 fd
-        if using_readfds != 0 {
+        if using_readfds.is_some() {
             for i in 0..nfds {
-                if using_readfds & (1 << i) != 0 {
+                if using_readfds.unwrap().got_fd(i) {
                     if let Some(file) = &inner.fd_table.try_get(i) {
                         let file: Arc<dyn File> = file.any();
                         let event = file.poll(PollEvents::IN);
                         if !event.contains(PollEvents::IN) {
-                            using_readfds &= !(1 << i);
+                            using_readfds.unwrap().mark_fd(i, false);
                         }
                         num += 1;
                     } else {
-                        using_readfds &= !(1 << i);
+                        using_readfds.unwrap().mark_fd(i, false);
                     }
                 }
             }
         }
 
         // 如果设置了监视是否可写的 fd
-        if using_writefds != 0 {
+        if using_writefds.is_some() {
             for i in 0..nfds {
-                if using_writefds & (1 << i) != 0 {
+                if using_writefds.unwrap().got_fd(i) {
                     if let Some(file) = &inner.fd_table.try_get(i) {
                         let file: Arc<dyn File> = file.any();
                         let event = file.poll(PollEvents::OUT);
                         if !event.contains(PollEvents::OUT) {
-                            using_writefds &= !(1 << i);
+                            using_writefds.unwrap().mark_fd(i, false);
                         }
                         num += 1;
                     } else {
-                        using_writefds &= !(1 << i);
+                        using_writefds.unwrap().mark_fd(i, false);
                     }
                 }
             }
         }
 
         // 如果设置了监视异常的 fd
-        if using_exceptfds != 0 {
+        if using_exceptfds.is_some() {
             for i in 0..nfds {
-                if using_exceptfds & (1 << i) != 0 {
+                if using_exceptfds.unwrap().got_fd(i) {
+                    debug!("got fd {}", i);
                     if let Some(file) = &inner.fd_table.try_get(i) {
                         let file: Arc<dyn File> = file.any();
                         let event = file.poll(PollEvents::ERR);
                         if !event.contains(PollEvents::ERR) {
-                            using_exceptfds &= !(1 << i);
+                            debug!("{:?}", using_exceptfds.unwrap());
+                            using_exceptfds.unwrap().mark_fd(i, false);
+                            debug!("change to {:?}", using_exceptfds.unwrap());
                         }
                         num += 1;
                     } else {
-                        using_exceptfds &= !(1 << i);
+                        using_exceptfds.unwrap().mark_fd(i, false);
                     }
                 }
             }
@@ -1181,18 +1184,18 @@ pub fn sys_pselect6(
 
         //如果有响应了则返回,或者如果时间是0，0，也需要返回结果
         if num > 0 || waittime == 0 {
-            debug!(
-                "[sys_pselect6] ret for num:{},waittime:{} with readfds:{:x}, writefds:{:x}, exceptfds:{:x}",
-                num,waittime,using_readfds, using_writefds, using_exceptfds
-            );
+            debug!("[sys_pselect6] ret for num:{},waittime:{}", num, waittime);
             if readfds != 0 {
-                put_data(token, readfds as *mut u128, using_readfds);
+                debug!("[sys_pselect6] readfds is {:?}", using_readfds.unwrap());
+                put_data(token, readfds as *mut FdSet, using_readfds.unwrap());
             }
             if writefds != 0 {
-                put_data(token, writefds as *mut u128, using_writefds);
+                debug!("[sys_pselect6] writefds is {:?}", using_writefds.unwrap());
+                put_data(token, writefds as *mut FdSet, using_writefds.unwrap());
             }
             if exceptfds != 0 {
-                put_data(token, exceptfds as *mut u128, using_exceptfds);
+                debug!("[sys_pselect6] exceptfds is {:?}", using_exceptfds.unwrap());
+                put_data(token, exceptfds as *mut FdSet, using_exceptfds.unwrap());
             }
             if sigmask != 0 {
                 // inner.sig_pending.get_mut().blocked = old_mask;
@@ -1204,10 +1207,7 @@ pub fn sys_pselect6(
 
         //或者时间到了也可以返回
         if waittime > 0 && get_time_ms() * 1000000 - begin >= waittime as usize {
-            debug!(
-                "[sys_pselect6] ret for timeout with readfds:{:x}, writefds:{:x}, exceptfds:{:x}",
-                using_readfds, using_writefds, using_exceptfds
-            );
+            debug!("[sys_pselect6] ret for timeout");
             if sigmask != 0 {
                 // inner.sig_pending.get_mut().blocked = old_mask;
                 // *inner.sig_table.blocked_mut() = old_mask;
