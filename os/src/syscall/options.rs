@@ -288,10 +288,7 @@ impl FdSet {
         if value {
             self.fds_bits[fd / FD_SET_LEN] |= 1 << offset;
         } else {
-            debug!("offset is {}", offset);
-            debug!("{:?}", self);
             self.fds_bits[fd / FD_SET_LEN] &= !(1 << offset);
-            debug!("{:?}", self);
         }
     }
 }

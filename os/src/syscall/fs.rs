@@ -1081,17 +1081,17 @@ pub fn sys_pselect6(
 
     let nfds = min(nfds, inner.fd_table.get_soft_limit());
 
-    let using_readfds = if readfds != 0 {
+    let mut using_readfds = if readfds != 0 {
         Some(get_data(token, readfds as *mut FdSet))
     } else {
         None
     };
-    let using_writefds = if writefds != 0 {
+    let mut using_writefds = if writefds != 0 {
         Some(get_data(token, writefds as *mut FdSet))
     } else {
         None
     };
-    let using_exceptfds = if exceptfds != 0 {
+    let mut using_exceptfds = if exceptfds != 0 {
         Some(get_data(token, exceptfds as *mut FdSet))
     } else {
         None
@@ -1124,7 +1124,7 @@ pub fn sys_pselect6(
         let mut num = 0;
 
         // 如果设置了监视是否可读的 fd
-        if let Some(mut readfds) = using_readfds {
+        if let Some(readfds) = using_readfds.as_mut() {
             for i in 0..nfds {
                 if readfds.got_fd(i) {
                     if let Some(file) = &inner.fd_table.try_get(i) {
@@ -1141,7 +1141,7 @@ pub fn sys_pselect6(
             }
         }
         // 如果设置了监视是否可写的 fd
-        if let Some(mut writefds) = using_writefds {
+        if let Some(writefds) = using_writefds.as_mut() {
             for i in 0..nfds {
                 if writefds.got_fd(i) {
                     if let Some(file) = &inner.fd_table.try_get(i) {
@@ -1159,7 +1159,7 @@ pub fn sys_pselect6(
         }
 
         // 如果设置了监视异常的 fd
-        if let Some(mut exceptfds) = using_exceptfds {
+        if let Some(exceptfds) = using_exceptfds.as_mut() {
             for i in 0..nfds {
                 if exceptfds.got_fd(i) {
                     if let Some(file) = &inner.fd_table.try_get(i) {
