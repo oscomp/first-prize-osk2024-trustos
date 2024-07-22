@@ -133,6 +133,10 @@ pub fn run_libc_bench() -> isize {
     sys_run_libc_bench()
 }
 
+pub fn run_lmbench_test() -> isize {
+    sys_run_lmbench_test()
+}
+
 pub fn waitpid(pid: usize, exit_code: &mut i32) -> isize {
     sys_waitpid(pid as isize, exit_code as *mut _, 0)
 }

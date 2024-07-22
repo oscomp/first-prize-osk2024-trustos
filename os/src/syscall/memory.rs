@@ -33,6 +33,9 @@ pub fn sys_mmap(
     let task_inner = task.inner_lock();
     let len = page_round_up(len);
     if fd == usize::MAX {
+        if !flags.contains(MmapFlags::MAP_ANONYMOUS) {
+            return Err(SysErrNo::EBADF);
+        }
         let rv = task_inner
             .memory_set
             .mmap(addr, len, map_perm, flags, None, off);

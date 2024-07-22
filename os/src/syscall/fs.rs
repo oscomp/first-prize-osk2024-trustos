@@ -26,7 +26,7 @@ use log::debug;
 use super::{FcntlCmd, Iovec, RLimit};
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
-    // debug!("[sys_write] fd is {}, len={}", fd, len);
+    debug!("[sys_write] fd is {}, len={}", fd, len);
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();

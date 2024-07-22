@@ -198,6 +198,31 @@ pub fn sys_run_libc_bench() -> isize {
         ["/libc-bench\0".as_ptr() as isize, 0, 0, 0, 0, 0],
     )
 }
+//时间结果为0，0的测例
+//lmbench_all lat_sig -P 1 catch
+//lmbench_all lat_sig -P 1 prot lat_sig
+//卡死的测例
+//lmbench_all lat_pipe -P 1
+pub fn sys_run_lmbench_test() -> isize {
+    syscall(
+        SYSCALL_EXECVE,
+        [
+            "/lmbench_all\0".as_ptr() as isize,
+            [
+                "lmbench_all\0".as_ptr() as isize,
+                "lat_pipe\0".as_ptr() as isize,
+                "-P\0".as_ptr() as isize,
+                "1\0".as_ptr() as isize,
+                0,
+            ]
+            .as_ptr() as isize,
+            0,
+            0,
+            0,
+            0,
+        ],
+    )
+}
 
 pub fn sys_finaltest() -> isize {
     syscall(

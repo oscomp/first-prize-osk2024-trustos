@@ -164,7 +164,7 @@ pub fn exit_current(exit_code: i32) -> SyscallRet {
 
 pub fn handle_exit() -> ! {
     let task = take_current_task();
-    //debug!("exit in hanle_exit");
+    debug!("exit in hanle_exit");
     drop(task);
     let mut _unused = TaskContext::zero_init();
     schedule(&mut _unused as *mut _);
