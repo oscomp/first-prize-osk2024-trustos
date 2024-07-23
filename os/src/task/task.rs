@@ -12,7 +12,7 @@ use crate::{
     fs::{FdTable, FsInfo},
     mm::{
         flush_tlb, get_data, put_data, translated_refmut, MapAreaType, MapPermission, MemorySet,
-        MemorySetInner, PageTable, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
+        MemorySetInner, PageTable, PageTableEntry, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
     },
     signal::{SigSet, SigTable},
     syscall::CloneFlags,
@@ -90,7 +90,7 @@ impl TaskControlBlockInner {
         self.sig_table.is_exited()
     }
     pub fn alloc_user_res(&mut self) {
-        let (_, ustack_top) = self.memory_set.lazy_insert_framed_area_with_hint(
+        let (ustack_bottom, ustack_top) = self.memory_set.lazy_insert_framed_area_with_hint(
             USER_STACK_TOP,
             USER_STACK_SIZE,
             MapPermission::R | MapPermission::W | MapPermission::U,
@@ -111,6 +111,15 @@ impl TaskControlBlockInner {
         self.trap_cx_ppn = trap_cx_ppn;
         self.trap_cx_bottom = trap_cx_bottom;
 
+        let user_stack_range = VPNRange::new(
+            VirtAddr::from(ustack_bottom).floor(),
+            VirtAddr::from(ustack_top).floor(),
+        );
+        // log::info!(
+        //     "[alloc_user_res] user_stack_range=[{:#x},{:#x}) ",
+        //     user_stack_range.start().0,
+        //     user_stack_range.end().0,
+        // );
         //预先为栈顶分配几页，用于环境变量等初始数据
         let page_table = PageTable::from_token(self.memory_set.get_ref().page_table.token());
         let area = self
@@ -118,14 +127,13 @@ impl TaskControlBlockInner {
             .get_mut()
             .areas
             .iter_mut()
-            .find(|area| {
-                area.area_type == MapAreaType::Stack && area.map_perm.contains(MapPermission::U)
-            })
+            .find(|area| area.vpn_range.range() == user_stack_range.range())
             .unwrap();
         for i in 1..=PRE_ALLOC_PAGES {
             let vpn = (area.vpn_range.end().0 - i).into();
-            let pte: Option<crate::mm::PageTableEntry> = page_table.translate(vpn);
+            let pte: Option<PageTableEntry> = page_table.translate(vpn);
             if pte.is_none() || !pte.unwrap().is_valid() {
+                // log::info!("map vpn : {:#x}", vpn.0);
                 area.map_one(&mut self.memory_set.get_mut().page_table, vpn);
             }
         }
@@ -219,8 +227,8 @@ impl TaskControlBlock {
         );
         let task = Self {
             tid: tid_handle,
-            pid: 0,
-            ppid: 0,
+            pid: 1,
+            ppid: 1,
             kernel_stack,
             inner: Mutex::new(TaskControlBlockInner {
                 trap_cx_ppn: 0.into(),
@@ -584,7 +592,7 @@ impl TaskControlBlock {
         if timer.trigger_once() {
             // 只触发一次,单次计时器
             if now > timer.last_time() + timer.timer().it_value {
-                // log::info!("Timer Alarm Once");
+                log::info!("Timer Alarm Once");
                 task_inner.sig_pending |= SigSet::SIGALRM;
                 timer.set_trigger_once(false);
                 timer.set_last_time(now);

@@ -33,16 +33,12 @@ pub fn sys_settimer(
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
 
-    debug!(
-        "[sys_settimer] which is {}, new_value is {},old_value is {}",
-        which, new_value as usize, old_value as usize
-    );
-
     if old_value as usize != 0 {
         put_data(token, old_value, task_inner.timer.timer());
     }
     if new_value as usize != 0 {
         let new_timer = get_data(token, new_value);
+        // debug!("[sys_settimer] new_timer={:?}", new_timer);
         task_inner.timer.set_timer(new_timer);
         task_inner.timer.set_last_time(TimeVal::now());
         if new_timer.it_interval.is_empty() {

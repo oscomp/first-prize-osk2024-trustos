@@ -25,7 +25,7 @@ use log::debug;
 use super::{FcntlCmd, Iovec, RLimit};
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
-    debug!("[sys_write] fd is {}, len={}", fd, len);
+    // debug!("[sys_write] fd is {}, len={}", fd, len);
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
@@ -56,7 +56,7 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let inner = task.inner_lock();
     let memory_set = inner.memory_set.clone();
 
-    debug!("[sys_read] fd is {}, len is {}", fd, len);
+    // debug!("[sys_read] fd is {}, len is {}", fd, len);
 
     if fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
@@ -72,6 +72,9 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
         let ret = file.read(UserBuffer::new(
             safe_translated_byte_buffer(memory_set, buf, len).unwrap(),
         ))?;
+        // if ret != len {
+        //     log::info!("size not equal, len={},ret={}", len, ret);
+        // }
         Ok(ret)
     } else {
         Err(SysErrNo::EBADF)

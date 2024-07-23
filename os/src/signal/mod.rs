@@ -55,7 +55,7 @@ pub fn handle_signal(signo: usize) {
     if sig_action.customed {
         setup_frame(signo, sig_action);
     } else {
-        debug!("sa_handler:{:#x}", sig_action.act.sa_handler);
+        debug!("sa_handler:{:#x}", sig_action.act.sa_handler as usize);
         // 就在S模式运行,转换成fn(i32)
         if sig_action.act.sa_handler != 1 {
             if sig_action.act.sa_handler == exit_current_and_run_next as usize {
@@ -73,8 +73,6 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
     let token = task_inner.user_token();
-
-    task_inner.sig_mask |= sig_action.act.sa_mask | SigSet::from_sig(signo);
 
     let trap_cx = task_inner.trap_cx();
     let mut user_sp = trap_cx.gp.x[2];
@@ -164,6 +162,7 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
     } else {
         sigreturn_trampoline as usize
     };
+    task_inner.sig_mask |= sig_action.act.sa_mask | SigSet::from_sig(signo);
 }
 /// 恢复栈帧
 pub fn restore_frame() -> SyscallRet {

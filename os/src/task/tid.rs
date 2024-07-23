@@ -16,7 +16,7 @@ impl TidAllocator {
     ///Create an empty `TidAllocator`
     pub fn new() -> Self {
         TidAllocator {
-            current: 0,
+            current: 1,
             recycled: Vec::new(),
         }
     }

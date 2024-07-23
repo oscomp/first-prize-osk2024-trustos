@@ -262,7 +262,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::SchedSetaffinity => sys_sched_setaffinity(args[0], args[1], args[2]),
         Syscall::SchedGetaffinity => sys_sched_getaffinity(args[0], args[1], args[2]),
         Syscall::SchedYield => sys_sched_yield(),
-        Syscall::SigKill => sys_kill(args[0] as isize, args[0]),
+        Syscall::SigKill => sys_kill(args[0] as isize, args[1]),
         Syscall::Tkill => sys_tkill(args[0], args[1]),
         Syscall::Tgkill => sys_tgkill(args[0], args[1], args[2]),
         Syscall::SigSuspend => sys_rt_sigsuspend(args[0] as *const SigSet),

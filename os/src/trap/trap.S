@@ -45,7 +45,7 @@ __trap_from_user:
     csrr t0, fcsr
     sd t0, 83*8(sp)
     # sd original_a0
-    # sd a0, 50*8(sp)
+    sd a0, 50*8(sp)
     # we can use t0/t1/t2 freely, because they have been saved in TrapContext
     csrr t0, sstatus
     csrr t1, sepc

@@ -223,8 +223,6 @@ pub fn exit_current_and_run_next(exit_code: i32) {
                 if inner.sig_table.not_exited() {
                     inner.sig_table.set_exit_code(exit_code);
                 }
-                // 删除进程的专属目录
-                // remove_proc_dir_and_file(task.pid());
             }
         }
     }
