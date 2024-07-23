@@ -29,6 +29,14 @@ extern "C" {
 pub fn check_if_any_sig_for_current_task() -> Option<usize> {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
+
+    // if task_inner.sig_pending.contains(SigSet::SIGALRM) {
+    //     log::info!(
+    //         "sig_pending={:?},sig_mask={:?}",
+    //         task_inner.sig_pending,
+    //         task_inner.sig_mask
+    //     );
+    // }
     task_inner
         .sig_pending
         .difference(task_inner.sig_mask)

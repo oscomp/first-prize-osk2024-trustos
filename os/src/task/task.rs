@@ -112,19 +112,21 @@ impl TaskControlBlockInner {
         self.trap_cx_bottom = trap_cx_bottom;
 
         //预先为栈顶分配几页，用于环境变量等初始数据
-        let mut page_table = PageTable::from_token(self.memory_set.get_ref().page_table.token());
+        let page_table = PageTable::from_token(self.memory_set.get_ref().page_table.token());
         let area = self
             .memory_set
             .get_mut()
             .areas
             .iter_mut()
-            .find(|area| area.area_type == MapAreaType::Stack)
+            .find(|area| {
+                area.area_type == MapAreaType::Stack && area.map_perm.contains(MapPermission::U)
+            })
             .unwrap();
         for i in 1..=PRE_ALLOC_PAGES {
-            let vpn = (area.vpn_range.range().1 .0 - i).into();
+            let vpn = (area.vpn_range.end().0 - i).into();
             let pte: Option<crate::mm::PageTableEntry> = page_table.translate(vpn);
             if pte.is_none() || !pte.unwrap().is_valid() {
-                area.map_one(&mut page_table, vpn);
+                area.map_one(&mut self.memory_set.get_mut().page_table, vpn);
             }
         }
     }
@@ -270,6 +272,8 @@ impl TaskControlBlock {
         let fd_table = Arc::new(FdTable::from_another(&task_inner.fd_table));
         task_inner.fd_table = fd_table;
         task_inner.fd_table.close_on_exec();
+        task_inner.sig_mask = SigSet::empty();
+        task_inner.sig_pending = SigSet::empty();
 
         let mut user_sp = task_inner.user_stack_top;
 
@@ -577,16 +581,18 @@ impl TaskControlBlock {
         let mut task_inner = self.inner_lock();
         let timer = task_inner.timer.clone();
         let now = TimeVal::now();
-        if timer.first_trigger() {
-            //首次触发
+        if timer.trigger_once() {
+            // 只触发一次,单次计时器
             if now > timer.last_time() + timer.timer().it_value {
+                // log::info!("Timer Alarm Once");
                 task_inner.sig_pending |= SigSet::SIGALRM;
-                timer.set_first_trigger(false);
+                timer.set_trigger_once(false);
                 timer.set_last_time(now);
             }
         } else if !timer.timer().it_interval.is_empty() {
             //间隔触发
             if now > timer.last_time() + timer.timer().it_interval {
+                // log::info!("Timer Alarm!");
                 task_inner.sig_pending |= SigSet::SIGALRM;
                 timer.set_last_time(now);
             }
