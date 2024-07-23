@@ -255,6 +255,9 @@ impl TimeVal {
         let size = core::mem::size_of::<Self>();
         unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
     }
+    pub fn is_empty(&self) -> bool {
+        self.tv_sec == 0 && self.tv_usec == 0
+    }
 }
 
 impl Add for TimeVal {

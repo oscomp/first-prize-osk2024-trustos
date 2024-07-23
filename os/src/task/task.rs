@@ -574,19 +574,20 @@ impl TaskControlBlock {
     }
 
     pub fn check_timer(&self) {
-        let task_inner = self.inner_lock();
+        let mut task_inner = self.inner_lock();
         let timer = task_inner.timer.clone();
         let now = TimeVal::now();
         if timer.first_trigger() {
             //首次触发
-            if now > timer.last_time() + timer.timer().it_value {}
-            // task_inner.sig_pending |= SigSet::SIGALRM;
-            timer.set_first_trigger(false);
-            timer.set_last_time(now);
-        } else {
+            if now > timer.last_time() + timer.timer().it_value {
+                task_inner.sig_pending |= SigSet::SIGALRM;
+                timer.set_first_trigger(false);
+                timer.set_last_time(now);
+            }
+        } else if !timer.timer().it_interval.is_empty() {
             //间隔触发
             if now > timer.last_time() + timer.timer().it_interval {
-                // task_inner.sig_pending |= SigSet::SIGALRM;
+                task_inner.sig_pending |= SigSet::SIGALRM;
                 timer.set_last_time(now);
             }
         }
