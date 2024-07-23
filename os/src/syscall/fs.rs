@@ -1166,9 +1166,7 @@ pub fn sys_pselect6(
                         let file: Arc<dyn File> = file.any();
                         let event = file.poll(PollEvents::ERR);
                         if !event.contains(PollEvents::ERR) {
-                            debug!("begins {:?}", exceptfds);
                             exceptfds.mark_fd(i, false);
-                            debug!("ends {:?}", exceptfds);
                         }
                         num += 1;
                     } else {
@@ -1188,7 +1186,7 @@ pub fn sys_pselect6(
                 put_data(token, writefds as *mut FdSet, using_writefds);
             }
             if let Some(using_exceptfds) = using_exceptfds {
-                debug!("[sys_pselect6] exceptfds is {:?}", using_exceptfds);
+                // debug!("[sys_pselect6] exceptfds is {:?}", using_exceptfds);
                 put_data(token, exceptfds as *mut FdSet, using_exceptfds);
             }
             if sigmask != 0 {

@@ -217,8 +217,8 @@ impl TaskControlBlock {
         );
         let task = Self {
             tid: tid_handle,
-            pid: 0,
-            ppid: 0,
+            pid: 1,
+            ppid: 1,
             kernel_stack,
             inner: Mutex::new(TaskControlBlockInner {
                 trap_cx_ppn: 0.into(),

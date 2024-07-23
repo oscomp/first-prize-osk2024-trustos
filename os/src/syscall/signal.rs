@@ -27,7 +27,8 @@ pub fn sys_rt_sigaction(
     if act as usize != 0 {
         let new_act = get_data(token, act);
         debug!(
-            "[sys_rt_sigaction] sig is {:?}, act is {:?}",
+            "[sys_rt_sigaction] signo is {}, sig is {:?}, act is {:?}",
+            signo,
             SigSet::from_sig(signo),
             new_act
         );
@@ -115,6 +116,10 @@ pub fn sys_rt_sigsuspend(mask: *const SigSet) -> SyscallRet {
 /// pid > 0 then sig is sent to the process with the ID specified by pid
 /// pid < -1 the sig is sent to every process in process group whose ID is -pid
 pub fn sys_kill(pid: isize, signo: usize) -> SyscallRet {
+    if signo == 0 {
+        //0信号仅用于测试进程是否存在
+        return Ok(0);
+    }
     let sig = SigSet::from_sig(signo);
 
     debug!("[sys_kill] pid is {}, sig is {:?}", pid, sig);
