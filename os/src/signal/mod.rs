@@ -30,13 +30,6 @@ pub fn check_if_any_sig_for_current_task() -> Option<usize> {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
 
-    // if task_inner.sig_pending.contains(SigSet::SIGALRM) {
-    //     log::info!(
-    //         "sig_pending={:?},sig_mask={:?}",
-    //         task_inner.sig_pending,
-    //         task_inner.sig_mask
-    //     );
-    // }
     task_inner
         .sig_pending
         .difference(task_inner.sig_mask)
@@ -87,7 +80,7 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
             // back to `ecall`
             trap_cx.sepc -= 4;
             // restore syscall parameter `a0`
-            // trap_cx.gp.x[10] = trap_cx.origin_a0;
+            trap_cx.gp.x[10] = trap_cx.origin_a0;
         } else {
             debug!("[do_signal] syscall was interrupted");
             // will return EINTR after sigreturn

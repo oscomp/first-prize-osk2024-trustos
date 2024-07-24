@@ -180,7 +180,7 @@ pub fn sys_busyboxsh() -> isize {
             [
                 "busybox\0".as_ptr() as isize,
                 "sh\0".as_ptr() as isize,
-                "unixbench_testcode.sh\0".as_ptr() as isize,
+                "libctest_testcode.sh\0".as_ptr() as isize,
                 0,
             ]
             .as_ptr() as isize,
@@ -210,10 +210,11 @@ pub fn sys_run_lmbench_test() -> isize {
             "/lmbench_all\0".as_ptr() as isize,
             [
                 "lmbench_all\0".as_ptr() as isize,
-                "lat_sig\0".as_ptr() as isize,
+                "lat_mmap\0".as_ptr() as isize,
                 "-P\0".as_ptr() as isize,
                 "1\0".as_ptr() as isize,
-                "catch\0".as_ptr() as isize,
+                "512k\0".as_ptr() as isize,
+                "/var/tmp/XXX\0".as_ptr() as isize,
                 0,
             ]
             .as_ptr() as isize,

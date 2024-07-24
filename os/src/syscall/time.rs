@@ -1,5 +1,4 @@
 use crate::mm::{get_data, put_data};
-use crate::signal::SigSet;
 use crate::task::current_task;
 use crate::timer::{get_time_spec, Itimerval, Rusage, TimeVal, Timespec, Tms, ITIMER_REAL};
 use crate::utils::{SysErrNo, SyscallRet};
@@ -38,12 +37,13 @@ pub fn sys_settimer(
     }
     if new_value as usize != 0 {
         let new_timer = get_data(token, new_value);
-        // debug!("[sys_settimer] new_timer={:?}", new_timer);
+        debug!("[sys_settimer] new_timer={:?}", new_timer);
         task_inner.timer.set_timer(new_timer);
         task_inner.timer.set_last_time(TimeVal::now());
         if new_timer.it_interval.is_empty() {
-            // task_inner.sig_pending |= SigSet::SIGALRM;
-            task_inner.timer.set_trigger_once(true);
+            if !new_timer.it_value.is_empty() {
+                task_inner.timer.set_trigger_once(true);
+            }
         } else {
             task_inner.timer.set_trigger_once(false);
         }

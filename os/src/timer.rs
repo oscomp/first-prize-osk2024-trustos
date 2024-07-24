@@ -208,7 +208,10 @@ impl Timer {
         }
     }
     pub fn set_timer(&self, new: Itimerval) {
-        self.inner.get_unchecked_mut().timer = new;
+        let inner = self.inner.get_unchecked_mut();
+        inner.timer = new;
+        inner.once = false;
+        inner.last_time = TimeVal::new(0, 0);
     }
     pub fn set_last_time(&self, last_time: TimeVal) {
         self.inner.get_unchecked_mut().last_time = last_time;

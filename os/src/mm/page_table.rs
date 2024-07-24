@@ -253,11 +253,13 @@ pub fn translated_byte_buffer(
         match page_table.translate(vpn) {
             None => {
                 //panic!("[kernel] mm: 0x{:x} not mapped", start);
+                log::debug!("vpn {:#x} not found", vpn.0);
                 return None;
             }
             Some(ref pte) => {
                 //assert!(pte.is_valid(), "vpn {} to ppn {}", vpn.0, pte.ppn().0);
                 if !pte.is_valid() {
+                    log::debug!("vpn {:#x} invalid", vpn.0);
                     return None;
                 }
             }

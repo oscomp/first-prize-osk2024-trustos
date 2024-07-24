@@ -2,14 +2,15 @@
 use super::{
     cow_page_fault, frame_alloc, lazy_page_fault, mmap_read_page_fault, mmap_write_page_fault,
     translated_byte_buffer, FrameTracker, MapArea, MapAreaType, MapPermission, MapType, PTEFlags,
-    PageTable, PageTableEntry, PhysAddr, UserBuffer, VPNRange, VirtAddr, VirtPageNum, GROUP_SHARE,
+    PageTable, PageTableEntry, PhysAddr, StepByOne, UserBuffer, VPNRange, VirtAddr, VirtPageNum,
+    GROUP_SHARE,
 };
 use crate::{
     config::{
         board::{MEMORY_END, MMIO},
         mm::{DL_INTERP_OFFSET, KERNEL_ADDR_OFFSET, MMAP_TOP, PAGE_SIZE},
     },
-    fs::{open, File, OSInode, OpenFlags, NONE_MODE},
+    fs::{open, File, OSInode, OpenFlags, NONE_MODE, SEEK_CUR, SEEK_SET},
     mm::flush_tlb,
     sync::SyncUnsafeCell,
     syscall::MmapFlags,
@@ -504,26 +505,52 @@ impl MemorySetInner {
             .iter_mut()
             .enumerate()
             .filter(|(_, area)| area.area_type == MapAreaType::Mmap)
-            .find(|(_, area)| area.vpn_range.start() == start_vpn)
+            .find(|(_, area)| {
+                let (start, end) = area.vpn_range.range();
+                start >= start_vpn && end <= end_vpn
+            })
         {
             // 检查是否需要写回
             if area.mmap_flags.contains(MmapFlags::MAP_SHARED)
                 && area.map_perm.contains(MapPermission::W)
             {
-                let mapped_len: usize = VPNRange::new(start_vpn, end_vpn)
+                // 相邻的页面一次写回
+                let mut wb_range: Vec<(VirtPageNum, VirtPageNum)> = Vec::new();
+                VPNRange::new(start_vpn, end_vpn)
                     .into_iter()
-                    .filter(|vpn| area.data_frames.contains_key(&vpn))
-                    .count()
-                    * PAGE_SIZE;
+                    .for_each(|vpn| {
+                        if area.data_frames.contains_key(&vpn) {
+                            if wb_range.is_empty() {
+                                wb_range.push((vpn, VirtPageNum(vpn.0 + 1)));
+                            } else {
+                                let end_range = wb_range.pop().unwrap();
+                                if end_range.1 == vpn {
+                                    wb_range.push((end_range.0, VirtPageNum(vpn.0 + 1)));
+                                } else {
+                                    wb_range.push(end_range);
+                                    wb_range.push((vpn, VirtPageNum(vpn.0 + 1)));
+                                }
+                            }
+                        }
+                    });
+                // 每次写回前要设置偏移量
                 let file = area.mmap_file.file.clone().unwrap();
-                file.write(UserBuffer {
-                    buffers: translated_byte_buffer(
-                        self.page_table.token(),
-                        addr as *const u8,
-                        mapped_len,
-                    )
-                    .unwrap(),
-                })?;
+                let off = file.lseek(0, SEEK_CUR).unwrap();
+                wb_range.into_iter().for_each(|(start_vpn, end_vpn)| {
+                    let start_addr: usize = VirtAddr::from(start_vpn).into();
+                    let mapped_len: usize = (end_vpn.0 - start_vpn.0) * PAGE_SIZE;
+                    let buf = UserBuffer {
+                        buffers: translated_byte_buffer(
+                            self.page_table.token(),
+                            start_addr as *const u8,
+                            mapped_len,
+                        )
+                        .unwrap(),
+                    };
+                    file.lseek((start_addr - addr) as isize, SEEK_SET);
+                    file.write(buf);
+                });
+                file.lseek(off as isize, SEEK_SET);
             }
             // debug!(
             //     "[area vpn_range] start:{:#x},end:{:#x}",

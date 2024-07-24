@@ -321,7 +321,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, _options: i32) -> SyscallRet {
     }
 }
 
-pub fn sys_nanosleep(req: *const u8, rem: *const u8) -> SyscallRet {
+pub fn sys_nanosleep(req: *const Timespec, rem: *mut Timespec) -> SyscallRet {
     let token = current_token();
 
     // debug!(
@@ -329,10 +329,10 @@ pub fn sys_nanosleep(req: *const u8, rem: *const u8) -> SyscallRet {
     //     req as usize, rem as usize
     // );
 
-    let req = translated_ref(token, req as *const Timespec);
+    let req = get_data(token, req);
     let waittime = req.tv_sec * 1_000_000_000usize + req.tv_nsec;
     let begin = get_time_ms() * 1_000_000usize;
-    let endtime = get_time_spec() + *req;
+    let endtime = get_time_spec() + req;
 
     // debug!(
     //     "[sys_nanosleep] ready to sleep for {} sec, {} nsec",
@@ -342,10 +342,7 @@ pub fn sys_nanosleep(req: *const u8, rem: *const u8) -> SyscallRet {
     while get_time_ms() * 1_000_000usize - begin < waittime {
         if let Some(signo) = check_if_any_sig_for_current_task() {
             if rem as usize != 0 {
-                let mut buffer = UserBuffer::new(
-                    translated_byte_buffer(token, rem, size_of::<Timespec>()).unwrap(),
-                );
-                buffer.write(calculate_left_timespec(endtime).as_bytes());
+                put_data(token, rem, calculate_left_timespec(endtime));
             }
             handle_signal(signo);
         }
@@ -447,8 +444,8 @@ pub fn sys_sched_getparam(_pid: usize, _param: *const u8) -> SyscallRet {
 pub fn sys_clock_nanosleep(
     _clockid: usize,
     flags: u32,
-    t: *const u8,
-    remain: *const u8,
+    t: *const Timespec,
+    remain: *mut Timespec,
 ) -> SyscallRet {
     const TIME_ABSTIME: u32 = 1;
     let token = current_token();
@@ -458,16 +455,16 @@ pub fn sys_clock_nanosleep(
     //     clockid, flags, t as usize, remain as usize
     // );
 
-    let t = translated_ref(token, t as *const Timespec);
+    let t = get_data(token, t);
     let waittime = t.tv_sec * 1_000_000_000usize + t.tv_nsec;
 
     let begin = get_time_ms() * 1_000_000usize;
     let endtime = if flags == TIME_ABSTIME {
         //绝对时间
-        *t
+        t
     } else {
         //相对时间
-        get_time_spec() + *t
+        get_time_spec() + t
     };
 
     // debug!(
@@ -478,10 +475,7 @@ pub fn sys_clock_nanosleep(
     while get_time_ms() * 1_000_000usize - begin < waittime {
         if let Some(signo) = check_if_any_sig_for_current_task() {
             if remain as usize != 0 {
-                let mut buffer = UserBuffer::new(
-                    translated_byte_buffer(token, remain, size_of::<Timespec>()).unwrap(),
-                );
-                buffer.write(calculate_left_timespec(endtime).as_bytes());
+                put_data(token, remain, calculate_left_timespec(endtime));
             }
             handle_signal(signo);
         }

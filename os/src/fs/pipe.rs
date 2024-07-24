@@ -10,10 +10,12 @@
 //
 use super::{File, StMode};
 use crate::fs::Kstat;
-use crate::signal::{check_if_any_sig_for_current_task, handle_signal};
-use crate::task::suspend_current_and_run_next;
+use crate::task::{current_task, suspend_current_and_run_next};
+use crate::utils::SysErrNo;
 use crate::{mm::UserBuffer, syscall::PollEvents, utils::SyscallRet};
 use alloc::sync::{Arc, Weak};
+use alloc::vec;
+use alloc::vec::Vec;
 use spin::{Mutex, MutexGuard};
 
 /// ### 管道
@@ -58,7 +60,7 @@ enum RingBufferStatus {
     Normal,
 }
 
-const RING_BUFFER_SIZE: usize = 1024;
+const RING_BUFFER_SIZE: usize = 65536;
 
 /// ### 管道缓冲区(双端队列,向右增长)
 /// |成员变量|描述|
@@ -78,7 +80,8 @@ const RING_BUFFER_SIZE: usize = 1024;
 /// pub fn all_write_ends_closed()
 /// ```
 pub struct PipeRingBuffer {
-    arr: [u8; RING_BUFFER_SIZE],
+    // arr: [u8; RING_BUFFER_SIZE],
+    arr: Vec<u8>,
     head: usize,
     tail: usize,
     status: RingBufferStatus,
@@ -89,7 +92,8 @@ pub struct PipeRingBuffer {
 impl PipeRingBuffer {
     pub fn new() -> Self {
         Self {
-            arr: [0; RING_BUFFER_SIZE],
+            // arr: [0; RING_BUFFER_SIZE],
+            arr: vec![0u8; RING_BUFFER_SIZE],
             head: 0,
             tail: 0,
             status: RingBufferStatus::Empty,
@@ -174,18 +178,23 @@ impl File for Pipe {
         let mut read_size = 0usize;
         let mut loop_read;
         loop {
+            let task = current_task().unwrap();
+            let task_inner = task.inner_lock();
+            if !task_inner
+                .sig_pending
+                .difference(task_inner.sig_mask)
+                .is_empty()
+            {
+                return Err(SysErrNo::ERESTART);
+            }
+            drop(task_inner);
+            drop(task);
             let ring_buffer = self.inner_lock();
             loop_read = ring_buffer.available_read();
             if loop_read == 0 {
                 if ring_buffer.all_write_ends_closed() {
                     return Ok(read_size);
                 }
-
-                //信号处理
-                if let Some(signo) = check_if_any_sig_for_current_task() {
-                    handle_signal(signo);
-                }
-
                 drop(ring_buffer);
                 suspend_current_and_run_next();
                 continue;
@@ -209,19 +218,24 @@ impl File for Pipe {
     }
     fn write(&self, buf: UserBuffer) -> SyscallRet {
         assert!(self.writable());
-        // let buf_len = buf.len();
         let mut buf_iter = buf.into_iter();
         let mut write_size = 0usize;
         let mut loop_write;
         loop {
+            let task = current_task().unwrap();
+            let task_inner = task.inner_lock();
+            if !task_inner
+                .sig_pending
+                .difference(task_inner.sig_mask)
+                .is_empty()
+            {
+                return Err(SysErrNo::ERESTART);
+            }
+            drop(task_inner);
+            drop(task);
             let ring_buffer = self.inner_lock();
             loop_write = ring_buffer.available_write();
             if loop_write == 0 {
-                //信号处理
-                if let Some(signo) = check_if_any_sig_for_current_task() {
-                    handle_signal(signo);
-                }
-
                 drop(ring_buffer);
                 suspend_current_and_run_next();
                 continue;
@@ -257,10 +271,11 @@ impl File for Pipe {
         if events.contains(PollEvents::OUT) && self.writable && ring_buffer.available_write() > 0 {
             revents |= PollEvents::OUT;
         }
-        if self.readable && ring_buffer.all_write_ends_closed() {
+        if events.contains(PollEvents::HUP) && self.readable && ring_buffer.all_write_ends_closed()
+        {
             revents |= PollEvents::HUP;
         }
-        if self.writable && ring_buffer.all_read_ends_closed() {
+        if events.contains(PollEvents::ERR) && self.writable && ring_buffer.all_read_ends_closed() {
             revents |= PollEvents::ERR;
         }
         revents

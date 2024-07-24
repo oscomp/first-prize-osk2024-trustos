@@ -110,6 +110,7 @@ pub enum Syscall {
     Mmap = 222,
     Execve = 221,
     Mprotect = 226,
+    MSync = 227,
     Madvise = 233,
     Wait4 = 260,
     Prlimit = 261,
@@ -146,13 +147,12 @@ use crate::{
     timer::{Itimerval, Rusage, Timespec, Tms},
     utils::SyscallRet,
 };
-use log::debug;
 
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
     let id = syscall_id;
     let syscall_id: Syscall = Syscall::from(syscall_id);
-    debug!("syscall:{:?}", syscall_id);
+    // debug!("syscall:{:?}", syscall_id);
     match syscall_id {
         Syscall::Getcwd => sys_getcwd(args[0] as *const u8, args[1]),
         Syscall::Dup => sys_dup(args[0]),
@@ -240,7 +240,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::GetRobustList => {
             sys_get_robust_list(args[0], args[1] as *mut usize, args[2] as *mut usize)
         }
-        Syscall::NanoSleep => sys_nanosleep(args[0] as *const u8, args[1] as *const u8),
+        Syscall::NanoSleep => sys_nanosleep(args[0] as *const Timespec, args[1] as *mut Timespec),
         Syscall::SetTimer => sys_settimer(
             args[0] as usize,
             args[1] as *const Itimerval,
@@ -251,8 +251,8 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::ClockNanosleep => sys_clock_nanosleep(
             args[0],
             args[1] as u32,
-            args[2] as *const u8,
-            args[3] as *const u8,
+            args[2] as *const Timespec,
+            args[3] as *mut Timespec,
         ),
         Syscall::SysLog => sys_syslog(args[0] as isize, args[1] as *const u8, args[2]),
         Syscall::SchedSetScheduler => {
@@ -350,6 +350,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         ),
         Syscall::Munmap => sys_munmap(args[0], args[1]),
         Syscall::Mprotect => sys_mprotect(args[0], args[1], args[2] as u32),
+        Syscall::MSync => Ok(0),
         Syscall::Madvise => sys_madvise(args[0], args[1], args[2]),
         Syscall::Wait4 => sys_wait4(args[0] as isize, args[1] as *mut i32, args[2] as i32),
         Syscall::Prlimit => sys_prlimit(

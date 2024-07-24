@@ -103,7 +103,6 @@ do_openclose(iter_t iterations, void *cookie)
 int
 lat_syscall_main(int ac, char **av)
 {
-    fprintf(stderr, "lat syscall main\n");
 	int parallel = 1;
 	int warmup = 0;
 	int repetitions = TRIES;
