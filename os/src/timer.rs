@@ -166,10 +166,10 @@ impl Itimerval {
             it_value: TimeVal::new(0, 0),
         }
     }
-    pub fn as_bytes(&self) -> &[u8] {
-        let size = core::mem::size_of::<Self>();
-        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
-    }
+    // pub fn as_bytes(&self) -> &[u8] {
+    //     let size = core::mem::size_of::<Self>();
+    //     unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
+    // }
 }
 ///以实际（即挂钟）时间倒计时。在每次到期时，都会生成一个 SIGALRM 信号
 pub const ITIMER_REAL: usize = 0;
@@ -188,7 +188,7 @@ pub struct Timer {
 pub struct TimerInner {
     pub timer: Itimerval,
     pub last_time: TimeVal,
-    pub first: bool,
+    pub once: bool,
 }
 
 impl TimerInner {
@@ -196,7 +196,7 @@ impl TimerInner {
         Self {
             timer: Itimerval::new(),
             last_time: TimeVal::new(0, 0),
-            first: false,
+            once: false,
         }
     }
 }
@@ -207,20 +207,17 @@ impl Timer {
             inner: SyncUnsafeCell::new(TimerInner::new()),
         }
     }
-    // pub fn as_bytes(&self) -> &[u8] {
-    //     self.inner.get_unchecked_ref().timer.as_bytes()
-    // }
     pub fn set_timer(&self, new: Itimerval) {
         self.inner.get_unchecked_mut().timer = new;
     }
     pub fn set_last_time(&self, last_time: TimeVal) {
         self.inner.get_unchecked_mut().last_time = last_time;
     }
-    pub fn set_first_trigger(&self, first: bool) {
-        self.inner.get_unchecked_mut().first = first;
+    pub fn set_trigger_once(&self, once: bool) {
+        self.inner.get_unchecked_mut().once = once;
     }
-    pub fn first_trigger(&self) -> bool {
-        self.inner.get_unchecked_ref().first
+    pub fn trigger_once(&self) -> bool {
+        self.inner.get_unchecked_ref().once
     }
     pub fn last_time(&self) -> TimeVal {
         self.inner.get_unchecked_ref().last_time
@@ -250,10 +247,6 @@ impl TimeVal {
             tv_sec: now_time / 1000,
             tv_usec: (now_time % 1000) * 1000,
         }
-    }
-    pub fn as_bytes(&self) -> &[u8] {
-        let size = core::mem::size_of::<Self>();
-        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
     }
     pub fn is_empty(&self) -> bool {
         self.tv_sec == 0 && self.tv_usec == 0
@@ -354,7 +347,8 @@ pub fn get_time_spec() -> Timespec {
 }
 /// set the next timer interrupt
 pub fn set_next_trigger() {
-    set_timer(get_time() + CLOCK_FREQ / TICKS_PER_SEC);
+    const TIME_SLICE: usize = CLOCK_FREQ / TICKS_PER_SEC;
+    set_timer(get_time() + TIME_SLICE);
 }
 
 #[derive(Debug, PartialEq, Eq)]

@@ -137,10 +137,8 @@ lat_syscall_main(int ac, char **av)
 		state.file = av[optind + 1];
 
 	if (!strcmp("null", av[optind])) {
-        fprintf(stderr, "[lat-syscall] bench null\n");
 		benchmp(NULL, do_getppid, NULL, 0, parallel, 
 			warmup, repetitions, &state);
-        fprintf(stderr, "[lat-syscall] bench end\n");
 		micro("Simple syscall", get_n());
 	} else if (!strcmp("write", av[optind])) {
 		state.fd = open("/dev/null", 1);
@@ -175,6 +173,5 @@ lat_syscall_main(int ac, char **av)
 	} else {
 		lmbench_usage(ac, av, usage);
 	}
-    fprintf(stderr,"[lat-syscall] end!\n");
 	return(0);
 }

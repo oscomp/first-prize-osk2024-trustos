@@ -107,78 +107,6 @@ pub fn exit_current_group_and_run_next(exit_code: i32) {
 
     exit_current_and_run_next(exit_code);
 }
-// pub fn exit_current_group(exit_code: i32) -> SyscallRet {
-//     let task = current_task().unwrap();
-//     let task_inner = task.inner_lock();
-//     let mut exit_code = exit_code;
-//     if task_inner.sig_table.not_exited() {
-//         //设置进程的SIGNAL_GROUP_EXIT标志并把终止代号放到current->signal->group_exit_code字段
-//         task_inner.sig_table.set_exit_code(exit_code);
-//         let pid = task.pid();
-//         drop(task_inner);
-//         drop(task);
-//         send_signal_to_thread_group(pid, SigSet::SIGKILL);
-//     } else {
-//         exit_code = task_inner.sig_table.exit_code();
-//         drop(task_inner);
-//         drop(task);
-//     }
-
-//     exit_current(exit_code)
-// }
-
-// pub fn exit_current(exit_code: i32) -> SyscallRet {
-//     let task = current_task().unwrap();
-//     let mut inner = task.inner_lock();
-//     debug!(
-//         "[sys_exit] thread {} exit, exit_code = {}",
-//         task.tid(),
-//         exit_code
-//     );
-
-//     // CLONE_CHILD_CLEARTID
-//     if inner.clear_child_tid != 0 {
-//         let token = inner.user_token();
-//         put_data(token, inner.clear_child_tid as *mut u32, 0);
-//         // 唤醒等待在 child_tid 的进程
-//         let pa = inner
-//             .memory_set
-//             .translate_va(VirtAddr::from(inner.clear_child_tid))
-//             .unwrap();
-//         futex_wake_up(pa, 1);
-//     }
-
-//     // 无论如何一个轻量级进程都会是一个线程
-//     // 释放线程相关资源
-//     remove_from_tid2task(task.tid());
-//     inner.dealloc_user_res();
-//     inner.task_status = TaskStatus::Zombie;
-
-//     drop(inner);
-
-//     // 一个进程的所有线程都退出了,此时回收资源
-//     {
-//         let thread_group = THREAD_GROUP.lock();
-//         if let Some(tasks) = thread_group.get(&task.pid()) {
-//             if tasks.iter().all(|task| task.inner_lock().is_zombie()) {
-//                 drop(thread_group);
-//                 send_signal_to_thread_group(task.ppid(), SigSet::SIGCHLD);
-//                 debug!("wake up parent {}", task.ppid());
-//                 wakeup_parent(task.ppid());
-//                 let inner = task.inner_lock();
-//                 inner.memory_set.recycle_data_pages()?;
-//                 if inner.sig_table.not_exited() {
-//                     inner.sig_table.set_exit_code(exit_code);
-//                 }
-//                 // 删除进程的专属目录
-//                 // remove_proc_dir_and_file(task.pid());
-//             }
-//         }
-//     }
-
-//     drop(task);
-//     Ok(0)
-// }
 
 pub fn exit_current_and_run_next(exit_code: i32) {
     let task = take_current_task().unwrap();
@@ -216,15 +144,12 @@ pub fn exit_current_and_run_next(exit_code: i32) {
             if tasks.iter().all(|task| task.inner_lock().is_zombie()) {
                 drop(thread_group);
                 send_signal_to_thread_group(task.ppid(), SigSet::SIGCHLD);
-                debug!("wake up parent {}", task.ppid());
                 wakeup_parent(task.ppid());
-                let inner = task.inner_lock();
-                inner.memory_set.recycle_data_pages();
-                if inner.sig_table.not_exited() {
-                    inner.sig_table.set_exit_code(exit_code);
+                let mut task_inner = task.inner_lock();
+                task_inner.recycle();
+                if task_inner.sig_table.not_exited() {
+                    task_inner.sig_table.set_exit_code(exit_code);
                 }
-                // 删除进程的专属目录
-                // remove_proc_dir_and_file(task.pid());
             }
         }
     }

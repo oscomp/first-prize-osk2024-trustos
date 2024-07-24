@@ -571,7 +571,7 @@ impl MemorySetInner {
             }
             return true;
         }
-        //brk
+        //brk or stack
         if let Some(area) = self
             .areas
             .iter_mut()
@@ -1084,6 +1084,7 @@ impl MemorySetInner {
             }
         }
         self.areas.clear();
+        self.page_table.clear();
         Ok(0)
     }
 }

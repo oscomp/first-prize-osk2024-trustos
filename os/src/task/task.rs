@@ -12,7 +12,7 @@ use crate::{
     fs::{FdTable, FsInfo},
     mm::{
         flush_tlb, get_data, put_data, translated_refmut, MapAreaType, MapPermission, MemorySet,
-        MemorySetInner, PageTable, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
+        MemorySetInner, PageTable, PageTableEntry, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
     },
     signal::{SigSet, SigTable},
     syscall::CloneFlags,
@@ -90,7 +90,7 @@ impl TaskControlBlockInner {
         self.sig_table.is_exited()
     }
     pub fn alloc_user_res(&mut self) {
-        let (_, ustack_top) = self.memory_set.lazy_insert_framed_area_with_hint(
+        let (ustack_bottom, ustack_top) = self.memory_set.lazy_insert_framed_area_with_hint(
             USER_STACK_TOP,
             USER_STACK_SIZE,
             MapPermission::R | MapPermission::W | MapPermission::U,
@@ -111,20 +111,24 @@ impl TaskControlBlockInner {
         self.trap_cx_ppn = trap_cx_ppn;
         self.trap_cx_bottom = trap_cx_bottom;
 
+        let user_stack_range = VPNRange::new(
+            VirtAddr::from(ustack_bottom).floor(),
+            VirtAddr::from(ustack_top).floor(),
+        );
         //预先为栈顶分配几页，用于环境变量等初始数据
-        let mut page_table = PageTable::from_token(self.memory_set.get_ref().page_table.token());
+        let page_table = PageTable::from_token(self.memory_set.get_ref().page_table.token());
         let area = self
             .memory_set
             .get_mut()
             .areas
             .iter_mut()
-            .find(|area| area.area_type == MapAreaType::Stack)
+            .find(|area| area.vpn_range.range() == user_stack_range.range())
             .unwrap();
         for i in 1..=PRE_ALLOC_PAGES {
-            let vpn = (area.vpn_range.range().1 .0 - i).into();
-            let pte: Option<crate::mm::PageTableEntry> = page_table.translate(vpn);
+            let vpn = (area.vpn_range.end().0 - i).into();
+            let pte: Option<PageTableEntry> = page_table.translate(vpn);
             if pte.is_none() || !pte.unwrap().is_valid() {
-                area.map_one(&mut page_table, vpn);
+                area.map_one(&mut self.memory_set.get_mut().page_table, vpn);
             }
         }
     }
@@ -149,23 +153,13 @@ impl TaskControlBlockInner {
             .remove_area_with_start_vpn(VirtAddr::from(self.trap_cx_bottom).floor());
         flush_tlb();
     }
-    #[deprecated]
-    pub fn get_cwd(&self, dirfd: isize, path: &str) -> Result<String, SysErrNo> {
-        if is_abs_path(path) {
-            Ok(String::from("/"))
-        } else if dirfd != -100 {
-            // AT_FDCWD=-100
-            let dirfd = dirfd as usize;
-            if let Some(file) = self.fd_table.try_get(dirfd) {
-                let file = file.file()?;
-                Ok(file.inode.path())
-            } else {
-                Err(SysErrNo::EINVAL)
-            }
-        } else {
-            Ok(self.fs_info.get_cwd())
-        }
+
+    pub fn recycle(&mut self) {
+        self.memory_set.recycle_data_pages();
+        self.fd_table.clear();
+        self.fs_info.clear();
     }
+
     pub fn get_abs_path(&self, dirfd: isize, path: &str) -> Result<String, SysErrNo> {
         if is_abs_path(path) {
             Ok(get_abs_path("/", path))
@@ -270,6 +264,8 @@ impl TaskControlBlock {
         let fd_table = Arc::new(FdTable::from_another(&task_inner.fd_table));
         task_inner.fd_table = fd_table;
         task_inner.fd_table.close_on_exec();
+        task_inner.sig_mask = SigSet::empty();
+        task_inner.sig_pending = SigSet::empty();
 
         let mut user_sp = task_inner.user_stack_top;
 
@@ -577,16 +573,18 @@ impl TaskControlBlock {
         let mut task_inner = self.inner_lock();
         let timer = task_inner.timer.clone();
         let now = TimeVal::now();
-        if timer.first_trigger() {
-            //首次触发
+        if timer.trigger_once() {
+            // 只触发一次,单次计时器
             if now > timer.last_time() + timer.timer().it_value {
+                // log::info!("Timer Alarm Once");
                 task_inner.sig_pending |= SigSet::SIGALRM;
-                timer.set_first_trigger(false);
+                timer.set_trigger_once(false);
                 timer.set_last_time(now);
             }
         } else if !timer.timer().it_interval.is_empty() {
             //间隔触发
             if now > timer.last_time() + timer.timer().it_interval {
+                // log::info!("Timer Alarm!");
                 task_inner.sig_pending |= SigSet::SIGALRM;
                 timer.set_last_time(now);
             }

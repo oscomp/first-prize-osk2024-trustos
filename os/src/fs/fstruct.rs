@@ -117,6 +117,9 @@ impl FdTable {
             }),
         }
     }
+    pub fn clear(&self) {
+        self.get_mut().files.clear();
+    }
     pub fn alloc_fd(&self) -> SyscallRet {
         let fd_table = &mut self.get_mut().files;
         if let Some(fd) = (0..fd_table.len()).find(|fd| fd_table[*fd].is_none()) {
@@ -259,6 +262,12 @@ impl FsInfo {
                 fd2path: another.inner.get_unchecked_ref().fd2path.clone(),
             }),
         }
+    }
+    pub fn clear(&self) {
+        let inner = self.get_mut();
+        inner.cwd.clear();
+        inner.exe.clear();
+        inner.fd2path.clear();
     }
     pub fn get_cwd(&self) -> String {
         self.get_mut().cwd.clone()

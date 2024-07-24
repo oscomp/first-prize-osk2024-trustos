@@ -7,7 +7,7 @@ use crate::{
         SigInfo, SigSet,
     },
     syscall::SignalMaskFlag,
-    task::{current_task, suspend_current_and_run_next},
+    task::{current_task, exit_current_and_run_next, suspend_current_and_run_next},
     timer::Timespec,
     utils::{SysErrNo, SyscallRet},
 };
@@ -38,9 +38,10 @@ pub fn sys_rt_sigaction(
             // 忽略
             KSigAction::ignore()
         } else {
+            let customed = new_act.sa_handler != exit_current_and_run_next as usize;
             KSigAction {
                 act: new_act,
-                customed: true,
+                customed,
             }
         };
         task_inner.sig_table.set_action(signo, new_sig);
@@ -117,7 +118,6 @@ pub fn sys_rt_sigsuspend(mask: *const SigSet) -> SyscallRet {
 /// pid < -1 the sig is sent to every process in process group whose ID is -pid
 pub fn sys_kill(pid: isize, signo: usize) -> SyscallRet {
     if signo == 0 {
-        //0信号仅用于测试进程是否存在
         return Ok(0);
     }
     let sig = SigSet::from_sig(signo);
