@@ -154,19 +154,20 @@ impl Inode for Ext4Inode {
                 return Ok(buf);
             }
         } else {
-            assert!(as_inode_type(file.types()) == InodeType::SymLink);
-            let mut real_path_buf = [0u8; 256];
-            file.file_readlink(&mut real_path_buf, 255)?;
-            let end = real_path_buf
-                .iter()
-                .enumerate()
-                .find(|(_, v)| **v == 0)
-                .map(|(idx, _)| idx)
-                .unwrap();
-            let real_path = format!("/{}", core::str::from_utf8(&real_path_buf[..end]).unwrap());
+            unimplemented!("not support!");
+            // assert!(as_inode_type(file.types()) == InodeType::SymLink);
+            // let mut real_path_buf = [0u8; 256];
+            // file.file_readlink(&mut real_path_buf, 255)?;
+            // let end = real_path_buf
+            //     .iter()
+            //     .enumerate()
+            //     .find(|(_, v)| **v == 0)
+            //     .map(|(idx, _)| idx)
+            //     .unwrap();
+            // let real_path = format!("/{}", core::str::from_utf8(&real_path_buf[..end]).unwrap());
             // debug!("[symlink] real_path= {}", real_path);
-            let real_file = self.find(&real_path)?;
-            real_file.read_all()
+            // let real_file = self.find(&real_path)?;
+            // real_file.read_all()
         }
     }
 

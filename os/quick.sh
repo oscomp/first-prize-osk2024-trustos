@@ -1,4 +1,4 @@
-cd ../final_tests/UnixBench
+cd ../final_tests/libc-test
 sudo make clean
 cd -
-make unix-bench
+make libctest
