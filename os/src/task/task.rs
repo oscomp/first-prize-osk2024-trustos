@@ -115,11 +115,6 @@ impl TaskControlBlockInner {
             VirtAddr::from(ustack_bottom).floor(),
             VirtAddr::from(ustack_top).floor(),
         );
-        // log::info!(
-        //     "[alloc_user_res] user_stack_range=[{:#x},{:#x}) ",
-        //     user_stack_range.start().0,
-        //     user_stack_range.end().0,
-        // );
         //预先为栈顶分配几页，用于环境变量等初始数据
         let page_table = PageTable::from_token(self.memory_set.get_ref().page_table.token());
         let area = self
@@ -133,7 +128,6 @@ impl TaskControlBlockInner {
             let vpn = (area.vpn_range.end().0 - i).into();
             let pte: Option<PageTableEntry> = page_table.translate(vpn);
             if pte.is_none() || !pte.unwrap().is_valid() {
-                // log::info!("map vpn : {:#x}", vpn.0);
                 area.map_one(&mut self.memory_set.get_mut().page_table, vpn);
             }
         }
@@ -159,23 +153,13 @@ impl TaskControlBlockInner {
             .remove_area_with_start_vpn(VirtAddr::from(self.trap_cx_bottom).floor());
         flush_tlb();
     }
-    #[deprecated]
-    pub fn get_cwd(&self, dirfd: isize, path: &str) -> Result<String, SysErrNo> {
-        if is_abs_path(path) {
-            Ok(String::from("/"))
-        } else if dirfd != -100 {
-            // AT_FDCWD=-100
-            let dirfd = dirfd as usize;
-            if let Some(file) = self.fd_table.try_get(dirfd) {
-                let file = file.file()?;
-                Ok(file.inode.path())
-            } else {
-                Err(SysErrNo::EINVAL)
-            }
-        } else {
-            Ok(self.fs_info.get_cwd())
-        }
+
+    pub fn recycle(&mut self) {
+        self.memory_set.recycle_data_pages();
+        self.fd_table.clear();
+        self.fs_info.clear();
     }
+
     pub fn get_abs_path(&self, dirfd: isize, path: &str) -> Result<String, SysErrNo> {
         if is_abs_path(path) {
             Ok(get_abs_path("/", path))
@@ -592,7 +576,7 @@ impl TaskControlBlock {
         if timer.trigger_once() {
             // 只触发一次,单次计时器
             if now > timer.last_time() + timer.timer().it_value {
-                log::info!("Timer Alarm Once");
+                // log::info!("Timer Alarm Once");
                 task_inner.sig_pending |= SigSet::SIGALRM;
                 timer.set_trigger_once(false);
                 timer.set_last_time(now);

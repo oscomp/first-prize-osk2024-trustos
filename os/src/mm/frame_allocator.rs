@@ -119,23 +119,6 @@ pub fn frame_alloc() -> Option<Arc<FrameTracker>> {
         .map(FrameTracker::new)
         .map(Arc::new)
 }
-/// 分配多个frams
-pub fn frames_alloc_much(pages: usize) -> Option<Vec<Arc<FrameTracker>>> {
-    let mut frames = Vec::new();
-    for _ in 0..pages {
-        if let Some(frame) = FRAME_ALLOCATOR
-            .lock()
-            .alloc()
-            .map(FrameTracker::new)
-            .map(Arc::new)
-        {
-            frames.push(frame);
-        } else {
-            return None;
-        }
-    }
-    Some(frames)
-}
 /// deallocate a frame
 pub fn frame_dealloc(ppn: PhysPageNum) {
     FRAME_ALLOCATOR.lock().dealloc(ppn);

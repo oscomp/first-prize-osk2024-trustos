@@ -178,7 +178,6 @@ impl PageTable {
         }
         result
     }
-    #[allow(unused)]
     /// Create a mapping form `vpn` to `ppn`
     pub fn map(&mut self, vpn: VirtPageNum, ppn: PhysPageNum, flags: PTEFlags) {
         let pte = self.find_pte_create(vpn).unwrap();
@@ -233,6 +232,9 @@ impl PageTable {
     }
     pub fn set_map_flags(&mut self, vpn: VirtPageNum, flags: PTEFlags) {
         self.find_pte_create(vpn).unwrap().set_map_flags(flags);
+    }
+    pub fn clear(&mut self) {
+        self.frames.clear();
     }
 }
 /// Translate a pointer to a mutable u8 Vec through page table

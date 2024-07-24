@@ -347,7 +347,8 @@ pub fn get_time_spec() -> Timespec {
 }
 /// set the next timer interrupt
 pub fn set_next_trigger() {
-    set_timer(get_time() + CLOCK_FREQ / TICKS_PER_SEC);
+    const TIME_SLICE: usize = CLOCK_FREQ / TICKS_PER_SEC;
+    set_timer(get_time() + TIME_SLICE);
 }
 
 #[derive(Debug, PartialEq, Eq)]

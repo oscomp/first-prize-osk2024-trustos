@@ -38,13 +38,14 @@ impl TaskManager {
             })
             .map(|(idx, _)| idx);
         if let Some(idx) = idx {
-            // info!("wake up parent {}", pid);
+            // log::info!("wake up parent {}", pid);
             let p = self.ready_queue.remove(idx).unwrap();
             self.ready_queue.push_front(p);
         } else {
             // info!("no parent pid=={}", pid);
             // 父进程已被回收,被添加到了initproc下
             if pid != 0 {
+                // log::info!("wake up parent {}", 0);
                 self.wakeup_parent(0);
             }
         }

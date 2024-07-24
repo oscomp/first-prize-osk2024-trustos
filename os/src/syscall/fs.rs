@@ -72,9 +72,6 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
         let ret = file.read(UserBuffer::new(
             safe_translated_byte_buffer(memory_set, buf, len).unwrap(),
         ))?;
-        // if ret != len {
-        //     log::info!("size not equal, len={},ret={}", len, ret);
-        // }
         Ok(ret)
     } else {
         Err(SysErrNo::EBADF)
