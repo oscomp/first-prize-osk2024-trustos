@@ -302,10 +302,10 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
 
-    debug!(
-        "[sys_getdents64] fd is {}, buf addr  is {:x}, len is {}",
-        fd, buf as usize, len
-    );
+    // debug!(
+    //     "[sys_getdents64] fd is {}, buf addr  is {:x}, len is {}",
+    //     fd, buf as usize, len
+    // );
 
     if fd >= inner.fd_table.len() || inner.fd_table.try_get(fd).is_none() {
         return Err(SysErrNo::EINVAL);
@@ -1164,14 +1164,10 @@ pub fn sys_pselect6(
                 if exceptfds.got_fd(i) {
                     if let Some(file) = &inner.fd_table.try_get(i) {
                         let file: Arc<dyn File> = file.any();
-                        let event = file.poll(PollEvents::ERR | PollEvents::HUP);
-                        if !event.contains(PollEvents::ERR) && !event.contains(PollEvents::HUP) {
+                        let event = file.poll(PollEvents::ERR);
+                        if !event.contains(PollEvents::ERR) {
                             exceptfds.mark_fd(i, false);
                         }
-                        // let event = file.poll(PollEvents::ERR);
-                        // if !event.contains(PollEvents::ERR) {
-                        //     exceptfds.mark_fd(i, false);
-                        // }
                         num += 1;
                     } else {
                         exceptfds.mark_fd(i, false);

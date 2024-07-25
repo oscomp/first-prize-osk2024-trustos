@@ -271,11 +271,10 @@ impl File for Pipe {
         if events.contains(PollEvents::OUT) && self.writable && ring_buffer.available_write() > 0 {
             revents |= PollEvents::OUT;
         }
-        if events.contains(PollEvents::HUP) && self.readable && ring_buffer.all_write_ends_closed()
-        {
+        if self.readable && ring_buffer.all_write_ends_closed() {
             revents |= PollEvents::HUP;
         }
-        if events.contains(PollEvents::ERR) && self.writable && ring_buffer.all_read_ends_closed() {
+        if self.writable && ring_buffer.all_read_ends_closed() {
             revents |= PollEvents::ERR;
         }
         revents
