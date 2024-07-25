@@ -1164,8 +1164,8 @@ pub fn sys_pselect6(
                 if exceptfds.got_fd(i) {
                     if let Some(file) = &inner.fd_table.try_get(i) {
                         let file: Arc<dyn File> = file.any();
-                        let event = file.poll(PollEvents::ERR);
-                        if !event.contains(PollEvents::ERR) {
+                        let event = file.poll(PollEvents::ERR | PollEvents::HUP);
+                        if !event.contains(PollEvents::ERR) && !event.contains(PollEvents::HUP) {
                             exceptfds.mark_fd(i, false);
                         }
                         num += 1;
