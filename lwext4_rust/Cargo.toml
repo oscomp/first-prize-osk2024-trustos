@@ -19,6 +19,7 @@ print = ["printf-compat"]
 [dependencies]
 log = "0.4"
 printf-compat = { version = "0.1", default-features = false, optional = true }
+spin = "0.9.8"
 
 #[build-dependencies]
 #[target.'cfg(unix)'.build-dependencies]

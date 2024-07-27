@@ -180,7 +180,7 @@ pub fn sys_busyboxsh() -> isize {
             [
                 "busybox\0".as_ptr() as isize,
                 "sh\0".as_ptr() as isize,
-                "lmbench_testcode.sh\0".as_ptr() as isize,
+                "iozone_testcode.sh\0".as_ptr() as isize,
                 0,
             ]
             .as_ptr() as isize,
@@ -198,11 +198,8 @@ pub fn sys_run_libc_bench() -> isize {
         ["/libc-bench\0".as_ptr() as isize, 0, 0, 0, 0, 0],
     )
 }
-//时间结果为0，0的测例
-//lmbench_all lat_sig -P 1 catch(有时为0)
 
-//卡死的测例
-//lmbench_all lat_sig -P 1 catch 和 lmbench_all lat_pipe -P 1 一起跑会卡死
+//lmbench_all lat_pagefault -P 1 /var/tmp/XXX
 pub fn sys_run_lmbench_test() -> isize {
     syscall(
         SYSCALL_EXECVE,
@@ -210,10 +207,9 @@ pub fn sys_run_lmbench_test() -> isize {
             "/lmbench_all\0".as_ptr() as isize,
             [
                 "lmbench_all\0".as_ptr() as isize,
-                "lat_mmap\0".as_ptr() as isize,
+                "lat_pagefault\0".as_ptr() as isize,
                 "-P\0".as_ptr() as isize,
                 "1\0".as_ptr() as isize,
-                "512k\0".as_ptr() as isize,
                 "/var/tmp/XXX\0".as_ptr() as isize,
                 0,
             ]
