@@ -45,7 +45,6 @@ impl Inode for Ext4Inode {
             let path = path.to_str().unwrap();
             file.file_open(path, O_RDONLY);
             let fsize = file.file_size();
-            let _ = file.file_close();
             fsize as usize
         } else {
             0
@@ -85,7 +84,6 @@ impl Inode for Ext4Inode {
         file.file_seek(off as i64, SEEK_SET)
             .map_err(|e| SysErrNo::from(e))?;
         let r = file.file_read(buf);
-        let _ = file.file_close();
         r.map_err(|e| SysErrNo::from(e))
     }
 
@@ -98,7 +96,6 @@ impl Inode for Ext4Inode {
         file.file_seek(off as i64, SEEK_SET)
             .map_err(|e| SysErrNo::from(e))?;
         let r = file.file_write(buf);
-        let _ = file.file_close();
         r.map_err(|e| SysErrNo::from(e))
     }
 
@@ -110,7 +107,6 @@ impl Inode for Ext4Inode {
             .map_err(|e| SysErrNo::from(e))?;
 
         let t = file.file_truncate(size as u64);
-        let _ = file.file_close();
         t.map_err(|e| SysErrNo::from(e))
     }
 
@@ -147,7 +143,6 @@ impl Inode for Ext4Inode {
             let mut buf: Vec<u8> = vec![0; size];
             file.file_seek(0, SEEK_SET).map_err(|e| SysErrNo::from(e))?;
             let r = file.file_read(buf.as_mut_slice());
-            file.file_close()?;
             if let Err(e) = r {
                 return Err(SysErrNo::from(e));
             } else {

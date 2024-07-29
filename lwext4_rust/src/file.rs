@@ -191,34 +191,6 @@ impl Ext4File {
         Ok(EOK as usize)
     }
 
-    /*
-    //检查cache是否被启用，如果未被启用则将内容读入缓存
-    fn check_cache_used(&mut self) {
-        let mut cache_writer = self.cache.write();
-        if !cache_writer.if_use {
-            debug!("initialize cache!");
-            let size = unsafe { ext4_fsize(&mut self.file_desc) as usize };
-            cache_writer.data = Vec::with_capacity(size);
-            let data = &mut cache_writer.data;
-            unsafe {
-                data.set_len(size);
-            }
-
-            unsafe { ext4_fseek(&mut self.file_desc, 0, 0) };
-            let mut rw_count = 0;
-            unsafe {
-                ext4_fread(
-                    &mut self.file_desc,
-                    cache_writer.data.as_mut_ptr() as _,
-                    size,
-                    &mut rw_count,
-                )
-            };
-            cache_writer.if_use = true;
-        }
-    }
-    */
-
     //检查是否在cache表中，没有则添加
     fn check_cached(&mut self, file_path: String) {
         if !if_cache(file_path.clone()) {
@@ -247,21 +219,25 @@ impl Ext4File {
         }
     }
 
-    pub fn file_seek(&mut self, offset: i64, _seek_type: u32) -> Result<usize, i32> {
-        let path = String::from((*self.file_path).to_str().unwrap());
-        self.check_cached(path.clone());
+    pub fn file_seek(&mut self, offset: i64, seek_type: u32) -> Result<usize, i32> {
+        if self.this_type != InodeTypes::EXT4_DE_DIR {
+            //如果是目录文件不用cache
+            let path = String::from((*self.file_path).to_str().unwrap());
+            self.check_cached(path.clone());
 
-        let cache = get_cache(path.clone());
-        let mut cache_writer = cache.write();
+            let cache = get_cache(path.clone());
+            let mut cache_writer = cache.write();
 
-        let mut offset = offset as usize;
-        if offset > cache_writer.size() {
-            warn!("Seek beyond the end of the file");
-            offset = cache_writer.size();
+            let mut offset = offset as usize;
+            if offset > cache_writer.size() {
+                warn!("Seek beyond the end of the file");
+                offset = cache_writer.size();
+            }
+
+            cache_writer.offset = offset as usize;
+            return Ok(EOK as usize);
         }
 
-        cache_writer.offset = offset as usize;
-        /*
         let mut offset = offset;
         let size = self.file_size() as i64;
 
@@ -275,12 +251,29 @@ impl Ext4File {
             error!("ext4_fseek: rc = {}", r);
             return Err(r);
         }
-        */
-        Ok(EOK as usize)
+
+        Ok(r as usize)
     }
 
     pub fn file_read(&mut self, buff: &mut [u8]) -> Result<usize, i32> {
-        /*
+        let path = String::from((*self.file_path).to_str().unwrap());
+        if if_cache(path.clone()) {
+            //找到cache直接读cache
+            let cache = get_cache(path.clone());
+            let cache_read = cache.read();
+            let data = cache_read.get_data_slice();
+            let end = (cache_read.offset + buff.len()).min(data.len());
+            let r_sz = end - cache_read.offset;
+            buff[..r_sz].copy_from_slice(&data[cache_read.offset..end]);
+
+            debug!(
+                "file_read {},len = {},offset is {}",
+                path, r_sz, cache_read.offset
+            );
+
+            return Ok(r_sz);
+        }
+
         let mut rw_count = 0;
         let r = unsafe {
             ext4_fread(
@@ -295,24 +288,9 @@ impl Ext4File {
             error!("ext4_fread: rc = {}", r);
             return Err(r);
         }
-        */
-
-        let path = String::from((*self.file_path).to_str().unwrap());
-        let cache = get_cache(path.clone());
-        let cache_read = cache.read();
-        let data = cache_read.get_data_slice();
-        let end = (cache_read.offset + buff.len()).min(data.len());
-        let r_sz = end - cache_read.offset;
-        buff[..r_sz].copy_from_slice(&data[cache_read.offset..end]);
-
-        debug!(
-            "file_read {},len = {},offset is {}",
-            path, r_sz, cache_read.offset
-        );
 
         //debug!("file_read {:?}, len={}", self.get_path(), rw_count);
-
-        Ok(r_sz)
+        Ok(rw_count)
     }
 
     /*
@@ -331,7 +309,15 @@ impl Ext4File {
     */
 
     pub fn file_write(&mut self, buf: &[u8]) -> Result<usize, i32> {
-        /*
+        let path = String::from((*self.file_path).to_str().unwrap());
+        if if_cache(path.clone()) {
+            //找到cache直接写cache
+            let cache = get_cache(path.clone());
+            let mut cache_writer = cache.write();
+            cache_writer.writebuf(buf);
+            return Ok(buf.len());
+        }
+
         let mut rw_count = 0;
         let r = unsafe {
             ext4_fwrite(
@@ -346,15 +332,9 @@ impl Ext4File {
             error!("ext4_fwrite: rc = {}", r);
             return Err(r);
         }
-        */
-
-        let path = String::from((*self.file_path).to_str().unwrap());
-        let cache = get_cache(path.clone());
-        let mut cache_writer = cache.write();
-        cache_writer.writebuf(buf);
 
         //debug!("file_write {:?}, len={}", self.get_path(), rw_count);
-        Ok(buf.len())
+        Ok(rw_count)
     }
 
     pub fn file_truncate(&mut self, size: u64) -> Result<usize, i32> {
@@ -380,13 +360,14 @@ impl Ext4File {
         if if_cache(path.clone()) {
             return get_cache(path.clone()).read().size() as u64;
         }
+
         //注，记得先 O_RDONLY 打开文件
         unsafe { ext4_fsize(&mut self.file_desc) }
     }
 
     pub fn file_cache_flush(&mut self) -> Result<usize, i32> {
-        let path = String::from((*self.file_path).to_str().unwrap());
-        write_back_cache(path.clone());
+        //let path = String::from((*self.file_path).to_str().unwrap());
+        //write_back_cache(path.clone());
 
         let c_path = self.file_path.clone();
         let c_path = c_path.into_raw();
@@ -453,6 +434,17 @@ impl Ext4File {
         let c_path = c_path.into_raw();
         let mut stat = ext4_inode_stat::default();
         let r = unsafe { ext4_stat_get(c_path, &mut stat) };
+
+        let path = String::from((*self.file_path).to_str().unwrap());
+        if if_cache(path.clone()) {
+            //如果在缓存中，更新stat获得的大小
+            let cache = get_cache(path.clone());
+            let cache_reader = cache.read();
+            stat.st_size = cache_reader.size() as isize;
+            stat.st_blocks =
+                (stat.st_size - 1 + (stat.st_blksize as isize)) / (stat.st_blksize as isize);
+        }
+
         unsafe {
             drop(CString::from_raw(c_path));
         }
@@ -738,9 +730,11 @@ impl VFileCache {
 
     pub fn truncate(&mut self, new_size: usize) {
         self.data.resize(new_size, 0);
+        self.modified = true;
     }
 }
 
+//cache表，目前只为普通文件使用cache
 static CACHE_TABLE: Mutex<BTreeMap<String, Arc<RwLock<VFileCache>>>> = Mutex::new(BTreeMap::new());
 
 pub fn if_cache(file_path: String) -> bool {
@@ -779,9 +773,11 @@ pub fn insert_fifo(file_path: String) {
 }
 
 pub fn write_back_cache(path: String) {
-    let c_path = CString::new(path.clone()).expect("CString::new failed");
     if if_cache(path.clone()) {
         //如果在缓存中有，表明未被删除
+        let c_path = CString::new(path.clone()).expect("CString::new failed");
+        let c_path = c_path.into_raw();
+        let flags = Ext4File::flags_to_cstring(2).into_raw();
         let cache = get_cache(path.clone());
         let mut cache_writer = cache.write();
         debug!("{} is written back!", path);
@@ -794,13 +790,12 @@ pub fn write_back_cache(path: String) {
                 fsize: 0,
                 fpos: 0,
             };
+            unsafe { ext4_fopen(&mut file_desc, c_path, flags) };
             unsafe {
-                ext4_fopen(
-                    &mut file_desc,
-                    c_path.into_raw(),
-                    Ext4File::flags_to_cstring(2).into_raw(),
-                )
-            };
+                // deallocate the CString
+                drop(CString::from_raw(c_path));
+                drop(CString::from_raw(flags));
+            }
             unsafe { ext4_fseek(&mut file_desc, 0, 0) };
             let mut rw_count = 0;
             unsafe {
