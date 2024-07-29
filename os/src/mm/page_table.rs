@@ -416,7 +416,24 @@ impl UserBuffer {
         }
         total
     }
-    // 将一个Buffer的数据写入UserBuffer，返回写入长度
+    /// 将内容数组返回
+    pub fn read(&mut self, len: usize) -> Vec<u8> {
+        let mut bytes = vec![0; len];
+        let mut current = 0;
+        for sub_buff in self.buffers.iter_mut() {
+            let mut sblen = (*sub_buff).len();
+            if current + sblen > len {
+                sblen = len - current;
+            }
+            bytes[current..current + sblen].copy_from_slice(&(*sub_buff)[..sblen]);
+            current += sblen;
+            if current == len {
+                return bytes;
+            }
+        }
+        bytes
+    }
+    /// 将一个Buffer的数据写入UserBuffer，返回写入长度
     pub fn write(&mut self, buff: &[u8]) -> usize {
         let len = self.len().min(buff.len());
         if len == 0 {
@@ -424,12 +441,23 @@ impl UserBuffer {
         }
         let mut current = 0;
         for sub_buff in self.buffers.iter_mut() {
-            let sblen = (*sub_buff).len();
-            for j in 0..sblen {
-                (*sub_buff)[j] = buff[current];
-                current += 1;
+            let mut sblen = (*sub_buff).len();
+            if buff.len() > 10 {
+                if current + sblen > len {
+                    sblen = len - current;
+                }
+                (*sub_buff)[..sblen].copy_from_slice(&buff[current..current + sblen]);
+                current += sblen;
                 if current == len {
                     return len;
+                }
+            } else {
+                for j in 0..sblen {
+                    (*sub_buff)[j] = buff[current];
+                    current += 1;
+                    if current == len {
+                        return len;
+                    }
                 }
             }
         }
@@ -437,6 +465,7 @@ impl UserBuffer {
     }
     //在指定位置写入数据
     pub fn write_at(&mut self, offset: usize, buff: &[u8]) -> isize {
+        //未被使用，暂不做优化
         let len = buff.len();
         if offset + len > self.len() {
             return -1;

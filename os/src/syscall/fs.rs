@@ -25,7 +25,7 @@ use log::debug;
 use super::{FcntlCmd, Iovec, RLimit};
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
-    debug!("[sys_write] fd is {}, len={}", fd, len);
+    //debug!("[sys_write] fd is {}, len={}", fd, len);
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let memory_set = inner.memory_set.clone();
@@ -56,7 +56,7 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let inner = task.inner_lock();
     let memory_set = inner.memory_set.clone();
 
-    debug!("[sys_read] fd is {}, len is {}", fd, len);
+    //debug!("[sys_read] fd is {}, len is {}", fd, len);
 
     if fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);

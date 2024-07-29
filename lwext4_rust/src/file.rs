@@ -204,7 +204,10 @@ impl Ext4File {
             unsafe {
                 data.set_len(size);
             }
-
+            if size == 0 {
+                insert_cache(file_path.clone(), &cache);
+                return;
+            }
             unsafe { ext4_fseek(&mut self.file_desc, 0, 0) };
             let mut rw_count = 0;
             unsafe {
@@ -366,8 +369,12 @@ impl Ext4File {
     }
 
     pub fn file_cache_flush(&mut self) -> Result<usize, i32> {
-        //let path = String::from((*self.file_path).to_str().unwrap());
-        //write_back_cache(path.clone());
+        /*
+        let path = String::from((*self.file_path).to_str().unwrap());
+        if if_cache(path.clone()) {
+            write_back_cache(path.clone());
+        }
+        */
 
         let c_path = self.file_path.clone();
         let c_path = c_path.into_raw();
@@ -720,12 +727,19 @@ impl VFileCache {
     }
 
     pub fn writebuf(&mut self, buf: &[u8]) {
-        if self.offset + buf.len() > self.size() {
-            self.data.resize(self.offset + buf.len(), 0);
+        let length = buf.len();
+        if self.offset + length > self.size() {
+            self.data.resize(self.offset + length, 0);
         }
-        self.data[self.offset..self.offset + buf.len()].copy_from_slice(buf);
+        if length <= 10 {
+            for i in 0..length {
+                self.data[self.offset + i] = buf[i];
+            }
+        } else {
+            self.data[self.offset..self.offset + length].copy_from_slice(buf);
+        }
         self.modified = true;
-        //debug!("write {} bytes and size is {} now", buf.len(), self.size());
+        //debug!("write {} bytes and size is {} now", length, self.size());
     }
 
     pub fn truncate(&mut self, new_size: usize) {
@@ -734,7 +748,7 @@ impl VFileCache {
     }
 }
 
-//cache表，目前只为普通文件使用cache
+//cache表，目前只为非目录文件使用cache
 static CACHE_TABLE: Mutex<BTreeMap<String, Arc<RwLock<VFileCache>>>> = Mutex::new(BTreeMap::new());
 
 pub fn if_cache(file_path: String) -> bool {
@@ -753,7 +767,7 @@ pub fn remove_cache(file_path: String) {
     CACHE_TABLE.lock().remove(&file_path);
 }
 
-const FIFO_SIZE: usize = 10;
+const FIFO_SIZE: usize = 50;
 //采用先进先出策略
 static FIFO_TABLE: Mutex<VecDeque<String>> = Mutex::new(VecDeque::new());
 
@@ -766,10 +780,14 @@ pub fn insert_fifo(file_path: String) {
         if if_cache(path.clone()) {
             remove_cache(path.clone());
         }
-        debug!("{} is replaced!", path);
+        debug!("\n\n{} is replaced!\n\n", path);
     }
     fifo.push_back(file_path.clone());
-    debug!("insert {} into fifo!", file_path.clone());
+    debug!(
+        "\n\ninsert {} into fifo!\nlen is {}\n\n",
+        file_path.clone(),
+        fifo.len()
+    );
 }
 
 pub fn write_back_cache(path: String) {

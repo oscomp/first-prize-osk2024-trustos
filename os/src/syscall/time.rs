@@ -67,6 +67,8 @@ pub fn sys_clock_gettime(_clockid: usize, tp: *mut Timespec) -> SyscallRet {
 }
 
 pub fn sys_getrusage(who: isize, usage: *mut Rusage) -> SyscallRet {
+    return Ok(0);
+
     const RUSAGESELF: isize = 0;
     const RUSAGECHILDEN: isize = -1;
 
