@@ -196,9 +196,11 @@ impl Ext4File {
         let c_path = CString::new(path).expect("CString::new failed");
         let c_path = c_path.into_raw();
 
+        let path = String::from(path);
         //删掉对应缓存
-        remove_cache(String::from(path));
+        remove_cache(path);
 
+        //修改为未打开
         self.has_opened = false;
 
         let r = unsafe { ext4_fremove(c_path) };
@@ -345,7 +347,12 @@ impl Ext4File {
             //找到cache直接写cache
             let cache = get_cache(path.clone());
             let mut cache_writer = cache.write();
-            cache_writer.writebuf(buf);
+            let size = cache_writer.writebuf(buf);
+            if size > 2048_000 {
+                //write_back_cache(path.clone());
+                remove_cache(path.clone());
+                return Err(ENOMEM as i32);
+            }
             return Ok(buf.len());
         }
 
@@ -754,9 +761,9 @@ impl VFileCache {
         &self.data.as_slice()[..]
     }
 
-    pub fn writebuf(&mut self, buf: &[u8]) {
+    pub fn writebuf(&mut self, buf: &[u8]) -> usize {
         let length = buf.len();
-        if self.offset + length > self.size() {
+        if self.offset + length > self.data.len() {
             self.data.resize(self.offset + length, 0);
         }
         if length <= 10 {
@@ -767,7 +774,8 @@ impl VFileCache {
             self.data[self.offset..self.offset + length].copy_from_slice(buf);
         }
         self.modified = true;
-        //debug!("write {} bytes and size is {} now", length, self.size());
+        debug!("write {} bytes and size is {} now", length, self.data.len());
+        return self.data.len();
     }
 
     pub fn truncate(&mut self, new_size: usize) {
