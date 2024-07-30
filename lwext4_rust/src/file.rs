@@ -348,7 +348,7 @@ impl Ext4File {
             let cache = get_cache(path.clone());
             let mut cache_writer = cache.write();
             let size = cache_writer.writebuf(buf);
-            if size > 2048_000 {
+            if size > 5_000_000 {
                 //write_back_cache(path.clone());
                 remove_cache(path.clone());
                 return Err(ENOMEM as i32);

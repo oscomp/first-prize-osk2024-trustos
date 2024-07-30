@@ -14,15 +14,15 @@ fn main() -> i32 {
     // println!("initproc running...");
     if fork() == 0 {
         // exec("user_shell\0");
-        run_busyboxsh();
-        // run_finaltest();
+        // run_busyboxsh();
+        run_finaltest();
         // run_libc_bench();
         // run_lmbench_test();
     } else {
         loop {
             let mut exit_code: i32 = 0;
             let _ = wait(&mut exit_code);
-            // shutdown();
+            shutdown();
             // sleep(5000);
             // println!(
             //     "[initproc] Released a zombie process, pid={}, exit_code={}",
