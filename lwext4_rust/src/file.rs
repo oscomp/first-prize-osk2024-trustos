@@ -14,6 +14,9 @@ pub struct Ext4File {
     file_path: CString,
 
     this_type: InodeTypes,
+
+    has_opened: bool,
+    last_flags: u32,
 }
 
 impl Ext4File {
@@ -28,6 +31,8 @@ impl Ext4File {
             },
             file_path: CString::new(path).expect("CString::new Ext4File path failed"),
             this_type: types,
+            has_opened: false,
+            last_flags: 0,
         }
     }
 
@@ -62,22 +67,33 @@ impl Ext4File {
                 self.file_path.to_str().unwrap(),
                 path
             );
+        } else {
+            if self.has_opened && self.last_flags == flags {
+                //如果之前已经按相同方式打开
+                debug!("reopen");
+                return Ok(EOK as usize);
+            }
         }
+
         //let to_map = c_path.clone();
         let c_path = c_path.into_raw();
-        let flags = Self::flags_to_cstring(flags);
-        let flags = flags.into_raw();
+        let c_flags = Self::flags_to_cstring(flags);
+        let c_flags = c_flags.into_raw();
 
-        let r = unsafe { ext4_fopen(&mut self.file_desc, c_path, flags) };
+        let r = unsafe { ext4_fopen(&mut self.file_desc, c_path, c_flags) };
         unsafe {
             // deallocate the CString
             drop(CString::from_raw(c_path));
-            drop(CString::from_raw(flags));
+            drop(CString::from_raw(c_flags));
         }
         if r != EOK as i32 {
             error!("ext4_fopen: {}, rc = {}", path, r);
             return Err(r);
         }
+
+        self.has_opened = true;
+        self.last_flags = flags;
+
         //self.file_desc_map.insert(to_map, fd); // store c_path
         //debug!("file_open {}, mp={:#x}", path, self.file_desc.mp as usize);
         Ok(EOK as usize)
@@ -91,6 +107,9 @@ impl Ext4File {
                 ext4_fclose(&mut self.file_desc);
             }
         }
+
+        self.has_opened = false;
+
         Ok(0)
     }
 
@@ -180,6 +199,8 @@ impl Ext4File {
         //删掉对应缓存
         remove_cache(String::from(path));
 
+        self.has_opened = false;
+
         let r = unsafe { ext4_fremove(c_path) };
         unsafe {
             drop(CString::from_raw(c_path));
@@ -265,9 +286,16 @@ impl Ext4File {
             let cache = get_cache(path.clone());
             let cache_read = cache.read();
             let data = cache_read.get_data_slice();
-            let end = (cache_read.offset + buff.len()).min(data.len());
+            let length = buff.len();
+            let end = (cache_read.offset + length).min(data.len());
             let r_sz = end - cache_read.offset;
-            buff[..r_sz].copy_from_slice(&data[cache_read.offset..end]);
+            if length <= 10 {
+                for i in 0..r_sz {
+                    buff[i] = data[cache_read.offset + i];
+                }
+            } else {
+                buff[..r_sz].copy_from_slice(&data[cache_read.offset..end]);
+            }
 
             debug!(
                 "file_read {},len = {},offset is {}",
@@ -793,14 +821,14 @@ pub fn insert_fifo(file_path: String) {
 pub fn write_back_cache(path: String) {
     if if_cache(path.clone()) {
         //如果在缓存中有，表明未被删除
-        let c_path = CString::new(path.clone()).expect("CString::new failed");
-        let c_path = c_path.into_raw();
-        let flags = Ext4File::flags_to_cstring(2).into_raw();
         let cache = get_cache(path.clone());
         let mut cache_writer = cache.write();
         debug!("{} is written back!", path);
         if cache_writer.modified {
             //如果被修改过，则写回
+            let c_path = CString::new(path.clone()).expect("CString::new failed");
+            let c_path = c_path.into_raw();
+            let flags = Ext4File::flags_to_cstring(2).into_raw();
             let mut file_desc = ext4_file {
                 mp: core::ptr::null_mut(),
                 inode: 0,

@@ -67,6 +67,10 @@ pub fn sys_clock_gettime(_clockid: usize, tp: *mut Timespec) -> SyscallRet {
 }
 
 pub fn sys_getrusage(who: isize, usage: *mut Rusage) -> SyscallRet {
+    debug!(
+        "[sys_getrusage] who is {}, usage is {:x}",
+        who, usage as usize
+    );
     return Ok(0);
 
     const RUSAGESELF: isize = 0;
@@ -75,11 +79,6 @@ pub fn sys_getrusage(who: isize, usage: *mut Rusage) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
-
-    // debug!(
-    //     "[sys_getrusage] who is {}, usage is {:x}",
-    //     who, usage as usize
-    // );
 
     match who {
         RUSAGESELF => {

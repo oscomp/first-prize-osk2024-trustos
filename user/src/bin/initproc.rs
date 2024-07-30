@@ -14,9 +14,9 @@ fn main() -> i32 {
     // println!("initproc running...");
     if fork() == 0 {
         // exec("user_shell\0");
-        // run_busyboxsh();
+        run_busyboxsh();
         // run_finaltest();
-        run_libc_bench();
+        // run_libc_bench();
         // run_lmbench_test();
     } else {
         loop {
