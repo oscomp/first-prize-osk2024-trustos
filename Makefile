@@ -5,7 +5,6 @@ all:
 	@cp os/target/riscv64gc-unknown-none-elf/release/os.bin ./kernel-qemu
 	-@cd ./os&&mv .cargo dotcargo
 	-@cd ./user&&mv .cargo dotcargo
-	@cd ./lwext4_rust&&sh create_testimg.sh
 	@mv ./lwext4_rust/ext4.img ./disk.img
 
 run:
