@@ -230,7 +230,7 @@ pub fn sys_finaltest() -> isize {
             [
                 "busybox\0".as_ptr() as isize,
                 "sh\0".as_ptr() as isize,
-                "test_all.sh\0".as_ptr() as isize,
+                "test_all_1stage.sh\0".as_ptr() as isize,
                 0,
             ]
             .as_ptr() as isize,
