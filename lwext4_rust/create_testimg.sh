@@ -7,7 +7,7 @@ DIR=lwext4_rust
 sudo mkfs.ext4 ext4.img
 sudo chmod 777 ext4.img
 sudo mkdir ../${DIR}/fs 
-guestmount -a ../${DIR}/ext4.img -i --rw ../${DIR}/fs
+sudo mount ../${DIR}/ext4.img ../${DIR}/fs
 sudo cp ../final_tests/test_all_1stage.sh ../${DIR}/fs/ 
-guestunmount ../${DIR}/fs
+sudo umount ../${DIR}/fs
 sudo rmdir ../${DIR}/fs
