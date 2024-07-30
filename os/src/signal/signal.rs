@@ -134,13 +134,6 @@ impl SigSet {
     }
 }
 
-// struct sigaction {
-//     void     (*sa_handler)(int);
-//     void     (*sa_sigaction)(int, siginfo_t *, void *);
-//     sigset_t   sa_mask;
-//     int        sa_flags;
-//     void     (*sa_restorer)(void);
-// };
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct SigAction {
@@ -194,17 +187,6 @@ impl KSigAction {
             customed: false,
         }
     }
-    // pub fn default() -> Self {
-    //     Self {
-    //         act: SigAction {
-    //             sa_handler: 0,
-    //             sa_flags: SigActionFlags::empty(),
-    //             sa_restore: 0,
-    //             sa_mask: SigSet::empty(),
-    //         },
-    //         customed: false,
-    //     }
-    // }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

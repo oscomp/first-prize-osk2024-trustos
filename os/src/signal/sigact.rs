@@ -5,36 +5,26 @@ use alloc::sync::Arc;
 use crate::sync::SyncUnsafeCell;
 
 use super::{KSigAction, SIG_MAX_NUM};
-// struct task_struct {
-//  int sigpending;
-//  struct signal_struct *sig;
-//  sigset_t blocked;
-//  struct sigpending pending;
-// }
-
-// struct k_sigaction {
-// 	struct sigaction sa;
-// };
 
 pub struct SigTable {
-    pub inner: SyncUnsafeCell<SigPendingInner>,
+    pub inner: SyncUnsafeCell<SigTableInner>,
 }
 
 impl SigTable {
     pub fn new() -> Self {
         Self {
-            inner: SyncUnsafeCell::new(SigPendingInner::new()),
+            inner: SyncUnsafeCell::new(SigTableInner::new()),
         }
     }
     pub fn from_another(another: &Arc<SigTable>) -> Self {
         Self {
-            inner: SyncUnsafeCell::new(SigPendingInner::from_another(another.get_ref())),
+            inner: SyncUnsafeCell::new(SigTableInner::from_another(another.get_ref())),
         }
     }
-    pub fn get_ref(&self) -> &SigPendingInner {
+    pub fn get_ref(&self) -> &SigTableInner {
         self.inner.get_unchecked_ref()
     }
-    pub fn get_mut(&self) -> &mut SigPendingInner {
+    pub fn get_mut(&self) -> &mut SigTableInner {
         self.inner.get_unchecked_mut()
     }
 
@@ -58,19 +48,19 @@ impl SigTable {
     }
 }
 
-pub struct SigPendingInner {
+pub struct SigTableInner {
     actions: [KSigAction; SIG_MAX_NUM + 1],
     group_exit_code: Option<i32>,
 }
 
-impl SigPendingInner {
+impl SigTableInner {
     pub fn new() -> Self {
         Self {
             actions: from_fn(|signo| KSigAction::new(signo, false)),
             group_exit_code: None,
         }
     }
-    pub fn from_another(other: &SigPendingInner) -> Self {
+    pub fn from_another(other: &SigTableInner) -> Self {
         Self {
             actions: other.actions.clone(),
             group_exit_code: None,

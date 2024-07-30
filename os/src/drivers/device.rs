@@ -1,4 +1,5 @@
 /// All supported device types.
+#[allow(unused)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum DeviceType {
     /// Block storage device (e.g., disk).
@@ -18,8 +19,8 @@ pub trait BaseDriver: Send + Sync {
     /// The type of the device.
     fn device_type(&self) -> DeviceType;
 }
-
 /// The error type for device operation failures.
+#[allow(unused)]
 #[derive(Debug)]
 pub enum DevError {
     /// An entity already exists.

@@ -11,7 +11,7 @@ use crate::{
 };
 
 use alloc::vec;
-use alloc::{format, sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec::Vec};
 
 pub struct Ext4Inode {
     inner: SyncUnsafeCell<Ext4InodeInner>,

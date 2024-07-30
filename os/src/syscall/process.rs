@@ -366,9 +366,7 @@ pub fn sys_uname(buf: *mut u8) -> SyscallRet {
         domainname: str2u8("TrustOS"),
     };
     let token = current_token();
-    let buf_vec = translated_byte_buffer(token, buf, size_of::<Utsname>()).unwrap();
-    let mut userbuf = UserBuffer::new(buf_vec);
-    userbuf.write(uname.as_bytes());
+    put_data(token, buf as *mut Utsname, uname);
     Ok(0)
 }
 
@@ -385,11 +383,12 @@ pub fn sys_sysinfo(info: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
-    let mut info =
-        UserBuffer::new(translated_byte_buffer(token, info, size_of::<Sysinfo>()).unwrap());
 
-    let ourinfo = Sysinfo::new(get_time_ms() / 1000, 1 << 56, task_num());
-    info.write(ourinfo.as_bytes());
+    put_data(
+        token,
+        info as *mut Sysinfo,
+        Sysinfo::new(get_time_ms() / 1000, 1 << 56, task_num()),
+    );
     // debug!("[sys_sysinfo] ourinfo is {:?}", ourinfo);
     Ok(0)
 }

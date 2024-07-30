@@ -99,6 +99,7 @@ impl Disk {
     }
 
     /// Read a single block starting from the specified offset.
+    #[allow(unused)]
     pub fn read_offset(&mut self, offset: usize) -> [u8; BLOCK_SIZE] {
         let block_id = offset / BLOCK_SIZE;
         let mut block_data = [0u8; BLOCK_SIZE];
@@ -107,6 +108,7 @@ impl Disk {
     }
 
     /// Write single block starting from the specified offset.
+    #[allow(unused)]
     pub fn write_offset(&mut self, offset: usize, buf: &[u8]) -> DevResult<usize> {
         assert!(
             buf.len() == BLOCK_SIZE,

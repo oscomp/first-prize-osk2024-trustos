@@ -18,6 +18,7 @@ use spin::Mutex;
 
 const TICKS_PER_SEC: usize = 100;
 const MSEC_PER_SEC: usize = 1000;
+#[allow(unused)]
 const USEC_PER_SEC: usize = 1000000;
 const NSEC_PER_SEC: usize = 1000000000;
 
@@ -33,10 +34,6 @@ impl Timespec {
             tv_sec: sec,
             tv_nsec: nsec,
         }
-    }
-    pub fn as_bytes(&self) -> &[u8] {
-        let size = core::mem::size_of::<Self>();
-        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
     }
     pub fn to_tick(&self) -> usize {
         self.tv_sec * CLOCK_FREQ + (self.tv_nsec * CLOCK_FREQ / NSEC_PER_SEC)
@@ -102,10 +99,6 @@ impl Tms {
             tms_cstime: time_data.cstime,
         }
     }
-    pub fn as_bytes(&self) -> &[u8] {
-        let size = core::mem::size_of::<Self>();
-        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
-    }
 }
 
 #[derive(Clone)]
@@ -166,10 +159,6 @@ impl Itimerval {
             it_value: TimeVal::new(0, 0),
         }
     }
-    // pub fn as_bytes(&self) -> &[u8] {
-    //     let size = core::mem::size_of::<Self>();
-    //     unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
-    // }
 }
 ///以实际（即挂钟）时间倒计时。在每次到期时，都会生成一个 SIGALRM 信号
 pub const ITIMER_REAL: usize = 0;
@@ -285,7 +274,7 @@ impl PartialOrd for TimeVal {
         }
     }
 }
-
+#[allow(unused)]
 pub struct Rusage {
     pub ru_utime: TimeVal,
     pub ru_stime: TimeVal,
@@ -328,10 +317,6 @@ impl Rusage {
             ru_nvcsw: 0,
             ru_nivcsw: 0,
         }
-    }
-    pub fn as_bytes(&self) -> &[u8] {
-        let size = core::mem::size_of::<Self>();
-        unsafe { core::slice::from_raw_parts(self as *const _ as usize as *const u8, size) }
     }
 }
 

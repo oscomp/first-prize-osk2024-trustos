@@ -24,7 +24,7 @@ use crate::{
     utils::{backtrace, hart_id},
 };
 use core::arch::global_asm;
-use log::{debug, trace, warn};
+use log::{debug, warn};
 use riscv::register::{
     mtvec::TrapMode,
     scause::{self, Exception, Interrupt, Trap},

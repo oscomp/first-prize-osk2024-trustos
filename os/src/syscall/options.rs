@@ -184,10 +184,6 @@ impl PollFd {
             revents: PollEvents::empty(),
         }
     }
-    pub fn as_bytes(&self) -> &[u8] {
-        let size = core::mem::size_of::<Self>();
-        unsafe { core::slice::from_raw_parts(self as *const _ as *const u8, size) }
-    }
 }
 
 bitflags! {
@@ -213,13 +209,6 @@ pub struct Utsname {
     pub version: [u8; 65],
     pub machine: [u8; 65],
     pub domainname: [u8; 65],
-}
-
-impl Utsname {
-    pub fn as_bytes(&self) -> &[u8] {
-        let size = core::mem::size_of::<Self>();
-        unsafe { core::slice::from_raw_parts(self as *const _ as *const u8, size) }
-    }
 }
 
 #[repr(C)]
