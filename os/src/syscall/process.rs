@@ -496,7 +496,11 @@ pub fn sys_set_robust_list(head: usize, len: usize) -> SyscallRet {
 }
 
 pub fn sys_get_robust_list(pid: usize, head_ptr: *mut usize, len_ptr: *mut usize) -> SyscallRet {
-    if let Some(task) = find_task_by_tid(pid) {
+    let mut task = find_task_by_tid(pid);
+    if task.is_none() && pid == 0 {
+        task = current_task();
+    }
+    if let Some(task) = task {
         let task_inner = task.inner_lock();
         let token = task_inner.user_token();
         put_data(token, head_ptr, task_inner.robust_list.head);
