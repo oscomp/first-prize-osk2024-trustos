@@ -10,10 +10,10 @@ busybox echo "run libc-bench"
 ./libc-bench
 busybox echo "run lua_testcode.sh"
 ./lua_testcode.sh
-busybox echo "run unixbench_testcode.sh"
-./unixbench_testcode.sh
 busybox echo "run lmbench_testcode.sh"
 ./lmbench_testcode.sh
+busybox echo "run unixbench_testcode.sh"
+./unixbench_testcode.sh
 busybox echo "run netperf_testcode.sh"
 ./netperf_testcode.sh
 busybox echo "run iperf_testcode.sh"
