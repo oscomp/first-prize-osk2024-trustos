@@ -66,6 +66,7 @@ pub fn open_device_file(abs_path: &str) -> Result<Arc<dyn File>, SysErrNo> {
     }
 }
 
+/// zero设备
 impl DevZero {
     pub fn new() -> Self {
         Self
@@ -108,6 +109,7 @@ impl File for DevZero {
     }
 }
 
+/// NULL设备
 impl DevNull {
     pub fn new() -> Self {
         Self
@@ -183,6 +185,7 @@ impl Debug for RtcTime {
     }
 }
 
+/// 时钟设备
 impl DevRtc {
     pub fn new() -> Self {
         Self
@@ -230,6 +233,7 @@ impl File for DevRtc {
     }
 }
 
+/// 随机数设备
 impl DevRandom {
     pub fn new() -> Self {
         Self
@@ -272,6 +276,7 @@ impl File for DevRandom {
     }
 }
 
+/// 终端设备
 impl DevTty {
     pub fn new() -> Self {
         Self
@@ -313,6 +318,7 @@ impl File for DevTty {
     }
 }
 
+/// cpu频率设备
 impl DevCpuDmaLatency {
     pub fn new() -> Self {
         Self {

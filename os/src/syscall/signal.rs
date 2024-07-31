@@ -12,6 +12,7 @@ use crate::{
     utils::{SysErrNo, SyscallRet},
 };
 
+/// 参考 https://man7.org/linux/man-pages/man2/rt_sigaction.2.html
 pub fn sys_rt_sigaction(
     signo: usize,
     act: *const SigAction,
@@ -49,10 +50,12 @@ pub fn sys_rt_sigaction(
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/rt_sigreturn.2.html
 pub fn sys_rt_sigreturn() -> SyscallRet {
     restore_frame()
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/rt_sigprocmask.2.html
 pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) -> SyscallRet {
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
@@ -78,7 +81,9 @@ pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) ->
     }
     Ok(0)
 }
+
 /// 在指定时间内挂起给定信号
+/// 参考 https://man7.org/linux/man-pages/man2/rt_sigtimedwait.2.html
 pub fn sys_rt_sigtimedwait(
     _sig: *const SigSet,
     _info: *mut SigInfo,
@@ -87,8 +92,10 @@ pub fn sys_rt_sigtimedwait(
     // TODO(ZMY): Linux实现与POSIX标准不同,只在部分pthread测试使用过,伪实现
     Ok(0)
 }
+
 /// 暂时将调用线程的信号掩码替换为 mask 给出的掩码，然后暂停线程，直到传递信号，
 /// 其操作是调用信号处理程序或终止进程
+/// 参考 https://man7.org/linux/man-pages/man2/rt_sigsuspend.2.html
 pub fn sys_rt_sigsuspend(mask: *const SigSet) -> SyscallRet {
     // TODO(ZMY): 暂停线程
     let task = current_task().unwrap();
@@ -116,6 +123,7 @@ pub fn sys_rt_sigsuspend(mask: *const SigSet) -> SyscallRet {
 /// pid == -1 then sig is sent to every process which current process has permission ( except init proc )
 /// pid > 0 then sig is sent to the process with the ID specified by pid
 /// pid < -1 the sig is sent to every process in process group whose ID is -pid
+/// 参考 https://man7.org/linux/man-pages/man2/kill.2.html
 pub fn sys_kill(pid: isize, signo: usize) -> SyscallRet {
     if signo == 0 {
         return Ok(0);
@@ -142,6 +150,7 @@ pub fn sys_kill(pid: isize, signo: usize) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/tkill.2.html
 pub fn sys_tkill(tid: usize, signo: usize) -> SyscallRet {
     let sig = SigSet::from_sig(signo);
     debug!("[sys_tkill] thread {} receive signal {:?}", tid, sig);
@@ -149,6 +158,7 @@ pub fn sys_tkill(tid: usize, signo: usize) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/tgkill.2.html
 pub fn sys_tgkill(tgid: usize, tid: usize, signo: usize) -> SyscallRet {
     let sig = SigSet::from_sig(signo);
 

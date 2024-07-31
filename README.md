@@ -12,7 +12,7 @@ RustTrushHuster队在rCore-Tutorial Chapter6的基础上,重构内存管理, 实
 
 TrustOS由rCore原有的11个非POSIX的syscall拓展到105个满足POSIX标准的syscall。
 
-在复赛排行榜中排名第四
+在复赛排行榜中排名第五，分数为393.6069
 
 ![rank](./doc/pic/rank.png)
 

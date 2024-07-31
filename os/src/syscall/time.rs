@@ -4,6 +4,7 @@ use crate::timer::{get_time_spec, Itimerval, Rusage, TimeVal, Timespec, Tms, ITI
 use crate::utils::{SysErrNo, SyscallRet};
 use log::debug;
 
+/// 参考 https://man7.org/linux/man-pages/man2/gettimeofday.2.html
 pub fn sys_gettimeofday(ts: *mut Timespec) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
@@ -13,6 +14,7 @@ pub fn sys_gettimeofday(ts: *mut Timespec) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/times.2.html
 pub fn sys_times(tms: *mut Tms) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
@@ -22,11 +24,13 @@ pub fn sys_times(tms: *mut Tms) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/setitimer.2.html
 pub fn sys_settimer(
     which: usize,
     new_value: *const Itimerval,
     old_value: *mut Itimerval,
 ) -> SyscallRet {
+    // TrustOS目前只支持 ITIMER_REAL
     assert!(which == ITIMER_REAL, "only support Itimer Real");
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
@@ -51,6 +55,7 @@ pub fn sys_settimer(
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/clock_gettime.2.html
 pub fn sys_clock_gettime(_clockid: usize, tp: *mut Timespec) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -66,7 +71,9 @@ pub fn sys_clock_gettime(_clockid: usize, tp: *mut Timespec) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/getrusage.2.html
 pub fn sys_getrusage(who: isize, usage: *mut Rusage) -> SyscallRet {
+    // TrustOS目前只支持 RUSAGESELF 和 RUSAGECHILDEN
     const RUSAGESELF: isize = 0;
     const RUSAGECHILDEN: isize = -1;
 
@@ -100,6 +107,7 @@ pub fn sys_getrusage(who: isize, usage: *mut Rusage) -> SyscallRet {
     }
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/clock_getres.2.html
 pub fn sys_clock_getres(_clockid: usize, _res: *mut Timespec) -> SyscallRet {
     unimplemented!();
 }

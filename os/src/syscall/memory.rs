@@ -11,6 +11,7 @@ use crate::{
     utils::{page_round_up, SysErrNo, SyscallRet},
 };
 
+/// 参考 https://man7.org/linux/man-pages/man2/mmap.2.html
 pub fn sys_mmap(
     addr: usize,
     len: usize,
@@ -58,6 +59,7 @@ pub fn sys_mmap(
     Ok(rv)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/munmap.2.html
 pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
     debug!("[sys_munmap] addr={:#X}, len={}", addr, len);
     let task = current_task().unwrap();
@@ -66,6 +68,7 @@ pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
     task_inner.memory_set.munmap(addr, len)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/mprotect.2.html
 pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> SyscallRet {
     if (addr % PAGE_SIZE != 0) || (len % PAGE_SIZE != 0) {
         println!("sys_mprotect: not align");
@@ -88,6 +91,7 @@ pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/madvise.2.html
 pub fn sys_madvise(_addr: usize, _len: usize, _advice: usize) -> SyscallRet {
     //伪实现，该系统调用用于给内存提建议
     // debug!(
@@ -97,6 +101,7 @@ pub fn sys_madvise(_addr: usize, _len: usize, _advice: usize) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/shmget.2.html
 pub fn sys_shmget(key: i32, size: usize, shmflag: i32) -> SyscallRet {
     const IPC_PRIVATE: i32 = 0;
     // 忽略权限位
@@ -122,6 +127,7 @@ pub fn sys_shmget(key: i32, size: usize, shmflag: i32) -> SyscallRet {
     }
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/shmat.2.html
 pub fn sys_shmat(shmid: i32, shmaddr: usize, shmflag: i32) -> SyscallRet {
     let mut permission = MapPermission::U | MapPermission::R;
     if shmflag == 0 {
@@ -142,6 +148,7 @@ pub fn sys_shmat(shmid: i32, shmaddr: usize, shmflag: i32) -> SyscallRet {
     }
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/shmctl.2.html
 pub fn sys_shmctl(shmid: i32, cmd: i32, _buf: usize) -> SyscallRet {
     const IPC_RMID: i32 = 0;
     match cmd {

@@ -25,58 +25,72 @@ use num_enum::TryFromPrimitive;
 
 use log::debug;
 
+/// 参考 https://man7.org/linux/man-pages/man2/exit.2.html
 pub fn sys_exit(exit_code: i32) -> ! {
     exit_current_and_run_next(exit_code);
     unreachable!();
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/exit_group.2.html
 pub fn sys_exit_group(exit_code: i32) -> SyscallRet {
     exit_current_group_and_run_next(exit_code);
     unreachable!();
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/sched_yield.2.html
 pub fn sys_sched_yield() -> SyscallRet {
     suspend_current_and_run_next();
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/getpid.2.html
 pub fn sys_getpid() -> SyscallRet {
     Ok(current_task().unwrap().pid())
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/getppid.2.html
 pub fn sys_getppid() -> SyscallRet {
     Ok(current_task().unwrap().ppid())
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/getuid.2.html
 pub fn sys_getuid() -> SyscallRet {
     Ok(0) // root user
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/geteuid.2.html
 pub fn sys_geteuid() -> SyscallRet {
     Ok(0) // root user
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/getgid.2.html
 pub fn sys_getgid() -> SyscallRet {
     Ok(0) // root group
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/getegid.2.html
 pub fn sys_getegid() -> SyscallRet {
     Ok(0) // root group
 }
+
+/// 参考 https://man7.org/linux/man-pages/man2/gettid.2.html
 pub fn sys_gettid() -> SyscallRet {
     Ok(current_task().unwrap().tid())
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/setsid.2.html
 pub fn sys_setsid() -> SyscallRet {
     //涉及到会话和进程组，暂时伪实现
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/set_tid_address.2.html
 pub fn sys_settidaddress(tidptr: usize) -> SyscallRet {
     current_task().unwrap().inner_lock().clear_child_tid = tidptr;
     sys_gettid()
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/clone.2.html
 /// void (*fn)(void* arg) 参数通过栈传递,如果stack_ptr!=0, fn=0(stack),arg=8(stack)
 pub fn sys_clone(
     flags: usize,
@@ -106,6 +120,7 @@ pub fn sys_clone(
     Ok(new_tid)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/execve.2.html
 pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usize) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
@@ -178,6 +193,7 @@ pub enum FutexCmd {
     FUTEX_REQUEUE = 3,
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/futex.2.html
 pub fn sys_futex(
     uaddr: *mut i32,
     futex_op: i32,
@@ -246,6 +262,7 @@ pub fn sys_futex(
 ///0      meaning wait for any child process whose process group ID
 ///       is equal to that of the calling process at the time of the call to waitpid().
 ///> 0    meaning wait for the child whose process ID is equal to the value of pid.
+/// 参考 https://man7.org/linux/man-pages/man2/wait4.2.html
 pub fn sys_wait4(pid: isize, wstatus: *mut i32, _options: i32) -> SyscallRet {
     //assert!(options == 0, "not support options yet");
     //默认所有进程都在同一个组
@@ -321,6 +338,7 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, _options: i32) -> SyscallRet {
     }
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/nanosleep.2.html
 pub fn sys_nanosleep(req: *const Timespec, rem: *mut Timespec) -> SyscallRet {
     let token = current_token();
 
@@ -341,6 +359,7 @@ pub fn sys_nanosleep(req: *const Timespec, rem: *mut Timespec) -> SyscallRet {
 
     while get_time_ms() * 1_000_000usize - begin < waittime {
         if let Some(signo) = check_if_any_sig_for_current_task() {
+            //被信号唤醒
             if rem as usize != 0 {
                 put_data(token, rem, calculate_left_timespec(endtime));
             }
@@ -351,6 +370,7 @@ pub fn sys_nanosleep(req: *const Timespec, rem: *mut Timespec) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/uname.2.html
 pub fn sys_uname(buf: *mut u8) -> SyscallRet {
     fn str2u8(s: &str) -> [u8; 65] {
         let mut b = [0; 65];
@@ -370,6 +390,7 @@ pub fn sys_uname(buf: *mut u8) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/brk.2.html
 pub fn sys_brk(brk_addr: usize) -> SyscallRet {
     let former_addr = current_task().unwrap().growproc(0);
     if brk_addr == 0 {
@@ -379,6 +400,7 @@ pub fn sys_brk(brk_addr: usize) -> SyscallRet {
     Ok(current_task().unwrap().growproc(grow_size))
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/sysinfo.2.html
 pub fn sys_sysinfo(info: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -393,14 +415,18 @@ pub fn sys_sysinfo(info: *const u8) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/umask.2.html
 pub fn sys_umask(_mask: u32) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/syslog.2.html
 pub fn sys_syslog(_logtype: isize, _bufp: *const u8, _len: usize) -> SyscallRet {
+    // 伪实现
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/sched_setaffinity.2.html
 pub fn sys_sched_setaffinity(_pid: usize, _cpusetsize: usize, _mask: usize) -> SyscallRet {
     // debug!(
     //     "[sys_sched_setaffinity] pid is {}, cpusetsize is {}, mask is {}",
@@ -409,6 +435,7 @@ pub fn sys_sched_setaffinity(_pid: usize, _cpusetsize: usize, _mask: usize) -> S
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/sched_getaffinity.2.html
 pub fn sys_sched_getaffinity(_pid: usize, _cpusetsize: usize, _mask: usize) -> SyscallRet {
     // debug!(
     //     "[sys_sched_getaffinity] pid is {}, cpusetsize is {}, mask is {}",
@@ -417,6 +444,7 @@ pub fn sys_sched_getaffinity(_pid: usize, _cpusetsize: usize, _mask: usize) -> S
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/sched_setscheduler.2.html
 pub fn sys_sched_setscheduler(_pid: usize, _policy: usize, _param: *const u8) -> SyscallRet {
     // debug!(
     //     "[sys_sched_setscheduler] pid is {}, policy is {}, param is {:x}",
@@ -425,12 +453,14 @@ pub fn sys_sched_setscheduler(_pid: usize, _policy: usize, _param: *const u8) ->
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/sched_getscheduler.2.html
 pub fn sys_sched_getscheduler(_pid: usize) -> SyscallRet {
     // debug!("[sys_sched_getscheduler] pid is {}", pid);
     //由于使用的是标准的时间片调度算法，直接返回SCHED_OHTER = 0
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/sched_getparam.2.html
 pub fn sys_sched_getparam(_pid: usize, _param: *const u8) -> SyscallRet {
     // debug!(
     //     "[sys_sched_getparam] pid is {}, param is {:x}",
@@ -440,6 +470,7 @@ pub fn sys_sched_getparam(_pid: usize, _param: *const u8) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/clock_nanosleep.2.html
 pub fn sys_clock_nanosleep(
     _clockid: usize,
     flags: u32,
@@ -473,6 +504,7 @@ pub fn sys_clock_nanosleep(
 
     while get_time_ms() * 1_000_000usize - begin < waittime {
         if let Some(signo) = check_if_any_sig_for_current_task() {
+            //被信号唤醒
             if remain as usize != 0 {
                 put_data(token, remain, calculate_left_timespec(endtime));
             }
@@ -483,6 +515,7 @@ pub fn sys_clock_nanosleep(
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/set_robust_list.2.html
 pub fn sys_set_robust_list(head: usize, len: usize) -> SyscallRet {
     if len != crate::task::RobustList::HEAD_SIZE {
         return Err(SysErrNo::EINVAL);
@@ -494,6 +527,7 @@ pub fn sys_set_robust_list(head: usize, len: usize) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/get_robust_list.2.html
 pub fn sys_get_robust_list(pid: usize, head_ptr: *mut usize, len_ptr: *mut usize) -> SyscallRet {
     if let Some(task) = find_task_by_tid(pid) {
         let task_inner = task.inner_lock();

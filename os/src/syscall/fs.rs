@@ -24,6 +24,7 @@ use log::debug;
 
 use super::{FcntlCmd, Iovec, RLimit};
 
+/// 参考 https://man7.org/linux/man-pages/man2/write.2.html
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     // debug!("[sys_write] fd is {}, len={}", fd, len);
     let task = current_task().unwrap();
@@ -51,6 +52,7 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     }
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/read.2.html
 pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -77,6 +79,8 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
         Err(SysErrNo::EBADF)
     }
 }
+
+/// 参考 https://man7.org/linux/man-pages/man2/writev.2.html
 pub fn sys_writev(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -118,6 +122,7 @@ pub fn sys_writev(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
     }
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/readv.2.html
 pub fn sys_readv(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -154,6 +159,7 @@ pub fn sys_readv(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
     }
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/openat.2.html
 pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> SyscallRet {
     if path as usize == 0 {
         return Err(SysErrNo::ENOENT);
@@ -187,6 +193,7 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> Sysca
     return Ok(new_fd);
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/close.2.html
 pub fn sys_close(fd: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -201,6 +208,7 @@ pub fn sys_close(fd: usize) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/getcwd.2.html
 pub fn sys_getcwd(buf: *const u8, size: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -210,6 +218,8 @@ pub fn sys_getcwd(buf: *const u8, size: usize) -> SyscallRet {
     buffer.write(inner.fs_info.cwd_as_bytes());
     Ok(buf as usize)
 }
+
+/// 参考 https://man7.org/linux/man-pages/man2/dup.2.html
 pub fn sys_dup(fd: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
@@ -226,6 +236,7 @@ pub fn sys_dup(fd: usize) -> SyscallRet {
     Ok(fd_new)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/dup3.2.html
 pub fn sys_dup3(old: usize, new: usize, flags: u32) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
@@ -254,6 +265,7 @@ pub fn sys_dup3(old: usize, new: usize, flags: u32) -> SyscallRet {
     Ok(new)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/chdir.2.html
 pub fn sys_chdir(path: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -278,6 +290,7 @@ pub fn sys_chdir(path: *const u8) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/mkdirat.2.html
 pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -298,6 +311,7 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> SyscallRet {
     return Err(SysErrNo::ENOENT);
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/getdents64.2.html
 pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -322,6 +336,7 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     return Ok(de.len());
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/linkat.2.html
 pub fn sys_linkat(
     _oldfd: isize,
     _oldpath: *const u8,
@@ -331,6 +346,8 @@ pub fn sys_linkat(
 ) -> SyscallRet {
     todo!();
 }
+
+/// 参考 https://man7.org/linux/man-pages/man2/unlinkat.2.html
 pub fn sys_unlinkat(dirfd: isize, path: *const u8, _flags: u32) -> SyscallRet {
     // assert!(flags != AT_REMOVEDIR, "not support yet");
     let task = current_task().unwrap();
@@ -362,6 +379,7 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, _flags: u32) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/umount2.2.html
 pub fn sys_umount2(special: *const u8, flags: u32) -> SyscallRet {
     let token = current_token();
     let special = translated_str(token, special);
@@ -374,6 +392,7 @@ pub fn sys_umount2(special: *const u8, flags: u32) -> SyscallRet {
     }
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/mount.2.html
 pub fn sys_mount(
     special: *const u8,
     dir: *const u8,
@@ -405,6 +424,7 @@ pub fn sys_mount(
     }
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/fstat.2.html
 pub fn sys_fstat(fd: usize, kst: *mut Kstat) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -422,6 +442,8 @@ pub fn sys_fstat(fd: usize, kst: *mut Kstat) -> SyscallRet {
     put_data(token, kst, file.fstat());
     Ok(0)
 }
+
+/// 参考 https://man7.org/linux/man-pages/man2/pipe2.2.html
 pub fn sys_pipe2(fd: *mut u32) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
@@ -445,6 +467,7 @@ pub fn sys_pipe2(fd: *mut u32) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/fstatat64.2.html
 pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *mut Kstat, _flags: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -459,6 +482,7 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *mut Kstat, _flags: usize
     return Ok(0);
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/statfs.2.html
 pub fn sys_statfs(_path: *const u8, statfs: *mut Statfs) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -467,6 +491,7 @@ pub fn sys_statfs(_path: *const u8, statfs: *mut Statfs) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/faccessat.2.html
 pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -483,6 +508,7 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/utimensat.2.html
 pub fn sys_utimensat(
     dirfd: isize,
     path: *const u8,
@@ -536,6 +562,7 @@ pub fn sys_utimensat(
     return Ok(0);
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/lseek.2.html
 pub fn sys_lseek(fd: usize, offset: isize, whence: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -552,6 +579,7 @@ pub fn sys_lseek(fd: usize, offset: isize, whence: usize) -> SyscallRet {
     file.lseek(offset, whence)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/fcntl.2.html
 pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
     const FD_CLOEXEC: usize = 1;
 
@@ -620,10 +648,13 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/ioctl.2.html
 pub fn sys_ioctl(_fd: usize, _cmd: usize, _arg: usize) -> SyscallRet {
+    // 伪实现
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/sendfile.2.html
 pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -700,6 +731,7 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
     Ok(retcount)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/pwrite64.2.html
 pub fn sys_pwrite64(fd: usize, buf: *const u8, count: usize, offset: isize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -728,6 +760,7 @@ pub fn sys_pwrite64(fd: usize, buf: *const u8, count: usize, offset: isize) -> S
     Err(SysErrNo::EBADF)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/pread64.2.html
 pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: isize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -756,6 +789,7 @@ pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: isize) -> Sy
         Err(SysErrNo::EBADF)
     }
 }
+
 // Linux的实现与手册有差异或未实现该调用
 pub fn sys_ftruncate(fd: usize, length: i32) -> SyscallRet {
     let task = current_task().unwrap();
@@ -767,6 +801,7 @@ pub fn sys_ftruncate(fd: usize, length: i32) -> SyscallRet {
     Err(SysErrNo::EBADF)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/fsync.2.html
 pub fn sys_fsync(fd: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -780,11 +815,13 @@ pub fn sys_fsync(fd: usize) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/sync.2.html
 pub fn sys_sync() -> SyscallRet {
     sync();
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/prlimit64.2.html
 pub fn sys_prlimit(
     pid: usize,
     resource: u32,
@@ -819,6 +856,7 @@ pub fn sys_prlimit(
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/readlinkat.2.html
 pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsize: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -854,6 +892,7 @@ pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsize: us
 /// If oldpath and newpath are existing hard links referring to the same inode, then return a success.
 /// If newpath exists but operation failed (for some reason, rename() failed), leave an instance of newpath in place (which means you should keep the backup of newpath if it exist).
 /// If oldpath can specify a directory, then newpath should be a blank directory or not exist.
+/// 参考 https://man7.org/linux/man-pages/man2/renameat2.2.html
 pub fn sys_renameat2(
     olddirfd: isize,
     oldpath: *const u8,
@@ -873,6 +912,9 @@ pub fn sys_renameat2(
     osfile.inode.rename(&old_abs_path, &new_abs_path)
 }
 
+/// fat32文件系统可以使用此调用
+/// ext4文件系统暂不支持将offset设置在超过文件大小
+/// 参考 https://man7.org/linux/man-pages/man2/copy_file_range.2.html
 pub fn sys_copy_file_range(
     infd: usize,
     off_in: usize,
@@ -975,6 +1017,7 @@ pub fn sys_copy_file_range(
     Ok(writecount)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/getrandom.2.html
 pub fn sys_getrandom(buf_ptr: *const u8, buflen: usize, _flags: u32) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -989,6 +1032,7 @@ pub fn sys_getrandom(buf_ptr: *const u8, buflen: usize, _flags: u32) -> SyscallR
     ))
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/ppoll.2.html
 pub fn sys_ppoll(fds_ptr: usize, nfds: usize, tmo_p: usize, mask: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
@@ -1060,6 +1104,7 @@ pub fn sys_ppoll(fds_ptr: usize, nfds: usize, tmo_p: usize, mask: usize) -> Sysc
     }
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/pselect6.2.html
 pub fn sys_pselect6(
     nfds: usize,
     readfds: usize,
@@ -1176,7 +1221,7 @@ pub fn sys_pselect6(
             }
         }
 
-        //如果有响应了则返回,或者如果时间是0，0，也需要返回结果
+        //如果有响应了则返回,或者如果时间是0，0（只监视一遍），也需要返回结果
         if num > 0 || waittime == 0 {
             // debug!("[sys_pselect6] ret for num:{},waittime:{}", num, waittime);
             if let Some(using_readfds) = using_readfds {

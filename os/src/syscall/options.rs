@@ -253,6 +253,7 @@ bitflags! {
 pub const FD_SET_SIZE: usize = 1024;
 pub const FD_SET_LEN: usize = FD_SET_SIZE / (8 * core::mem::size_of::<usize>());
 
+/// FdSet为大小为1024的位图，分装在16个大小为usize的fds_bits子位图中，每一个位都代表一个文件描述符
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
 pub struct FdSet {

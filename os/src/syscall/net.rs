@@ -7,6 +7,7 @@ use crate::{
     utils::{SysErrNo, SyscallRet},
 };
 
+/// 参考 https://man7.org/linux/man-pages/man2/socket.2.html
 pub fn sys_socket(_domain: u32, _type: u32, _protocol: u32) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
@@ -22,15 +23,23 @@ pub fn sys_socket(_domain: u32, _type: u32, _protocol: u32) -> SyscallRet {
         .insert(format!("socket{}", new_fd).to_string(), new_fd);
     Ok(new_fd)
 }
+
+/// 参考 https://man7.org/linux/man-pages/man2/bind.2.html
 pub fn sys_bind(_sockfd: usize, _addr: *const u8, _addrlen: u32) -> SyscallRet {
     Ok(0)
 }
+
+/// 参考 https://man7.org/linux/man-pages/man2/getsockname.2.html
 pub fn sys_getsockname(_sockfd: usize, _addr: *const u8, _addrlen: u32) -> SyscallRet {
     Ok(0)
 }
+
+/// 参考 https://man7.org/linux/man-pages/man2/getpeername.2.html
 pub fn sys_getpeername(_sockfd: usize, _addr: *const u8, _addrlen: u32) -> SyscallRet {
     Err(SysErrNo::Default)
 }
+
+/// 参考 https://man7.org/linux/man-pages/man2/setsockopt.2.html
 pub fn sys_setsockopt(
     _sockfd: usize,
     _level: u32,
@@ -40,6 +49,8 @@ pub fn sys_setsockopt(
 ) -> SyscallRet {
     Ok(0)
 }
+
+/// 参考 https://man7.org/linux/man-pages/man2/sendto.2.html
 pub fn sys_sendto(
     _sockfd: usize,
     _buf: *const u8,
@@ -50,6 +61,8 @@ pub fn sys_sendto(
 ) -> SyscallRet {
     Ok(1)
 }
+
+/// 参考 https://man7.org/linux/man-pages/man2/recvfrom.2.html
 pub fn sys_recvfrom(
     _sockfd: usize,
     buf: *mut u8,
@@ -67,16 +80,23 @@ pub fn sys_recvfrom(
     }
     Ok(1)
 }
+
+/// 参考 https://man7.org/linux/man-pages/man2/listen.2.html
 pub fn sys_listen(_sockfd: usize, _backlog: u32) -> SyscallRet {
     Ok(0)
 }
+
+/// 参考 https://man7.org/linux/man-pages/man2/connect.2.html
 pub fn sys_connect(_sockfd: usize, _addr: *const u8, _addrlen: u32) -> SyscallRet {
     Ok(0)
 }
+
+/// 参考 https://man7.org/linux/man-pages/man2/accept.2.html
 pub fn sys_accept(_sockfd: usize, _addr: *const u8, _addrlen: u32) -> SyscallRet {
     Ok(0)
 }
 
+/// 参考 https://man7.org/linux/man-pages/man2/sendmsg.2.html
 pub fn sys_sendmsg(_sockfd: usize, _addr: *const u8, _flags: u32) -> SyscallRet {
     Ok(0)
 }
