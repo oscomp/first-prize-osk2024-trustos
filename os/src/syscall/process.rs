@@ -151,6 +151,8 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
     }
     env.push("PATH=/:/bin:".to_string());
     env.push("LD_LIBRARY_PATH=/:/lib:/lib/musl:/lib/glibc:".to_string());
+    //设置系统最大负载
+    env.push("ENOUGH=100000".to_string());
 
     debug!("[sys_execve] env is {:?}", env);
 
