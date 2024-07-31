@@ -7,6 +7,13 @@ use alloc::sync::Arc;
 use alloc::{ffi::CString, vec::Vec};
 use spin::{Mutex, RwLock};
 
+const PAGE_SIZE: usize = 4096;
+pub const PAGE_MASK: usize = !0xfff;
+
+fn aligned_down(addr: usize) -> usize {
+    addr & PAGE_MASK
+}
+
 // Ext4File文件操作与block device设备解耦了
 pub struct Ext4File {
     //file_desc_map: BTreeMap<CString, ext4_file>,
@@ -222,11 +229,13 @@ impl Ext4File {
             let mut cache_writer = cache.write();
             debug!("initialize cache!");
             let size = unsafe { ext4_fsize(&mut self.file_desc) as usize };
-            cache_writer.data = Vec::with_capacity(size);
+            let aligned_size = aligned_down(size) + PAGE_SIZE;
+            cache_writer.data = Vec::with_capacity(aligned_size);
             let data = &mut cache_writer.data;
             unsafe {
                 data.set_len(size);
             }
+            cache_writer.size = size;
             if size == 0 {
                 insert_cache(file_path.clone(), &cache);
                 return;
@@ -255,9 +264,9 @@ impl Ext4File {
             let mut cache_writer = cache.write();
 
             let mut offset = offset as usize;
-            if offset > cache_writer.size() {
+            if offset > cache_writer.size {
                 warn!("Seek beyond the end of the file");
-                offset = cache_writer.size();
+                offset = cache_writer.size;
             }
 
             cache_writer.offset = offset as usize;
@@ -289,7 +298,7 @@ impl Ext4File {
             let cache_read = cache.read();
             let data = cache_read.get_data_slice();
             let length = buff.len();
-            let end = (cache_read.offset + length).min(data.len());
+            let end = (cache_read.offset + length).min(cache_read.size);
             let r_sz = end - cache_read.offset;
             if length <= 10 {
                 for i in 0..r_sz {
@@ -347,8 +356,8 @@ impl Ext4File {
             //找到cache直接写cache
             let cache = get_cache(path.clone());
             let mut cache_writer = cache.write();
-            let size = cache_writer.writebuf(buf);
-            if size > 5_000_000 {
+            let len = cache_writer.writebuf(buf);
+            if len > 5_000_000 {
                 //write_back_cache(path.clone());
                 remove_cache(path.clone());
                 return Err(ENOMEM as i32);
@@ -396,7 +405,7 @@ impl Ext4File {
     pub fn file_size(&mut self) -> u64 {
         let path = String::from((*self.file_path).to_str().unwrap());
         if if_cache(path.clone()) {
-            return get_cache(path.clone()).read().size() as u64;
+            return get_cache(path.clone()).read().size as u64;
         }
 
         //注，记得先 O_RDONLY 打开文件
@@ -482,7 +491,7 @@ impl Ext4File {
             //如果在缓存中，更新stat获得的大小
             let cache = get_cache(path.clone());
             let cache_reader = cache.read();
-            stat.st_size = cache_reader.size() as isize;
+            stat.st_size = cache_reader.size as isize;
             stat.st_blocks =
                 (stat.st_size - 1 + (stat.st_blksize as isize)) / (stat.st_blksize as isize);
         }
@@ -742,6 +751,7 @@ pub struct VFileCache {
     data: Vec<u8>,
     offset: usize,
     modified: bool,
+    size: usize,
 }
 
 impl VFileCache {
@@ -750,11 +760,8 @@ impl VFileCache {
             data: Vec::new(),
             offset: 0,
             modified: false,
+            size: 0,
         }
-    }
-
-    pub fn size(&self) -> usize {
-        self.data.len()
     }
 
     pub fn get_data_slice(&self) -> &[u8] {
@@ -763,8 +770,12 @@ impl VFileCache {
 
     pub fn writebuf(&mut self, buf: &[u8]) -> usize {
         let length = buf.len();
+        if self.offset + length > self.size {
+            self.size = self.offset + length;
+        }
         if self.offset + length > self.data.len() {
-            self.data.resize(self.offset + length, 0);
+            let aligned_size = aligned_down(self.offset + length) + PAGE_SIZE;
+            self.data.resize(aligned_size, 0);
         }
         if length <= 10 {
             for i in 0..length {
@@ -774,13 +785,19 @@ impl VFileCache {
             self.data[self.offset..self.offset + length].copy_from_slice(buf);
         }
         self.modified = true;
-        debug!("write {} bytes and size is {} now", length, self.data.len());
+        debug!(
+            "write {} bytes and size is {}, data.len() is {} now",
+            length,
+            self.size,
+            self.data.len()
+        );
         return self.data.len();
     }
 
     pub fn truncate(&mut self, new_size: usize) {
-        self.data.resize(new_size, 0);
-        self.modified = true;
+        let aligned_size = aligned_down(new_size) + PAGE_SIZE;
+        self.data.resize(aligned_size, 0);
+        self.size = new_size;
     }
 }
 
@@ -856,7 +873,7 @@ pub fn write_back_cache(path: String) {
                 ext4_fwrite(
                     &mut file_desc,
                     cache_writer.data.as_mut_ptr() as _,
-                    cache_writer.size(),
+                    cache_writer.size,
                     &mut rw_count,
                 )
             };
