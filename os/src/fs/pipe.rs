@@ -16,6 +16,7 @@ use crate::{mm::UserBuffer, syscall::PollEvents, utils::SyscallRet};
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
+use core::cmp::min;
 use spin::{Mutex, MutexGuard};
 
 /// ### 管道
@@ -116,6 +117,26 @@ impl PipeRingBuffer {
             self.status = RingBufferStatus::Full;
         }
     }
+    /// 写n个字节到管道尾
+    pub fn write_bytes(&mut self, bytes: &[u8], len: usize) {
+        assert!(
+            len <= RING_BUFFER_SIZE,
+            "len must less than RING_BUFFER_SIZE"
+        );
+        self.status = RingBufferStatus::Normal;
+        if self.tail + len <= RING_BUFFER_SIZE {
+            self.arr[self.tail..self.tail + len].copy_from_slice(bytes);
+        } else {
+            let form_len = RING_BUFFER_SIZE - self.tail;
+            let late_len = len - form_len;
+            self.arr[self.tail..RING_BUFFER_SIZE].copy_from_slice(&bytes[..form_len]);
+            self.arr[..late_len].copy_from_slice(&bytes[form_len..len]);
+        }
+        self.tail = (self.tail + len) % RING_BUFFER_SIZE;
+        if self.tail == self.head {
+            self.status = RingBufferStatus::Full;
+        }
+    }
     /// 从管道头读一个字节
     pub fn read_byte(&mut self) -> u8 {
         self.status = RingBufferStatus::Normal;
@@ -125,6 +146,28 @@ impl PipeRingBuffer {
             self.status = RingBufferStatus::Empty;
         }
         c
+    }
+    /// 从管道头读n个字节
+    pub fn read_bytes(&mut self, len: usize) -> Vec<u8> {
+        assert!(
+            len <= RING_BUFFER_SIZE,
+            "len must less than RING_BUFFER_SIZE"
+        );
+        self.status = RingBufferStatus::Normal;
+        let mut bytes = vec![0; len];
+        if self.head + len <= RING_BUFFER_SIZE {
+            bytes[..].copy_from_slice(&self.arr[self.head..self.head + len]);
+        } else {
+            let form_len = RING_BUFFER_SIZE - self.head;
+            let late_len = len - form_len;
+            bytes[..form_len].copy_from_slice(&self.arr[self.head..RING_BUFFER_SIZE]);
+            bytes[form_len..].copy_from_slice(&self.arr[..late_len]);
+        }
+        self.head = (self.head + len) % RING_BUFFER_SIZE;
+        if self.head == self.tail {
+            self.status = RingBufferStatus::Empty;
+        }
+        bytes
     }
     /// 获取管道中剩余可读长度
     pub fn available_read(&self) -> usize {
@@ -171,10 +214,9 @@ impl File for Pipe {
     fn writable(&self) -> bool {
         self.writable
     }
-    fn read(&self, buf: UserBuffer) -> SyscallRet {
+    fn read(&self, mut buf: UserBuffer) -> SyscallRet {
         assert!(self.readable());
         // let buf_len = buf.len();
-        let mut buf_iter = buf.into_iter();
         let mut read_size = 0usize;
         let mut loop_read;
         loop {
@@ -204,21 +246,27 @@ impl File for Pipe {
         }
         // read at most loop_read bytes
         let mut ring_buffer = self.inner_lock();
-        for _ in 0..loop_read {
-            if let Some(byte_ref) = buf_iter.next() {
-                unsafe {
-                    *byte_ref = ring_buffer.read_byte();
+        let length = buf.len();
+        if length <= 10 {
+            let mut buf_iter = buf.into_iter();
+            for _ in 0..loop_read {
+                if let Some(byte_ref) = buf_iter.next() {
+                    unsafe {
+                        *byte_ref = ring_buffer.read_byte();
+                    }
+                    read_size += 1;
+                } else {
+                    break;
                 }
-                read_size += 1;
-            } else {
-                break;
             }
+        } else {
+            read_size = min(loop_read, length);
+            buf.write(&ring_buffer.read_bytes(read_size));
         }
         Ok(read_size)
     }
-    fn write(&self, buf: UserBuffer) -> SyscallRet {
+    fn write(&self, mut buf: UserBuffer) -> SyscallRet {
         assert!(self.writable());
-        let mut buf_iter = buf.into_iter();
         let mut write_size = 0usize;
         let mut loop_write;
         loop {
@@ -245,13 +293,20 @@ impl File for Pipe {
         }
         // write at most loop_write bytes
         let mut ring_buffer = self.inner_lock();
-        for _ in 0..loop_write {
-            if let Some(byte_ref) = buf_iter.next() {
-                ring_buffer.write_byte(unsafe { *byte_ref });
-                write_size += 1;
-            } else {
-                break;
+        let length = buf.len();
+        if length <= 10 {
+            let mut buf_iter = buf.into_iter();
+            for _ in 0..loop_write {
+                if let Some(byte_ref) = buf_iter.next() {
+                    ring_buffer.write_byte(unsafe { *byte_ref });
+                    write_size += 1;
+                } else {
+                    break;
+                }
             }
+        } else {
+            write_size = min(loop_write, length);
+            ring_buffer.write_bytes(&buf.read(write_size), write_size);
         }
         Ok(write_size)
     }

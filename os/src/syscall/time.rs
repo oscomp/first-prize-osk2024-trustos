@@ -74,17 +74,18 @@ pub fn sys_clock_gettime(_clockid: usize, tp: *mut Timespec) -> SyscallRet {
 /// 参考 https://man7.org/linux/man-pages/man2/getrusage.2.html
 pub fn sys_getrusage(who: isize, usage: *mut Rusage) -> SyscallRet {
     // TrustOS目前只支持 RUSAGESELF 和 RUSAGECHILDEN
+    debug!(
+        "[sys_getrusage] who is {}, usage is {:x}",
+        who, usage as usize
+    );
+    return Ok(0);
+
     const RUSAGESELF: isize = 0;
     const RUSAGECHILDEN: isize = -1;
 
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
-
-    // debug!(
-    //     "[sys_getrusage] who is {}, usage is {:x}",
-    //     who, usage as usize
-    // );
 
     match who {
         RUSAGESELF => {

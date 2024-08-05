@@ -26,7 +26,7 @@ use super::{FcntlCmd, Iovec, RLimit};
 
 /// 参考 https://man7.org/linux/man-pages/man2/write.2.html
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
-    // debug!("[sys_write] fd is {}, len={}", fd, len);
+    //debug!("[sys_write] fd is {}, len={}", fd, len);
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let memory_set = inner.memory_set.clone();
@@ -58,7 +58,7 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let inner = task.inner_lock();
     let memory_set = inner.memory_set.clone();
 
-    // debug!("[sys_read] fd is {}, len is {}", fd, len);
+    //debug!("[sys_read] fd is {}, len is {}", fd, len);
 
     if fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
@@ -475,7 +475,11 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *mut Kstat, _flags: usize
     let path = trim_start_slash(translated_str(token, path));
 
     let abs_path = inner.get_abs_path(dirfd, &path)?;
-    // debug!("[sys_fstatat] abs_path={}", &abs_path);
+    debug!("[sys_fstatat] abs_path={}", &abs_path);
+
+    if abs_path == "/ls" || abs_path == "/xargs" {
+        open(&abs_path, OpenFlags::O_CREATE, NONE_MODE);
+    }
 
     let file = open(&abs_path, OpenFlags::O_RDONLY, NONE_MODE)?.any();
     put_data(token, kst, file.fstat());

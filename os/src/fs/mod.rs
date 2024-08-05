@@ -194,6 +194,8 @@ pub fn flush_preload() {
     extern "C" {
         fn initproc_start();
         fn initproc_end();
+        fn test_start();
+        fn test_end();
     }
 
     let initproc = open("/initproc", OpenFlags::O_CREATE, DEFAULT_FILE_MODE)
@@ -208,6 +210,23 @@ pub fn flush_preload() {
         ) as &'static mut [u8]
     });
     initproc.write(UserBuffer::new(v));
+
+    let test = open(
+        "/test_all_1stage.sh",
+        OpenFlags::O_CREATE,
+        DEFAULT_FILE_MODE,
+    )
+    .unwrap()
+    .file()
+    .unwrap();
+    let mut v = Vec::new();
+    v.push(unsafe {
+        core::slice::from_raw_parts_mut(
+            test_start as *mut u8,
+            test_end as usize - test_start as usize,
+        ) as &'static mut [u8]
+    });
+    test.write(UserBuffer::new(v));
 }
 
 pub fn init() {

@@ -3,6 +3,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+use log::debug;
 
 // pub fn trim_first_point_slash(path: &str) -> &str {
 //     if path.starts_with("./") {
@@ -66,4 +67,12 @@ pub fn get_abs_path(base_path: &str, path: &str) -> String {
         };
         path2abs(&mut wpath, &path2vec(&path))
     }
+}
+
+pub fn strip_color(s: String, prefix: &str, suffix: &str) -> String {
+    debug!("prefix is {}, suffix is {}", prefix, suffix);
+    let trimmed_start = s.strip_prefix(prefix).unwrap_or(&s);
+    let trimmed_result = trimmed_start.strip_suffix(suffix).unwrap_or(trimmed_start);
+    let ret = String::from("ltp/testcases/bin/") + trimmed_result;
+    ret
 }

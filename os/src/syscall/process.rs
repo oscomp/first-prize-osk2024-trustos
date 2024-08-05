@@ -13,7 +13,7 @@ use crate::{
         suspend_current_and_run_next, task_num, Sysinfo, PROCESS_GROUP,
     },
     timer::{add_futex_timer, calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
-    utils::{get_abs_path, trim_start_slash, SysErrNo, SyscallRet},
+    utils::{get_abs_path, strip_color, trim_start_slash, SysErrNo, SyscallRet},
 };
 use alloc::{
     string::{String, ToString},
@@ -127,9 +127,17 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
 
     let token = task_inner.user_token();
     let mut path = trim_start_slash(translated_str(token, path));
+    if path.starts_with("ltp/testcases/bin/") {
+        //去除颜色
+        path = strip_color(path, "ltp/testcases/bin/\u{1b}[1;32m", "\u{1b}[m");
+    }
 
     //处理argv参数
     let mut argv_vec = Vec::<String>::new();
+    argv_vec.push(path.clone());
+    unsafe {
+        argv = argv.add(1);
+    }
     loop {
         if argv.is_null() {
             break;
@@ -146,6 +154,16 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
     if path.ends_with(".sh") {
         //.sh文件不是可执行文件，需要用busybox的sh来启动
         argv_vec.insert(0, String::from("sh"));
+        argv_vec.insert(0, String::from("busybox"));
+        path = String::from("/busybox");
+    }
+    if path.ends_with("ls") {
+        //ls文件为busybox调用，需要用busybox来启动
+        argv_vec.insert(0, String::from("busybox"));
+        path = String::from("/busybox");
+    }
+    if path.ends_with("xargs") {
+        //xargs文件为busybox调用，需要用busybox来启动
         argv_vec.insert(0, String::from("busybox"));
         path = String::from("/busybox");
     }
@@ -166,6 +184,8 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
     }
     env.push("PATH=/:/bin:".to_string());
     env.push("LD_LIBRARY_PATH=/:/lib:/lib/musl:/lib/glibc:".to_string());
+    //设置系统最大负载
+    env.push("ENOUGH=100000".to_string());
 
     debug!("[sys_execve] env is {:?}", env);
 
@@ -529,7 +549,11 @@ pub fn sys_set_robust_list(head: usize, len: usize) -> SyscallRet {
 
 /// 参考 https://man7.org/linux/man-pages/man2/get_robust_list.2.html
 pub fn sys_get_robust_list(pid: usize, head_ptr: *mut usize, len_ptr: *mut usize) -> SyscallRet {
-    if let Some(task) = find_task_by_tid(pid) {
+    let mut task = find_task_by_tid(pid);
+    if task.is_none() && pid == 0 {
+        task = current_task();
+    }
+    if let Some(task) = task {
         let task_inner = task.inner_lock();
         let token = task_inner.user_token();
         put_data(token, head_ptr, task_inner.robust_list.head);
