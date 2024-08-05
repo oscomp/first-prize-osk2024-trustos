@@ -12,13 +12,11 @@ edition = "2021"
 
 [dependencies]
 riscv = { git = "https://github.com/rcore-os/riscv", features = ["inline-asm"] }
-# lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
 buddy_system_allocator = "0.6"
 bitflags = "1.2.1"
 xmas-elf = "0.7.0"
 # virtio-drivers = { git = "https://github.com/rcore-os/virtio-drivers", rev = "4ee80e5" }
 virtio-drivers= {path = "./vendor/virtio-drivers"}
-# fat32_fs = { path = "../fat32_fs" }
 lwext4_rust= {path = "../lwext4_rust"}
 log = "0.4"
 sbi-rt = { version = "0.0.2", features = ["legacy"] }
@@ -29,14 +27,11 @@ cfg-if = { version = "1.0.0" }
 
 
 [features]
-default = ["debug", "ext4_lw"]
+default = ["debug"]
 error = []
 warn = []
 info = []
 debug = []
-
-fat32 = []
-ext4_lw=[]
 
 [profile.release]
 debug = true

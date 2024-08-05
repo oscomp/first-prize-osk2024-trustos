@@ -1,5 +1,6 @@
 mod devfs;
 mod dirent;
+mod ext4_lw;
 mod fsidx;
 mod fstruct;
 mod mount;
@@ -9,22 +10,13 @@ mod stat;
 mod stdio;
 mod vfs;
 
-cfg_if::cfg_if! {
-    if #[cfg(feature="fat32")]{
-        mod fat32;
-        pub use fat32::{sync,fs_stat,root_inode};
-    }  else if #[cfg(feature="ext4_lw")]{
-        mod ext4_lw;
-        pub use ext4_lw::{sync,fs_stat,root_inode,ls};
-    }
-}
-
 use crate::mm::UserBuffer;
 use crate::utils::{GeneralRet, SysErrNo};
 use alloc::string::String;
 use alloc::{sync::Arc, vec::Vec};
 pub use devfs::*;
 pub use dirent::Dirent;
+pub use ext4_lw::{fs_stat, ls, root_inode, sync};
 pub use fsidx::*;
 pub use fstruct::*;
 use log::debug;
