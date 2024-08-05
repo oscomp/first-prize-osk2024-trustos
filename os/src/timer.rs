@@ -393,9 +393,9 @@ pub fn add_stopped_task_timer(expire: Timespec, task: Arc<TaskControlBlock>) {
     });
 }
 
-pub fn check_timer() {
-    let current = get_time_spec();
+pub fn check_futex_timer() {
     let mut timers = TIMERS.lock();
+    let current = get_time_spec();
     while let Some(timer) = timers.peek() {
         // debug!("expire={:?}, current={:?}", timer.expire, current);
         if timer.expire <= current {

@@ -334,11 +334,11 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, _options: i32) -> SyscallRet {
             drop(child_inner);
             // 从父进程的子进程组移除
             children.remove(idx);
-            // 从线程组移除
-            remove_all_from_thread_group(found_pid);
             drop(task_inner);
             drop(task);
             drop(process_group);
+            // 从线程组移除
+            remove_all_from_thread_group(found_pid);
             // 转移子进程
             move_child_process_to_init(found_pid);
 

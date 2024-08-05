@@ -44,9 +44,9 @@ impl TaskManager {
         } else {
             // info!("no parent pid=={}", pid);
             // 父进程已被回收,被添加到了initproc下
-            if pid != 0 {
+            if pid != 1 {
                 // log::info!("wake up parent {}", 0);
-                self.wakeup_parent(0);
+                self.wakeup_parent(1);
             }
         }
     }

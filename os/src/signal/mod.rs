@@ -227,16 +227,14 @@ pub fn send_signal_to_thread(tid: usize, sig: SigSet) {
     }
 }
 
-// pub fn send_signal_to_one_thread_of_thread_group(pid: usize, tid: usize, sig: SigSet) {
-//     let thread_group = THREAD_GROUP.lock();
-//     if let Some(tasks) = thread_group.get(&pid) {
-//         for task in tasks.iter() {
-//             if task.tid() == tid {
-//                 add_signal(task.clone(), sig);
-//             }
-//         }
-//     }
-// }
+pub fn send_signal_to_thread_of_proc(pid: usize, tid: usize, sig: SigSet) {
+    let tid2task = TID_TO_TASK.lock();
+    if let Some(task) = tid2task.get(&tid) {
+        if task.pid() == pid {
+            add_signal(Arc::clone(task), sig);
+        }
+    }
+}
 
 // 目前的进程组只是一个进程的所有子进程的集合
 pub fn send_signal_to_process_group(_pid: usize, _sig: SigSet) {

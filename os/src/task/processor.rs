@@ -1,6 +1,6 @@
 //!Implementation of [`Processor`] and Intersection of control flow
 use super::{__switch, add_task, fetch_task, TaskContext, TaskControlBlock, TaskStatus};
-use crate::{config::sync::HART_NUM, timer::check_timer, trap::TrapContext, utils::hart_id};
+use crate::{config::sync::HART_NUM, timer::check_futex_timer, trap::TrapContext, utils::hart_id};
 use alloc::{boxed::Box, sync::Arc};
 ///Processor management structure
 pub struct Processor {
@@ -49,7 +49,7 @@ pub fn run_tasks() {
         let idle_task_cx_ptr = processor.get_idle_task_cx_ptr();
         if let Some(cur_task) = take_current_task() {
             let mut cur_task_inner = cur_task.inner_lock();
-            check_timer();
+            check_futex_timer();
             if let Some(next_task) = fetch_task() {
                 // info!(
                 //     "drop task {},fetch task {}",
@@ -91,7 +91,7 @@ pub fn run_tasks() {
                 }
             }
             //不切换到内核的地址空间，可能继续运行或转到别的任务
-            check_timer();
+            check_futex_timer();
         }
     }
 }

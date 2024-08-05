@@ -3,8 +3,8 @@ use log::debug;
 use crate::{
     mm::{get_data, put_data},
     signal::{
-        restore_frame, send_signal_to_thread, send_signal_to_thread_group, KSigAction, SigAction,
-        SigInfo, SigSet,
+        restore_frame, send_signal_to_thread, send_signal_to_thread_group,
+        send_signal_to_thread_of_proc, KSigAction, SigAction, SigInfo, SigSet,
     },
     syscall::SignalMaskFlag,
     task::{current_task, exit_current_and_run_next, suspend_current_and_run_next},
@@ -167,7 +167,6 @@ pub fn sys_tgkill(tgid: usize, tid: usize, signo: usize) -> SyscallRet {
         tgid, tid, sig
     );
 
-    unimplemented!();
-    // send_signal_to_one_thread_of_thread_group(tgid, tid, sig);
-    // Ok(0)
+    send_signal_to_thread_of_proc(tgid, tid, sig);
+    Ok(0)
 }
