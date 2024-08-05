@@ -3,9 +3,8 @@ use super::{current_task, TaskControlBlock, TaskStatus, INITPROC};
 use alloc::collections::{BTreeMap, VecDeque};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use lazy_static::*;
 use log::debug;
-use spin::Mutex;
+use spin::{Lazy, Mutex};
 ///A array of `TaskControlBlock` that is thread-safe
 pub struct TaskManager {
     ready_queue: VecDeque<Arc<TaskControlBlock>>,
@@ -52,9 +51,7 @@ impl TaskManager {
     }
 }
 
-lazy_static! {
-    pub static ref TASK_MANAGER: Mutex<TaskManager> = Mutex::new(TaskManager::new());
-}
+pub static TASK_MANAGER: Lazy<Mutex<TaskManager>> = Lazy::new(|| Mutex::new(TaskManager::new()));
 ///Interface offered to add task
 pub fn add_task(task: Arc<TaskControlBlock>) {
     TASK_MANAGER.lock().ready_queue.push_back(task);
@@ -103,10 +100,8 @@ pub fn find_task_by_tid(tid: usize) -> Option<Arc<TaskControlBlock>> {
 //     }
 // }
 
-lazy_static! {
-    pub static ref TID_TO_TASK: Mutex<BTreeMap<usize, Arc<TaskControlBlock>>> =
-        Mutex::new(BTreeMap::new());
-}
+pub static TID_TO_TASK: Lazy<Mutex<BTreeMap<usize, Arc<TaskControlBlock>>>> =
+    Lazy::new(|| Mutex::new(BTreeMap::new()));
 
 pub fn tid2task(tid: usize) -> Option<Arc<TaskControlBlock>> {
     match TID_TO_TASK.lock().get(&tid) {
@@ -127,11 +122,9 @@ pub fn task_num() -> usize {
     TID_TO_TASK.lock().len()
 }
 
-lazy_static! {
-    /// 线程组
-    pub static ref THREAD_GROUP: Mutex<BTreeMap<usize, Vec<Arc<TaskControlBlock>>>> =
-        Mutex::new(BTreeMap::new());
-}
+/// 线程组
+pub static THREAD_GROUP: Lazy<Mutex<BTreeMap<usize, Vec<Arc<TaskControlBlock>>>>> =
+    Lazy::new(|| Mutex::new(BTreeMap::new()));
 
 pub fn insert_into_thread_group(pid: usize, task: &Arc<TaskControlBlock>) {
     THREAD_GROUP
@@ -145,12 +138,10 @@ pub fn remove_all_from_thread_group(pid: usize) {
     THREAD_GROUP.lock().remove(&pid);
 }
 
-lazy_static! {
-    /// 需要持有Arc,避免进程在exit时被释放,等待到wait释放进程
-    /// 一个进程组实际上是一个进程的所有子进程
-    pub static ref PROCESS_GROUP: Mutex<BTreeMap<usize, Vec<Arc<TaskControlBlock>>>> =
-        Mutex::new(BTreeMap::new());
-}
+/// 需要持有Arc,避免进程在exit时被释放,等待到wait释放进程
+/// 一个进程组实际上是一个进程的所有子进程
+pub static PROCESS_GROUP: Lazy<Mutex<BTreeMap<usize, Vec<Arc<TaskControlBlock>>>>> =
+    Lazy::new(|| Mutex::new(BTreeMap::new()));
 
 pub fn insert_into_process_group(ppid: usize, task: &Arc<TaskControlBlock>) {
     PROCESS_GROUP

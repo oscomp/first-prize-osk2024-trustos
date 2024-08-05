@@ -1,14 +1,11 @@
 use alloc::{collections::btree_map::BTreeMap, sync::Arc, vec::Vec};
-use lazy_static::*;
-use spin::Mutex;
+use spin::{Lazy, Mutex};
 
 use super::{FrameTracker, VirtPageNum};
 pub const GROUP_SIZE: usize = 0x1000;
 
-lazy_static! {
-    //共享空间管理器,mmap专用，因为只有mmap会在有固定内容但没加载时fork
-    pub static ref GROUP_SHARE: Mutex<GroupManager> = Mutex::new(GroupManager::new());
-}
+//共享空间管理器,mmap专用，因为只有mmap会在有固定内容但没加载时fork
+pub static GROUP_SHARE: Lazy<Mutex<GroupManager>> = Lazy::new(|| Mutex::new(GroupManager::new()));
 //以MapArea为单元分组，每个MapArea一个groupid,在同一个group内的MapArea共享内存
 struct GroupInner {
     //该组内共享的帧

@@ -2,7 +2,7 @@ mod blk;
 
 pub use blk::*;
 
-use spin::Mutex;
+use spin::{Lazy, Mutex};
 use virtio_drivers::Hal;
 
 use crate::{
@@ -14,12 +14,9 @@ use crate::{
     task::current_token,
 };
 use alloc::{sync::Arc, vec::Vec};
-use lazy_static::*;
-lazy_static! {
-    /// 实现 Trait BlockDevice时对内部操作加锁
-    // pub static ref BLOCK_DEVICE: Arc<dyn BlockDevice> = Arc::new(BlockDeviceImpl::new());
-    static ref QUEUE_FRAMES: Mutex<Vec<Arc<FrameTracker>>> = Mutex::new(Vec::new());
-}
+/// 实现 Trait BlockDevice时对内部操作加锁
+// pub static ref BLOCK_DEVICE: Arc<dyn BlockDevice> = Arc::new(BlockDeviceImpl::new());
+static QUEUE_FRAMES: Lazy<Mutex<Vec<Arc<FrameTracker>>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
 pub struct VirtIoHalImpl;
 

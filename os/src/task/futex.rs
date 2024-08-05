@@ -8,14 +8,12 @@ use alloc::{
     collections::{BTreeMap, VecDeque},
     sync::{Arc, Weak},
 };
-use lazy_static::*;
 use log::debug;
-use spin::Mutex;
+use spin::{Lazy, Mutex};
 
 type WaitQueue = VecDeque<Weak<TaskControlBlock>>;
-lazy_static! {
-    pub static ref FUTEX_LIST: Mutex<BTreeMap<PhysAddr, WaitQueue>> = Mutex::new(BTreeMap::new());
-}
+pub static FUTEX_LIST: Lazy<Mutex<BTreeMap<PhysAddr, WaitQueue>>> =
+    Lazy::new(|| Mutex::new(BTreeMap::new()));
 
 pub fn futex_wait(pa: PhysAddr) -> SyscallRet {
     let mut waitq = FUTEX_LIST.lock();

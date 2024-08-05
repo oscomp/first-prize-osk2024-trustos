@@ -23,13 +23,12 @@ use alloc::{
     vec::Vec,
 };
 use core::arch::asm;
-use lazy_static::*;
 use log::debug;
 use riscv::register::{
     satp,
     scause::{Exception, Trap},
 };
-use spin::Mutex;
+use spin::{Lazy, Mutex};
 use xmas_elf::ElfFile;
 
 extern "C" {
@@ -45,16 +44,9 @@ extern "C" {
     fn sigreturn_trampoline();
 }
 
-lazy_static! {
-    /// a memory set instance through lazy_static! managing kernel space
-    pub static ref KERNEL_SPACE: Mutex<MemorySetInner> =
-         Mutex::new(MemorySetInner::new_kernel()) ;
-}
-lazy_static! {
-    /// 全0页，bss段初始指向这里
-    pub static ref ZERO_PAGE: Arc<FrameTracker> =
-        frame_alloc().unwrap();
-}
+/// a memory set instance through lazy_static! managing kernel space
+pub static KERNEL_SPACE: Lazy<Mutex<MemorySetInner>> =
+    Lazy::new(|| Mutex::new(MemorySetInner::new_kernel()));
 ///Get kernelspace root ppn
 pub fn kernel_token() -> usize {
     KERNEL_SPACE.lock().token()

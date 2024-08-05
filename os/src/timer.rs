@@ -11,10 +11,9 @@ use alloc::{
     sync::{Arc, Weak},
 };
 use core::cmp::Ordering;
-use lazy_static::*;
 use log::debug;
 use riscv::register::time;
-use spin::Mutex;
+use spin::{Lazy, Mutex};
 
 const TICKS_PER_SEC: usize = 100;
 const MSEC_PER_SEC: usize = 1000;
@@ -370,10 +369,8 @@ impl Ord for TimerCondVar {
     }
 }
 
-lazy_static! {
-    static ref TIMERS: Mutex<BinaryHeap<TimerCondVar>> =
-        Mutex::new(BinaryHeap::<TimerCondVar>::new());
-}
+pub static TIMERS: Lazy<Mutex<BinaryHeap<TimerCondVar>>> =
+    Lazy::new(|| Mutex::new(BinaryHeap::<TimerCondVar>::new()));
 
 pub fn add_futex_timer(expire: Timespec, task: Arc<TaskControlBlock>) {
     let mut timers = TIMERS.lock();

@@ -1,5 +1,5 @@
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
-use spin::Mutex;
+use spin::{Lazy, Mutex};
 
 use crate::{
     config::mm::PAGE_SIZE,
@@ -8,7 +8,6 @@ use crate::{
 };
 
 use super::{frame_alloc, FrameTracker, MapPermission};
-use lazy_static::*;
 
 bitflags! {
     pub struct ShmFlags: i32 {
@@ -54,9 +53,7 @@ impl ShmManager {
     }
 }
 
-lazy_static! {
-    pub static ref SHM_MANAGER: Mutex<ShmManager> = Mutex::new(ShmManager::new());
-}
+pub static SHM_MANAGER: Lazy<Mutex<ShmManager>> = Lazy::new(|| Mutex::new(ShmManager::new()));
 
 /// 创建共享内存段，返回共享内存段标识符
 ///

@@ -5,7 +5,7 @@ pub use inode::*;
 pub use sb::*;
 
 use alloc::sync::Arc;
-use lazy_static::*;
+use spin::Lazy;
 
 use crate::{
     drivers::{BlockDeviceImpl, Disk},
@@ -14,13 +14,11 @@ use crate::{
 
 use super::{Inode, Statfs};
 
-lazy_static! {
-    static ref SUPER_BLOCK: Arc<dyn SuperBlock> = {
-        Arc::new(Ext4SuperBlock::new(
-            Disk::new(BlockDeviceImpl::new_device()),
-        ))
-    };
-}
+static SUPER_BLOCK: Lazy<Arc<dyn SuperBlock>> = Lazy::new(|| {
+    Arc::new(Ext4SuperBlock::new(
+        Disk::new(BlockDeviceImpl::new_device()),
+    ))
+});
 
 pub fn root_inode() -> Arc<dyn Inode> {
     SUPER_BLOCK.root_inode()

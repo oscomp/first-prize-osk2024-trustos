@@ -4,8 +4,7 @@ use crate::{
     mm::{MapAreaType, MapPermission, VirtAddr, KERNEL_SPACE},
 };
 use alloc::vec::Vec;
-use lazy_static::*;
-use spin::Mutex;
+use spin::{Lazy, Mutex};
 ///Pid Allocator struct
 pub struct TidAllocator {
     current: usize,
@@ -41,9 +40,8 @@ impl TidAllocator {
     }
 }
 
-lazy_static! {
-    pub static ref TID_ALLOCATOR: Mutex<TidAllocator> = Mutex::new(TidAllocator::new());
-}
+pub static TID_ALLOCATOR: Lazy<Mutex<TidAllocator>> = Lazy::new(|| Mutex::new(TidAllocator::new()));
+
 ///Bind pid lifetime to `TidHandle`
 pub struct TidHandle(pub usize);
 

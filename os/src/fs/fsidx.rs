@@ -4,14 +4,12 @@ use alloc::{
     sync::Arc,
 };
 use hashbrown::HashMap;
-use lazy_static::*;
-use spin::RwLock;
+use spin::{Lazy, RwLock};
 
 use super::Inode;
 
-lazy_static! {
-    pub static ref FSIDX: RwLock<HashMap<String, Arc<dyn Inode>>> = RwLock::new(HashMap::new());
-}
+pub static FSIDX: Lazy<RwLock<HashMap<String, Arc<dyn Inode>>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 
 pub fn has_inode(path: &str) -> bool {
     FSIDX.read().contains_key(path)

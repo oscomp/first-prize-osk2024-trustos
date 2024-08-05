@@ -35,9 +35,9 @@ use crate::{
 use alloc::{boxed::Box, sync::Arc};
 pub use context::TaskContext;
 pub use futex::*;
-use lazy_static::*;
 use log::debug;
 pub use manager::*;
+use spin::Lazy;
 use switch::__switch;
 pub use sysinfo::Sysinfo;
 pub use task::{RobustList, TaskControlBlock, TaskStatus};
@@ -167,18 +167,18 @@ pub fn exit_current_and_run_next(exit_code: i32) {
 //     panic!("Unreachable in handle_exit!");
 // }
 
-lazy_static! {
-    ///Globle process that init user shell
-    pub static ref INITPROC: Arc<TaskControlBlock> = Arc::new({
-        let initproc= open("/initproc", OpenFlags::O_RDONLY,NONE_MODE)
+///Globle process that init user shell
+pub static INITPROC: Lazy<Arc<TaskControlBlock>> = Lazy::new(|| {
+    Arc::new({
+        let initproc = open("/initproc", OpenFlags::O_RDONLY, NONE_MODE)
             .expect("open initproc error!")
             .file()
             .expect("initproc can not be abs file!");
         let elf_data = initproc.inode.read_all().unwrap();
-        let res=TaskControlBlock::new(&elf_data);
+        let res = TaskControlBlock::new(&elf_data);
         res
-    });
-}
+    })
+});
 ///Add init process to the manager
 pub fn add_initproc() {
     add_task(INITPROC.clone());

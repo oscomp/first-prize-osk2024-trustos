@@ -1,6 +1,5 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
-use lazy_static::*;
-use spin::Mutex;
+use spin::{Lazy, Mutex};
 
 const MNT_MAXLEN: usize = 16;
 
@@ -51,11 +50,9 @@ impl MountTable {
     }
 }
 
-lazy_static! {
-    pub static ref MNT_TABLE: Arc<Mutex<MountTable>> = {
-        let mnt_table = MountTable {
-            mnt_list: Vec::new(),
-        };
-        Arc::new(Mutex::new(mnt_table))
+pub static MNT_TABLE: Lazy<Arc<Mutex<MountTable>>> = Lazy::new(|| {
+    let mnt_table = MountTable {
+        mnt_list: Vec::new(),
     };
-}
+    Arc::new(Mutex::new(mnt_table))
+});

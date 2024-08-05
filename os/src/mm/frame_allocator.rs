@@ -4,8 +4,7 @@ use super::{PhysAddr, PhysPageNum};
 use crate::{config::board::MEMORY_END, mm::address::KernelAddr};
 use alloc::{sync::Arc, vec::Vec};
 use core::fmt::{self, Debug, Formatter};
-use lazy_static::*;
-use spin::Mutex;
+use spin::{Lazy, Mutex};
 
 /// manage a frame which has the same lifecycle as the tracker
 pub struct FrameTracker {
@@ -96,11 +95,9 @@ impl FrameAllocator for PhysFrameAllocator {
 
 type FrameAllocatorImpl = PhysFrameAllocator;
 
-lazy_static! {
-    /// frame allocator instance through lazy_static!
-    pub static ref FRAME_ALLOCATOR: Mutex<FrameAllocatorImpl> =
-         Mutex::new(FrameAllocatorImpl::new()) ;
-}
+/// frame allocator instance through lazy_static!
+pub static FRAME_ALLOCATOR: Lazy<Mutex<FrameAllocatorImpl>> =
+    Lazy::new(|| Mutex::new(FrameAllocatorImpl::new()));
 /// initiate the frame allocator using `ekernel` and `MEMORY_END`
 pub fn init_frame_allocator() {
     extern "C" {

@@ -11,8 +11,7 @@ use alloc::{
     sync::Arc,
 };
 use core::cmp::min;
-use lazy_static::lazy_static;
-use spin::{Mutex, RwLock};
+use spin::{Lazy, Mutex, RwLock};
 
 use super::{stat::StMode, File, Kstat, Stdin, Stdout};
 
@@ -28,9 +27,8 @@ pub struct DevCpuDmaLatency {
 }
 
 //设备树，通过设备名称可以查找到设备号
-lazy_static! {
-    pub static ref DEVICES: Mutex<BTreeMap<String, usize>> = Mutex::new(BTreeMap::new());
-}
+pub static DEVICES: Lazy<Mutex<BTreeMap<String, usize>>> =
+    Lazy::new(|| Mutex::new(BTreeMap::new()));
 
 //从1起算，0为其他抽象文件
 static mut DEV_NO: usize = 1;
