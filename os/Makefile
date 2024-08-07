@@ -6,8 +6,8 @@ MODE := release
 KERNEL_ELF := target/$(TARGET)/$(MODE)/os
 KERNEL_BIN := $(KERNEL_ELF).bin
 DISASM_TMP := target/$(TARGET)/$(MODE)/asm
-#FS := lwext4_rust
-#IMG := ext4.img
+# FS := lwext4_rust
+# IMG := ext4.img
 # 使用的时候把copy_to_fs的命令注释掉
 FS := final_tests
 IMG := sdcard.img
