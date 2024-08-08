@@ -134,9 +134,14 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
 
     //处理argv参数
     let mut argv_vec = Vec::<String>::new();
-    argv_vec.push(path.clone());
-    unsafe {
-        argv = argv.add(1);
+    if !argv.is_null() {
+        let argv_ptr = *translated_ref(token, argv);
+        if argv_ptr != 0 {
+            argv_vec.push(path.clone());
+            unsafe {
+                argv = argv.add(1);
+            }
+        }
     }
     loop {
         if argv.is_null() {

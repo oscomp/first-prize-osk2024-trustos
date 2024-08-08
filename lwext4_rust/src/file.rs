@@ -5,7 +5,7 @@ use alloc::collections::{BTreeMap, VecDeque};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::{ffi::CString, vec::Vec};
-use spin::{Mutex, RwLock};
+use spin::{Lazy, Mutex, RwLock};
 
 const PAGE_SIZE: usize = 4096;
 pub const PAGE_MASK: usize = !0xfff;
@@ -77,7 +77,7 @@ impl Ext4File {
         } else {
             if self.has_opened && self.last_flags == flags {
                 //如果之前已经按相同方式打开
-                debug!("reopen");
+                //debug!("reopen");
                 return Ok(EOK as usize);
             }
         }
@@ -198,14 +198,16 @@ impl Ext4File {
 
     /// Remove file by path.
     pub fn file_remove(&mut self, path: &str) -> Result<usize, i32> {
-        debug!("file_remove {}", path);
+        //debug!("file_remove {}", path);
 
         let c_path = CString::new(path).expect("CString::new failed");
         let c_path = c_path.into_raw();
 
         let path = String::from(path);
         //删掉对应缓存
-        remove_cache(path);
+        if if_cache(path.clone()) {
+            remove_cache(path);
+        }
 
         //修改为未打开
         self.has_opened = false;
@@ -227,13 +229,25 @@ impl Ext4File {
             insert_fifo(file_path.clone());
             let cache = Arc::new(RwLock::new(VFileCache::new()));
             let mut cache_writer = cache.write();
-            debug!("initialize cache!");
+            debug!("initialize cache! {}", file_path);
+            let c_path = CString::new(file_path.as_str()).expect("CString::new failed");
+            let c_path = c_path.into_raw();
+            let c_flags = Ext4File::flags_to_cstring(2).into_raw();
+
+            //重新打开文件获得最新的文件信息
+            unsafe { ext4_fopen(&mut self.file_desc, c_path, c_flags) };
+            unsafe {
+                // deallocate the CString
+                drop(CString::from_raw(c_path));
+                drop(CString::from_raw(c_flags));
+            }
+
             let size = unsafe { ext4_fsize(&mut self.file_desc) as usize };
             let aligned_size = aligned_down(size) + PAGE_SIZE;
             cache_writer.data = Vec::with_capacity(aligned_size);
             let data = &mut cache_writer.data;
             unsafe {
-                data.set_len(size);
+                data.set_len(aligned_size);
             }
             cache_writer.size = size;
             if size == 0 {
@@ -265,7 +279,10 @@ impl Ext4File {
 
             let mut offset = offset as usize;
             if offset > cache_writer.size {
-                warn!("Seek beyond the end of the file");
+                warn!(
+                    "Seek beyond the end of the file,path is {},offset is {} while size is {}",
+                    path, offset, cache_writer.size
+                );
                 offset = cache_writer.size;
             }
 
@@ -357,7 +374,17 @@ impl Ext4File {
             let cache = get_cache(path.clone());
             let mut cache_writer = cache.write();
             let len = cache_writer.writebuf(buf);
-            if len > 5_000_000 {
+            /*
+            debug!(
+                "file write at {} with size={} offset={}",
+                path,
+                buf.len(),
+                cache_writer.offset
+            );
+            */
+            //debug!("len is {} now", len);
+            if len > 5_100_000 {
+                debug!("len is {} out of mem", len);
                 //write_back_cache(path.clone());
                 remove_cache(path.clone());
                 return Err(ENOMEM as i32);
@@ -785,12 +812,14 @@ impl VFileCache {
             self.data[self.offset..self.offset + length].copy_from_slice(buf);
         }
         self.modified = true;
+        /*
         debug!(
             "write {} bytes and size is {}, data.len() is {} now",
             length,
             self.size,
             self.data.len()
         );
+        */
         return self.data.len();
     }
 
@@ -802,7 +831,8 @@ impl VFileCache {
 }
 
 //cache表，目前只为非目录文件使用cache
-static CACHE_TABLE: Mutex<BTreeMap<String, Arc<RwLock<VFileCache>>>> = Mutex::new(BTreeMap::new());
+static CACHE_TABLE: Lazy<Mutex<BTreeMap<String, Arc<RwLock<VFileCache>>>>> =
+    Lazy::new(|| Mutex::new(BTreeMap::new()));
 
 pub fn if_cache(file_path: String) -> bool {
     CACHE_TABLE.lock().contains_key(&file_path)
@@ -820,12 +850,19 @@ pub fn remove_cache(file_path: String) {
     CACHE_TABLE.lock().remove(&file_path);
 }
 
-const FIFO_SIZE: usize = 30;
+const FIFO_SIZE: usize = 10;
 //采用先进先出策略
-static FIFO_TABLE: Mutex<VecDeque<String>> = Mutex::new(VecDeque::new());
+static FIFO_TABLE: Lazy<Mutex<VecDeque<String>>> = Lazy::new(|| Mutex::new(VecDeque::new()));
 
 pub fn insert_fifo(file_path: String) {
     let mut fifo = FIFO_TABLE.lock();
+    for item in fifo.iter() {
+        //队列中存在该文件，说明之前被删除过，不重复加入
+        if *item == file_path {
+            debug!("file {} already exist", file_path);
+            return;
+        }
+    }
     if fifo.len() == FIFO_SIZE {
         //替换并可能写回
         let path = fifo.pop_front().unwrap();
@@ -847,11 +884,11 @@ pub fn write_back_cache(path: String) {
     if if_cache(path.clone()) {
         //如果在缓存中有，表明未被删除
         let cache = get_cache(path.clone());
-        let mut cache_writer = cache.write();
-        debug!("{} is written back!", path);
+        let cache_writer = cache.write();
         if cache_writer.modified {
             //如果被修改过，则写回
-            let c_path = CString::new(path.clone()).expect("CString::new failed");
+            debug!("{} is written back!", path);
+            let c_path = CString::new(path.as_str()).expect("CString::new failed");
             let c_path = c_path.into_raw();
             let flags = Ext4File::flags_to_cstring(2).into_raw();
             let mut file_desc = ext4_file {
@@ -872,7 +909,7 @@ pub fn write_back_cache(path: String) {
             unsafe {
                 ext4_fwrite(
                     &mut file_desc,
-                    cache_writer.data.as_mut_ptr() as _,
+                    cache_writer.data.as_ptr() as _,
                     cache_writer.size,
                     &mut rw_count,
                 )

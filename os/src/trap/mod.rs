@@ -24,7 +24,7 @@ use crate::{
     utils::{backtrace, hart_id},
 };
 use core::arch::global_asm;
-use log::{debug, warn};
+use log::{debug, trace, warn};
 use riscv::register::{
     mtvec::TrapMode,
     scause::{self, Exception, Interrupt, Trap},
@@ -108,7 +108,7 @@ pub fn trap_handler() {
             };
             // handle error
             match result {
-                Ok(ret) => debug!("[syscall ret] {:?} ret = {}", syscall_id, ret),
+                Ok(ret) => trace!("[syscall ret] {:?} ret = {}", syscall_id, ret),
                 Err(errno) => debug!("[syscall ret] {:?} ret = {}", syscall_id, errno.str()),
             }
         }
@@ -169,7 +169,7 @@ pub fn trap_handler() {
             check_futex_timer();
             // debug!("Timer Interupt!");
             suspend_current_and_run_next();
-            set_next_trigger();
+            //set_next_trigger();
         }
         Trap::Exception(Exception::Breakpoint) => {
             warn!(
@@ -205,6 +205,9 @@ pub fn trap_return() {
     if let Some(signo) = check_if_any_sig_for_current_task() {
         debug!("found signo in trap_return");
         handle_signal(signo);
+    }
+    if scause::read().cause() == Trap::Interrupt(Interrupt::SupervisorTimer) {
+        set_next_trigger();
     }
 
     set_user_trap_entry();

@@ -3,6 +3,7 @@ use super::{current_task, TaskControlBlock, TaskStatus, INITPROC};
 use alloc::collections::{BTreeMap, VecDeque};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use hashbrown::HashSet;
 use log::debug;
 use spin::{Lazy, Mutex};
 ///A array of `TaskControlBlock` that is thread-safe
@@ -54,11 +55,22 @@ impl TaskManager {
 pub static TASK_MANAGER: Lazy<Mutex<TaskManager>> = Lazy::new(|| Mutex::new(TaskManager::new()));
 ///Interface offered to add task
 pub fn add_task(task: Arc<TaskControlBlock>) {
+    let tid = task.tid();
+    if if_in_manager(tid) {
+        return;
+    }
+    //debug!("add task {} {}", task.pid(), task.tid());
     TASK_MANAGER.lock().ready_queue.push_back(task);
+    insert_in_manager(tid);
 }
 ///Interface offered to pop the first task
 pub fn fetch_task() -> Option<Arc<TaskControlBlock>> {
-    TASK_MANAGER.lock().fetch()
+    if let Some(task) = TASK_MANAGER.lock().fetch() {
+        remove_in_manager(task.tid());
+        return Some(task);
+    } else {
+        None
+    }
 }
 pub fn wakeup_parent(pid: usize) {
     TASK_MANAGER.lock().wakeup_parent(pid);
@@ -177,4 +189,18 @@ pub fn wakeup_futex_task(task: Arc<TaskControlBlock>) {
     debug!("[futex wakeup task] thread={}", task.tid());
     drop(task_inner);
     add_task(task);
+}
+
+pub static TID_IN: Lazy<Mutex<HashSet<usize>>> = Lazy::new(|| Mutex::new(HashSet::new()));
+
+pub fn if_in_manager(tid: usize) -> bool {
+    TID_IN.lock().contains(&tid)
+}
+
+pub fn insert_in_manager(tid: usize) {
+    TID_IN.lock().insert(tid);
+}
+
+pub fn remove_in_manager(tid: usize) {
+    TID_IN.lock().remove(&tid);
 }

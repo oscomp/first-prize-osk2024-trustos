@@ -67,10 +67,12 @@ pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) ->
     }
     if set as usize != 0 {
         let mask = get_data(token, set);
+        /*
         debug!(
             "[sys_sigprocmask] how is {:?}, mask is {:?}, old_set is {:x}",
             how, mask, old_set as usize
         );
+        */
         // let mut blocked = &mut task_inner.sig_mask;
         match how {
             SignalMaskFlag::SIG_BLOCK => task_inner.sig_mask |= mask,
