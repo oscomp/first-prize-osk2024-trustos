@@ -2,7 +2,7 @@ use super::sync::THREAD_MAX_NUM;
 
 pub const USER_STACK_SIZE: usize = 1024 * 1024 * 8; // 8MB
 pub const KERNEL_STACK_SIZE: usize = 4096 * 2;
-pub const KERNEL_HEAP_SIZE: usize = 0x3_000_000; // 32MB
+pub const KERNEL_HEAP_SIZE: usize = 0x3_000_000; // 48MB
 pub const USER_HEAP_SIZE: usize = 0x10_000_000;
 pub const PRE_ALLOC_PAGES: usize = 8;
 

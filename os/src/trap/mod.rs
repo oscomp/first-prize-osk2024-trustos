@@ -169,7 +169,7 @@ pub fn trap_handler() {
             check_futex_timer();
             // debug!("Timer Interupt!");
             suspend_current_and_run_next();
-            //set_next_trigger();
+            // set_next_trigger();
         }
         Trap::Exception(Exception::Breakpoint) => {
             warn!(
@@ -207,6 +207,10 @@ pub fn trap_return() {
         handle_signal(signo);
     }
     if scause::read().cause() == Trap::Interrupt(Interrupt::SupervisorTimer) {
+        set_next_trigger();
+    }
+
+    if scause::read().cause() == Trap::Interrupt(scause::Interrupt::SupervisorTimer) {
         set_next_trigger();
     }
 
