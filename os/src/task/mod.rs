@@ -139,7 +139,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
 
     // 一个进程的所有线程都退出了,此时回收资源
     {
-        //println!("work at recycle for {} {}", task.pid(), task.tid());
+        //debug!("work at exit for {} {}", task.pid(), task.tid());
         let thread_group = THREAD_GROUP.lock();
         if let Some(tasks) = thread_group.get(&task.pid()) {
             if tasks.iter().all(|task| task.inner_lock().is_zombie()) {

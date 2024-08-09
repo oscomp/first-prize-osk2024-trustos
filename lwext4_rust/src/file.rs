@@ -5,6 +5,7 @@ use alloc::collections::{BTreeMap, VecDeque};
 use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::{ffi::CString, vec::Vec};
+use hashbrown::HashSet;
 use spin::{Lazy, Mutex, RwLock};
 
 const PAGE_SIZE: usize = 4096;
@@ -436,6 +437,16 @@ impl Ext4File {
         }
 
         //注，记得先 O_RDONLY 打开文件
+        let c_path = self.file_path.clone().into_raw();
+        let c_flags = Ext4File::flags_to_cstring(2).into_raw();
+
+        //重新打开文件获得最新的文件信息
+        unsafe { ext4_fopen(&mut self.file_desc, c_path, c_flags) };
+        unsafe {
+            // deallocate the CString
+            drop(CString::from_raw(c_path));
+            drop(CString::from_raw(c_flags));
+        }
         unsafe { ext4_fsize(&mut self.file_desc) }
     }
 
@@ -856,6 +867,12 @@ static FIFO_TABLE: Lazy<Mutex<VecDeque<String>>> = Lazy::new(|| Mutex::new(VecDe
 
 pub fn insert_fifo(file_path: String) {
     let mut fifo = FIFO_TABLE.lock();
+    //队列中存在该文件，说明之前被删除过，不重复加入
+    if if_fifo_set(file_path.clone()) {
+        debug!("file {} already exist", file_path);
+        return;
+    }
+    /*
     for item in fifo.iter() {
         //队列中存在该文件，说明之前被删除过，不重复加入
         if *item == file_path {
@@ -863,21 +880,38 @@ pub fn insert_fifo(file_path: String) {
             return;
         }
     }
+    */
     if fifo.len() == FIFO_SIZE {
         //替换并可能写回
         let path = fifo.pop_front().unwrap();
         write_back_cache(path.clone());
         if if_cache(path.clone()) {
             remove_cache(path.clone());
+            remove_fifo_set(path.clone());
         }
         debug!("\n\n{} is replaced!\n\n", path);
     }
     fifo.push_back(file_path.clone());
+    insert_fifo_set(file_path.clone());
     debug!(
         "\n\ninsert {} into fifo!\nlen is {}\n\n",
-        file_path.clone(),
+        file_path,
         fifo.len()
     );
+}
+
+static FIFO_SET: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| Mutex::new(HashSet::new()));
+
+pub fn insert_fifo_set(file_path: String) {
+    FIFO_SET.lock().insert(file_path);
+}
+
+pub fn if_fifo_set(file_path: String) -> bool {
+    FIFO_SET.lock().contains(&file_path)
+}
+
+pub fn remove_fifo_set(file_path: String) {
+    FIFO_SET.lock().remove(&file_path);
 }
 
 pub fn write_back_cache(path: String) {
