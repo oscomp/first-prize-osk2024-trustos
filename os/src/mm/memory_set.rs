@@ -1,6 +1,6 @@
 //! Implementation of [`MapArea`] and [`MemorySet`].
 use super::{
-    cow_page_fault, frame_alloc, lazy_page_fault, mmap_read_page_fault, mmap_write_page_fault,
+    cow_page_fault, lazy_page_fault, mmap_read_page_fault, mmap_write_page_fault,
     translated_byte_buffer, FrameTracker, MapArea, MapAreaType, MapPermission, MapType, PTEFlags,
     PageTable, PageTableEntry, PhysAddr, UserBuffer, VPNRange, VirtAddr, VirtPageNum, GROUP_SHARE,
 };
@@ -9,7 +9,7 @@ use crate::{
         board::{MEMORY_END, MMIO},
         mm::{DL_INTERP_OFFSET, KERNEL_ADDR_OFFSET, MMAP_TOP, PAGE_SIZE},
     },
-    fs::{open, File, OSInode, OpenFlags, NONE_MODE, SEEK_CUR, SEEK_SET},
+    fs::{map_dynamic_link_file, open, File, OSInode, OpenFlags, NONE_MODE, SEEK_CUR, SEEK_SET},
     mm::flush_tlb,
     sync::SyncUnsafeCell,
     syscall::MmapFlags,
@@ -19,7 +19,6 @@ use crate::{
 use alloc::{
     string::{String, ToString},
     sync::Arc,
-    vec,
     vec::Vec,
 };
 use core::arch::asm;
@@ -371,25 +370,14 @@ impl MemorySetInner {
             interp = interp.strip_suffix("\0").unwrap_or(&interp).to_string();
             debug!("[load_dl] interp {}", interp);
 
-            let mut interps: Vec<String> = vec![interp.clone()];
+            let interp = map_dynamic_link_file(&interp);
 
-            debug!("interp {}", interp);
+            // log::info!("interp {}", interp);
 
-            if interp.eq("/lib/ld-musl-riscv64-sf.so.1") || interp.eq("/lib/ld-musl-riscv64.so.1") {
-                // interp = "/lib/libc.so".to_string();
-                // interps.push("/libc.so".to_string());
-                // interps.push("/musl/libc.so".to_string());
-                interps.insert(0, "/lib/musl/libc.so".to_string());
-            }
-
-            let mut interp_inode = None;
-            for interp in interps {
-                if let Ok(inode) = open(&interp, OpenFlags::O_RDONLY, NONE_MODE) {
-                    debug!("read interp from {}", &interp);
-                    interp_inode = inode.file().ok();
-                    break;
-                }
-            }
+            let interp_inode = open(&interp, OpenFlags::O_RDONLY, NONE_MODE)
+                .unwrap()
+                .file()
+                .ok();
             let interp_file = interp_inode.unwrap();
             let interp_elf_data = interp_file.inode.read_all().unwrap();
             let interp_elf = xmas_elf::ElfFile::new(&interp_elf_data).unwrap();

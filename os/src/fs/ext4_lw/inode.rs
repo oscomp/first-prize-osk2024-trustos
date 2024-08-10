@@ -10,7 +10,7 @@ use crate::{
     utils::{SysErrNo, SyscallRet},
 };
 
-use alloc::vec;
+use alloc::{format, vec};
 use alloc::{sync::Arc, vec::Vec};
 
 pub struct Ext4Inode {
@@ -173,7 +173,19 @@ impl Inode for Ext4Inode {
         } else if file.check_inode_exist(path, InodeTypes::EXT4_DE_REG_FILE) {
             Ok(Arc::new(Ext4Inode::new(path, InodeTypes::EXT4_DE_REG_FILE)))
         } else if file.check_inode_exist(path, InodeTypes::EXT4_DE_SYMLINK) {
-            Ok(Arc::new(Ext4Inode::new(path, InodeTypes::EXT4_DE_SYMLINK)))
+            // 符号链接文件应该返回对应的真实的文件
+            let mut file_name = [0u8; 256];
+            let file = Ext4Inode::new(path, InodeTypes::EXT4_DE_SYMLINK);
+            file.read_link(&mut file_name, 256)?;
+            let end = file_name.iter().position(|v| *v == 0).unwrap();
+            let file_path = core::str::from_utf8(&file_name[..end]).unwrap();
+            // log::info!("[Inode.find] file_path={}", file_path);
+            let (prefix, _) = path.rsplit_once("/").unwrap();
+            // log::info!("[Inode.find] prefix={}", prefix);
+            let abs_path = format!("{}/{}", prefix, file_path);
+            // log::info!("[Inode.find] abs_path={}", &abs_path);
+            self.find(&abs_path)
+            // Ok(Arc::new(Ext4Inode::new(path, InodeTypes::EXT4_DE_SYMLINK)))
         } else {
             Err(SysErrNo::ENOENT)
         }

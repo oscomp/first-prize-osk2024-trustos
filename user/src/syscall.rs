@@ -180,7 +180,8 @@ pub fn sys_busyboxsh() -> isize {
             [
                 "busybox\0".as_ptr() as isize,
                 "sh\0".as_ptr() as isize,
-                "iozone_testcode.sh\0".as_ptr() as isize,
+                "./test-ltp.sh\0".as_ptr() as isize,
+                "ltp/testcases/bin/abs01\0".as_ptr() as isize,
                 0,
             ]
             .as_ptr() as isize,

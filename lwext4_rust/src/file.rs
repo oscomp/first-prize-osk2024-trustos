@@ -70,11 +70,11 @@ impl Ext4File {
     pub fn file_open(&mut self, path: &str, flags: u32) -> Result<usize, i32> {
         let c_path = CString::new(path).expect("CString::new failed");
         if c_path != self.path() {
-            debug!(
-                "Ext4File file_open, cur path={}, new path={}",
-                self.file_path.to_str().unwrap(),
-                path
-            );
+            // debug!(
+            //     "Ext4File file_open, cur path={}, new path={}",
+            //     self.file_path.to_str().unwrap(),
+            //     path
+            // );
         } else {
             if self.has_opened && self.last_flags == flags {
                 //如果之前已经按相同方式打开
@@ -230,7 +230,7 @@ impl Ext4File {
             insert_fifo(file_path.clone());
             let cache = Arc::new(RwLock::new(VFileCache::new()));
             let mut cache_writer = cache.write();
-            debug!("initialize cache! {}", file_path);
+            // debug!("initialize cache! {}", file_path);
             let c_path = CString::new(file_path.as_str()).expect("CString::new failed");
             let c_path = c_path.into_raw();
             let c_flags = Ext4File::flags_to_cstring(2).into_raw();
@@ -326,10 +326,10 @@ impl Ext4File {
                 buff[..r_sz].copy_from_slice(&data[cache_read.offset..end]);
             }
 
-            debug!(
-                "file_read {},len = {},offset is {}",
-                path, r_sz, cache_read.offset
-            );
+            // debug!(
+            //     "file_read {},len = {},offset is {}",
+            //     path, r_sz, cache_read.offset
+            // );
 
             return Ok(r_sz);
         }
@@ -869,7 +869,7 @@ pub fn insert_fifo(file_path: String) {
     let mut fifo = FIFO_TABLE.lock();
     //队列中存在该文件，说明之前被删除过，不重复加入
     if if_fifo_set(file_path.clone()) {
-        debug!("file {} already exist", file_path);
+        // debug!("file {} already exist", file_path);
         return;
     }
     /*
@@ -889,15 +889,15 @@ pub fn insert_fifo(file_path: String) {
             remove_cache(path.clone());
             remove_fifo_set(path.clone());
         }
-        debug!("\n\n{} is replaced!\n\n", path);
+        // debug!("\n\n{} is replaced!\n\n", path);
     }
     fifo.push_back(file_path.clone());
     insert_fifo_set(file_path.clone());
-    debug!(
-        "\n\ninsert {} into fifo!\nlen is {}\n\n",
-        file_path,
-        fifo.len()
-    );
+    // debug!(
+    //     "\n\ninsert {} into fifo!\nlen is {}\n\n",
+    //     file_path,
+    //     fifo.len()
+    // );
 }
 
 static FIFO_SET: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| Mutex::new(HashSet::new()));
@@ -921,7 +921,7 @@ pub fn write_back_cache(path: String) {
         let cache_writer = cache.write();
         if cache_writer.modified {
             //如果被修改过，则写回
-            debug!("{} is written back!", path);
+            // debug!("{} is written back!", path);
             let c_path = CString::new(path.as_str()).expect("CString::new failed");
             let c_path = c_path.into_raw();
             let flags = Ext4File::flags_to_cstring(2).into_raw();

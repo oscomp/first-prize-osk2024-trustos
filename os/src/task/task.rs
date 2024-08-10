@@ -179,6 +179,14 @@ impl TaskControlBlockInner {
         } else {
             Ok(get_abs_path(self.fs_info.cwd(), path))
         }
+        // abs_path.map_or(Err(SysErrNo::EINVAL), |abs_path| {
+        //     if is_dynamic_link_file(&abs_path) {
+        //         let real_path = map_dynamic_link_file(&abs_path);
+        //         // log::info!("path={},dynamic path={}", path, real_path);
+        //         return Ok(String::from(real_path));
+        //     }
+        //     Ok(abs_path)
+        // })
     }
 }
 
