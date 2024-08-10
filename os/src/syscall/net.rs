@@ -1,11 +1,12 @@
 use alloc::{format, string::ToString};
 
 use crate::{
-    fs::{make_socket, FileClass, FileDescriptor},
-    mm::put_data,
+    fs::{make_socket, make_socketpair, FileClass, FileDescriptor},
+    mm::{put_data, translated_refmut},
     task::current_task,
     utils::{SysErrNo, SyscallRet},
 };
+use log::debug;
 
 /// 参考 https://man7.org/linux/man-pages/man2/socket.2.html
 pub fn sys_socket(_domain: u32, _type: u32, _protocol: u32) -> SyscallRet {
@@ -98,5 +99,45 @@ pub fn sys_accept(_sockfd: usize, _addr: *const u8, _addrlen: u32) -> SyscallRet
 
 /// 参考 https://man7.org/linux/man-pages/man2/sendmsg.2.html
 pub fn sys_sendmsg(_sockfd: usize, _addr: *const u8, _flags: u32) -> SyscallRet {
+    Ok(0)
+}
+
+pub fn sys_socketpair(domain: u32, stype: u32, protocol: u32, sv: *mut u32) -> SyscallRet {
+    debug!(
+        "[sys_socketpair] domain is {}, type is {}, protocol is {}, sv is {}",
+        domain, stype, protocol, sv as usize
+    );
+
+    return Ok(0);
+
+    let task = current_task().unwrap();
+    let inner = task.inner_lock();
+    let token = inner.user_token();
+
+    let (socket1, socket2) = make_socketpair();
+    let close_on_exec = (stype & 0o2000000) == 0o2000000;
+    let non_block = (stype & 0o4000) == 0o4000;
+
+    let new_fd1 = inner.fd_table.alloc_fd()?;
+    inner.fd_table.set(
+        new_fd1,
+        FileDescriptor::new(close_on_exec, non_block, FileClass::Abs(socket1)),
+    );
+    inner
+        .fs_info
+        .insert(format!("socket{}", new_fd1).to_string(), new_fd1);
+
+    let new_fd2 = inner.fd_table.alloc_fd()?;
+    inner.fd_table.set(
+        new_fd2,
+        FileDescriptor::new(close_on_exec, non_block, FileClass::Abs(socket2)),
+    );
+    inner
+        .fs_info
+        .insert(format!("socket{}", new_fd2).to_string(), new_fd2);
+
+    *translated_refmut(token, sv) = new_fd1 as u32;
+    *translated_refmut(token, unsafe { sv.add(1) }) = new_fd2 as u32;
+
     Ok(0)
 }

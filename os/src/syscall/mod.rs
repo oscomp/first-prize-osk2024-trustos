@@ -94,6 +94,7 @@ pub enum Syscall {
     Shmctl = 195,
     Shmat = 196,
     Socket = 198,
+    Socketpair = 199,
     Bind = 200,
     Listen = 201,
     Accept = 202,
@@ -153,7 +154,7 @@ use log::debug;
 pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
     let id = syscall_id;
     let syscall_id: Syscall = Syscall::from(syscall_id);
-    //debug!("syscall:{:?}", syscall_id);
+    debug!("syscall:{:?}", syscall_id);
     match syscall_id {
         Syscall::Getcwd => sys_getcwd(args[0] as *const u8, args[1]),
         Syscall::Dup => sys_dup(args[0]),
@@ -304,6 +305,12 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Shmctl => sys_shmctl(args[0] as i32, args[1] as i32, args[2]),
         Syscall::Shmat => sys_shmat(args[0] as i32, args[1], args[2] as i32),
         Syscall::Socket => sys_socket(args[0] as u32, args[1] as u32, args[2] as u32),
+        Syscall::Socketpair => sys_socketpair(
+            args[0] as u32,
+            args[1] as u32,
+            args[2] as u32,
+            args[3] as *mut u32,
+        ),
         Syscall::Bind => sys_bind(args[0], args[1] as *const u8, args[2] as u32),
         Syscall::Listen => sys_listen(args[0], args[1] as u32),
         Syscall::Accept => sys_accept(args[0], args[1] as *const u8, args[2] as u32),

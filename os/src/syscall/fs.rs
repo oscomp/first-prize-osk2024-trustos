@@ -477,7 +477,7 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *mut Kstat, _flags: usize
     let abs_path = inner.get_abs_path(dirfd, &path)?;
     debug!("[sys_fstatat] abs_path={}", &abs_path);
 
-    if abs_path == "/ls" || abs_path == "/xargs" {
+    if abs_path == "/ls" || abs_path == "/xargs" || abs_path == "/sleep" {
         open(&abs_path, OpenFlags::O_CREATE, NONE_MODE);
     }
 
