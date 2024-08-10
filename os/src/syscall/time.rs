@@ -109,6 +109,19 @@ pub fn sys_getrusage(who: isize, usage: *mut Rusage) -> SyscallRet {
 }
 
 /// 参考 https://man7.org/linux/man-pages/man2/clock_getres.2.html
-pub fn sys_clock_getres(_clockid: usize, _res: *mut Timespec) -> SyscallRet {
-    unimplemented!();
+pub fn sys_clock_getres(clockid: usize, res: *mut Timespec) -> SyscallRet {
+    debug!(
+        "[sys_clock_getres] clockid is {}, res is {:x}",
+        clockid, res as usize
+    );
+
+    let task = current_task().unwrap();
+    let inner = task.inner_lock();
+    let token = inner.user_token();
+
+    assert!(clockid == 1, "other clockid not supported!");
+
+    let restime = Timespec::new(0, 1);
+    put_data(token, res, restime);
+    Ok(0)
 }

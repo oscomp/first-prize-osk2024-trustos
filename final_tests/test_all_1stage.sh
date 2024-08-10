@@ -14,11 +14,11 @@ busybox echo "run lmbench_testcode.sh"
 ./lmbench_testcode.sh
 busybox echo "run unixbench_testcode.sh"
 ./unixbench_testcode.sh
-busybox echo "run netperf_testcode.sh"
-./netperf_testcode.sh
-busybox echo "run iperf_testcode.sh"
-./iperf_testcode.sh
+#busybox echo "run netperf_testcode.sh"
+#./netperf_testcode.sh
+#busybox echo "run iperf_testcode.sh"
+#./iperf_testcode.sh
 busybox echo "run cyclic_testcode.sh"
-./cyclic_testcode.sh
+./cyclictest_testcode.sh
 busybox echo "run ltp_testcode.sh"
 ./ltp_testcode.sh

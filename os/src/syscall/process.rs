@@ -159,16 +159,13 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
         argv_vec.insert(0, String::from("busybox"));
         path = String::from("/busybox");
     }
-    // if path.ends_with("ls") {
-    //     //ls文件为busybox调用，需要用busybox来启动
-    //     argv_vec.insert(0, String::from("busybox"));
-    //     path = String::from("/busybox");
-    // }
-    // if path.ends_with("xargs") {
-    //     //xargs文件为busybox调用，需要用busybox来启动
-    //     argv_vec.insert(0, String::from("busybox"));
-    //     path = String::from("/busybox");
-    // }
+    /*
+    if path.ends_with("ls") || path.ends_with("xargs") || path.ends_with("sleep") {
+        //ls,xargs,sleep文件为busybox调用，需要用busybox来启动
+        argv_vec.insert(0, String::from("busybox"));
+        path = String::from("/busybox");
+    }
+    */
     debug!("[sys_execve] path is {},arg is {:?}", path, argv_vec);
     let mut env = Vec::<String>::new();
     loop {
