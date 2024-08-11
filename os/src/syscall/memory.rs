@@ -39,7 +39,7 @@ pub fn sys_mmap(
         }
         let rv = task_inner
             .memory_set
-            .mmap(addr, len, map_perm, flags, None, off);
+            .mmap(addr, len, map_perm, flags, None, usize::MAX);
         return Ok(rv);
     }
     // check fd and map_permission

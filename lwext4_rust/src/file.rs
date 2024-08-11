@@ -230,7 +230,7 @@ impl Ext4File {
             insert_fifo(file_path.clone());
             let cache = Arc::new(RwLock::new(VFileCache::new()));
             let mut cache_writer = cache.write();
-            // debug!("initialize cache! {}", file_path);
+            debug!("initialize cache! {}", file_path);
             let c_path = CString::new(file_path.as_str()).expect("CString::new failed");
             let c_path = c_path.into_raw();
             let c_flags = Ext4File::flags_to_cstring(2).into_raw();
@@ -244,6 +244,7 @@ impl Ext4File {
             }
 
             let size = unsafe { ext4_fsize(&mut self.file_desc) as usize };
+            //debug!("initialize size={}", size);
             let aligned_size = aligned_down(size) + PAGE_SIZE;
             cache_writer.data = Vec::with_capacity(aligned_size);
             let data = &mut cache_writer.data;
@@ -288,6 +289,7 @@ impl Ext4File {
             }
 
             cache_writer.offset = offset as usize;
+            //debug!("offset change to {:x}", offset);
             return Ok(EOK as usize);
         }
 
@@ -318,6 +320,7 @@ impl Ext4File {
             let length = buff.len();
             let end = (cache_read.offset + length).min(cache_read.size);
             let r_sz = end - cache_read.offset;
+            //debug!("data.len={:x},end={:x}", data.len(), end);
             if length <= 10 {
                 for i in 0..r_sz {
                     buff[i] = data[cache_read.offset + i];
@@ -325,12 +328,12 @@ impl Ext4File {
             } else {
                 buff[..r_sz].copy_from_slice(&data[cache_read.offset..end]);
             }
-
-            // debug!(
-            //     "file_read {},len = {},offset is {}",
-            //     path, r_sz, cache_read.offset
-            // );
-
+            /*
+            debug!(
+                "file_read {},len = {:x},offset is {:x}",
+                path, r_sz, cache_read.offset
+            );
+            */
             return Ok(r_sz);
         }
 
@@ -872,15 +875,6 @@ pub fn insert_fifo(file_path: String) {
         // debug!("file {} already exist", file_path);
         return;
     }
-    /*
-    for item in fifo.iter() {
-        //队列中存在该文件，说明之前被删除过，不重复加入
-        if *item == file_path {
-            debug!("file {} already exist", file_path);
-            return;
-        }
-    }
-    */
     if fifo.len() == FIFO_SIZE {
         //替换并可能写回
         let path = fifo.pop_front().unwrap();

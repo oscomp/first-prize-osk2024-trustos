@@ -130,7 +130,7 @@ impl MemorySet {
     pub fn mprotect(&self, start_vpn: VirtPageNum, end_vpn: VirtPageNum, map_perm: MapPermission) {
         self.inner
             .get_unchecked_mut()
-            .mprotect(start_vpn, end_vpn, map_perm);
+            .mprotect(start_vpn, end_vpn, map_perm, usize::MAX);
     }
     #[inline(always)]
     pub fn activate(&self) {
@@ -436,7 +436,7 @@ impl MemorySetInner {
                 }
             });
             if need_split {
-                self.mprotect(start_vpn, end_vpn, map_perm);
+                self.mprotect(start_vpn, end_vpn, map_perm, off);
             } else {
                 self.push_lazily(MapArea::new_mmap(
                     VirtAddr::from(addr),
@@ -626,10 +626,14 @@ impl MemorySetInner {
         start_vpn: VirtPageNum,
         end_vpn: VirtPageNum,
         map_perm: MapPermission,
+        offset: usize,
     ) {
         //因修改而新增的Area
         let mut new_areas = Vec::new();
         for area in self.areas.iter_mut() {
+            if offset != usize::MAX {
+                area.mmap_file.offset = offset as usize;
+            }
             let (start, end) = area.vpn_range.range();
             if start >= start_vpn && end <= end_vpn {
                 //修改整个area

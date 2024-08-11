@@ -288,6 +288,7 @@ Hugetlb:               0 kB
 const ADJTIME: &str = "0.000000 0.000000 UTC\n";
 const LOCALTIME: &str =
     "lrwxrwxrwx 1 root root 33 11月 18  2023 /etc/localtime -> /usr/share/zoneinfo/Asia/Shanghai\n";
+const PRELOAD: &str = "";
 
 pub fn create_init_files() -> GeneralRet {
     //创建/proc文件夹
@@ -415,6 +416,23 @@ pub fn create_init_files() -> GeneralRet {
     let passwdbuf = UserBuffer::new(passwdvec);
     let passwdsize = passwdfile.write(passwdbuf)?;
     debug!("create /etc/passwd with {} sizes", passwdsize);
+
+    //创建/etc/ld.so.preload记录用户信息
+    let preloadfile = open(
+        "/etc/ld.so.preload",
+        OpenFlags::O_CREATE | OpenFlags::O_RDWR,
+        DEFAULT_FILE_MODE,
+    )?
+    .file()?;
+    let mut preload = String::from(PRELOAD);
+    let mut preloadvec = Vec::new();
+    unsafe {
+        let pre = preload.as_bytes_mut();
+        preloadvec.push(core::slice::from_raw_parts_mut(pre.as_mut_ptr(), pre.len()));
+    }
+    let preloadbuf = UserBuffer::new(preloadvec);
+    let preloadsize = preloadfile.write(preloadbuf)?;
+    debug!("create /etc/ld.so.preload with {} sizes", preloadsize);
 
     println!("create_init_files success!");
     Ok(())

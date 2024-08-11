@@ -475,13 +475,11 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *mut Kstat, _flags: usize
     let path = trim_start_slash(translated_str(token, path));
 
     let abs_path = inner.get_abs_path(dirfd, &path)?;
-    log::info!("[sys_fstatat] abs_path={}", &abs_path);
+    //log::info!("[sys_fstatat] abs_path={}", &abs_path);
 
-    /*
     if abs_path == "/ls" || abs_path == "/xargs" || abs_path == "/sleep" {
         open(&abs_path, OpenFlags::O_CREATE, NONE_MODE);
     }
-    */
 
     let file = open(&abs_path, OpenFlags::O_RDONLY, NONE_MODE)?.any();
     put_data(token, kst, file.fstat());
