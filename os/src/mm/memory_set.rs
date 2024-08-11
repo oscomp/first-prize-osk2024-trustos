@@ -631,19 +631,22 @@ impl MemorySetInner {
         //因修改而新增的Area
         let mut new_areas = Vec::new();
         for area in self.areas.iter_mut() {
-            if offset != usize::MAX {
-                area.mmap_file.offset = offset as usize;
-            }
             let (start, end) = area.vpn_range.range();
             if start >= start_vpn && end <= end_vpn {
                 //修改整个area
                 area.map_perm = map_perm;
+                if offset != usize::MAX {
+                    area.mmap_file.offset = offset as usize;
+                }
                 continue;
             } else if start < start_vpn && end > start_vpn && end <= end_vpn {
                 //修改area后半部分
                 let mut new_area = MapArea::from_another(area);
                 new_area.map_perm = map_perm;
                 new_area.vpn_range = VPNRange::new(start_vpn, end);
+                if offset != usize::MAX {
+                    new_area.mmap_file.offset = offset as usize;
+                }
                 area.vpn_range = VPNRange::new(start, start_vpn);
                 GROUP_SHARE.lock().add_area(new_area.groupid);
                 while !area.data_frames.is_empty() {
@@ -660,6 +663,9 @@ impl MemorySetInner {
                 let mut new_area = MapArea::from_another(area);
                 new_area.map_perm = map_perm;
                 new_area.vpn_range = VPNRange::new(start, end_vpn);
+                if offset != usize::MAX {
+                    new_area.mmap_file.offset = offset as usize;
+                }
                 area.vpn_range = VPNRange::new(end_vpn, end);
                 GROUP_SHARE.lock().add_area(new_area.groupid);
                 while !area.data_frames.is_empty() {
@@ -681,6 +687,9 @@ impl MemorySetInner {
                 front_area.vpn_range = VPNRange::new(start, start_vpn);
                 back_area.vpn_range = VPNRange::new(end_vpn, end);
                 area.vpn_range = VPNRange::new(start_vpn, end_vpn);
+                if offset != usize::MAX {
+                    area.mmap_file.offset = offset as usize;
+                }
                 GROUP_SHARE.lock().add_area(front_area.groupid);
                 GROUP_SHARE.lock().add_area(back_area.groupid);
                 while !area.data_frames.is_empty() {

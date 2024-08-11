@@ -24,12 +24,12 @@ pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut
     let old_offset = file.lseek(0, SEEK_CUR).unwrap();
     let start_addr: VirtAddr = vma.vpn_range.start().into();
     let va = va.0;
-    /*
+
     debug!(
         "va={:x},start_addr={:x},vma.offset={:x}",
         va, start_addr.0, vma.mmap_file.offset
     );
-    */
+
     file.lseek(
         (va - start_addr.0 + vma.mmap_file.offset) as isize,
         SEEK_SET,
