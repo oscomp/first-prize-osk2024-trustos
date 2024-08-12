@@ -281,3 +281,18 @@ impl FdSet {
         }
     }
 }
+
+bitflags! {
+    pub struct FutexCmd:u32{
+        const FUTEX_WAIT = 0;
+        const FUTEX_WAKE = 1;
+        const FUTEX_REQUEUE = 3;
+    }
+}
+
+bitflags! {
+pub struct FutexOpt: u32 {
+    const FUTEX_PRIVATE_FLAG = 128;
+    const FUTEX_CLOCK_REALTIME = 256;
+}
+}

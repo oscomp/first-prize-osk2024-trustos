@@ -153,7 +153,7 @@ use crate::{
 pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
     let id = syscall_id;
     let syscall_id: Syscall = Syscall::from(syscall_id);
-    log::debug!("syscall:{:?}", syscall_id);
+    log::info!("syscall:{:?}", syscall_id);
     match syscall_id {
         Syscall::Getcwd => sys_getcwd(args[0] as *const u8, args[1]),
         Syscall::Dup => sys_dup(args[0]),
@@ -231,10 +231,10 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::SetTidAddress => sys_settidaddress(args[0]),
         Syscall::Futex => sys_futex(
             args[0] as *mut i32,
-            args[1] as i32,
+            args[1] as u32,
             args[2] as i32,
             args[3] as *const Timespec,
-            args[4] as *mut i32,
+            args[4] as *mut u32,
             args[5] as i32,
         ),
         Syscall::SetRobustList => sys_set_robust_list(args[0], args[1]),

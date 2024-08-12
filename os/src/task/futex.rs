@@ -8,26 +8,39 @@ use alloc::{
     collections::{BTreeMap, VecDeque},
     sync::{Arc, Weak},
 };
-use log::debug;
 use spin::{Lazy, Mutex};
 
 type WaitQueue = VecDeque<Weak<TaskControlBlock>>;
-pub static FUTEX_LIST: Lazy<Mutex<BTreeMap<PhysAddr, WaitQueue>>> =
+
+/// 如果是PRIVATE_FUTEX,pid为进程的pid,否则pid为0(用户进程pid从1开始,0未被使用)
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct FutexKey {
+    pa: PhysAddr,
+    pid: usize,
+}
+
+impl FutexKey {
+    pub fn new(pa: PhysAddr, pid: usize) -> Self {
+        Self { pa, pid }
+    }
+}
+
+pub static FUTEX_QUEUE: Lazy<Mutex<BTreeMap<FutexKey, WaitQueue>>> =
     Lazy::new(|| Mutex::new(BTreeMap::new()));
 
-pub fn futex_wait(pa: PhysAddr) -> SyscallRet {
-    let mut waitq = FUTEX_LIST.lock();
+pub fn futex_wait(key: FutexKey) -> SyscallRet {
+    let mut waitq = FUTEX_QUEUE.lock();
     let task = current_task().unwrap();
-    if let Some(queue) = waitq.get_mut(&pa) {
+    if let Some(queue) = waitq.get_mut(&key) {
         queue.push_back(Arc::downgrade(&task));
     } else {
-        waitq.insert(pa, {
+        waitq.insert(key, {
             let mut queue = VecDeque::new();
             queue.push_back(Arc::downgrade(&task));
             queue
         });
     }
-    debug!("[futex_wait] blocked!");
+    log::info!("[futex_wait] blocked!");
     drop(task);
     drop(waitq);
     block_current_and_run_next();
@@ -44,11 +57,15 @@ pub fn futex_wait(pa: PhysAddr) -> SyscallRet {
     Ok(0)
 }
 
-pub fn futex_wake_up(pa: PhysAddr, max_num: i32) -> usize {
-    debug!("[sys_futex] futex wakeup thread,max_num={}", max_num);
-    let mut list = FUTEX_LIST.lock();
+pub fn futex_wake_up(key: FutexKey, max_num: i32) -> usize {
+    log::info!(
+        "[sys_futex] futex wakeup thread,max_num={},key={:?}",
+        max_num,
+        key
+    );
+    let mut futex_queue = FUTEX_QUEUE.lock();
     let mut num = 0;
-    if let Some(queue) = list.get_mut(&pa) {
+    if let Some(queue) = futex_queue.get_mut(&key) {
         loop {
             if num >= max_num as usize {
                 break;
@@ -67,16 +84,19 @@ pub fn futex_wake_up(pa: PhysAddr, max_num: i32) -> usize {
     num
 }
 
-pub fn futex_requeue(pa: PhysAddr, max_num: i32, pa2: PhysAddr, max_num2: i32) -> usize {
-    debug!(
-        "[futex_requeue],pa={:#x},max_num={},pa2={:#x},max_num2={}",
-        pa.0, max_num, pa2.0, max_num2
+pub fn futex_requeue(old_key: FutexKey, max_num: i32, new_key: FutexKey, max_num2: i32) -> usize {
+    log::info!(
+        "[futex_requeue],old_key={:?},max_num={},new_key={:?},max_num2={}",
+        old_key,
+        max_num,
+        new_key,
+        max_num2
     );
-    let mut list = FUTEX_LIST.lock();
+    let mut futex_queue = FUTEX_QUEUE.lock();
     let mut num = 0;
     let mut num2 = 0;
     let mut tmp = VecDeque::new();
-    if let Some(queue) = list.get_mut(&pa) {
+    if let Some(queue) = futex_queue.get_mut(&old_key) {
         while let Some(weak_task) = queue.pop_front() {
             if let Some(task) = weak_task.upgrade() {
                 if num < max_num {
@@ -90,7 +110,10 @@ pub fn futex_requeue(pa: PhysAddr, max_num: i32, pa2: PhysAddr, max_num2: i32) -
         }
     }
     if !tmp.is_empty() {
-        list.entry(pa2).or_insert_with(VecDeque::new).extend(tmp);
+        futex_queue
+            .entry(new_key)
+            .or_insert_with(VecDeque::new)
+            .extend(tmp);
     }
     num as usize
 }

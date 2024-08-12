@@ -112,7 +112,9 @@ pub fn trap_handler() {
                 Err(errno) => debug!("[syscall ret] {:?} ret = {}", syscall_id, errno.str()),
             }
         }
-        Trap::Exception(Exception::StorePageFault) | Trap::Exception(Exception::LoadPageFault) => {
+        Trap::Exception(Exception::StorePageFault)
+        | Trap::Exception(Exception::LoadPageFault)
+        | Trap::Exception(Exception::InstructionPageFault) => {
             // page fault
             let mut ok;
             {
@@ -142,8 +144,7 @@ pub fn trap_handler() {
         }
         Trap::Exception(Exception::StoreFault)
         | Trap::Exception(Exception::InstructionFault)
-        | Trap::Exception(Exception::LoadFault)
-        | Trap::Exception(Exception::InstructionPageFault) => {
+        | Trap::Exception(Exception::LoadFault) => {
             warn!(
                 "[kernel] hart {} {:?} in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.",
                 hartid,

@@ -2,12 +2,12 @@ use crate::{
     fs::{open, OpenFlags, NONE_MODE},
     mm::{get_data, put_data, translated_ref, translated_str, VirtAddr},
     signal::{check_if_any_sig_for_current_task, handle_signal},
-    syscall::{CloneFlags, Utsname},
+    syscall::{CloneFlags, FutexCmd, FutexOpt, Utsname},
     task::{
         add_task, current_task, current_token, exit_current_and_run_next,
         exit_current_group_and_run_next, find_task_by_tid, futex_requeue, futex_wait,
         futex_wake_up, move_child_process_to_init, remove_all_from_thread_group,
-        suspend_current_and_run_next, task_num, Sysinfo, PROCESS_GROUP,
+        suspend_current_and_run_next, task_num, FutexKey, Sysinfo, PROCESS_GROUP,
     },
     timer::{add_futex_timer, calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
     utils::{get_abs_path, strip_color, trim_start_slash, SysErrNo, SyscallRet},
@@ -17,7 +17,6 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use num_enum::TryFromPrimitive;
 
 use log::debug;
 
@@ -203,29 +202,21 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
     Ok(0)
 }
 
-#[allow(non_camel_case_types)]
-#[derive(Debug, PartialEq, Eq, Clone, Copy, TryFromPrimitive)]
-#[repr(i32)]
-pub enum FutexCmd {
-    FUTEX_WAIT = 0,
-    FUTEX_WAKE = 1,
-    FUTEX_REQUEUE = 3,
-}
-
 /// 参考 https://man7.org/linux/man-pages/man2/futex.2.html
 pub fn sys_futex(
     uaddr: *mut i32,
-    futex_op: i32,
+    futex_op: u32,
     val: i32,
     timeout: *const Timespec,
-    uaddr2: *mut i32,
+    uaddr2: *mut u32,
     _val3: i32,
 ) -> SyscallRet {
-    let cmd = FutexCmd::try_from_primitive(futex_op & 0x7f).unwrap();
-
+    let cmd = FutexCmd::from_bits(futex_op & 0x7f).unwrap();
+    let opt = FutexOpt::from_bits_truncate(futex_op);
     if uaddr.align_offset(4) != 0 {
         return Err(SysErrNo::EINVAL);
     }
+
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
@@ -234,43 +225,58 @@ pub fn sys_futex(
         .translate_va(VirtAddr::from(uaddr as usize))
         .unwrap();
 
-    debug!(
-        "[sys_futex] pa = {:#x}, cmd = {:?}, val = {}",
-        pa.0, cmd, val,
+    let private = opt.contains(FutexOpt::FUTEX_PRIVATE_FLAG);
+
+    let key = if private {
+        FutexKey::new(pa, task.pid())
+    } else {
+        FutexKey::new(pa, 0)
+    };
+
+    log::info!(
+        "[sys_futex] key = {:?}, cmd = {:?}, val = {},opt={:?}",
+        key,
+        cmd,
+        val,
+        opt
     );
 
     match cmd {
         FutexCmd::FUTEX_WAIT => {
             let futex_word = get_data(token, uaddr);
+            log::info!("[sys_futex] futex_word = {}", futex_word,);
             if futex_word != val {
                 return Err(SysErrNo::EAGAIN);
             }
             if !timeout.is_null() {
                 let timeout = get_data(token, timeout);
-                debug!(
-                    "[sys_futex] futex_word = {},timeout={:?}",
-                    futex_word, timeout
-                );
+                log::info!("[sys_futex] timeout={:?}", timeout);
                 add_futex_timer(get_time_spec() + timeout, current_task().unwrap());
             }
             drop(task_inner);
             drop(task);
-            futex_wait(pa)
+            futex_wait(key)
         }
         FutexCmd::FUTEX_WAKE => {
             drop(task_inner);
             drop(task);
-            Ok(futex_wake_up(pa, val))
+            Ok(futex_wake_up(key, val))
         }
         FutexCmd::FUTEX_REQUEUE => {
             let pa2 = task_inner
                 .memory_set
                 .translate_va(VirtAddr::from(uaddr2 as usize))
                 .ok_or(SysErrNo::EINVAL)?;
+            let new_key = if private {
+                FutexKey::new(pa2, task.pid())
+            } else {
+                FutexKey::new(pa2, 0)
+            };
             drop(task_inner);
             drop(task);
-            Ok(futex_requeue(pa, val, pa2, timeout as i32))
+            Ok(futex_requeue(key, val, new_key, timeout as i32))
         }
+        _ => unimplemented!(),
     }
 }
 

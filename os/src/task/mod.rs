@@ -126,7 +126,10 @@ pub fn exit_current_and_run_next(exit_code: i32) {
             .memory_set
             .translate_va(VirtAddr::from(inner.clear_child_tid))
             .unwrap();
-        futex_wake_up(pa, 1);
+        let thread_shared_key = FutexKey::new(pa, task.pid());
+        futex_wake_up(thread_shared_key, 1);
+        let process_shared_key = FutexKey::new(pa, 0);
+        futex_wake_up(process_shared_key, 1);
     }
 
     // 无论如何一个轻量级进程都会是一个线程

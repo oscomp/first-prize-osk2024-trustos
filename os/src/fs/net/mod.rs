@@ -1,7 +1,6 @@
 use alloc::sync::Arc;
 
 use super::{File, Kstat};
-use crate::fs::Pipe;
 
 mod simple_net;
 pub use simple_net::*;
