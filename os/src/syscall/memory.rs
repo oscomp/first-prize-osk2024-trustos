@@ -26,9 +26,14 @@ pub fn sys_mmap(
     if flags.contains(MmapFlags::MAP_FIXED) && addr == 0 {
         return Err(SysErrNo::EPERM);
     }
-    debug!(
+    log::info!(
         "[sys_mmap]: addr {:#x}, len {:#x}, fd {}, offset {:#x}, flags {:?}, prot {:?}",
-        addr, len, fd as isize, off, flags, map_perm
+        addr,
+        len,
+        fd as isize,
+        off,
+        flags,
+        map_perm
     );
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();

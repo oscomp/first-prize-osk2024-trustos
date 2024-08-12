@@ -378,14 +378,14 @@ impl Ext4File {
             let cache = get_cache(path.clone());
             let mut cache_writer = cache.write();
             let len = cache_writer.writebuf(buf);
-            /*
+
             debug!(
                 "file write at {} with size={} offset={}",
                 path,
                 buf.len(),
                 cache_writer.offset
             );
-            */
+
             //debug!("len is {} now", len);
             if len > 5_100_000 {
                 debug!("len is {} out of mem", len);

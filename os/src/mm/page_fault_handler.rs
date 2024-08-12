@@ -25,6 +25,14 @@ pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut
     let start_addr: VirtAddr = vma.vpn_range.start().into();
     let va = va.0;
 
+    if va == 0x2a2336b000 {
+        log::info!(
+            "va={:x},start_addr={:x},vma.offset={:x}",
+            va,
+            start_addr.0,
+            vma.mmap_file.offset
+        );
+    }
     debug!(
         "va={:x},start_addr={:x},vma.offset={:x}",
         va, start_addr.0, vma.mmap_file.offset
@@ -43,7 +51,7 @@ pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut
         .expect("mmap_write_page_fault should not fail");
     //设置为cow
     let vpn = VirtAddr::from(va).floor();
-    let mut pte_flags = vma.flags();
+    let mut pte_flags = vma.flags() | PTEFlags::V;
     //可写的才需要cow
     let need_cow = pte_flags.contains(PTEFlags::W);
     pte_flags &= !PTEFlags::W;
@@ -56,10 +64,9 @@ pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut
 pub fn mmap_read_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapArea) {
     let frame = GROUP_SHARE.lock().find(vma.groupid, va.into());
     if let Some(frame) = frame {
-        debug!("got frame");
         //有现成的，直接clone,需要是cow的
         let vpn = va.into();
-        let mut pte_flags = vma.flags();
+        let mut pte_flags = vma.flags() | PTEFlags::V;
         //可写的才需要cow
         let need_cow = pte_flags.contains(PTEFlags::W);
         pte_flags &= !PTEFlags::W;

@@ -439,7 +439,6 @@ pub fn sys_fstat(fd: usize, kst: *mut Kstat) -> SyscallRet {
         return Err(SysErrNo::EBADF);
     }
     let file = inner.fd_table.get(fd).any();
-    debug!("fstat is {:?}", file.fstat());
     put_data(token, kst, file.fstat());
     Ok(0)
 }
