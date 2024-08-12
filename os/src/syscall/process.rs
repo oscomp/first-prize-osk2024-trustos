@@ -233,8 +233,9 @@ pub fn sys_futex(
         FutexKey::new(pa, 0)
     };
 
-    log::info!(
-        "[sys_futex] key = {:?}, cmd = {:?}, val = {},opt={:?}",
+    log::debug!(
+        "[sys_futex] uaddr = {:x}, key = {:?}, cmd = {:?}, val = {},opt={:?}",
+        uaddr as usize,
         key,
         cmd,
         val,
@@ -244,13 +245,13 @@ pub fn sys_futex(
     match cmd {
         FutexCmd::FUTEX_WAIT => {
             let futex_word = get_data(token, uaddr);
-            log::info!("[sys_futex] futex_word = {}", futex_word,);
+            log::debug!("[sys_futex] futex_word = {}", futex_word,);
             if futex_word != val {
                 return Err(SysErrNo::EAGAIN);
             }
             if !timeout.is_null() {
                 let timeout = get_data(token, timeout);
-                log::info!("[sys_futex] timeout={:?}", timeout);
+                log::debug!("[sys_futex] timeout={:?}", timeout);
                 add_futex_timer(get_time_spec() + timeout, current_task().unwrap());
             }
             drop(task_inner);
@@ -334,7 +335,12 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, _options: i32) -> SyscallRet {
                     "[sys_wait4] wait pid {}: child {} exit with code {}, wstatus= {:#x}",
                     pid, found_pid, exit_code, wstatus as usize
                 );
-                put_data(task_inner.memory_set.token(), wstatus, exit_code << 8);
+                if exit_code >= 128 && exit_code <= 255 {
+                    //表示由于信号而退出的
+                    put_data(task_inner.memory_set.token(), wstatus, exit_code);
+                } else {
+                    put_data(task_inner.memory_set.token(), wstatus, exit_code << 8);
+                }
             }
             drop(child_inner);
             // 从父进程的子进程组移除

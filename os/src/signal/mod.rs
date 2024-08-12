@@ -52,7 +52,7 @@ pub fn handle_signal(signo: usize) {
         // 就在S模式运行,转换成fn(i32)
         if sig_action.act.sa_handler != 1 {
             if sig_action.act.sa_handler == exit_current_and_run_next as usize {
-                exit_current_and_run_next(signo as i32);
+                exit_current_and_run_next((signo + 128) as i32);
             }
         }
     }

@@ -3,7 +3,7 @@ use log::debug;
 use crate::{
     mm::{get_data, put_data},
     signal::{
-        restore_frame, send_signal_to_thread, send_signal_to_thread_group,
+        restore_frame, send_access_signal, send_signal_to_thread, send_signal_to_thread_group,
         send_signal_to_thread_of_proc, KSigAction, SigAction, SigInfo, SigSet,
     },
     syscall::SignalMaskFlag,
@@ -136,17 +136,10 @@ pub fn sys_kill(pid: isize, signo: usize) -> SyscallRet {
 
     match pid {
         _ if pid > 0 => send_signal_to_thread_group(pid as usize, sig),
-        0 => {
-            todo!()
-            // send_signal_to_thread_group(current_task().unwrap().pid(), sig)
-        }
-        -1 => {
-            todo!()
-            // send_access_signal(current_task().unwrap().tid(), sig)
-        }
+        0 => send_signal_to_thread_group(current_task().unwrap().pid(), sig),
+        -1 => send_access_signal(current_task().unwrap().tid(), sig),
         _ => {
-            todo!()
-            // send_signal_to_thread_group(-pid as usize, sig);
+            send_signal_to_thread_group(-pid as usize, sig);
         }
     }
     Ok(0)

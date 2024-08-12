@@ -28,6 +28,8 @@ pub enum Syscall {
     Ftruncate = 46,
     Faccessat = 48,
     Chdir = 49,
+    Fchmodat = 53,
+    Fchownat = 54,
     Openat = 56,
     Close = 57,
     Pipe2 = 59,
@@ -153,7 +155,7 @@ use crate::{
 pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
     let id = syscall_id;
     let syscall_id: Syscall = Syscall::from(syscall_id);
-    log::info!("syscall:{:?}", syscall_id);
+    log::debug!("syscall:{:?}", syscall_id);
     match syscall_id {
         Syscall::Getcwd => sys_getcwd(args[0] as *const u8, args[1]),
         Syscall::Dup => sys_dup(args[0]),
@@ -186,6 +188,19 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[3],
         ),
         Syscall::Chdir => sys_chdir(args[0] as *const u8),
+        Syscall::Fchmodat => sys_fchmodat(
+            args[0] as isize,
+            args[1] as *const u8,
+            args[2] as u32,
+            args[3] as u32,
+        ),
+        Syscall::Fchownat => sys_fchownat(
+            args[0] as isize,
+            args[1] as *const u8,
+            args[2] as usize,
+            args[3] as usize,
+            args[4] as u32,
+        ),
         Syscall::Openat => sys_openat(
             args[0] as isize,
             args[1] as *const u8,

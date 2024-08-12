@@ -56,6 +56,7 @@ pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut
 pub fn mmap_read_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut MapArea) {
     let frame = GROUP_SHARE.lock().find(vma.groupid, va.into());
     if let Some(frame) = frame {
+        debug!("got frame");
         //有现成的，直接clone,需要是cow的
         let vpn = va.into();
         let mut pte_flags = vma.flags();

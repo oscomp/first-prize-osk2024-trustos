@@ -115,6 +115,7 @@ pub fn trap_handler() {
         Trap::Exception(Exception::StorePageFault)
         | Trap::Exception(Exception::LoadPageFault)
         | Trap::Exception(Exception::InstructionPageFault) => {
+            debug!("{:?},bad addr = {:#x}", scause.cause(), stval);
             // page fault
             let mut ok;
             {

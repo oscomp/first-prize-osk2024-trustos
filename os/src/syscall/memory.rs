@@ -61,7 +61,7 @@ pub fn sys_mmap(
 
 /// 参考 https://man7.org/linux/man-pages/man2/munmap.2.html
 pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
-    debug!("[sys_munmap] addr={:#X}, len={}", addr, len);
+    debug!("[sys_munmap] addr={:x}, len={}", addr, len);
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let len = page_round_up(len);

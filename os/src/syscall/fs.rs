@@ -439,6 +439,7 @@ pub fn sys_fstat(fd: usize, kst: *mut Kstat) -> SyscallRet {
         return Err(SysErrNo::EBADF);
     }
     let file = inner.fd_table.get(fd).any();
+    debug!("fstat is {:?}", file.fstat());
     put_data(token, kst, file.fstat());
     Ok(0)
 }
@@ -1256,4 +1257,38 @@ pub fn sys_pselect6(
         drop(task);
         suspend_current_and_run_next();
     }
+}
+
+pub fn sys_fchownat(
+    _dirfd: isize,
+    _pathname: *const u8,
+    _owner: usize,
+    _group: usize,
+    _flags: u32,
+) -> SyscallRet {
+    //伪实现
+    Ok(0)
+}
+
+pub fn sys_fchmodat(_dirfd: isize, _path: *const u8, _mode: u32, _flags: u32) -> SyscallRet {
+    //伪实现
+    Ok(0)
+    /*
+    let task = current_task().unwrap();
+    let task_inner = task.inner_lock();
+    let token = task_inner.user_token();
+    let path = translated_str(token, path);
+    debug!("flags is {}", flags);
+
+    let abs_path = task_inner.get_abs_path(dirfd, &path)?;
+
+    debug!(
+        "[sys_fchmodat] path is {}, flags is {:?}, new mode is {:o}",
+        &abs_path, flags, mode
+    );
+
+    let inode = open(&abs_path, Openflags::empty(), NONE_MODE)?.file()?;
+    inode.inode.fmode_set(mode);
+    Ok(0)
+    */
 }

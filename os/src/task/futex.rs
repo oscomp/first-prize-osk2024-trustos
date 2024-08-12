@@ -40,7 +40,7 @@ pub fn futex_wait(key: FutexKey) -> SyscallRet {
             queue
         });
     }
-    log::info!("[futex_wait] blocked!");
+    log::debug!("[futex_wait] blocked!");
     drop(task);
     drop(waitq);
     block_current_and_run_next();
@@ -58,7 +58,7 @@ pub fn futex_wait(key: FutexKey) -> SyscallRet {
 }
 
 pub fn futex_wake_up(key: FutexKey, max_num: i32) -> usize {
-    log::info!(
+    log::debug!(
         "[sys_futex] futex wakeup thread,max_num={},key={:?}",
         max_num,
         key

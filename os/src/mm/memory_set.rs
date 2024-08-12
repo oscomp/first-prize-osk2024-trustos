@@ -128,9 +128,14 @@ impl MemorySet {
     }
     #[inline(always)]
     pub fn mprotect(&self, start_vpn: VirtPageNum, end_vpn: VirtPageNum, map_perm: MapPermission) {
-        self.inner
-            .get_unchecked_mut()
-            .mprotect(start_vpn, end_vpn, map_perm, usize::MAX);
+        self.inner.get_unchecked_mut().mprotect(
+            start_vpn,
+            end_vpn,
+            map_perm,
+            None,
+            usize::MAX,
+            false,
+        );
     }
     #[inline(always)]
     pub fn activate(&self) {
@@ -436,7 +441,7 @@ impl MemorySetInner {
                 }
             });
             if need_split {
-                self.mprotect(start_vpn, end_vpn, map_perm, off);
+                self.mprotect(start_vpn, end_vpn, map_perm, file, off, true);
             } else {
                 self.push_lazily(MapArea::new_mmap(
                     VirtAddr::from(addr),
@@ -570,7 +575,9 @@ impl MemorySetInner {
                 start <= vpn && vpn < end
             })
         {
-            if scause == Trap::Exception(Exception::LoadPageFault) {
+            if scause == Trap::Exception(Exception::LoadPageFault)
+                || scause == Trap::Exception(Exception::InstructionPageFault)
+            {
                 mmap_read_page_fault(vpn.into(), &mut self.page_table, area);
             } else {
                 mmap_write_page_fault(vpn.into(), &mut self.page_table, area);
@@ -595,7 +602,9 @@ impl MemorySetInner {
         false
     }
     pub fn cow_page_fault(&mut self, vpn: VirtPageNum, scause: Trap) -> bool {
-        if scause == Trap::Exception(Exception::LoadPageFault) {
+        if scause == Trap::Exception(Exception::LoadPageFault)
+            || scause == Trap::Exception(Exception::InstructionPageFault)
+        {
             return false;
         }
         //找到触发cow的段
@@ -626,7 +635,9 @@ impl MemorySetInner {
         start_vpn: VirtPageNum,
         end_vpn: VirtPageNum,
         map_perm: MapPermission,
+        file: Option<Arc<OSInode>>,
         offset: usize,
+        if_mmap: bool,
     ) {
         //因修改而新增的Area
         let mut new_areas = Vec::new();
@@ -635,6 +646,9 @@ impl MemorySetInner {
             if start >= start_vpn && end <= end_vpn {
                 //修改整个area
                 area.map_perm = map_perm;
+                if if_mmap {
+                    area.mmap_file.file = file.clone();
+                }
                 if offset != usize::MAX {
                     area.mmap_file.offset = offset as usize;
                 }
@@ -644,6 +658,9 @@ impl MemorySetInner {
                 let mut new_area = MapArea::from_another(area);
                 new_area.map_perm = map_perm;
                 new_area.vpn_range = VPNRange::new(start_vpn, end);
+                if if_mmap {
+                    new_area.mmap_file.file = file.clone();
+                }
                 if offset != usize::MAX {
                     new_area.mmap_file.offset = offset as usize;
                 }
@@ -663,6 +680,9 @@ impl MemorySetInner {
                 let mut new_area = MapArea::from_another(area);
                 new_area.map_perm = map_perm;
                 new_area.vpn_range = VPNRange::new(start, end_vpn);
+                if if_mmap {
+                    new_area.mmap_file.file = file.clone();
+                }
                 if offset != usize::MAX {
                     new_area.mmap_file.offset = offset as usize;
                 }
@@ -687,6 +707,9 @@ impl MemorySetInner {
                 front_area.vpn_range = VPNRange::new(start, start_vpn);
                 back_area.vpn_range = VPNRange::new(end_vpn, end);
                 area.vpn_range = VPNRange::new(start_vpn, end_vpn);
+                if if_mmap {
+                    area.mmap_file.file = file.clone();
+                }
                 if offset != usize::MAX {
                     area.mmap_file.offset = offset as usize;
                 }

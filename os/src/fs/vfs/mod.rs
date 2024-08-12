@@ -2,7 +2,7 @@ mod inode;
 
 use super::{InodeType, Kstat, Statfs};
 use crate::{
-    fs::String,
+    fs::{OpenFlags, String},
     mm::UserBuffer,
     syscall::PollEvents,
     utils::{SysErrNo, SyscallRet},
@@ -36,7 +36,7 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     /// 查找文件
-    fn find(&self, _path: &str) -> Result<Arc<dyn Inode>, SysErrNo> {
+    fn find(&self, _path: &str, _flags: OpenFlags) -> Result<Arc<dyn Inode>, SysErrNo> {
         unimplemented!()
     }
     ///

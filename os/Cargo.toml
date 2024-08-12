@@ -27,7 +27,7 @@ cfg-if = { version = "1.0.0" }
 
 
 [features]
-default = ["info"]
+default = ["debug"]
 error = []
 warn = []
 info = []

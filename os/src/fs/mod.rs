@@ -486,7 +486,7 @@ pub fn open(mut abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass
     if has_inode(abs_path) {
         inode = find_inode_idx(abs_path);
     } else {
-        if let Ok(t) = root_inode().find(abs_path) {
+        if let Ok(t) = root_inode().find(abs_path, flags) {
             insert_inode_idx(abs_path, t.clone());
             inode = Some(t);
         }

@@ -5,7 +5,7 @@ use lwext4_rust::{
 };
 
 use crate::{
-    fs::{Dirent, Inode, InodeType, Kstat, String},
+    fs::{Dirent, Inode, InodeType, Kstat, OpenFlags, String},
     sync::SyncUnsafeCell,
     utils::{SysErrNo, SyscallRet},
 };
@@ -166,12 +166,15 @@ impl Inode for Ext4Inode {
         }
     }
 
-    fn find(&self, path: &str) -> Result<Arc<dyn Inode>, SysErrNo> {
+    fn find(&self, path: &str, flags: OpenFlags) -> Result<Arc<dyn Inode>, SysErrNo> {
         //log::info!("[Inode.find] origin path={}", path);
         let file = &mut self.inner.get_unchecked_mut().f;
         if file.check_inode_exist(path, InodeTypes::EXT4_DE_DIR) {
             Ok(Arc::new(Ext4Inode::new(path, InodeTypes::EXT4_DE_DIR)))
         } else if file.check_inode_exist(path, InodeTypes::EXT4_DE_REG_FILE) {
+            if flags.contains(OpenFlags::O_DIRECTORY) {
+                return Err(SysErrNo::ENOTDIR);
+            }
             Ok(Arc::new(Ext4Inode::new(path, InodeTypes::EXT4_DE_REG_FILE)))
         } else if file.check_inode_exist(path, InodeTypes::EXT4_DE_SYMLINK) {
             // 符号链接文件应该返回对应的真实的文件
@@ -185,7 +188,7 @@ impl Inode for Ext4Inode {
             //log::info!("[Inode.find] prefix={}", prefix);
             let abs_path = format!("{}/{}", prefix, file_path);
             //log::info!("[Inode.find] abs_path={}", &abs_path);
-            self.find(&abs_path)
+            self.find(&abs_path, flags)
 
             // Ok(Arc::new(Ext4Inode::new(path, InodeTypes::EXT4_DE_SYMLINK)))
         } else {
