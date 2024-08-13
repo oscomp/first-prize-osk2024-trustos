@@ -94,7 +94,6 @@ pub fn trampoline(hartid: usize) {
 
 static FIRST_HART: AtomicBool = AtomicBool::new(true);
 static INIT_FINISHED: AtomicBool = AtomicBool::new(false);
-static START_HART_ID: AtomicUsize = AtomicUsize::new(0);
 /// boot start_hart之外的所有 hart
 pub fn boot_all_harts(hartid: usize) {
     for i in (0..HART_NUM).filter(|id| *id != hartid) {
@@ -127,7 +126,7 @@ pub fn rust_main(hartid: usize) -> ! {
         fs::init();
         task::add_initproc();
         INIT_FINISHED.store(true, Ordering::SeqCst);
-        START_HART_ID.store(hartid, Ordering::SeqCst);
+        fs::list_apps();
         boot_all_harts(hartid);
         trap::enable_timer_interrupt();
         timer::set_next_trigger();
@@ -144,9 +143,6 @@ pub fn rust_main(hartid: usize) -> ! {
         activate_kernel_space();
         trap::enable_timer_interrupt();
         timer::set_next_trigger();
-    }
-    if hart_id() == START_HART_ID.load(Ordering::SeqCst) {
-        fs::list_apps();
     }
     task::run_tasks();
     panic!("Unreachable in rust_main!");
