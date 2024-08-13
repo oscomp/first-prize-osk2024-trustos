@@ -25,14 +25,6 @@ pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut
     let start_addr: VirtAddr = vma.vpn_range.start().into();
     let va = va.0;
 
-    if va == 0x2a2336b000 {
-        log::info!(
-            "va={:x},start_addr={:x},vma.offset={:x}",
-            va,
-            start_addr.0,
-            vma.mmap_file.offset
-        );
-    }
     debug!(
         "va={:x},start_addr={:x},vma.offset={:x}",
         va, start_addr.0, vma.mmap_file.offset
@@ -70,11 +62,13 @@ pub fn mmap_read_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut 
         //可写的才需要cow
         let need_cow = pte_flags.contains(PTEFlags::W);
         pte_flags &= !PTEFlags::W;
-        page_table.set_flags(vpn, pte_flags);
+        //page_table.set_flags(vpn, pte_flags);
+        let ppn = frame.ppn;
+        vma.data_frames.insert(vpn, frame);
+        page_table.map(vpn, ppn, pte_flags);
         if need_cow {
             page_table.set_cow(vpn);
         }
-        vma.data_frames.insert(vpn, frame);
     } else {
         //第一次读，分配页面
         mmap_write_page_fault(va, page_table, vma);
