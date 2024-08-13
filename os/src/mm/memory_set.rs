@@ -1011,13 +1011,20 @@ impl MemorySetInner {
                 continue;
             }
             let mut new_area = MapArea::from_another(area);
-            if area.area_type == MapAreaType::Mmap {
+            if area.area_type == MapAreaType::Mmap
+                && !area.mmap_flags.contains(MmapFlags::MAP_SHARED)
+            {
                 GROUP_SHARE.lock().add_area(new_area.groupid);
             }
             // Mmap和brk是lazy allocation
             if area.area_type == MapAreaType::Mmap || area.area_type == MapAreaType::Brk {
                 //已经分配且独占/被写过的部分以及读共享部分按cow处理
                 //其余是未分配部分，直接clone即可
+                if area.mmap_flags.contains(MmapFlags::MAP_SHARED) {
+                    let frames = area.data_frames.values().cloned().collect();
+                    memory_set.push_with_given_frames(new_area, frames);
+                    continue;
+                }
                 new_area.data_frames = area.data_frames.clone();
                 for (vpn, _) in area.data_frames.iter() {
                     let vpn = *vpn;

@@ -2,18 +2,20 @@
 use crate::{
     fs::{
         fs_stat, make_pipe, open, open_device_file, remove_inode_idx, sync, File, FileClass,
-        FileDescriptor, Kstat, OpenFlags, Statfs, MNT_TABLE, NONE_MODE, SEEK_CUR, SEEK_SET,
+        FileDescriptor, Kstat, OpenFlags, Statfs, DEFAULT_DIR_MODE, DEFAULT_FILE_MODE, MNT_TABLE,
+        NONE_MODE, SEEK_CUR, SEEK_SET,
     },
     mm::{
         get_data, put_data, safe_translated_byte_buffer, translated_byte_buffer, translated_ref,
         translated_refmut, translated_str, UserBuffer,
     },
-    syscall::{FdSet, PollEvents, PollFd, SigSet},
+    syscall::{FaccessatFileMode, FaccessatMode, FdSet, PollEvents, PollFd, SigSet},
     task::{current_task, current_token, suspend_current_and_run_next},
     timer::{get_time_ms, Timespec},
-    utils::{get_abs_path, trim_start_slash, SysErrNo, SyscallRet},
+    utils::{get_abs_path, rsplit_once, trim_start_slash, SysErrNo, SyscallRet},
 };
 use alloc::{
+    format,
     string::{String, ToString},
     sync::Arc,
     vec,
@@ -200,7 +202,11 @@ pub fn sys_close(fd: usize) -> SyscallRet {
 
     debug!("[sys_close] fd is {}", fd);
 
-    if fd >= inner.fd_table.len() || inner.fd_table.try_get(fd).is_none() {
+    if inner.fd_table.try_get(fd).is_none() {
+        return Ok(0);
+    }
+
+    if fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
     }
     inner.fd_table.take(fd);
@@ -316,10 +322,10 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
 
-    // debug!(
-    //     "[sys_getdents64] fd is {}, buf addr  is {:x}, len is {}",
-    //     fd, buf as usize, len
-    // );
+    debug!(
+        "[sys_getdents64] fd is {}, buf addr  is {:x}, len is {}",
+        fd, buf as usize, len
+    );
 
     if fd >= inner.fd_table.len() || inner.fd_table.try_get(fd).is_none() {
         return Err(SysErrNo::EINVAL);
@@ -501,14 +507,53 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
     let inner = task.inner_lock();
     let token = inner.user_token();
     let path = translated_str(token, path);
+    debug!("mode={}", mode);
+    let mode = FaccessatMode::from_bits(mode).unwrap();
 
     debug!(
-        "[sys_faccessat] dirfd is {} and path is {} and mode is {}",
+        "[sys_faccessat] dirfd is {} and path is {} and mode is {:?}",
         dirfd, path, mode
     );
 
     let abs_path = inner.get_abs_path(dirfd, &path)?;
-    open(&abs_path, OpenFlags::O_RDWR, NONE_MODE)?;
+    let inode = open(&abs_path, OpenFlags::O_RDWR, NONE_MODE)?.file()?;
+    let file_mode = inode.inode.fmode()? & 0xfff;
+    let file_mode = FaccessatFileMode::from_bits_truncate(file_mode);
+    let (parent_path, _) = rsplit_once(abs_path.as_str(), "/");
+    let parent_inode = open(&parent_path, OpenFlags::O_RDWR, NONE_MODE)?.file()?;
+    let parent_mode = parent_inode.inode.fmode()? & 0xfff;
+    let parent_mode = FaccessatFileMode::from_bits_truncate(parent_mode);
+    if inner.user_id != 0
+        && !(parent_mode.contains(FaccessatFileMode::S_IXUSR)
+            || parent_mode.contains(FaccessatFileMode::S_IXGRP)
+            || parent_mode.contains(FaccessatFileMode::S_IXOTH))
+    {
+        //父目录必须有可以执行的权限
+        return Err(SysErrNo::EACCES);
+    }
+    if mode.contains(FaccessatMode::R_OK)
+        && inner.user_id != 0
+        && !(file_mode.contains(FaccessatFileMode::S_IRUSR)
+            || file_mode.contains(FaccessatFileMode::S_IRGRP)
+            || file_mode.contains(FaccessatFileMode::S_IROTH))
+    {
+        return Err(SysErrNo::EACCES);
+    }
+    if mode.contains(FaccessatMode::W_OK)
+        && inner.user_id != 0
+        && !(file_mode.contains(FaccessatFileMode::S_IWUSR)
+            || file_mode.contains(FaccessatFileMode::S_IWGRP)
+            || file_mode.contains(FaccessatFileMode::S_IWOTH))
+    {
+        return Err(SysErrNo::EACCES);
+    }
+    if mode.contains(FaccessatMode::X_OK)
+        && !(file_mode.contains(FaccessatFileMode::S_IXUSR)
+            || file_mode.contains(FaccessatFileMode::S_IXGRP)
+            || file_mode.contains(FaccessatFileMode::S_IXOTH))
+    {
+        return Err(SysErrNo::EACCES);
+    }
     Ok(0)
 }
 
@@ -1269,25 +1314,26 @@ pub fn sys_fchownat(
     Ok(0)
 }
 
-pub fn sys_fchmodat(_dirfd: isize, _path: *const u8, _mode: u32, _flags: u32) -> SyscallRet {
-    //伪实现
-    Ok(0)
-    /*
+pub fn sys_fchmodat(dirfd: isize, path: *const u8, mode: u32, flags: u32) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
     let path = translated_str(token, path);
-    debug!("flags is {}", flags);
 
     let abs_path = task_inner.get_abs_path(dirfd, &path)?;
 
     debug!(
-        "[sys_fchmodat] path is {}, flags is {:?}, new mode is {:o}",
+        "[sys_fchmodat] path is {}, flags is {}, new mode is {:o}",
         &abs_path, flags, mode
     );
 
-    let inode = open(&abs_path, Openflags::empty(), NONE_MODE)?.file()?;
+    log::info!(
+        "{} set {:?}",
+        abs_path,
+        FaccessatFileMode::from_bits_truncate(mode)
+    );
+
+    let inode = open(&abs_path, OpenFlags::empty(), NONE_MODE)?.file()?;
     inode.inode.fmode_set(mode);
     Ok(0)
-    */
 }

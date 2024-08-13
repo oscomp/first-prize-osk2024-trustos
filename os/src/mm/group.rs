@@ -75,6 +75,9 @@ impl GroupManager {
     }
     //查找共享帧
     pub fn find(&mut self, id: usize, vpn: VirtPageNum) -> Option<Arc<FrameTracker>> {
+        if id == 0 {
+            return None;
+        }
         //get(&id)必定成功
         if let Some(frame) = self.groups.get(&id).unwrap().shared_frames.get(&vpn) {
             Some(frame.clone())

@@ -97,6 +97,10 @@ pub fn sys_accept(_sockfd: usize, _addr: *const u8, _addrlen: u32) -> SyscallRet
     Ok(0)
 }
 
+pub fn sys_accept4(_sockfd: usize, _addr: *const u8, _addrlen: u32, _flags: u32) -> SyscallRet {
+    Ok(0)
+}
+
 /// 参考 https://man7.org/linux/man-pages/man2/sendmsg.2.html
 pub fn sys_sendmsg(_sockfd: usize, _addr: *const u8, _flags: u32) -> SyscallRet {
     Ok(0)

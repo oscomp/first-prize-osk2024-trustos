@@ -296,3 +296,33 @@ pub struct FutexOpt: u32 {
     const FUTEX_CLOCK_REALTIME = 256;
 }
 }
+
+bitflags! {
+    pub struct FaccessatFileMode : u32 {
+        const S_ISUID = 0o04000;
+        const S_ISGID = 0o02000;
+        const S_ISVTX = 0o01000;
+
+        const S_IRUSR = 0o0400;
+        const S_IWUSR = 0o0200;
+        const S_IXUSR = 0o0100;
+        const S_IRWXU = 0o0700;
+        const S_IRGRP = 0o0040;
+        const S_IWGRP = 0o0020;
+        const S_IXGRP = 0o0010;
+        const S_IRWXG = 0o0070;
+        const S_IROTH = 0o0004;
+        const S_IWOTH = 0o0002;
+        const S_IXOTH = 0o0001;
+        const S_IRWXO = 0o0007;
+    }
+}
+
+bitflags! {
+    pub struct FaccessatMode: u32 {
+        const F_OK = 0;
+        const X_OK = 1;
+        const W_OK = 2;
+        const R_OK = 4;
+    }
+}

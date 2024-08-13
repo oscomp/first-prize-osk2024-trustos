@@ -9,7 +9,7 @@ use crate::{
         PAGE_SIZE, PRE_ALLOC_PAGES, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP,
         USER_TRAP_CONTEXT_TOP,
     },
-    fs::{FdTable, FsInfo},
+    fs::{open, FdTable, FsInfo, OpenFlags, DEFAULT_DIR_MODE, DEFAULT_FILE_MODE},
     mm::{
         flush_tlb, get_data, put_data, translated_refmut, MapAreaType, MapPermission, MemorySet,
         MemorySetInner, PageTable, PageTableEntry, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
@@ -21,7 +21,7 @@ use crate::{
     trap::TrapContext,
     utils::{get_abs_path, is_abs_path, SysErrNo},
 };
-use alloc::{string::String, sync::Arc, vec::Vec};
+use alloc::{format, string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
 use spin::{Mutex, MutexGuard};
 
@@ -71,6 +71,7 @@ pub struct TaskControlBlockInner {
     pub sig_pending: SigSet,
     pub timer: Arc<Timer>,
     pub robust_list: RobustList,
+    pub user_id: usize,
 }
 
 impl TaskControlBlockInner {
@@ -241,6 +242,7 @@ impl TaskControlBlock {
                 sig_pending: SigSet::empty(),
                 timer: Arc::new(Timer::new()),
                 robust_list: RobustList::default(),
+                user_id: 0,
             }),
         };
 
@@ -468,6 +470,7 @@ impl TaskControlBlock {
                 sig_pending,
                 timer,
                 robust_list: RobustList::default(),
+                user_id: parent_inner.user_id,
             }),
         });
 

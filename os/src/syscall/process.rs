@@ -50,7 +50,16 @@ pub fn sys_getppid() -> SyscallRet {
 
 /// 参考 https://man7.org/linux/man-pages/man2/getuid.2.html
 pub fn sys_getuid() -> SyscallRet {
-    Ok(0) // root user
+    let task = current_task().unwrap();
+    let task_inner = task.inner_lock();
+    Ok(task_inner.user_id)
+}
+
+pub fn sys_setuid(uid: usize) -> SyscallRet {
+    let task = current_task().unwrap();
+    let mut task_inner = task.inner_lock();
+    task_inner.user_id = uid;
+    Ok(0)
 }
 
 /// 参考 https://man7.org/linux/man-pages/man2/geteuid.2.html

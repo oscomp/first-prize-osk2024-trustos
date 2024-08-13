@@ -289,7 +289,7 @@ impl Ext4File {
             }
 
             cache_writer.offset = offset as usize;
-            debug!("offset change to {:x}", offset);
+            //debug!("offset change to {:x}", offset);
             return Ok(EOK as usize);
         }
 
@@ -329,10 +329,12 @@ impl Ext4File {
                 buff[..r_sz].copy_from_slice(&data[cache_read.offset..end]);
             }
 
+            /*
             debug!(
                 "file_read {},len = {:x},offset is {:x}",
                 path, r_sz, cache_read.offset
             );
+            */
 
             return Ok(r_sz);
         }
