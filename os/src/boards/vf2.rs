@@ -1,7 +1,8 @@
 use crate::config::mm::KERNEL_ADDR_OFFSET;
 
 pub const CLOCK_FREQ: usize = 400_0000;
-pub const MEMORY_END: usize = 0x8800_0000 + KERNEL_ADDR_OFFSET;
+// VisionFive2地址空间  memory[0]      [0x40000000-0x13fffffff]
+pub const MEMORY_END: usize = 0x13fffffff + KERNEL_ADDR_OFFSET;
 
 pub const MMIO: &[(usize, usize)] = &[
     (0x1704_0000, 0x1_0000),  // RTC

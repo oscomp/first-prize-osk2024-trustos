@@ -13,7 +13,7 @@ links = "lwext4"
 build = "build.rs"
 
 [features]
-default = ["print","board_ramdisk"]
+default = ["print","board_qemu"]
 print = ["printf-compat"]
 
 board_qemu = []
