@@ -6,8 +6,8 @@ use crate::{
         MAX_PATH_LEN, MNT_TABLE, NONE_MODE, SEEK_CUR, SEEK_SET,
     },
     mm::{
-        get_data, put_data, safe_translated_byte_buffer, translated_byte_buffer, translated_ref,
-        translated_refmut, translated_str, UserBuffer,
+        get_data, if_bad_address, put_data, safe_translated_byte_buffer, translated_byte_buffer,
+        translated_ref, translated_refmut, translated_str, UserBuffer,
     },
     syscall::{FaccessatFileMode, FaccessatMode, FdSet, PollEvents, PollFd, SigSet},
     task::{current_task, current_token, suspend_current_and_run_next},
@@ -202,13 +202,14 @@ pub fn sys_close(fd: usize) -> SyscallRet {
 
     debug!("[sys_close] fd is {}", fd);
 
+    if fd >= inner.fd_table.len() {
+        return Err(SysErrNo::EINVAL);
+    }
+
     if inner.fd_table.try_get(fd).is_none() {
         return Ok(0);
     }
 
-    if fd >= inner.fd_table.len() {
-        return Err(SysErrNo::EINVAL);
-    }
     inner.fd_table.take(fd);
     inner.fs_info.remove(fd);
     Ok(0)
@@ -276,7 +277,16 @@ pub fn sys_chdir(path: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
+
+    if (path as isize) <= 0 || if_bad_address(path as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
     let mut path = translated_str(token, path);
+
+    if path.len() > MAX_PATH_LEN {
+        return Err(SysErrNo::ENAMETOOLONG);
+    }
 
     debug!("[sys_chdir] path is {}", path);
 
@@ -1396,5 +1406,10 @@ pub fn sys_fchmodat(dirfd: isize, path: *const u8, mode: u32, flags: u32) -> Sys
 
     let inode = open(&abs_path, OpenFlags::empty(), NONE_MODE)?.file()?;
     inode.inode.fmode_set(mode);
+    Ok(0)
+}
+
+pub fn sys_fallocate(_fd: usize, _mode: u32, _offset: usize, _len: usize) -> SyscallRet {
+    //伪实现
     Ok(0)
 }

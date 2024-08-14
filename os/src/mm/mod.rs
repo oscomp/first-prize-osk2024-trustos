@@ -15,7 +15,10 @@ mod page_fault_handler;
 mod page_table;
 mod shm;
 
-pub use address::{KernelAddr, PhysAddr, PhysPageNum, StepByOne, VPNRange, VirtAddr, VirtPageNum};
+pub use address::{
+    if_bad_address, insert_bad_address, remove_bad_address, KernelAddr, PhysAddr, PhysPageNum,
+    StepByOne, VPNRange, VirtAddr, VirtPageNum,
+};
 pub use frame_allocator::{frame_alloc, frame_dealloc, FrameTracker};
 pub use group::*;
 pub use map_area::{MapArea, MapAreaType, MapPermission, MapType};

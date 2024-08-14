@@ -26,6 +26,7 @@ pub enum Syscall {
     Mount = 40,
     StatFs = 43,
     Ftruncate = 46,
+    Fallocate = 47,
     Faccessat = 48,
     Chdir = 49,
     Fchmodat = 53,
@@ -186,6 +187,12 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         ),
         Syscall::StatFs => sys_statfs(args[0] as *const u8, args[1] as *mut Statfs),
         Syscall::Ftruncate => sys_ftruncate(args[0], args[1] as i32),
+        Syscall::Fallocate => sys_fallocate(
+            args[0] as usize,
+            args[1] as u32,
+            args[2] as usize,
+            args[3] as usize,
+        ),
         Syscall::Faccessat => sys_faccessat(
             args[0] as isize,
             args[1] as *const u8,

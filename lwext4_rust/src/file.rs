@@ -343,10 +343,12 @@ impl Ext4File {
                 buff[..r_sz].copy_from_slice(&data[cache_read.offset..end]);
             }
 
+            /*
             debug!(
                 "file_read {},len = {:x},offset is {:x}",
                 path, r_sz, cache_read.offset
             );
+            */
 
             return Ok(r_sz);
         }
@@ -393,12 +395,14 @@ impl Ext4File {
             let mut cache_writer = cache.write();
             let len = cache_writer.writebuf(buf);
 
+            /*
             debug!(
                 "file write at {} with size={} offset={}",
                 path,
                 buf.len(),
                 cache_writer.offset
             );
+            */
 
             //debug!("len is {} now", len);
             if len > 5_100_000 {

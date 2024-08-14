@@ -115,11 +115,15 @@ pub fn sys_clock_getres(clockid: usize, res: *mut Timespec) -> SyscallRet {
         clockid, res as usize
     );
 
+    if (clockid as isize) < 0 {
+        return Err(SysErrNo::EINVAL);
+    }
+
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
 
-    assert!(clockid == 1, "other clockid not supported!");
+    //assert!(clockid == 1, "other clockid not supported!");
 
     let restime = Timespec::new(0, 1);
     put_data(token, res, restime);
