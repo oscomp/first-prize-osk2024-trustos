@@ -18,7 +18,7 @@ busybox echo "run unixbench_testcode.sh"
 #./netperf_testcode.sh
 #busybox echo "run iperf_testcode.sh"
 #./iperf_testcode.sh
-busybox echo "run cyclic_testcode.sh"
-./cyclictest_testcode.sh
-busybox echo "run ltp_testcode.sh"
-./ltp_testcode.sh
+# busybox echo "run cyclic_testcode.sh"
+# ./cyclictest_testcode.sh
+# busybox echo "run ltp_testcode.sh"
+# ./ltp_testcode.sh

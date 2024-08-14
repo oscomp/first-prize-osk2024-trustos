@@ -27,8 +27,8 @@ cfg-if = { version = "1.0.0" }
 # visionfive2-sd = { git = "https://github.com/os-module/visionfive2-sd.git" }
 visionfive2-sd = {path = "./vendor/visionfive2-sd"}
 [features]
-# default = ["debug","board_qemu"]
-default = ["info","board_ramdisk"]
+default = ["info","board_qemu"]
+# default = ["info","board_ramdisk"]
 error = []
 warn = []
 info = []
