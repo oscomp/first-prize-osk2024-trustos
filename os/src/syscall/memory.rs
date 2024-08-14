@@ -51,6 +51,7 @@ pub fn sys_mmap(
             .memory_set
             .mmap(0, 1, MapPermission::empty(), flags, None, usize::MAX);
         insert_bad_address(rv);
+        log::info!("bad address is 0x{:x}", rv);
         return Ok(rv);
     }
     // check fd and map_permission

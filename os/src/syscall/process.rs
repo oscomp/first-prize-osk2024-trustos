@@ -1,6 +1,8 @@
 use crate::{
     fs::{open, OpenFlags, NONE_MODE},
-    mm::{get_data, put_data, translated_ref, translated_str, VirtAddr},
+    mm::{
+        get_data, if_bad_address, put_data, safe_put_data, translated_ref, translated_str, VirtAddr,
+    },
     signal::{check_if_any_sig_for_current_task, handle_signal},
     syscall::{CloneFlags, FutexCmd, FutexOpt, Utsname},
     task::{
@@ -398,12 +400,12 @@ pub fn sys_nanosleep(req: *const Timespec, rem: *mut Timespec) -> SyscallRet {
     // );
 
     while get_time_ms() * 1_000_000usize - begin < waittime {
-        if let Some(signo) = check_if_any_sig_for_current_task() {
+        if let Some(_) = check_if_any_sig_for_current_task() {
             //被信号唤醒
             if rem as usize != 0 {
                 put_data(token, rem, calculate_left_timespec(endtime));
             }
-            handle_signal(signo);
+            return Err(SysErrNo::EINTR);
         }
         suspend_current_and_run_next();
     }
@@ -512,20 +514,41 @@ pub fn sys_sched_getparam(_pid: usize, _param: *const u8) -> SyscallRet {
 
 /// 参考 https://man7.org/linux/man-pages/man2/clock_nanosleep.2.html
 pub fn sys_clock_nanosleep(
-    _clockid: usize,
+    clockid: usize,
     flags: u32,
     t: *const Timespec,
     remain: *mut Timespec,
 ) -> SyscallRet {
     const TIME_ABSTIME: u32 = 1;
-    let token = current_token();
+    let task = current_task().unwrap();
+    let task_inner = task.inner_lock();
+    let memory_set = task_inner.memory_set.clone();
+    drop(task_inner);
+    drop(task);
 
-    // debug!(
-    //     "[sys_clock_nanosleep] clockid is {}, flags is {}, t is {:x}, remain is {:x}",
-    //     clockid, flags, t as usize, remain as usize
-    // );
+    if clockid != 0 {
+        return Err(SysErrNo::EOPNOTSUPP);
+    }
 
-    let t = get_data(token, t);
+    if (t as isize) <= 0 || if_bad_address(t as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
+    if (remain as isize) < 0 || if_bad_address(remain as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
+    debug!(
+        "[sys_clock_nanosleep] clockid is {}, flags is {}, t is {:x}, remain is {:x}",
+        clockid, flags, t as usize, remain as usize
+    );
+
+    let t = get_data(memory_set.token(), t);
+
+    if t.tv_nsec >= 1_000_000_000usize {
+        return Err(SysErrNo::EINVAL);
+    }
+
     let waittime = t.tv_sec * 1_000_000_000usize + t.tv_nsec;
 
     let begin = get_time_ms() * 1_000_000usize;
@@ -537,18 +560,20 @@ pub fn sys_clock_nanosleep(
         get_time_spec() + t
     };
 
-    // debug!(
-    //     "[sys_clock_nanosleep] when not abs_time, ready to sleep for {} sec, {} nsec",
-    //     t.tv_sec, t.tv_nsec
-    // );
+    debug!(
+        "[sys_clock_nanosleep] ready to sleep for {} sec, {} nsec",
+        t.tv_sec, t.tv_nsec
+    );
 
     while get_time_ms() * 1_000_000usize - begin < waittime {
-        if let Some(signo) = check_if_any_sig_for_current_task() {
+        if let Some(_) = check_if_any_sig_for_current_task() {
             //被信号唤醒
+            debug!("interupt by signal");
             if remain as usize != 0 {
-                put_data(token, remain, calculate_left_timespec(endtime));
+                safe_put_data(memory_set, remain, calculate_left_timespec(endtime));
             }
-            handle_signal(signo);
+            //handle_signal(signo);
+            return Err(SysErrNo::EINTR);
         }
         suspend_current_and_run_next();
     }

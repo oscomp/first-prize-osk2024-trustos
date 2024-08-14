@@ -1,8 +1,10 @@
-use crate::mm::{get_data, put_data};
+use crate::mm::{get_data, if_bad_address, put_data};
 use crate::task::current_task;
 use crate::timer::{get_time_spec, Itimerval, Rusage, TimeVal, Timespec, Tms, ITIMER_REAL};
 use crate::utils::{SysErrNo, SyscallRet};
 use log::debug;
+
+const MAX_CLOCKS: usize = 12;
 
 /// 参考 https://man7.org/linux/man-pages/man2/gettimeofday.2.html
 pub fn sys_gettimeofday(ts: *mut Timespec) -> SyscallRet {
@@ -56,12 +58,20 @@ pub fn sys_settimer(
 }
 
 /// 参考 https://man7.org/linux/man-pages/man2/clock_gettime.2.html
-pub fn sys_clock_gettime(_clockid: usize, tp: *mut Timespec) -> SyscallRet {
+pub fn sys_clock_gettime(clockid: usize, tp: *mut Timespec) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
 
     let token = inner.user_token();
     let time = get_time_spec();
+
+    if (tp as isize) <= 0 || if_bad_address(tp as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
+    if clockid >= MAX_CLOCKS {
+        return Err(SysErrNo::EINVAL);
+    }
 
     put_data(token, tp, time);
     // debug!(

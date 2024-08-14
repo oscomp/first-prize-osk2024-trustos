@@ -173,12 +173,16 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> Sysca
     let path = translated_str(token, path);
     let flags = OpenFlags::from_bits(flags).unwrap();
 
-    let abs_path = task_inner.get_abs_path(dirfd, &path)?;
+    let mut abs_path = task_inner.get_abs_path(dirfd, &path)?;
 
     debug!(
         "[sys_openat] path is {}, flags is {:?}, mode is {:o}",
         &abs_path, flags, mode
     );
+
+    if abs_path == "/proc/self/stat" {
+        abs_path = format!("/proc/{}/stat", task.pid());
+    }
 
     let inode = open(&abs_path, flags, mode)?;
     let new_fd = task_inner.fd_table.alloc_fd()?;
@@ -543,10 +547,12 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
         dirfd, path, mode
     );
 
-    if let Some((_, _, _, mountflags)) = MNT_TABLE.lock().got_mount(path.clone()) {
-        if mountflags & 1 != 0 {
-            //挂载点只读
-            return Err(SysErrNo::EROFS);
+    if mode.contains(FaccessatMode::W_OK) {
+        if let Some((_, _, _, mountflags)) = MNT_TABLE.lock().got_mount(path.clone()) {
+            if mountflags & 1 != 0 {
+                //挂载点只读
+                return Err(SysErrNo::EROFS);
+            }
         }
     }
 

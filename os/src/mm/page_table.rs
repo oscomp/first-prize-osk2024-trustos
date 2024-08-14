@@ -374,6 +374,24 @@ pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
     KernelAddr::from(page_table.translate_va(VirtAddr::from(va)).unwrap()).as_mut()
 }
 
+pub fn safe_translated_refmut<T>(memory_set: Arc<MemorySet>, ptr: *mut T) -> &'static mut T {
+    let page_table = PageTable::from_token(memory_set.token());
+    let va = ptr as usize;
+    let start_va = VirtAddr::from(va);
+    let vpn = start_va.floor();
+    match page_table.translate(vpn) {
+        None => {
+            memory_set.lazy_page_fault(vpn, Trap::Exception(Exception::StorePageFault));
+        }
+        Some(ref pte) => {
+            if !pte.is_valid() {
+                memory_set.lazy_page_fault(vpn, Trap::Exception(Exception::StorePageFault));
+            }
+        }
+    }
+    KernelAddr::from(page_table.translate_va(VirtAddr::from(va)).unwrap()).as_mut()
+}
+
 /// 从 `token` 地址空间 `ptr` 处读取数据，
 /// 其中虚拟地址 `ptr` 解析得到的物理地址可以跨页。
 ///
@@ -403,6 +421,7 @@ pub fn safe_get_data<T: 'static + Copy>(memory_set: Arc<MemorySet>, ptr: *const 
     let size = core::mem::size_of::<T>();
     // 若数据跨页，则转换成字节数据写入
     if (pa + size - 1).floor() != pa.floor() {
+        debug!("work in overpage");
         let mut bytes = vec![0u8; size];
         for i in 0..size {
             bytes[i] = *(page_table.translate_va(va).unwrap().as_ref());
@@ -431,6 +450,24 @@ pub fn put_data<T: 'static>(token: usize, ptr: *mut T, data: T) {
         }
     } else {
         *translated_refmut(token, ptr) = data;
+    }
+}
+
+pub fn safe_put_data<T: 'static>(memory_set: Arc<MemorySet>, ptr: *mut T, data: T) {
+    let page_table = PageTable::from_token(memory_set.token());
+    let mut va = VirtAddr::from(ptr as usize);
+    let pa = page_table.translate_va(va).unwrap();
+    let size = core::mem::size_of::<T>();
+    // 若数据跨页，则转换成字节数据写入
+    if (pa + size - 1).floor() != pa.floor() {
+        let bytes =
+            unsafe { core::slice::from_raw_parts(&data as *const _ as usize as *const u8, size) };
+        for i in 0..size {
+            *(page_table.translate_va(va).unwrap().as_mut()) = bytes[i];
+            va = va + 1;
+        }
+    } else {
+        *safe_translated_refmut(memory_set, ptr) = data;
     }
 }
 
