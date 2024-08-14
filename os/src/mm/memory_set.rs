@@ -463,12 +463,17 @@ impl MemorySetInner {
             VirtAddr::from(addr).0,
             VirtAddr::from(addr + len).0
         );
+        let area_type = if flags.contains(MmapFlags::MAP_STACK) {
+            MapAreaType::Stack
+        } else {
+            MapAreaType::Mmap
+        };
         self.push_lazily(MapArea::new_mmap(
             VirtAddr::from(addr),
             VirtAddr::from(addr + len),
             MapType::Framed,
             map_perm,
-            MapAreaType::Mmap,
+            area_type,
             file,
             off,
             flags,
@@ -1019,13 +1024,20 @@ impl MemorySetInner {
                 continue;
             }
             let mut new_area = MapArea::from_another(area);
-            if area.area_type == MapAreaType::Mmap {
+            if area.area_type == MapAreaType::Mmap
+                && !area.mmap_flags.contains(MmapFlags::MAP_SHARED)
+            {
                 GROUP_SHARE.lock().add_area(new_area.groupid);
             }
             // Mmap和brk是lazy allocation
             if area.area_type == MapAreaType::Mmap || area.area_type == MapAreaType::Brk {
                 //已经分配且独占/被写过的部分以及读共享部分按cow处理
                 //其余是未分配部分，直接clone即可
+                if area.mmap_flags.contains(MmapFlags::MAP_SHARED) {
+                    let frames = area.data_frames.values().cloned().collect();
+                    memory_set.push_with_given_frames(new_area, frames);
+                    continue;
+                }
                 new_area.data_frames = area.data_frames.clone();
                 for (vpn, _) in area.data_frames.iter() {
                     let vpn = *vpn;

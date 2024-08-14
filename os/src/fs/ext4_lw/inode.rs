@@ -13,6 +13,8 @@ use crate::{
 use alloc::{format, vec};
 use alloc::{sync::Arc, vec::Vec};
 
+const MAX_LOOPTIMES: usize = 5;
+
 pub struct Ext4Inode {
     inner: SyncUnsafeCell<Ext4InodeInner>,
 }
@@ -166,7 +168,12 @@ impl Inode for Ext4Inode {
         }
     }
 
-    fn find(&self, path: &str, flags: OpenFlags) -> Result<Arc<dyn Inode>, SysErrNo> {
+    fn find(
+        &self,
+        path: &str,
+        flags: OpenFlags,
+        loop_times: usize,
+    ) -> Result<Arc<dyn Inode>, SysErrNo> {
         //log::info!("[Inode.find] origin path={}", path);
         let file = &mut self.inner.get_unchecked_mut().f;
         if file.check_inode_exist(path, InodeTypes::EXT4_DE_DIR) {
@@ -177,6 +184,13 @@ impl Inode for Ext4Inode {
             }
             Ok(Arc::new(Ext4Inode::new(path, InodeTypes::EXT4_DE_REG_FILE)))
         } else if file.check_inode_exist(path, InodeTypes::EXT4_DE_SYMLINK) {
+            if flags.contains(OpenFlags::O_UNLINK) {
+                return Ok(Arc::new(Ext4Inode::new(path, InodeTypes::EXT4_DE_SYMLINK)));
+            }
+            if loop_times >= MAX_LOOPTIMES {
+                debug!("error ELOOP!");
+                return Err(SysErrNo::ELOOP);
+            }
             // 符号链接文件应该返回对应的真实的文件
             let mut file_name = [0u8; 256];
             let file = Ext4Inode::new(path, InodeTypes::EXT4_DE_SYMLINK);
@@ -187,8 +201,8 @@ impl Inode for Ext4Inode {
             let (prefix, _) = path.rsplit_once("/").unwrap();
             //log::info!("[Inode.find] prefix={}", prefix);
             let abs_path = format!("{}/{}", prefix, file_path);
-            //log::info!("[Inode.find] abs_path={}", &abs_path);
-            self.find(&abs_path, flags)
+            //debug!("[Inode.find] symlink abs_path={}", &abs_path);
+            return self.find(&abs_path, flags, loop_times + 1);
 
             // Ok(Arc::new(Ext4Inode::new(path, InodeTypes::EXT4_DE_SYMLINK)))
         } else {
@@ -245,6 +259,12 @@ impl Inode for Ext4Inode {
     fn read_link(&self, buf: &mut [u8], bufsize: usize) -> SyscallRet {
         let file = &mut self.inner.get_unchecked_mut().f;
         file.file_readlink(buf, bufsize)
+            .map_err(|e| SysErrNo::from(e))
+    }
+
+    fn sym_link(&self, target: &str, path: &str) -> SyscallRet {
+        let file = &mut self.inner.get_unchecked_mut().f;
+        file.file_fsymlink(target, path)
             .map_err(|e| SysErrNo::from(e))
     }
 

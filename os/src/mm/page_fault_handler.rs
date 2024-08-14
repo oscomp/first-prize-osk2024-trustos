@@ -25,10 +25,12 @@ pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut
     let start_addr: VirtAddr = vma.vpn_range.start().into();
     let va = va.0;
 
+    /*
     debug!(
         "va={:x},start_addr={:x},vma.offset={:x}",
         va, start_addr.0, vma.mmap_file.offset
     );
+    */
 
     file.lseek(
         (va - start_addr.0 + vma.mmap_file.offset) as isize,
@@ -72,11 +74,13 @@ pub fn mmap_read_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut 
     } else {
         //第一次读，分配页面
         mmap_write_page_fault(va, page_table, vma);
-        GROUP_SHARE.lock().add_frame(
-            vma.groupid,
-            va.into(),
-            vma.data_frames.get(&va.into()).unwrap().clone(),
-        )
+        if vma.groupid != 0 {
+            GROUP_SHARE.lock().add_frame(
+                vma.groupid,
+                va.into(),
+                vma.data_frames.get(&va.into()).unwrap().clone(),
+            )
+        }
     }
 }
 ///堆触发的lazy alocation，必是写

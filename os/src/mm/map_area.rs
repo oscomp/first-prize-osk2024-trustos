@@ -59,8 +59,13 @@ impl MapArea {
     ) -> Self {
         let start_vpn: VirtPageNum = start_va.floor();
         let end_vpn: VirtPageNum = end_va.ceil();
-        let groupid = GROUP_SHARE.lock().alloc_id();
-        GROUP_SHARE.lock().add_area(groupid);
+        let groupid;
+        if mmap_flags.contains(MmapFlags::MAP_SHARED) {
+            groupid = 0;
+        } else {
+            groupid = GROUP_SHARE.lock().alloc_id();
+            GROUP_SHARE.lock().add_area(groupid);
+        }
         Self {
             vpn_range: VPNRange::new(start_vpn, end_vpn),
             data_frames: BTreeMap::new(),

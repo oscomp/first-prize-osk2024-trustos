@@ -2,6 +2,7 @@
 use super::{__switch, add_task, fetch_task, TaskContext, TaskControlBlock, TaskStatus};
 use crate::{config::sync::HART_NUM, timer::check_futex_timer, trap::TrapContext, utils::hart_id};
 use alloc::{boxed::Box, sync::Arc};
+use log::debug;
 ///Processor management structure
 pub struct Processor {
     ///The task currently executing on the current processor
@@ -51,11 +52,13 @@ pub fn run_tasks() {
             let mut cur_task_inner = cur_task.inner_lock();
             check_futex_timer();
             if let Some(next_task) = fetch_task() {
-                // info!(
-                //     "drop task {},fetch task {}",
-                //     cur_task.pid(),
-                //     next_task.pid()
-                // );
+                /*
+                debug!(
+                    "drop task {},fetch task {}",
+                    cur_task.pid(),
+                    next_task.pid()
+                );
+                */
                 let mut next_task_inner = next_task.inner_lock();
                 let next_task_cx_ptr = &next_task_inner.task_cx as *const TaskContext;
                 next_task_inner.task_status = TaskStatus::Running;

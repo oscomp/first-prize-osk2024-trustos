@@ -172,6 +172,10 @@ pub fn sys_execve(args: &[&str]) -> isize {
 }
 // "busybox_testcode.sh\0".as_ptr() as isize,
 
+//已通过测例：abort01，abs01,access01,access03,access04,brk01,brk02,chdir04,clock_getres01
+//单独运行方法：修改 ltp/testcases/bin/{} 括号内的内容为目标文件
+//全部运行方法：运行ltp_testcode.sh
+
 pub fn sys_busyboxsh() -> isize {
     syscall(
         SYSCALL_EXECVE,
@@ -180,9 +184,9 @@ pub fn sys_busyboxsh() -> isize {
             [
                 "busybox\0".as_ptr() as isize,
                 "sh\0".as_ptr() as isize,
-                "./test-ltp.sh\0".as_ptr() as isize,
-                "ltp/testcases/bin/abort01\0".as_ptr() as isize,
-                //"ltp_testcode.sh\0".as_ptr() as isize,
+                //"./test-ltp.sh\0".as_ptr() as isize,
+                //"ltp/testcases/bin/clock_gettime01\0".as_ptr() as isize,
+                "cyclictest_testcode.sh\0".as_ptr() as isize,
                 0,
             ]
             .as_ptr() as isize,

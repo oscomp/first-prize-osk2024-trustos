@@ -6,7 +6,10 @@ use super::{MmapFlags, MmapProt};
 use crate::{
     config::mm::PAGE_SIZE,
     fs::File,
-    mm::{shm_attach, shm_create, shm_drop, shm_find, MapPermission, ShmFlags, VirtAddr},
+    mm::{
+        if_bad_address, insert_bad_address, remove_bad_address, shm_attach, shm_create, shm_drop,
+        shm_find, MapPermission, ShmFlags, VirtAddr,
+    },
     task::current_task,
     utils::{page_round_up, SysErrNo, SyscallRet},
 };
@@ -42,6 +45,14 @@ pub fn sys_mmap(
             .mmap(addr, len, map_perm, flags, None, usize::MAX);
         return Ok(rv);
     }
+    if flags.contains(MmapFlags::MAP_ANONYMOUS) {
+        //映射1字节没有任何权限的地址
+        let rv = task_inner
+            .memory_set
+            .mmap(0, 1, MapPermission::empty(), flags, None, usize::MAX);
+        insert_bad_address(rv);
+        return Ok(rv);
+    }
     // check fd and map_permission
     let file = task_inner.fd_table.get(fd).file()?;
     // 读写权限
@@ -61,10 +72,13 @@ pub fn sys_mmap(
 
 /// 参考 https://man7.org/linux/man-pages/man2/munmap.2.html
 pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
-    debug!("[sys_munmap] addr={:x}, len={}", addr, len);
+    debug!("[sys_munmap] addr={:#x}, len={:#x}", addr, len);
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let len = page_round_up(len);
+    if if_bad_address(addr) {
+        remove_bad_address(addr);
+    }
     task_inner.memory_set.munmap(addr, len)
 }
 

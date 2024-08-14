@@ -15,16 +15,19 @@ mod page_fault_handler;
 mod page_table;
 mod shm;
 
-pub use address::{KernelAddr, PhysAddr, PhysPageNum, StepByOne, VPNRange, VirtAddr, VirtPageNum};
+pub use address::{
+    if_bad_address, insert_bad_address, remove_bad_address, KernelAddr, PhysAddr, PhysPageNum,
+    StepByOne, VPNRange, VirtAddr, VirtPageNum,
+};
 pub use frame_allocator::{frame_alloc, frame_dealloc, FrameTracker};
 pub use group::*;
 pub use map_area::{MapArea, MapAreaType, MapPermission, MapType};
 pub use memory_set::{kernel_token, remap_test, MemorySet, MemorySetInner, KERNEL_SPACE};
 pub use page_fault_handler::*;
 pub use page_table::{
-    flush_tlb, get_data, put_data, safe_translated_byte_buffer, translated_byte_buffer,
-    translated_ref, translated_refmut, translated_str, PTEFlags, PageTable, PageTableEntry,
-    UserBuffer, UserBufferIterator,
+    flush_tlb, get_data, put_data, safe_get_data, safe_translated_byte_buffer,
+    translated_byte_buffer, translated_ref, translated_refmut, translated_str, PTEFlags, PageTable,
+    PageTableEntry, UserBuffer, UserBufferIterator,
 };
 pub use shm::*;
 

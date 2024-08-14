@@ -1,7 +1,7 @@
 use log::debug;
 
 use crate::{
-    mm::{get_data, put_data},
+    mm::{get_data, put_data, safe_get_data},
     signal::{
         restore_frame, send_access_signal, send_signal_to_thread, send_signal_to_thread_group,
         send_signal_to_thread_of_proc, KSigAction, SigAction, SigInfo, SigSet,
@@ -59,20 +59,24 @@ pub fn sys_rt_sigreturn() -> SyscallRet {
 pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) -> SyscallRet {
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
-    let token = task_inner.user_token();
+    let memory_set = task_inner.memory_set.clone();
     let how = SignalMaskFlag::from_bits(how).ok_or(SysErrNo::EINVAL)?;
 
+    debug!(
+        "oldset is {:x}, set is {:x}",
+        old_set as usize, set as usize
+    );
     if old_set as usize != 0 {
-        put_data(token, old_set, task_inner.sig_mask)
+        put_data(memory_set.token(), old_set, task_inner.sig_mask);
     }
     if set as usize != 0 {
-        let mask = get_data(token, set);
-        /*
+        let mask = safe_get_data(memory_set, set);
+
         debug!(
             "[sys_sigprocmask] how is {:?}, mask is {:?}, old_set is {:x}",
             how, mask, old_set as usize
         );
-        */
+
         // let mut blocked = &mut task_inner.sig_mask;
         match how {
             SignalMaskFlag::SIG_BLOCK => task_inner.sig_mask |= mask,

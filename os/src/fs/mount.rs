@@ -1,10 +1,11 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
+use log::debug;
 use spin::{Lazy, Mutex};
 
 const MNT_MAXLEN: usize = 16;
 
 pub struct MountTable {
-    mnt_list: Vec<(String, String, String)>, // special, dir, fstype
+    mnt_list: Vec<(String, String, String, u32)>, // special, dir, fstype
 }
 
 impl MountTable {
@@ -20,16 +21,32 @@ impl MountTable {
             return -1;
         }
         // 已存在
-        if self.mnt_list.iter().find(|&(_, d, _)| *d == dir).is_some() {
+        if let Some((mountspecial, _, mountfstype, mountflags)) =
+            self.mnt_list.iter_mut().find(|(_, d, _, _)| *d == dir)
+        {
+            if flags & 32 != 0 {
+                //包含MS_REMOUNT标志
+                *mountspecial = special;
+                *mountfstype = fstype;
+                *mountflags = flags;
+            }
             return 0;
         }
 
         // todo
-        _ = flags;
         _ = data;
 
-        self.mnt_list.push((special, dir, fstype));
+        log::info!("push mount dir {} with flags={}", dir, flags);
+
+        self.mnt_list.push((special, dir, fstype, flags));
         0
+    }
+
+    pub fn got_mount(&mut self, dir: String) -> Option<(String, String, String, u32)> {
+        if let Some(mount) = self.mnt_list.iter().find(|&(_, d, _, _)| *d == dir) {
+            return Some((*mount).clone());
+        }
+        return None;
     }
 
     pub fn umount(&mut self, special: String, flags: u32) -> isize {

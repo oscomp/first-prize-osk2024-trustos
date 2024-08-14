@@ -85,7 +85,7 @@ pub fn futex_wake_up(key: FutexKey, max_num: i32) -> usize {
 }
 
 pub fn futex_requeue(old_key: FutexKey, max_num: i32, new_key: FutexKey, max_num2: i32) -> usize {
-    log::info!(
+    log::debug!(
         "[futex_requeue],old_key={:?},max_num={},new_key={:?},max_num2={}",
         old_key,
         max_num,

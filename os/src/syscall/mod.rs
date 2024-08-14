@@ -20,12 +20,13 @@ pub enum Syscall {
     Ioctl = 29,
     Mkdirat = 34,
     Unlinkat = 35,
-    // Symlinkat = 36,
+    Symlinkat = 36,
     Linkat = 37,
     Umount2 = 39,
     Mount = 40,
     StatFs = 43,
     Ftruncate = 46,
+    Fallocate = 47,
     Faccessat = 48,
     Chdir = 49,
     Fchmodat = 53,
@@ -76,6 +77,7 @@ pub enum Syscall {
     SigProcMask = 135,
     SigTimedWait = 137,
     SigReturn = 139,
+    Setuid = 146,
     Times = 153,
     SetPGid = 154,
     GetPGid = 155,
@@ -115,6 +117,7 @@ pub enum Syscall {
     Mprotect = 226,
     MSync = 227,
     Madvise = 233,
+    Accept4 = 242,
     Wait4 = 260,
     Prlimit = 261,
     Renameat2 = 276,
@@ -164,6 +167,9 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Ioctl => sys_ioctl(args[0], args[1], args[2]),
         Syscall::Mkdirat => sys_mkdirat(args[0] as isize, args[1] as *const u8, args[2] as u32),
         Syscall::Unlinkat => sys_unlinkat(args[0] as isize, args[1] as *const u8, args[2] as u32),
+        Syscall::Symlinkat => {
+            sys_symlinkat(args[0] as *const u8, args[1] as isize, args[2] as *const u8)
+        }
         Syscall::Linkat => sys_linkat(
             args[0] as isize,
             args[1] as *const u8,
@@ -181,6 +187,12 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         ),
         Syscall::StatFs => sys_statfs(args[0] as *const u8, args[1] as *mut Statfs),
         Syscall::Ftruncate => sys_ftruncate(args[0], args[1] as i32),
+        Syscall::Fallocate => sys_fallocate(
+            args[0] as usize,
+            args[1] as u32,
+            args[2] as usize,
+            args[3] as usize,
+        ),
         Syscall::Faccessat => sys_faccessat(
             args[0] as isize,
             args[1] as *const u8,
@@ -299,6 +311,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[2] as *const Timespec,
         ),
         Syscall::SigReturn => sys_rt_sigreturn(),
+        Syscall::Setuid => sys_setuid(args[0] as usize),
         Syscall::Times => sys_times(args[0] as *mut Tms),
         Syscall::SetPGid => Ok(0),
         Syscall::GetPGid => Ok(0),
@@ -374,6 +387,12 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Mprotect => sys_mprotect(args[0], args[1], args[2] as u32),
         Syscall::MSync => Ok(0),
         Syscall::Madvise => sys_madvise(args[0], args[1], args[2]),
+        Syscall::Accept4 => sys_accept4(
+            args[0] as usize,
+            args[1] as *const u8,
+            args[2] as u32,
+            args[3] as u32,
+        ),
         Syscall::Wait4 => sys_wait4(args[0] as isize, args[1] as *mut i32, args[2] as i32),
         Syscall::Prlimit => sys_prlimit(
             args[0],

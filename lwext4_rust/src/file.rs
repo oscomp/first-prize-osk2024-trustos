@@ -179,6 +179,20 @@ impl Ext4File {
         Ok(rcnt)
     }
 
+    //ext4_fsymlink(const char *target, const char *path)
+    pub fn file_fsymlink(&mut self, target: &str, path: &str) -> Result<usize, i32> {
+        let c_path = CString::new(path).expect("CString::new failed");
+        let c_path = c_path.into_raw();
+        let target_path = CString::new(target).expect("CString::new failed");
+        let target_path = target_path.into_raw();
+        let r = unsafe { ext4_fsymlink(target_path, c_path) };
+        if r != EOK as i32 {
+            error!("ext4_fsymlink error: rc = {}", r);
+            return Err(r);
+        }
+        Ok(EOK as usize)
+    }
+
     /// Rename file and directory
     pub fn file_rename(&mut self, path: &str, new_path: &str) -> Result<usize, i32> {
         let c_path = CString::new(path).expect("CString::new failed");
@@ -289,7 +303,7 @@ impl Ext4File {
             }
 
             cache_writer.offset = offset as usize;
-            debug!("offset change to {:x}", offset);
+            //debug!("offset change to {:x}", offset);
             return Ok(EOK as usize);
         }
 
@@ -329,10 +343,12 @@ impl Ext4File {
                 buff[..r_sz].copy_from_slice(&data[cache_read.offset..end]);
             }
 
+            /*
             debug!(
                 "file_read {},len = {:x},offset is {:x}",
                 path, r_sz, cache_read.offset
             );
+            */
 
             return Ok(r_sz);
         }
@@ -379,12 +395,14 @@ impl Ext4File {
             let mut cache_writer = cache.write();
             let len = cache_writer.writebuf(buf);
 
+            /*
             debug!(
                 "file write at {} with size={} offset={}",
                 path,
                 buf.len(),
                 cache_writer.offset
             );
+            */
 
             //debug!("len is {} now", len);
             if len > 5_100_000 {

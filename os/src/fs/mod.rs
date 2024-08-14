@@ -11,6 +11,7 @@ mod stdio;
 mod vfs;
 
 use crate::mm::UserBuffer;
+use crate::syscall::FaccessatFileMode;
 use crate::utils::{GeneralRet, SysErrNo};
 use alloc::format;
 use alloc::string::String;
@@ -57,6 +58,8 @@ bitflags! {
         const O_NOATIME     = 0o1000000;   // Do not update access time
         const O_PATH        = 0o10000000;  // Obtain a file descriptor for a directory
         const O_TMPFILE     = 0o20200000;  // Create an unnamed temporary file
+
+        const O_UNLINK    = 0o40000000;     //自用，用于识别unlink系统调用
     }
 }
 
@@ -79,6 +82,8 @@ impl OpenFlags {
         }
     }
 }
+
+pub const MAX_PATH_LEN: usize = 30;
 
 pub const SEEK_SET: usize = 0;
 pub const SEEK_CUR: usize = 1;
@@ -240,7 +245,7 @@ pub fn list_apps() {
 
 //
 const MOUNTS: &str = " ext4 / ext rw 0 0\n";
-const PASSWD: &str = "root:x:0:0:root:/root:/bin/bash\n";
+const PASSWD: &str = "root:x:0:0:root:/root:/bin/bash\nnobody:x:1:0:nobody:/nobody:/bin/bash\n";
 const MEMINFO: &str = r"
 MemTotal:         944564 kB
 MemFree:          835248 kB
@@ -438,13 +443,13 @@ pub fn create_init_files() -> GeneralRet {
     Ok(())
 }
 
-fn create_file(abs_path: &str, flags: OpenFlags, _mode: u32) -> Result<FileClass, SysErrNo> {
+fn create_file(abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass, SysErrNo> {
     // 一定能找到,因为除了RootInode外都有父结点
     let parent_dir = root_inode();
     let (readable, writable) = flags.read_write();
     let inode = parent_dir.create(abs_path, flags.node_type())?;
+    inode.fmode_set(mode);
     insert_inode_idx(abs_path, inode.clone());
-    // inode.fmode_set(mode);
     let osinode = OSInode::new(readable, writable, inode);
     Ok(FileClass::File(Arc::new(osinode)))
 }
@@ -486,9 +491,12 @@ pub fn open(mut abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass
     if has_inode(abs_path) {
         inode = find_inode_idx(abs_path);
     } else {
-        let found_res = root_inode().find(abs_path, flags);
+        let found_res = root_inode().find(abs_path, flags, 0);
         if found_res.clone().err() == Some(SysErrNo::ENOTDIR) {
             return Err(SysErrNo::ENOTDIR);
+        }
+        if found_res.clone().err() == Some(SysErrNo::ELOOP) {
+            return Err(SysErrNo::ELOOP);
         }
         if let Ok(t) = found_res {
             insert_inode_idx(abs_path, t.clone());
@@ -496,6 +504,9 @@ pub fn open(mut abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass
         }
     }
     if let Some(inode) = inode {
+        if flags.contains(OpenFlags::O_DIRECTORY) && inode.types() != InodeType::Dir {
+            return Err(SysErrNo::ENOTDIR);
+        }
         let (readable, writable) = flags.read_write();
         let osfile = OSInode::new(readable, writable, inode);
         if flags.contains(OpenFlags::O_APPEND) {
