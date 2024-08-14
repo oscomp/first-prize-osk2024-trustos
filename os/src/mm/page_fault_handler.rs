@@ -6,7 +6,7 @@ use log::debug;
 use crate::{
     config::mm::PAGE_SIZE,
     fs::{File, SEEK_CUR, SEEK_SET},
-    mm::flush_tlb,
+    mm::{flush_tlb, page_table::PTE_FLAGS_MASK},
 };
 
 use super::{
@@ -43,7 +43,7 @@ pub fn mmap_write_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut
         .expect("mmap_write_page_fault should not fail");
     //设置为cow
     let vpn = VirtAddr::from(va).floor();
-    let mut pte_flags = vma.flags() | PTEFlags::V;
+    let mut pte_flags = vma.flags() | PTE_FLAGS_MASK;
     //可写的才需要cow
     let need_cow = pte_flags.contains(PTEFlags::W);
     pte_flags &= !PTEFlags::W;
@@ -58,7 +58,7 @@ pub fn mmap_read_page_fault(va: VirtAddr, page_table: &mut PageTable, vma: &mut 
     if let Some(frame) = frame {
         //有现成的，直接clone,需要是cow的
         let vpn = va.into();
-        let mut pte_flags = vma.flags() | PTEFlags::V;
+        let mut pte_flags = vma.flags() | PTE_FLAGS_MASK;
         //可写的才需要cow
         let need_cow = pte_flags.contains(PTEFlags::W);
         pte_flags &= !PTEFlags::W;

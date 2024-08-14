@@ -786,9 +786,14 @@ impl MemorySetInner {
             sbss_with_stack as usize, ebss as usize
         );
         println!(
-            "sigreturn_trampoline start: [{:#x}, {:#x}",
+            "sigreturn_trampoline : [{:#x}, {:#x})",
             sigreturn_trampoline as usize,
             sigreturn_trampoline as usize + PAGE_SIZE
+        );
+
+        println!(
+            "physical memory: [{:#x},{:#x})",
+            ekernel as usize, MEMORY_END
         );
         // map kernel sections
         println!("mapping .text section");

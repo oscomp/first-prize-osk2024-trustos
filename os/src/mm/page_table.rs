@@ -35,6 +35,13 @@ pub struct PageTableEntry {
     ///PTE
     pub bits: usize,
 }
+/// visionFive2没有设置A标志位和D标志位的硬件,需要手动设置
+#[cfg(feature = "board_vf2")]
+pub static PTE_FLAGS_MASK: PTEFlags =
+    PTEFlags::from_bits_truncate(PTEFlags::V.bits | PTEFlags::A.bits | PTEFlags::D.bits);
+
+#[cfg(feature = "board_qemu")]
+pub static PTE_FLAGS_MASK: PTEFlags = PTEFlags::V;
 
 impl PageTableEntry {
     ///Create a PTE from ppn
@@ -92,9 +99,9 @@ impl PageTableEntry {
         self.bits = ppn.0 << 10 | flags.bits as usize;
     }
     // only X+W+R can be set
-    pub fn set_pte_flags(&mut self, flags: usize) {
-        self.bits = (self.bits & !(0b1110 as usize)) | (flags & (0b1110 as usize));
-    }
+    // pub fn set_pte_flags(&mut self, flags: usize) {
+    //     self.bits = (self.bits & !(0b1110 as usize)) | (flags & (0b1110 as usize));
+    // }
     pub fn set_flags(&mut self, flags: PTEFlags) {
         let new_flags: u8 = flags.bits().clone();
         self.bits = (self.bits & 0xFFFF_FFFF_FFFF_FF00) | (new_flags as usize);
@@ -153,7 +160,7 @@ impl PageTable {
             }
             if !pte.is_valid() {
                 let frame = frame_alloc().unwrap();
-                *pte = PageTableEntry::new(frame.ppn, PTEFlags::V);
+                *pte = PageTableEntry::new(frame.ppn, PTE_FLAGS_MASK);
                 self.frames.push(frame);
             }
             ppn = pte.ppn();
@@ -187,7 +194,7 @@ impl PageTable {
             vpn,
             vpn.0 << 12
         );
-        *pte = PageTableEntry::new(ppn, flags | PTEFlags::V);
+        *pte = PageTableEntry::new(ppn, flags | PTE_FLAGS_MASK);
     }
     /// Delete a mapping form `vpn`
     pub fn unmap(&mut self, vpn: VirtPageNum) {
@@ -228,10 +235,14 @@ impl PageTable {
         self.find_pte_create(vpn).unwrap().reset_w();
     }
     pub fn set_flags(&mut self, vpn: VirtPageNum, flags: PTEFlags) {
-        self.find_pte_create(vpn).unwrap().set_flags(flags);
+        self.find_pte_create(vpn)
+            .unwrap()
+            .set_flags(flags | PTE_FLAGS_MASK);
     }
     pub fn set_map_flags(&mut self, vpn: VirtPageNum, flags: PTEFlags) {
-        self.find_pte_create(vpn).unwrap().set_map_flags(flags);
+        self.find_pte_create(vpn)
+            .unwrap()
+            .set_map_flags(flags | PTE_FLAGS_MASK);
     }
     pub fn clear(&mut self) {
         self.frames.clear();
