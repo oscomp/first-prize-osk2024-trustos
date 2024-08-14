@@ -27,7 +27,7 @@ pub fn sys_mmap(
         return Err(SysErrNo::EPERM);
     }
     debug!(
-        "[sys_mmap]: addr {:#x}, len {:#x}, fd {}, offset {:#x}, flags {:?}, prot {:?}",
+        "[sys_mmap]: addr 0x{:#x}, len 0x{:#x}, fd {}, offset 0x{:#x}, flags {:?}, prot {:?}",
         addr, len, fd as isize, off, flags, map_perm
     );
     let task = current_task().unwrap();
@@ -61,7 +61,7 @@ pub fn sys_mmap(
 
 /// 参考 https://man7.org/linux/man-pages/man2/munmap.2.html
 pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
-    debug!("[sys_munmap] addr={:x}, len={}", addr, len);
+    debug!("[sys_munmap] addr=0x{:x}, len=0x{:x}", addr, len);
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let len = page_round_up(len);

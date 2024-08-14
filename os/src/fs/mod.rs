@@ -58,6 +58,8 @@ bitflags! {
         const O_NOATIME     = 0o1000000;   // Do not update access time
         const O_PATH        = 0o10000000;  // Obtain a file descriptor for a directory
         const O_TMPFILE     = 0o20200000;  // Create an unnamed temporary file
+
+        const O_UNLINK    = 0o40000000;     //自用，用于识别unlink系统调用
     }
 }
 
@@ -80,6 +82,8 @@ impl OpenFlags {
         }
     }
 }
+
+pub const MAX_PATH_LEN: usize = 30;
 
 pub const SEEK_SET: usize = 0;
 pub const SEEK_CUR: usize = 1;
@@ -444,13 +448,6 @@ fn create_file(abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass,
     let parent_dir = root_inode();
     let (readable, writable) = flags.read_write();
     let inode = parent_dir.create(abs_path, flags.node_type())?;
-    if flags.contains(OpenFlags::O_DIRECTORY) {
-        log::info!(
-            "{} initialize {:?}",
-            abs_path,
-            FaccessatFileMode::from_bits_truncate(mode)
-        );
-    }
     inode.fmode_set(mode);
     insert_inode_idx(abs_path, inode.clone());
     let osinode = OSInode::new(readable, writable, inode);
@@ -494,9 +491,12 @@ pub fn open(mut abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass
     if has_inode(abs_path) {
         inode = find_inode_idx(abs_path);
     } else {
-        let found_res = root_inode().find(abs_path, flags);
+        let found_res = root_inode().find(abs_path, flags, 0);
         if found_res.clone().err() == Some(SysErrNo::ENOTDIR) {
             return Err(SysErrNo::ENOTDIR);
+        }
+        if found_res.clone().err() == Some(SysErrNo::ELOOP) {
+            return Err(SysErrNo::ELOOP);
         }
         if let Ok(t) = found_res {
             insert_inode_idx(abs_path, t.clone());

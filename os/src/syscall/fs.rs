@@ -2,8 +2,8 @@
 use crate::{
     fs::{
         fs_stat, make_pipe, open, open_device_file, remove_inode_idx, sync, File, FileClass,
-        FileDescriptor, Kstat, OpenFlags, Statfs, DEFAULT_DIR_MODE, DEFAULT_FILE_MODE, MNT_TABLE,
-        NONE_MODE, SEEK_CUR, SEEK_SET,
+        FileDescriptor, InodeType, Kstat, OpenFlags, Statfs, DEFAULT_DIR_MODE, DEFAULT_FILE_MODE,
+        MAX_PATH_LEN, MNT_TABLE, NONE_MODE, SEEK_CUR, SEEK_SET,
     },
     mm::{
         get_data, put_data, safe_translated_byte_buffer, translated_byte_buffer, translated_ref,
@@ -366,7 +366,7 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, _flags: u32) -> SyscallRet {
     // 如果是File但尚有对应的fd未关闭,等到close时unlink
     // 如果是符号链接,直接移除
     // 如果是socket, FIFO, or device,移除但现有的fd可继续使用
-    let osfile = open(&abs_path, OpenFlags::empty(), NONE_MODE)?.file()?;
+    let osfile = open(&abs_path, OpenFlags::O_UNLINK, NONE_MODE)?.file()?;
     debug!(
         "[sys_unlinkat] path={},link_cnt={},has_activate_fd={}",
         &abs_path,
@@ -406,10 +406,14 @@ pub fn sys_mount(
     flags: u32,
     data: *const u8,
 ) -> SyscallRet {
+    const MS_RDONLY: u32 = 1;
+    const MS_REMOUNT: u32 = 32;
+
     let token = current_token();
     let special = translated_str(token, special);
     let dir = translated_str(token, dir);
     let ftype = translated_str(token, ftype);
+    log::info!("flags = {}", flags);
     if !data.is_null() {
         let data = translated_str(token, data);
         let ret = MNT_TABLE.lock().mount(special, dir, ftype, flags, data);
@@ -506,8 +510,22 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
+    if (path as isize) <= 0 {
+        return Err(SysErrNo::EFAULT);
+    }
+    if (mode as i32) < 0 {
+        return Err(SysErrNo::EINVAL);
+    }
     let path = translated_str(token, path);
-    debug!("mode={}", mode);
+
+    if path.len() == 0 {
+        return Err(SysErrNo::ENOENT);
+    }
+
+    if path.len() > MAX_PATH_LEN {
+        return Err(SysErrNo::ENAMETOOLONG);
+    }
+
     let mode = FaccessatMode::from_bits(mode).unwrap();
 
     debug!(
@@ -515,14 +533,21 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
         dirfd, path, mode
     );
 
+    if let Some((_, _, _, mountflags)) = MNT_TABLE.lock().got_mount(path.clone()) {
+        if mountflags & 1 != 0 {
+            //挂载点只读
+            return Err(SysErrNo::EROFS);
+        }
+    }
+
     let abs_path = inner.get_abs_path(dirfd, &path)?;
-    let inode = open(&abs_path, OpenFlags::O_RDWR, NONE_MODE)?.file()?;
-    let file_mode = inode.inode.fmode()? & 0xfff;
-    let file_mode = FaccessatFileMode::from_bits_truncate(file_mode);
     let (parent_path, _) = rsplit_once(abs_path.as_str(), "/");
     let parent_inode = open(&parent_path, OpenFlags::O_RDWR, NONE_MODE)?.file()?;
     let parent_mode = parent_inode.inode.fmode()? & 0xfff;
     let parent_mode = FaccessatFileMode::from_bits_truncate(parent_mode);
+    if parent_inode.inode.types() != InodeType::Dir {
+        return Err(SysErrNo::ENOTDIR);
+    }
     if inner.user_id != 0
         && !(parent_mode.contains(FaccessatFileMode::S_IXUSR)
             || parent_mode.contains(FaccessatFileMode::S_IXGRP)
@@ -531,6 +556,9 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
         //父目录必须有可以执行的权限
         return Err(SysErrNo::EACCES);
     }
+    let inode = open(&abs_path, OpenFlags::O_RDWR, NONE_MODE)?.file()?;
+    let file_mode = inode.inode.fmode()? & 0xfff;
+    let file_mode = FaccessatFileMode::from_bits_truncate(file_mode);
     if mode.contains(FaccessatMode::R_OK)
         && inner.user_id != 0
         && !(file_mode.contains(FaccessatFileMode::S_IRUSR)
@@ -937,6 +965,37 @@ pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsize: us
     // Ok(res)
 }
 
+pub fn sys_symlinkat(target: *const u8, newdirfd: isize, linkpath: *const u8) -> SyscallRet {
+    let task = current_task().unwrap();
+    let inner = task.inner_lock();
+    let token = inner.user_token();
+    let target_path = translated_str(token, target);
+    let link_path = translated_str(token, linkpath);
+
+    debug!(
+        "[sys_symlinkat] target is {},newdirfd is {},linkpath is {}",
+        target_path, newdirfd, link_path
+    );
+
+    let abs_link_path = inner.get_abs_path(newdirfd, &link_path)?;
+    //检查linkpath是否已存在
+    if let Ok(_) = open(&abs_link_path, OpenFlags::empty(), NONE_MODE) {
+        return Err(SysErrNo::EEXIST);
+    }
+
+    let (abs_link_dir, _) = rsplit_once(abs_link_path.as_str(), "/");
+    let new_file = open(
+        &abs_link_dir,
+        OpenFlags::O_DIRECTORY | OpenFlags::O_RDWR,
+        NONE_MODE,
+    )?
+    .file()?;
+    new_file
+        .inode
+        .sym_link(target_path.as_str(), abs_link_path.as_str())?;
+    Ok(0)
+}
+
 /// If newpath already exists, replace it.
 /// If oldpath and newpath are existing hard links referring to the same inode, then return a success.
 /// If newpath exists but operation failed (for some reason, rename() failed), leave an instance of newpath in place (which means you should keep the backup of newpath if it exist).
@@ -1327,11 +1386,13 @@ pub fn sys_fchmodat(dirfd: isize, path: *const u8, mode: u32, flags: u32) -> Sys
         &abs_path, flags, mode
     );
 
-    log::info!(
+    /*
+    debug!(
         "{} set {:?}",
         abs_path,
         FaccessatFileMode::from_bits_truncate(mode)
     );
+    */
 
     let inode = open(&abs_path, OpenFlags::empty(), NONE_MODE)?.file()?;
     inode.inode.fmode_set(mode);

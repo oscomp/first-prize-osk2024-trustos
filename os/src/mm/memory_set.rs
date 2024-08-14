@@ -463,12 +463,17 @@ impl MemorySetInner {
             VirtAddr::from(addr).0,
             VirtAddr::from(addr + len).0
         );
+        let area_type = if flags.contains(MmapFlags::MAP_STACK) {
+            MapAreaType::Stack
+        } else {
+            MapAreaType::Mmap
+        };
         self.push_lazily(MapArea::new_mmap(
             VirtAddr::from(addr),
             VirtAddr::from(addr + len),
             MapType::Framed,
             map_perm,
-            MapAreaType::Mmap,
+            area_type,
             file,
             off,
             flags,

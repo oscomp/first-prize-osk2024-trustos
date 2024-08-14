@@ -7,6 +7,7 @@ use super::{
 };
 use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use bitflags::*;
+use log::debug;
 use riscv::register::scause::{Exception, Trap};
 
 use core::arch::asm;
@@ -348,6 +349,24 @@ pub fn translated_ref<T>(token: usize, ptr: *const T) -> &'static T {
     let va = ptr as usize;
     KernelAddr::from(page_table.translate_va(VirtAddr::from(va)).unwrap()).as_ref()
 }
+
+pub fn safe_translated_ref<T>(memory_set: Arc<MemorySet>, ptr: *const T) -> &'static T {
+    let page_table = PageTable::from_token(memory_set.token());
+    let va = ptr as usize;
+    let start_va = VirtAddr::from(va);
+    let vpn = start_va.floor();
+    match page_table.translate(vpn) {
+        None => {
+            memory_set.lazy_page_fault(vpn, Trap::Exception(Exception::LoadPageFault));
+        }
+        Some(ref pte) => {
+            if !pte.is_valid() {
+                memory_set.lazy_page_fault(vpn, Trap::Exception(Exception::LoadPageFault));
+            }
+        }
+    }
+    KernelAddr::from(page_table.translate_va(VirtAddr::from(va)).unwrap()).as_ref()
+}
 ///Translate a generic through page table and return a mutable reference
 pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
     let page_table = PageTable::from_token(token);
@@ -374,6 +393,24 @@ pub fn get_data<T: 'static + Copy>(token: usize, ptr: *const T) -> T {
         unsafe { *(bytes.as_slice().as_ptr() as usize as *const T) }
     } else {
         *translated_ref(token, ptr)
+    }
+}
+
+pub fn safe_get_data<T: 'static + Copy>(memory_set: Arc<MemorySet>, ptr: *const T) -> T {
+    let page_table = PageTable::from_token(memory_set.token());
+    let mut va = VirtAddr::from(ptr as usize);
+    let pa = page_table.translate_va(va).unwrap();
+    let size = core::mem::size_of::<T>();
+    // 若数据跨页，则转换成字节数据写入
+    if (pa + size - 1).floor() != pa.floor() {
+        let mut bytes = vec![0u8; size];
+        for i in 0..size {
+            bytes[i] = *(page_table.translate_va(va).unwrap().as_ref());
+            va = va + 1;
+        }
+        unsafe { *(bytes.as_slice().as_ptr() as usize as *const T) }
+    } else {
+        *safe_translated_ref(memory_set, ptr)
     }
 }
 

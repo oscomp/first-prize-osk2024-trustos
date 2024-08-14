@@ -36,7 +36,12 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     /// 查找文件
-    fn find(&self, _path: &str, _flags: OpenFlags) -> Result<Arc<dyn Inode>, SysErrNo> {
+    fn find(
+        &self,
+        _path: &str,
+        _flags: OpenFlags,
+        _loop_times: usize,
+    ) -> Result<Arc<dyn Inode>, SysErrNo> {
         unimplemented!()
     }
     ///
@@ -75,6 +80,9 @@ pub trait Inode: Send + Sync {
         unimplemented!();
     }
     fn read_link(&self, _buf: &mut [u8], _bufsize: usize) -> SyscallRet {
+        unimplemented!()
+    }
+    fn sym_link(&self, _target: &str, _path: &str) -> SyscallRet {
         unimplemented!()
     }
     fn rename(&self, _path: &str, _new_path: &str) -> SyscallRet {

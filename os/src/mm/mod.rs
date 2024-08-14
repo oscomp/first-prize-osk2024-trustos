@@ -22,9 +22,9 @@ pub use map_area::{MapArea, MapAreaType, MapPermission, MapType};
 pub use memory_set::{kernel_token, remap_test, MemorySet, MemorySetInner, KERNEL_SPACE};
 pub use page_fault_handler::*;
 pub use page_table::{
-    flush_tlb, get_data, put_data, safe_translated_byte_buffer, translated_byte_buffer,
-    translated_ref, translated_refmut, translated_str, PTEFlags, PageTable, PageTableEntry,
-    UserBuffer, UserBufferIterator,
+    flush_tlb, get_data, put_data, safe_get_data, safe_translated_byte_buffer,
+    translated_byte_buffer, translated_ref, translated_refmut, translated_str, PTEFlags, PageTable,
+    PageTableEntry, UserBuffer, UserBufferIterator,
 };
 pub use shm::*;
 
