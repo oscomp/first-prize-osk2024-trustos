@@ -769,11 +769,11 @@ impl MemorySetInner {
         self.areas.push(map_area);
     }
     ///仅initproc会用，将懒分配的全部分配
-    // fn unlazy(&mut self) {
-    //     for map_area in self.areas.iter_mut() {
-    //         map_area.map(&mut self.page_table);
-    //     }
-    // }
+    fn unlazy(&mut self) {
+        for map_area in self.areas.iter_mut() {
+            map_area.map(&mut self.page_table);
+        }
+    }
     /// Without kernel stacks.
     pub fn new_kernel() -> Self {
         let mut memory_set = Self::new_bare();
@@ -874,11 +874,14 @@ impl MemorySetInner {
             None,
         );
         println!("mapping memory-mapped registers");
-        for pair in MMIO {
+        for (addr, size) in MMIO {
+            let start = *addr + KERNEL_ADDR_OFFSET;
+            let end = start + *size;
+            println!("map mmio device,[{:#x},{:#x})", start, end);
             memory_set.push(
                 MapArea::new(
-                    ((*pair).0 + KERNEL_ADDR_OFFSET).into(),
-                    ((*pair).0 + (*pair).1 + KERNEL_ADDR_OFFSET).into(),
+                    start.into(),
+                    end.into(),
                     MapType::Direct,
                     MapPermission::R | MapPermission::W,
                     MapAreaType::MMIO,

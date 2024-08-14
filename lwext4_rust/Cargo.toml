@@ -13,8 +13,11 @@ links = "lwext4"
 build = "build.rs"
 
 [features]
-default = ["print"]
+default = ["print","board_vf2"]
 print = ["printf-compat"]
+
+board_qemu = []
+board_vf2 = []
 
 [dependencies]
 log = "0.4"

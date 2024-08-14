@@ -2,7 +2,9 @@ use crate::cmd::Cmd;
 use crate::utils::GetBit;
 use bitfield_struct::bitfield;
 
-pub const SDIO_BASE: usize = 0x16020000;
+// TrustOs 将MMIO设备映射到了高地址空间
+pub const KERNEL_ADDR_OFFSET: usize = 0xffff_ffc0_0000_0000;
+pub const SDIO_BASE: usize = 0x16020000 + KERNEL_ADDR_OFFSET;
 pub const CTRL_REG: usize = SDIO_BASE + 0x00;
 pub const POWER_REG: usize = SDIO_BASE + 0x04;
 pub const BLK_SIZE_REG: usize = SDIO_BASE + 0x1c;

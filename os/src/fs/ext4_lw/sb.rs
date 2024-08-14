@@ -67,7 +67,7 @@ impl KernelDevOp for Disk {
     type DevType = Disk;
 
     fn read(dev: &mut Disk, mut buf: &mut [u8]) -> Result<usize, i32> {
-        //debug!("READ block device buf={}", buf.len());
+        log::debug!("READ block device buf={}", buf.len());
         let mut read_len = 0;
         while !buf.is_empty() {
             match dev.read_one(buf) {

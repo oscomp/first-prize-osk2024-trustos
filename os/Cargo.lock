@@ -406,7 +406,6 @@ dependencies = [
 [[package]]
 name = "visionfive2-sd"
 version = "0.1.0"
-source = "git+https://github.com/os-module/visionfive2-sd.git#dae131edabbb33aaa4b7068d4a8da152df683648"
 dependencies = [
  "bitfield-struct",
  "log",

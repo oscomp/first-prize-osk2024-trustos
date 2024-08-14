@@ -9,6 +9,10 @@ use core::ptr::null_mut;
 use core::slice::{from_raw_parts, from_raw_parts_mut};
 
 /// Device block size.
+#[cfg(feature = "board_vf2")]
+const EXT4_DEV_BSIZE: u32 = 1024;
+
+#[cfg(feature = "board_qemu")]
 const EXT4_DEV_BSIZE: u32 = 512;
 
 pub trait KernelDevOp {

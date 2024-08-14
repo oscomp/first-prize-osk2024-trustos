@@ -60,7 +60,10 @@ pub struct Vf2BlkDev(Mutex<Vf2SdDriver<SdIoImpl, SleepOpsImpl>>);
 
 impl Vf2BlkDev {
     pub fn new_device() -> Self {
-        Vf2BlkDev(Mutex::new(Vf2SdDriver::new(SdIoImpl)))
+        let mut vf2_driver = Vf2SdDriver::new(SdIoImpl);
+        vf2_driver.init();
+        Vf2BlkDev(Mutex::new(vf2_driver))
+        // Vf2BlkDev(Mutex::new(Vf2SdDriver::new(SdIoImpl)))
     }
 }
 
@@ -76,12 +79,12 @@ impl BaseDriver for Vf2BlkDev {
 
 impl BlockDriver for Vf2BlkDev {
     fn block_size(&self) -> usize {
-        512
+        1024
     }
 
     fn num_blocks(&self) -> usize {
         // sdcard 32GB磁盘空间
-        32 * 1024 * 1024 * 1024 / 512
+        32 * 1024 * 1024 * 1024 / self.block_size()
     }
 
     fn read_block(&mut self, block_id: usize, buf: &mut [u8]) {

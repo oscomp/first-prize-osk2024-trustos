@@ -4,7 +4,11 @@ use crate::drivers::BlockDriver;
 
 use super::BlockDeviceImpl;
 
+#[cfg(feature = "board_qemu")]
 const BLOCK_SIZE: usize = 512;
+
+#[cfg(feature = "board_vf2")]
+const BLOCK_SIZE: usize = 1024;
 
 /// A disk device with a cursor.
 pub struct Disk {

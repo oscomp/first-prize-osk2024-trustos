@@ -53,6 +53,7 @@ fn wait_ms_util_response<T: SDIo, S: SleepOps>(io: &mut T) -> bool {
 
 fn fifo_filled_cnt<T: SDIo>(io: &mut T) -> usize {
     let status = StatusReg::from(read_reg(io, STATUS_REG));
+    // log::debug!("statusReg={:?}", status);
     status.fifo_count() as usize
 }
 
@@ -87,6 +88,7 @@ fn send_cmd<T: SDIo, S: SleepOps>(
         match data_trans_type {
             DataTransType::Read(buffer) => {
                 trace!("data_expected read....");
+                log::debug!("[sdcard] read_buf_size={}", buffer.len());
                 let mut buf_offset = 0;
                 S::sleep_ms_until(250, || {
                     let raw_int_status_reg =
@@ -96,6 +98,7 @@ fn send_cmd<T: SDIo, S: SleepOps>(
                     if raw_int_status.rxdr() {
                         debug!("RXDR....");
                         while fifo_filled_cnt(io) >= 2 {
+                            // log::debug!("fifo_filled_cnt={}", fifo_filled_cnt(io));
                             let data = read_fifo(io, fifo_addr);
                             for i in 0..8 {
                                 buffer[buf_offset] = (data >> (i * 8)) as u8;
@@ -523,8 +526,10 @@ impl Display for Vf2SdDriverError {
 pub type Result<T> = core::result::Result<T, Vf2SdDriverError>;
 
 fn read_block<T: SDIo, S: SleepOps>(io: &mut T, block: usize, buf: &mut [u8]) -> Result<usize> {
-    assert_eq!(buf.len(), 512);
-    set_transaction_size(io, 512, 512);
+    // assert_eq!(buf.len(), 512);
+    // set_transaction_size(io, 512, 512);
+    assert_eq!(buf.len(), 1024);
+    set_transaction_size(io, 1024, 1024);
     let cmd17 = CmdReg::from(Cmd::ReadSingleBlock);
     let arg = CmdArg::new(block as u32);
     let _resp = send_cmd::<_, S>(
@@ -540,8 +545,10 @@ fn read_block<T: SDIo, S: SleepOps>(io: &mut T, block: usize, buf: &mut [u8]) ->
 }
 
 fn write_block<T: SDIo, S: SleepOps>(io: &mut T, block: usize, buf: &[u8]) -> Result<usize> {
-    assert_eq!(buf.len(), 512);
-    set_transaction_size(io, 512, 512);
+    // assert_eq!(buf.len(), 512);
+    // set_transaction_size(io, 512, 512);
+    assert_eq!(buf.len(), 1024);
+    set_transaction_size(io, 1024, 1024);
     let cmd24 = CmdReg::from(Cmd::WriteSingleBlock);
     let arg = CmdArg::new(block as u32);
     let _resp = send_cmd::<_, S>(
