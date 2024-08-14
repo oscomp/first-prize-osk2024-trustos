@@ -19,7 +19,10 @@ cfg_if::cfg_if! {
             }
         }
     }else if #[cfg(feature="board_vf2")]{
-        mod vf2;
-        pub type BlockDeviceImpl = vf2::Vf2BlkDev;
+        mod sdcard;
+        pub type BlockDeviceImpl = sdcard::Vf2BlkDev;
+    }else if #[cfg(feature="board_ramdisk")]{
+        mod ramdisk;
+        pub type BlockDeviceImpl = ramdisk::MemBlockWrapper;
     }
 }

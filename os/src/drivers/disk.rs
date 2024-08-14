@@ -10,6 +10,9 @@ const BLOCK_SIZE: usize = 512;
 #[cfg(feature = "board_vf2")]
 const BLOCK_SIZE: usize = 1024;
 
+#[cfg(feature = "board_ramdisk")]
+const BLOCK_SIZE: usize = 512;
+
 /// A disk device with a cursor.
 pub struct Disk {
     block_id: usize,

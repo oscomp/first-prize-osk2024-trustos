@@ -1,9 +1,12 @@
 use spin::Mutex;
 use visionfive2_sd::{SDIo, SleepOps, Vf2SdDriver};
 
-use crate::{boards::CLOCK_FREQ, config::mm::KERNEL_ADDR_OFFSET, timer::get_time};
-
-use super::{BaseDriver, BlockDriver, DeviceType};
+use crate::{
+    boards::CLOCK_FREQ,
+    config::mm::KERNEL_ADDR_OFFSET,
+    drivers::{BaseDriver, BlockDriver, DeviceType},
+    timer::get_time,
+};
 
 pub struct SdIoImpl;
 pub const SDIO_BASE: usize = 0x16020000;

@@ -15,6 +15,9 @@ const EXT4_DEV_BSIZE: u32 = 1024;
 #[cfg(feature = "board_qemu")]
 const EXT4_DEV_BSIZE: u32 = 512;
 
+#[cfg(feature = "board_ramdisk")]
+const EXT4_DEV_BSIZE: u32 = 512;
+
 pub trait KernelDevOp {
     //type DevType: ForeignOwnable + Sized + Send + Sync = ();
     type DevType;

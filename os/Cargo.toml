@@ -28,14 +28,15 @@ cfg-if = { version = "1.0.0" }
 visionfive2-sd = {path = "./vendor/visionfive2-sd"}
 [features]
 # default = ["debug","board_qemu"]
-default = ["debug","board_vf2"]
+default = ["info","board_ramdisk"]
 error = []
 warn = []
 info = []
 debug = []
 
 board_qemu = []
-board_vf2 = []
+board_vf2 = []  # visionFive2 with sdcard
+board_ramdisk=[] # visionFive2 without sdcard
 
 [profile.release]
 debug = true

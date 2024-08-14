@@ -5,5 +5,8 @@ cfg_if::cfg_if! {
     }else if #[cfg(feature="board_vf2")]{
         mod vf2;
         pub use vf2::*;
+    }else if #[cfg(feature="board_ramdisk")]{
+        mod vf2;
+        pub use vf2::*;
     }
 }

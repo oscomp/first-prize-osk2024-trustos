@@ -40,6 +40,10 @@ pub struct PageTableEntry {
 pub static PTE_FLAGS_MASK: PTEFlags =
     PTEFlags::from_bits_truncate(PTEFlags::V.bits | PTEFlags::A.bits | PTEFlags::D.bits);
 
+#[cfg(feature = "board_ramdisk")]
+pub static PTE_FLAGS_MASK: PTEFlags =
+    PTEFlags::from_bits_truncate(PTEFlags::V.bits | PTEFlags::A.bits | PTEFlags::D.bits);
+
 #[cfg(feature = "board_qemu")]
 pub static PTE_FLAGS_MASK: PTEFlags = PTEFlags::V;
 
