@@ -17,3 +17,14 @@ test_start:
     .incbin "../final_tests/test_all_1stage.sh"
 test_end:
     .align 12
+
+
+# 将test提前放到内存里
+    .section .data
+    .global test_start
+    .global test_end
+    .align 12
+sd_start:
+    .incbin "../final_tests/sdcard.img"
+sd_end:
+    .align 12

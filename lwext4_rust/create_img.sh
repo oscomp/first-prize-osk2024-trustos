@@ -9,13 +9,13 @@ sudo chmod 777 ext4.img
 pwd
 sudo mkdir ../${DIR}/fs 
 sudo mount ../${DIR}/ext4.img ../${DIR}/fs 
-sudo cp ../user/target/riscv64gc-unknown-none-elf/release/user_shell ../${DIR}/fs/ 
-sudo mkdir ../${DIR}/fs/rCoretests
-sudo rm ../user/target/riscv64gc-unknown-none-elf/release/*.*
-sudo cp ../user/target/riscv64gc-unknown-none-elf/release/* ../${DIR}/fs/rCoretests/ 
-sudo rm ../${DIR}/fs/rCoretests/initproc 
+# sudo cp ../user/target/riscv64gc-unknown-none-elf/release/user_shell ../${DIR}/fs/ 
+# sudo mkdir ../${DIR}/fs/rCoretests
+# sudo rm ../user/target/riscv64gc-unknown-none-elf/release/*.*
+# sudo cp ../user/target/riscv64gc-unknown-none-elf/release/* ../${DIR}/fs/rCoretests/ 
+# sudo rm ../${DIR}/fs/rCoretests/initproc 
 
-sudo cp ../user/target/riscv64gc-unknown-none-elf/release/usertests ../${DIR}/fs
+# sudo cp ../user/target/riscv64gc-unknown-none-elf/release/usertests ../${DIR}/fs
 # sudo cp -r ../pre_ctests/build/riscv64/* ../${DIR}/fs/ 
 
 
