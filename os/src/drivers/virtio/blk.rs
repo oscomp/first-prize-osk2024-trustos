@@ -1,9 +1,7 @@
 use spin::Mutex;
 use virtio_drivers::{Hal, VirtIOBlk, VirtIOHeader};
 
-use crate::drivers::{BaseDriver, BlockDriver, DevResult, DeviceType};
-
-use super::as_dev_err;
+use crate::drivers::{BaseDriver, BlockDriver, DeviceType};
 
 pub struct VirtIoBlkDev<H: Hal> {
     inner: Mutex<VirtIOBlk<'static, H>>,
@@ -41,21 +39,13 @@ impl<H: Hal> BlockDriver for VirtIoBlkDev<H> {
         512
     }
 
-    fn read_block(&mut self, block_id: usize, buf: &mut [u8]) -> DevResult {
-        self.inner
-            .lock()
-            .read_block(block_id as _, buf)
-            .map_err(as_dev_err)
+    fn read_block(&mut self, block_id: usize, buf: &mut [u8]) {
+        self.inner.lock().read_block(block_id as _, buf).unwrap();
     }
 
-    fn write_block(&mut self, block_id: usize, buf: &[u8]) -> DevResult {
-        self.inner
-            .lock()
-            .write_block(block_id as _, buf)
-            .map_err(as_dev_err)
+    fn write_block(&mut self, block_id: usize, buf: &[u8]) {
+        self.inner.lock().write_block(block_id as _, buf).unwrap()
     }
 
-    fn flush(&mut self) -> DevResult {
-        Ok(())
-    }
+    fn flush(&mut self) {}
 }

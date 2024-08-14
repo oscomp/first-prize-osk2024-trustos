@@ -24,14 +24,17 @@ spin = "0.9.8"
 hashbrown = "0.12.0"
 num_enum = { version = "0.7.2", default-features = false }
 cfg-if = { version = "1.0.0" }
-
+visionfive2-sd = { git = "https://github.com/os-module/visionfive2-sd.git" }
 
 [features]
-default = ["debug"]
+default = ["debug","board_vf2"]
 error = []
 warn = []
 info = []
 debug = []
+
+board_qemu = []
+board_vf2 = []
 
 [profile.release]
 debug = true

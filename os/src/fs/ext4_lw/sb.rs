@@ -71,13 +71,12 @@ impl KernelDevOp for Disk {
         let mut read_len = 0;
         while !buf.is_empty() {
             match dev.read_one(buf) {
-                Ok(0) => break,
-                Ok(n) => {
+                0 => break,
+                n => {
                     let tmp = buf;
                     buf = &mut tmp[n..];
                     read_len += n;
                 }
-                Err(_e) => return Err(-1),
             }
         }
         //debug!("READ rt len={}", read_len);
@@ -88,12 +87,11 @@ impl KernelDevOp for Disk {
         let mut write_len = 0;
         while !buf.is_empty() {
             match dev.write_one(buf) {
-                Ok(0) => break,
-                Ok(n) => {
+                0 => break,
+                n => {
                     buf = &buf[n..];
                     write_len += n;
                 }
-                Err(_e) => return Err(-1),
             }
         }
         //debug!("WRITE rt len={}", write_len);

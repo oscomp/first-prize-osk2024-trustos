@@ -1,12 +1,10 @@
 mod blk;
 
 pub use blk::*;
-
 use spin::{Lazy, Mutex};
 use virtio_drivers::Hal;
 
 use crate::{
-    drivers::DevError,
     mm::{
         frame_alloc, frame_dealloc, FrameTracker, KernelAddr, PageTable, PhysAddr, PhysPageNum,
         StepByOne, VirtAddr,
@@ -55,18 +53,5 @@ impl Hal for VirtIoHalImpl {
             .unwrap()
             .0
         // PhysAddr::from(vaddr - KERNEL_ADDR_OFFSET).0
-    }
-}
-
-#[allow(dead_code)]
-const fn as_dev_err(e: virtio_drivers::Error) -> DevError {
-    use virtio_drivers::Error::*;
-    match e {
-        NotReady => DevError::Again,
-        AlreadyUsed => DevError::AlreadyExists,
-        InvalidParam => DevError::InvalidParam,
-        DmaError => DevError::NoMemory,
-        IoError => DevError::Io,
-        _ => DevError::BadState,
     }
 }

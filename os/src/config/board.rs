@@ -1,1 +1,1 @@
-pub use crate::board::{CLOCK_FREQ, MEMORY_END, MMIO};
+pub use crate::boards::{CLOCK_FREQ, MEMORY_END, MMIO};

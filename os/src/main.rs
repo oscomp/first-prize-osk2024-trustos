@@ -36,8 +36,7 @@ extern crate alloc;
 #[macro_use]
 extern crate bitflags;
 
-#[path = "boards/qemu.rs"]
-mod board;
+mod boards;
 
 #[macro_use]
 mod console;
@@ -56,14 +55,14 @@ pub mod timer;
 pub mod trap;
 pub mod utils;
 
-use crate::{mm::activate_kernel_space, utils::hart_id};
+use crate::mm::activate_kernel_space;
 use config::{
     mm::{HART_START_ADDR, KERNEL_ADDR_OFFSET},
     sync::HART_NUM,
 };
 use core::{
     arch::{asm, global_asm},
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, Ordering},
     usize,
 };
 
