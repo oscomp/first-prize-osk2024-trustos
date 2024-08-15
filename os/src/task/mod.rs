@@ -73,16 +73,16 @@ pub fn block_current_and_run_next() {
     schedule(task_cx_ptr);
 }
 
-// pub fn stop_current_and_run_next() {
-//     let task = take_current_task().unwrap();
-//     let mut task_inner = task.inner_lock();
-//     let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
-//     task_inner.task_status = TaskStatus::Stopped;
-//     drop(task_inner);
-//     // drop(task);
-//     stop_task(task);
-//     schedule(task_cx_ptr);
-// }
+pub fn stop_current_and_run_next() {
+    let task = take_current_task().unwrap();
+    let mut task_inner = task.inner_lock();
+    let task_cx_ptr = &mut task_inner.task_cx as *mut TaskContext;
+    task_inner.task_status = TaskStatus::Stopped;
+    drop(task_inner);
+    // drop(task);
+    stop_task(task);
+    schedule(task_cx_ptr);
+}
 
 /// pid of usertests app in make run TEST=1
 pub const IDLE_PID: usize = 0;

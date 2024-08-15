@@ -9,7 +9,7 @@ use spin::{Lazy, Mutex};
 ///A array of `TaskControlBlock` that is thread-safe
 pub struct TaskManager {
     ready_queue: VecDeque<Arc<TaskControlBlock>>,
-    // stopped_queue: VecDeque<Arc<TaskControlBlock>>,
+    stopped_queue: VecDeque<Arc<TaskControlBlock>>,
 }
 
 /// A simple FIFO scheduler.
@@ -18,7 +18,7 @@ impl TaskManager {
     pub fn new() -> Self {
         Self {
             ready_queue: VecDeque::new(),
-            // stopped_queue: VecDeque::new(),
+            stopped_queue: VecDeque::new(),
         }
     }
     ///Remove the first task and return it,or `None` if `TaskManager` is empty
@@ -93,24 +93,24 @@ pub fn find_task_by_tid(tid: usize) -> Option<Arc<TaskControlBlock>> {
     }
 }
 
-// pub fn stop_task(task: Arc<TaskControlBlock>) {
-//     TASK_MANAGER.lock().stopped_queue.push_back(task);
-// }
+pub fn stop_task(task: Arc<TaskControlBlock>) {
+    TASK_MANAGER.lock().stopped_queue.push_back(task);
+}
 
-// pub fn wakeup_stopped_task(task: Arc<TaskControlBlock>) {
-//     let mut manager = TASK_MANAGER.lock();
-//     manager
-//         .stopped_queue
-//         .retain(|t| Arc::as_ptr(t) != Arc::as_ptr(&task));
-//     if manager
-//         .ready_queue
-//         .iter()
-//         .find(|t| t.tid() == task.tid())
-//         .is_none()
-//     {
-//         manager.ready_queue.push_back(task);
-//     }
-// }
+pub fn wakeup_stopped_task(task: Arc<TaskControlBlock>) {
+    let mut manager = TASK_MANAGER.lock();
+    manager
+        .stopped_queue
+        .retain(|t| Arc::as_ptr(t) != Arc::as_ptr(&task));
+    if manager
+        .ready_queue
+        .iter()
+        .find(|t| t.tid() == task.tid())
+        .is_none()
+    {
+        manager.ready_queue.push_back(task);
+    }
+}
 
 pub static TID_TO_TASK: Lazy<Mutex<BTreeMap<usize, Arc<TaskControlBlock>>>> =
     Lazy::new(|| Mutex::new(BTreeMap::new()));
