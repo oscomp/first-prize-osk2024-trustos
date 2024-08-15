@@ -748,11 +748,11 @@ impl MemorySetInner {
             //剩下的情况无相交部分，无需修改
         }
         for area in new_areas {
+            for (vpn, _) in area.data_frames.iter() {
+                self.page_table
+                    .set_map_flags((*vpn).into(), PTEFlags::from_bits(map_perm.bits()).unwrap())
+            }
             self.areas.push(area);
-        }
-        for vpn in start_vpn.0..=end_vpn.0 {
-            self.page_table
-                .set_map_flags(vpn.into(), PTEFlags::from_bits(map_perm.bits()).unwrap());
         }
         flush_tlb();
     }
