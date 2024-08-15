@@ -98,7 +98,7 @@ QEMU_ARGS := -machine virt \
 			 -smp $(CPUS) \
 			 -m 128M
 
-run-inner: build copy_to_fs
+run-inner: build #copy_to_fs
 	@qemu-system-riscv64 $(QEMU_ARGS)
 drun: 
 	@qemu-system-riscv64 $(QEMU_ARGS)

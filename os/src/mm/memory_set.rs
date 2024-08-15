@@ -648,6 +648,8 @@ impl MemorySetInner {
         let mut new_areas = Vec::new();
         for area in self.areas.iter_mut() {
             let (start, end) = area.vpn_range.range();
+            debug!("start is {:x}, end is {:x}", start.0, end.0);
+            debug!("start_vpn is {:x}, end_vpn is {:x}", start_vpn.0, end_vpn.0);
             if start >= start_vpn && end <= end_vpn {
                 //修改整个area
                 area.map_perm = map_perm;
@@ -659,14 +661,17 @@ impl MemorySetInner {
                 }
                 continue;
             } else if start < start_vpn && end > start_vpn && end <= end_vpn {
+                debug!("work here with {:?}", map_perm);
                 //修改area后半部分
                 let mut new_area = MapArea::from_another(area);
                 new_area.map_perm = map_perm;
                 new_area.vpn_range = VPNRange::new(start_vpn, end);
                 if if_mmap {
+                    debug!("can't work here");
                     new_area.mmap_file.file = file.clone();
                 }
                 if offset != usize::MAX {
+                    debug!("can't work here2");
                     new_area.mmap_file.offset = offset as usize;
                 }
                 area.vpn_range = VPNRange::new(start, start_vpn);

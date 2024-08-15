@@ -529,7 +529,7 @@ impl TaskControlBlock {
             *translated_refmut(child_token, child_tid) = child.tid() as u32;
         }
 
-        if flags.contains(CloneFlags::SIGCHLD) {
+        if !flags.contains(CloneFlags::CLONE_THREAD) {
             create_proc_dir_and_file(pid, ppid);
         }
 

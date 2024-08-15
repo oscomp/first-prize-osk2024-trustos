@@ -20,11 +20,11 @@ test_end:
 
 
 # 将test提前放到内存里
-    .section .data
-    .global sd_start
-    .global sd_end
-    .align 12
-sd_start:
-    .incbin "../lwext4_rust/ext4.img"
-sd_end:
-    .align 12
+    #.section .data
+    #.global sd_start
+    #.global sd_end
+    #.align 12
+#sd_start:
+    #.incbin "../lwext4_rust/ext4.img"
+#sd_end:
+    #.align 12
