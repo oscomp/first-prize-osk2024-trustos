@@ -7,10 +7,18 @@ use log::debug;
 const MAX_CLOCKS: usize = 12;
 
 /// 参考 https://man7.org/linux/man-pages/man2/gettimeofday.2.html
-pub fn sys_gettimeofday(ts: *mut Timespec) -> SyscallRet {
+pub fn sys_gettimeofday(ts: *mut Timespec, tz: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
+
+    if (ts as isize) < 0 || if_bad_address(ts as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
+    if (tz as isize) < 0 || if_bad_address(tz as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
 
     put_data(token, ts, get_time_spec());
     Ok(0)
@@ -88,7 +96,14 @@ pub fn sys_getrusage(who: isize, usage: *mut Rusage) -> SyscallRet {
         "[sys_getrusage] who is {}, usage is {:x}",
         who, usage as usize
     );
-    return Ok(0);
+
+    if who < -1 {
+        return Err(SysErrNo::EINVAL);
+    }
+
+    if (usage as isize) < 0 || if_bad_address(usage as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
 
     const RUSAGESELF: isize = 0;
     const RUSAGECHILDEN: isize = -1;

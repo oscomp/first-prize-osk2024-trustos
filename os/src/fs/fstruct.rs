@@ -98,7 +98,7 @@ impl FdTable {
     }
     pub fn new_with_stdio() -> Self {
         FdTable::new(FdTableInner::new(
-            64,
+            128,
             256,
             vec![
                 Some(FileDescriptor::default(FileClass::Abs(Arc::new(Stdin)))),
@@ -134,6 +134,9 @@ impl FdTable {
     pub fn alloc_fd_larger_than(&self, arg: usize) -> SyscallRet {
         let fd_table = &mut self.get_mut().files;
         if arg >= self.get_soft_limit() {
+            return Err(SysErrNo::EMFILE);
+        }
+        if fd_table.len() + 1 >= self.get_soft_limit() {
             return Err(SysErrNo::EMFILE);
         }
         if fd_table.len() < arg {

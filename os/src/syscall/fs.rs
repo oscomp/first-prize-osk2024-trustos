@@ -228,6 +228,14 @@ pub fn sys_getcwd(buf: *const u8, size: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
 
+    if (buf as isize) < 0 || if_bad_address(buf as usize) || (size as isize) < 0 {
+        return Err(SysErrNo::EFAULT);
+    }
+
+    let cwdlen = inner.fs_info.cwd().len();
+    if size < cwdlen {
+        return Err(SysErrNo::ERANGE);
+    }
     let mut buffer =
         UserBuffer::new(safe_translated_byte_buffer(inner.memory_set.clone(), buf, size).unwrap());
     buffer.write(inner.fs_info.cwd_as_bytes());
@@ -466,6 +474,10 @@ pub fn sys_fstat(fd: usize, kst: *mut Kstat) -> SyscallRet {
     let inner = task.inner_lock();
     let token = inner.user_token();
 
+    if (kst as isize) <= 0 || if_bad_address(kst as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
     // debug!(
     //     "[sys_fstat] fd is {:?}, kst_addr is {:#x}",
     //     fd, kst as usize
@@ -697,7 +709,11 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
 
     // debug!("[sys_fcntl] fd is {}, cmd is {}, arg is {}", fd, cmd, arg);
 
-    if fd >= task_inner.fd_table.len() || task_inner.fd_table.try_get(fd).is_none() {
+    if fd >= task_inner.fd_table.len() || (fd as isize) < 0 {
+        return Err(SysErrNo::EBADF);
+    }
+
+    if task_inner.fd_table.try_get(fd).is_none() {
         return Err(SysErrNo::EINVAL);
     }
 
@@ -903,6 +919,15 @@ pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: isize) -> Sy
 pub fn sys_ftruncate(fd: usize, length: i32) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
+
+    if fd >= inner.fd_table.len() || (fd as isize) < 0 {
+        return Err(SysErrNo::EBADF);
+    }
+
+    if length < 0 {
+        return Err(SysErrNo::EINVAL);
+    }
+
     if let Some(file) = inner.fd_table.try_get(fd) {
         let file = file.file()?;
         return file.inode.truncate(length as usize);
@@ -950,8 +975,8 @@ pub fn sys_prlimit(
         if !old_limit.is_null() {
             // 说明是get
             let limit = translated_refmut(token, old_limit);
-            limit.rlim_cur = fd_table.get_soft_limit();
-            limit.rlim_max = fd_table.get_hard_limit();
+            limit.rlim_cur = fd_table.get_soft_limit() - 1;
+            limit.rlim_max = fd_table.get_hard_limit() - 1;
         }
         if !new_limit.is_null() {
             // 说明是set
@@ -1161,10 +1186,18 @@ pub fn sys_copy_file_range(
 }
 
 /// 参考 https://man7.org/linux/man-pages/man2/getrandom.2.html
-pub fn sys_getrandom(buf_ptr: *const u8, buflen: usize, _flags: u32) -> SyscallRet {
+pub fn sys_getrandom(buf_ptr: *const u8, buflen: usize, flags: u32) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
+
+    if (flags as i32) < 0 {
+        return Err(SysErrNo::EINVAL);
+    }
+
+    if (buf_ptr as isize) < 0 || if_bad_address(buf_ptr as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
 
     if buf_ptr.is_null() {
         return Err(SysErrNo::EINVAL);
