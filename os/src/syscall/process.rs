@@ -377,6 +377,13 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, _options: i32) -> SyscallRet {
             drop(process_group);
             suspend_current_and_run_next();
         }
+
+        /*
+        if let Some(_) = check_if_any_sig_for_current_task() {
+            //被信号唤醒
+            return Err(SysErrNo::EINTR);
+        }
+        */
     }
 }
 

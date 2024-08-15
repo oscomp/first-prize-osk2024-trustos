@@ -435,7 +435,7 @@ impl TaskControlBlock {
         } else {
             0
         };
-        let (pid, ppid, timer, sig_pending, sig_mask);
+        let (pid, mut ppid, timer, sig_pending, sig_mask);
         sig_pending = SigSet::empty();
         // 检查是否创建线程
         if flags.contains(CloneFlags::CLONE_THREAD) {
@@ -448,6 +448,9 @@ impl TaskControlBlock {
             ppid = self.pid;
             timer = Arc::new(Timer::new());
             sig_mask = parent_inner.sig_mask.clone();
+        }
+        if flags.contains(CloneFlags::CLONE_PARENT) {
+            ppid = self.ppid;
         }
         let child = Arc::new(TaskControlBlock {
             tid: tid_handle,

@@ -206,6 +206,10 @@ pub fn sys_close(fd: usize) -> SyscallRet {
 
     debug!("[sys_close] fd is {}", fd);
 
+    if (fd as isize) < 0 {
+        return Err(SysErrNo::EBADF);
+    }
+
     if fd >= inner.fd_table.len() {
         return Err(SysErrNo::EINVAL);
     }
@@ -235,7 +239,11 @@ pub fn sys_dup(fd: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
 
-    if fd >= task_inner.fd_table.len() || task_inner.fd_table.try_get(fd).is_none() {
+    if fd >= task_inner.fd_table.len() || (fd as isize) < 0 {
+        return Err(SysErrNo::EBADF);
+    }
+
+    if task_inner.fd_table.try_get(fd).is_none() {
         return Err(SysErrNo::EINVAL);
     }
 
@@ -257,7 +265,11 @@ pub fn sys_dup3(old: usize, new: usize, flags: u32) -> SyscallRet {
         old, new, flags
     );
 
-    if old >= task_inner.fd_table.len() || task_inner.fd_table.try_get(old).is_none() {
+    if old >= task_inner.fd_table.len() || (old as isize) < 0 || (new as isize) < 0 {
+        return Err(SysErrNo::EBADF);
+    }
+
+    if task_inner.fd_table.try_get(old).is_none() {
         return Err(SysErrNo::EINVAL);
     }
 
@@ -266,7 +278,7 @@ pub fn sys_dup3(old: usize, new: usize, flags: u32) -> SyscallRet {
     }
 
     let mut file = task_inner.fd_table.get(old);
-    if flags == 0x800000 {
+    if flags == 0x800000 || flags == 0x80000 {
         //flags包含O_CLOEXEC,为新的fd设置该标志，否则不设置
         file.set_cloexec();
     } else {
@@ -538,6 +550,10 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
 
     if path.len() > MAX_PATH_LEN {
         return Err(SysErrNo::ENAMETOOLONG);
+    }
+
+    if dirfd != -100 && dirfd as usize >= inner.fd_table.len() {
+        return Err(SysErrNo::EBADF);
     }
 
     let mode = FaccessatMode::from_bits(mode).unwrap();
@@ -1130,6 +1146,9 @@ pub fn sys_copy_file_range(
         writecount = outfile.write(outbuffer)?;
         outfile.lseek(out_offset as isize, SEEK_SET)?;
     }
+    outfile
+        .inode
+        .set_timestamps(None, Some((get_time_ms() / 1000) as u64), None);
     //如果系统调用执行成功，*off_in和*off_out将会增加复制的长度
     if off_in != 0 {
         *translated_refmut(token, off_in as *mut isize) += writecount as isize;
@@ -1393,7 +1412,28 @@ pub fn sys_fchmodat(dirfd: isize, path: *const u8, mode: u32, flags: u32) -> Sys
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
+
+    if (flags as isize) < 0 {
+        return Err(SysErrNo::EINVAL);
+    }
+
+    if dirfd != -100 && dirfd as usize >= task_inner.fd_table.len() {
+        return Err(SysErrNo::EBADF);
+    }
+
+    if (path as isize) <= 0 || if_bad_address(path as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
     let path = translated_str(token, path);
+
+    if path.len() > MAX_PATH_LEN {
+        return Err(SysErrNo::ENAMETOOLONG);
+    }
+
+    if path.len() == 0 {
+        return Err(SysErrNo::ENOENT);
+    }
 
     let abs_path = task_inner.get_abs_path(dirfd, &path)?;
 
@@ -1401,6 +1441,12 @@ pub fn sys_fchmodat(dirfd: isize, path: *const u8, mode: u32, flags: u32) -> Sys
         "[sys_fchmodat] path is {}, flags is {}, new mode is {:o}",
         &abs_path, flags, mode
     );
+
+    let (parent_path, _) = rsplit_once(abs_path.as_str(), "/");
+    let parent_inode = open(&parent_path, OpenFlags::O_RDWR, NONE_MODE)?.file()?;
+    if parent_inode.inode.types() != InodeType::Dir {
+        return Err(SysErrNo::ENOTDIR);
+    }
 
     /*
     debug!(
