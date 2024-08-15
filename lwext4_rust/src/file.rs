@@ -435,7 +435,7 @@ impl Ext4File {
     }
 
     pub fn file_truncate(&mut self, size: u64) -> Result<usize, i32> {
-        //debug!("file_truncate to {}", size);
+        debug!("file_truncate to {}", size);
 
         let path = String::from((*self.file_path).to_str().unwrap());
         if if_cache(path.clone()) {
@@ -859,6 +859,10 @@ impl VFileCache {
     pub fn truncate(&mut self, new_size: usize) {
         let aligned_size = aligned_down(new_size) + PAGE_SIZE;
         self.data.resize(aligned_size, 0);
+        let length = self.data.len();
+        if new_size < length {
+            self.data[new_size..length].fill(0);
+        }
         self.size = new_size;
     }
 }

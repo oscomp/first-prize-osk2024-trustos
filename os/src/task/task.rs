@@ -9,7 +9,10 @@ use crate::{
         PAGE_SIZE, PRE_ALLOC_PAGES, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP,
         USER_TRAP_CONTEXT_TOP,
     },
-    fs::{open, FdTable, FsInfo, OpenFlags, DEFAULT_DIR_MODE, DEFAULT_FILE_MODE},
+    fs::{
+        create_proc_dir_and_file, open, FdTable, FsInfo, OpenFlags, DEFAULT_DIR_MODE,
+        DEFAULT_FILE_MODE,
+    },
     mm::{
         flush_tlb, get_data, put_data, translated_refmut, MapAreaType, MapPermission, MemorySet,
         MemorySetInner, PageTable, PageTableEntry, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
@@ -432,7 +435,7 @@ impl TaskControlBlock {
         } else {
             0
         };
-        let (pid, ppid, timer, sig_pending, sig_mask);
+        let (pid, mut ppid, timer, sig_pending, sig_mask);
         sig_pending = SigSet::empty();
         // 检查是否创建线程
         if flags.contains(CloneFlags::CLONE_THREAD) {
@@ -445,6 +448,9 @@ impl TaskControlBlock {
             ppid = self.pid;
             timer = Arc::new(Timer::new());
             sig_mask = parent_inner.sig_mask.clone();
+        }
+        if flags.contains(CloneFlags::CLONE_PARENT) {
+            ppid = self.ppid;
         }
         let child = Arc::new(TaskControlBlock {
             tid: tid_handle,
@@ -521,6 +527,10 @@ impl TaskControlBlock {
         if flags.contains(CloneFlags::CLONE_CHILD_SETTID) {
             let child_token = child_inner.user_token();
             *translated_refmut(child_token, child_tid) = child.tid() as u32;
+        }
+
+        if flags.contains(CloneFlags::SIGCHLD) {
+            create_proc_dir_and_file(pid, ppid);
         }
 
         drop(child_inner);

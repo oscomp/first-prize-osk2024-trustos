@@ -317,7 +317,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::GetPGid => Ok(0),
         Syscall::SetSid => sys_setsid(),
         Syscall::GetRusage => sys_getrusage(args[0] as isize, args[1] as *mut Rusage),
-        Syscall::GetTimeOfDay => sys_gettimeofday(args[0] as *mut Timespec),
+        Syscall::GetTimeOfDay => sys_gettimeofday(args[0] as *mut Timespec, args[1] as usize),
         Syscall::Umask => sys_umask(args[0] as u32),
         Syscall::Uname => sys_uname(args[0] as *mut u8),
         Syscall::GetPid => sys_getpid(),

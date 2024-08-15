@@ -173,6 +173,12 @@ pub fn sys_execve(args: &[&str]) -> isize {
 // "busybox_testcode.sh\0".as_ptr() as isize,
 
 //已通过测例：abort01，abs01,access01,access03,access04,brk01,brk02,chdir04,clock_getres01
+//          clock_gettime01,clock_gettime02,clock_nanosleep01,clone01,clone04,close01
+//          close02,copy_file_range03,dup01,dup02,dup03,dup04,dup07,dup201,dup202,dup203,
+//          dup204,dup205,dup206,dup207,dup3_01,dup3_02,exit02,faccessat01,faccessat02,fchmodat01
+//          fchmodat02,fcntl03,fcntl04,fcntl08,fcntl12,fstat03,ftruncate01,getcwd01,getpagesize01
+//          getppid02,getrandom01,getrandom02,getrandom03,getrandom04,getrandom05,getrusage01
+//          getrusage02,gettid02,gettimeofday01,gettimeofday02,getuid01
 //单独运行方法：修改 ltp/testcases/bin/{} 括号内的内容为目标文件
 //全部运行方法：运行ltp_testcode.sh
 
@@ -184,9 +190,9 @@ pub fn sys_busyboxsh() -> isize {
             [
                 "busybox\0".as_ptr() as isize,
                 "sh\0".as_ptr() as isize,
-                //"./test-ltp.sh\0".as_ptr() as isize,
-                //"ltp/testcases/bin/clock_gettime01\0".as_ptr() as isize,
-                "cyclictest_testcode.sh\0".as_ptr() as isize,
+                "./test-ltp.sh\0".as_ptr() as isize,
+                "ltp/testcases/bin/getuid03\0".as_ptr() as isize,
+                //"ltp_testcode.sh\0".as_ptr() as isize,
                 0,
             ]
             .as_ptr() as isize,

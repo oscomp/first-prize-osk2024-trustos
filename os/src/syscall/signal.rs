@@ -4,7 +4,7 @@ use crate::{
     mm::{get_data, put_data, safe_get_data},
     signal::{
         restore_frame, send_access_signal, send_signal_to_thread, send_signal_to_thread_group,
-        send_signal_to_thread_of_proc, KSigAction, SigAction, SigInfo, SigSet,
+        send_signal_to_thread_of_proc, KSigAction, SigAction, SigInfo, SigSet, SIG_MAX_NUM,
     },
     syscall::SignalMaskFlag,
     task::{current_task, exit_current_and_run_next, suspend_current_and_run_next},
@@ -18,6 +18,10 @@ pub fn sys_rt_sigaction(
     act: *const SigAction,
     old_act: *mut SigAction,
 ) -> SyscallRet {
+    if signo > SIG_MAX_NUM {
+        return Err(SysErrNo::EINVAL);
+    }
+
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();

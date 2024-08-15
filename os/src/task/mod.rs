@@ -28,7 +28,7 @@ mod task;
 mod tid;
 
 use crate::{
-    fs::{open, OpenFlags, NONE_MODE},
+    fs::{open, remove_proc_dir_and_file, OpenFlags, NONE_MODE},
     mm::{get_data, put_data, VirtAddr},
     signal::{send_signal_to_thread_group, SigSet},
 };
@@ -153,6 +153,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
                 if task_inner.sig_table.not_exited() {
                     task_inner.sig_table.set_exit_code(exit_code);
                 }
+                remove_proc_dir_and_file(task.pid());
                 wakeup_parent(task.ppid());
             }
         }
