@@ -179,6 +179,7 @@ pub fn sys_execve(args: &[&str]) -> isize {
 //          fchmodat02,fcntl03,fcntl04,fcntl08,fcntl12,fstat03,ftruncate01,getcwd01,getpagesize01
 //          getppid02,getrandom01,getrandom02,getrandom03,getrandom04,getrandom05,getrusage01
 //          getrusage02,gettid02,gettimeofday01,gettimeofday02,getuid01
+//          lseek01,lseek07,madvise01,memcpy01,memset01,mkdir05,mmap02,mmap05
 //单独运行方法：修改 ltp/testcases/bin/{} 括号内的内容为目标文件
 //全部运行方法：运行ltp_testcode.sh
 
@@ -191,8 +192,8 @@ pub fn sys_busyboxsh() -> isize {
                 "busybox\0".as_ptr() as isize,
                 "sh\0".as_ptr() as isize,
                 "./test-ltp.sh\0".as_ptr() as isize,
-                "ltp/testcases/bin/getuid03\0".as_ptr() as isize,
-                //"ltp_testcode.sh\0".as_ptr() as isize,
+                "ltp/testcases/bin/mmap06\0".as_ptr() as isize,
+                //"libctest_testcode.sh\0".as_ptr() as isize,
                 0,
             ]
             .as_ptr() as isize,

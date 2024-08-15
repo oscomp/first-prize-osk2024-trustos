@@ -1,7 +1,7 @@
 use alloc::{format, string::ToString};
 
 use crate::{
-    fs::{make_socket, make_socketpair, FileClass, FileDescriptor},
+    fs::{make_socket, make_socketpair, FileClass, FileDescriptor, OpenFlags},
     mm::{put_data, translated_refmut},
     task::current_task,
     utils::{SysErrNo, SyscallRet},
@@ -15,9 +15,16 @@ pub fn sys_socket(_domain: u32, _type: u32, _protocol: u32) -> SyscallRet {
     let new_fd = task_inner.fd_table.alloc_fd()?;
     let close_on_exec = (_type & 0o2000000) == 0o2000000;
     let non_block = (_type & 0o4000) == 0o4000;
+    let mut flags = OpenFlags::empty();
+    if close_on_exec {
+        flags |= OpenFlags::O_CLOEXEC;
+    }
+    if non_block {
+        flags |= OpenFlags::O_NONBLOCK;
+    }
     task_inner.fd_table.set(
         new_fd,
-        FileDescriptor::new(close_on_exec, non_block, FileClass::Abs(make_socket())),
+        FileDescriptor::new(flags, FileClass::Abs(make_socket())),
     );
     task_inner
         .fs_info
@@ -121,21 +128,26 @@ pub fn sys_socketpair(domain: u32, stype: u32, protocol: u32, sv: *mut u32) -> S
     let (socket1, socket2) = make_socketpair();
     let close_on_exec = (stype & 0o2000000) == 0o2000000;
     let non_block = (stype & 0o4000) == 0o4000;
+    let mut flags = OpenFlags::empty();
+    if close_on_exec {
+        flags |= OpenFlags::O_CLOEXEC;
+    }
+    if non_block {
+        flags |= OpenFlags::O_NONBLOCK;
+    }
 
     let new_fd1 = inner.fd_table.alloc_fd()?;
-    inner.fd_table.set(
-        new_fd1,
-        FileDescriptor::new(close_on_exec, non_block, FileClass::Abs(socket1)),
-    );
+    inner
+        .fd_table
+        .set(new_fd1, FileDescriptor::new(flags, FileClass::Abs(socket1)));
     inner
         .fs_info
         .insert(format!("socket{}", new_fd1).to_string(), new_fd1);
 
     let new_fd2 = inner.fd_table.alloc_fd()?;
-    inner.fd_table.set(
-        new_fd2,
-        FileDescriptor::new(close_on_exec, non_block, FileClass::Abs(socket2)),
-    );
+    inner
+        .fd_table
+        .set(new_fd2, FileDescriptor::new(flags, FileClass::Abs(socket2)));
     inner
         .fs_info
         .insert(format!("socket{}", new_fd2).to_string(), new_fd2);

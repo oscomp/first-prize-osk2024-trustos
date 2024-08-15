@@ -36,7 +36,7 @@ impl MountTable {
         // todo
         _ = data;
 
-        log::info!("push mount dir {} with flags={}", dir, flags);
+        //log::info!("push mount dir {} with flags={}", dir, flags);
 
         self.mnt_list.push((special, dir, fstype, flags));
         0

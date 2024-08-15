@@ -186,14 +186,9 @@ pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> Sysca
 
     let inode = open(&abs_path, flags, mode)?;
     let new_fd = task_inner.fd_table.alloc_fd()?;
-    task_inner.fd_table.set(
-        new_fd,
-        FileDescriptor::new(
-            flags.contains(OpenFlags::O_CLOEXEC),
-            flags.contains(OpenFlags::O_NONBLOCK),
-            inode,
-        ),
-    );
+    task_inner
+        .fd_table
+        .set(new_fd, FileDescriptor::new(flags, inode));
 
     task_inner.fs_info.insert(abs_path, new_fd);
     return Ok(new_fd);
@@ -273,7 +268,11 @@ pub fn sys_dup3(old: usize, new: usize, flags: u32) -> SyscallRet {
         old, new, flags
     );
 
-    if old >= task_inner.fd_table.len() || (old as isize) < 0 || (new as isize) < 0 {
+    if old >= task_inner.fd_table.len()
+        || (old as isize) < 0
+        || (new as isize) < 0
+        || new >= task_inner.fd_table.get_soft_limit()
+    {
         return Err(SysErrNo::EBADF);
     }
 
@@ -336,6 +335,15 @@ pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> SyscallRet {
     let inner = task.inner_lock();
     let token = inner.user_token();
     let path = translated_str(token, path);
+
+    debug!(
+        "[sys_mkdirat] dirfd is {},path is {},mode is {}",
+        dirfd, path, mode
+    );
+
+    if dirfd != -100 && dirfd as usize >= inner.fd_table.len() {
+        return Err(SysErrNo::EBADF);
+    }
 
     let abs_path = inner.get_abs_path(dirfd, &path)?;
     if let Ok(_) = open(&abs_path, OpenFlags::O_RDWR, NONE_MODE) {
@@ -447,7 +455,7 @@ pub fn sys_mount(
     let special = translated_str(token, special);
     let dir = translated_str(token, dir);
     let ftype = translated_str(token, ftype);
-    log::info!("flags = {}", flags);
+    //log::info!("flags = {}", flags);
     if !data.is_null() {
         let data = translated_str(token, data);
         let ret = MNT_TABLE.lock().mount(special, dir, ftype, flags, data);
@@ -975,8 +983,8 @@ pub fn sys_prlimit(
         if !old_limit.is_null() {
             // 说明是get
             let limit = translated_refmut(token, old_limit);
-            limit.rlim_cur = fd_table.get_soft_limit() - 1;
-            limit.rlim_max = fd_table.get_hard_limit() - 1;
+            limit.rlim_cur = fd_table.get_soft_limit();
+            limit.rlim_max = fd_table.get_hard_limit();
         }
         if !new_limit.is_null() {
             // 说明是set
@@ -1438,6 +1446,21 @@ pub fn sys_fchownat(
     _flags: u32,
 ) -> SyscallRet {
     //伪实现
+    Ok(0)
+}
+
+pub fn sys_fchmod(fd: usize, mode: u32) -> SyscallRet {
+    let task = current_task().unwrap();
+    let inner = task.inner_lock();
+
+    if (fd as isize) < 0 && fd >= inner.fd_table.len() {
+        return Err(SysErrNo::EBADF);
+    }
+
+    debug!("[sys_fchmod] fd is {},new mode is {:o}", fd, mode);
+
+    let file = inner.fd_table.get(fd).file()?;
+    file.inode.fmode_set(mode);
     Ok(0)
 }
 
