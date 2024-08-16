@@ -179,7 +179,15 @@ pub fn sys_execve(args: &[&str]) -> isize {
 //          fchmodat02,fcntl03,fcntl04,fcntl08,fcntl12,fstat03,ftruncate01,getcwd01,getpagesize01
 //          getppid02,getrandom01,getrandom02,getrandom03,getrandom04,getrandom05,getrusage01
 //          getrusage02,gettid02,gettimeofday01,gettimeofday02,getuid01
-//          lseek01,lseek07,madvise01,memcpy01,memset01,mkdir05,mmap02,mmap05
+//          fchmod01,fchmod04,lseek01,lseek07,madvise01,memcpy01,memset01,mkdir05,mmap02,mmap05,mmap06，
+//          mmap08,mmap09，mmap19,mprotect05,nanosleep02,nanosleep04,open01,open03,open04,open09,pipe01
+//          pipe03,pipe06,pipe08,pipe10,pipe11,pipe13,pipe14,pipe2_01,poll01,pread01,pread02,pselect03
+//          pwrite01,pwrite02,pwrite03,read01,read02,read04,readdir01,readv01,readv02,select03
+//          sendfile02,sendfile03,sendfile05,sendfile06,sendfile08,set_tid_address01,setitimer01
+//          setitimer02,sigaction01,stat01,stat02,string01,symlink02,symlink04,syscall01,time01
+//          times01,uname01,uname02,wait01,wait02,wait401,waitpid01,waitpid03,waitpid04，write02
+//          write03，write05，writev01
+//内存不够的测例：write01
 //单独运行方法：修改 ltp/testcases/bin/{} 括号内的内容为目标文件
 //全部运行方法：运行ltp_testcode.sh
 
@@ -192,8 +200,8 @@ pub fn sys_busyboxsh() -> isize {
                 "busybox\0".as_ptr() as isize,
                 "sh\0".as_ptr() as isize,
                 "./test-ltp.sh\0".as_ptr() as isize,
-                "ltp/testcases/bin/getcwd01\0".as_ptr() as isize,
-                //"cyclictest_testcode.sh\0".as_ptr() as isize,
+                "ltp/testcases/bin/abort01\0".as_ptr() as isize,
+                // "libctest_testcode.sh\0".as_ptr() as isize,
                 0,
             ]
             .as_ptr() as isize,

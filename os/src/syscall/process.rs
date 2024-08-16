@@ -6,10 +6,11 @@ use crate::{
     signal::{check_if_any_sig_for_current_task, handle_signal},
     syscall::{CloneFlags, FutexCmd, FutexOpt, Utsname},
     task::{
-        add_task, current_task, current_token, exit_current_and_run_next,
-        exit_current_group_and_run_next, find_task_by_tid, futex_requeue, futex_wait,
-        futex_wake_up, move_child_process_to_init, remove_all_from_thread_group,
-        suspend_current_and_run_next, task_num, FutexKey, Sysinfo, PROCESS_GROUP,
+        add_task, change_current_uid, current_task, current_token, current_uid,
+        exit_current_and_run_next, exit_current_group_and_run_next, find_task_by_tid,
+        futex_requeue, futex_wait, futex_wake_up, move_child_process_to_init,
+        remove_all_from_thread_group, suspend_current_and_run_next, task_num, FutexKey, Sysinfo,
+        PROCESS_GROUP,
     },
     timer::{add_futex_timer, calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
     utils::{get_abs_path, strip_color, trim_start_slash, SysErrNo, SyscallRet},
@@ -52,21 +53,20 @@ pub fn sys_getppid() -> SyscallRet {
 
 /// 参考 https://man7.org/linux/man-pages/man2/getuid.2.html
 pub fn sys_getuid() -> SyscallRet {
-    let task = current_task().unwrap();
-    let task_inner = task.inner_lock();
-    Ok(task_inner.user_id)
+    Ok(current_uid() as usize)
 }
 
-pub fn sys_setuid(uid: usize) -> SyscallRet {
+pub fn sys_setuid(uid: u32) -> SyscallRet {
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
     task_inner.user_id = uid;
+    change_current_uid(uid);
     Ok(0)
 }
 
 /// 参考 https://man7.org/linux/man-pages/man2/geteuid.2.html
 pub fn sys_geteuid() -> SyscallRet {
-    Ok(0) // root user
+    Ok(current_uid() as usize)
 }
 
 /// 参考 https://man7.org/linux/man-pages/man2/getgid.2.html
@@ -300,13 +300,19 @@ pub fn sys_futex(
 ///       is equal to that of the calling process at the time of the call to waitpid().
 ///> 0    meaning wait for the child whose process ID is equal to the value of pid.
 /// 参考 https://man7.org/linux/man-pages/man2/wait4.2.html
-pub fn sys_wait4(pid: isize, wstatus: *mut i32, _options: i32) -> SyscallRet {
+pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
     //assert!(options == 0, "not support options yet");
     //默认所有进程都在同一个组
     // debug!(
     //     "[sys_wait4] pid is {},wstatus is {:#x}, options is {}",
     //     pid, wstatus as usize, options
     // );
+    if (pid as i32) == i32::MIN {
+        return Err(SysErrNo::ESRCH);
+    }
+    if options < 0 || options > 100 {
+        return Err(SysErrNo::EINVAL);
+    }
     loop {
         let mut process_group = PROCESS_GROUP.lock();
         let task = current_task().unwrap();
@@ -391,6 +397,14 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, _options: i32) -> SyscallRet {
 pub fn sys_nanosleep(req: *const Timespec, rem: *mut Timespec) -> SyscallRet {
     let token = current_token();
 
+    if (req as isize) <= 0 || if_bad_address(req as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
+    if (rem as isize) < 0 || if_bad_address(rem as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
     // debug!(
     //     "[sys_nanosleep] req is {:x}, rem is {:x}",
     //     req as usize, rem as usize
@@ -400,6 +414,10 @@ pub fn sys_nanosleep(req: *const Timespec, rem: *mut Timespec) -> SyscallRet {
     let waittime = req.tv_sec * 1_000_000_000usize + req.tv_nsec;
     let begin = get_time_ms() * 1_000_000usize;
     let endtime = get_time_spec() + req;
+
+    if (req.tv_sec as isize) < 0 || (req.tv_nsec as isize) < 0 || req.tv_nsec >= 1000_000_000usize {
+        return Err(SysErrNo::EINVAL);
+    }
 
     // debug!(
     //     "[sys_nanosleep] ready to sleep for {} sec, {} nsec",
@@ -421,13 +439,17 @@ pub fn sys_nanosleep(req: *const Timespec, rem: *mut Timespec) -> SyscallRet {
 
 /// 参考 https://man7.org/linux/man-pages/man2/uname.2.html
 pub fn sys_uname(buf: *mut u8) -> SyscallRet {
+    if (buf as isize) < 0 || if_bad_address(buf as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
     fn str2u8(s: &str) -> [u8; 65] {
         let mut b = [0; 65];
         b[0..s.len()].copy_from_slice(s.as_bytes());
         b
     }
     let uname = Utsname {
-        sysname: str2u8("TrustOS"),
+        sysname: str2u8("Linux"),
         nodename: str2u8("TrustOS"),
         release: str2u8("5.0.0"),
         version: str2u8("5.0.0"),
@@ -552,7 +574,7 @@ pub fn sys_clock_nanosleep(
 
     let t = get_data(memory_set.token(), t);
 
-    if t.tv_nsec >= 1_000_000_000usize {
+    if (t.tv_sec as isize) < 0 || (t.tv_nsec as isize) < 0 || t.tv_nsec >= 1_000_000_000usize {
         return Err(SysErrNo::EINVAL);
     }
 

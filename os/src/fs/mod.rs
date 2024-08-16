@@ -12,7 +12,8 @@ mod vfs;
 
 use crate::mm::UserBuffer;
 use crate::syscall::FaccessatFileMode;
-use crate::timer::get_time;
+use crate::task::current_uid;
+use crate::timer::{get_time, get_time_ms};
 use crate::utils::{GeneralRet, SysErrNo};
 use alloc::format;
 use alloc::string::String;
@@ -60,7 +61,7 @@ bitflags! {
         const O_PATH        = 0o10000000;  // Obtain a file descriptor for a directory
         const O_TMPFILE     = 0o20200000;  // Create an unnamed temporary file
 
-        const O_UNLINK    = 0o40000000;     //自用，用于识别unlink系统调用
+        const O_ASK_SYMLINK    = 0o400000000;     //自用，用于识别可访问符号链接本身文件的系统调用
     }
 }
 
@@ -450,6 +451,8 @@ fn create_file(abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass,
     let (readable, writable) = flags.read_write();
     let inode = parent_dir.create(abs_path, flags.node_type())?;
     inode.fmode_set(mode);
+    inode.set_owner(current_uid(), 0);
+    inode.set_timestamps(None, Some((get_time_ms() / 1000) as u64), None);
     insert_inode_idx(abs_path, inode.clone());
     let osinode = OSInode::new(readable, writable, inode);
     Ok(FileClass::File(Arc::new(osinode)))
@@ -500,12 +503,15 @@ pub fn open(mut abs_path: &str, flags: OpenFlags, mode: u32) -> Result<FileClass
             return Err(SysErrNo::ELOOP);
         }
         if let Ok(t) = found_res {
-            insert_inode_idx(abs_path, t.clone());
+            if !flags.contains(OpenFlags::O_ASK_SYMLINK) {
+                //符号链接文件不加入idx
+                insert_inode_idx(abs_path, t.clone());
+            }
             inode = Some(t);
         }
     }
     if let Some(inode) = inode {
-        if flags.contains(OpenFlags::O_DIRECTORY) && inode.types() != InodeType::Dir {
+        if flags.contains(OpenFlags::O_DIRECTORY) && !inode.is_dir() {
             return Err(SysErrNo::ENOTDIR);
         }
         let (readable, writable) = flags.read_write();

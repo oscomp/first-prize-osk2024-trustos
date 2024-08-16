@@ -1,5 +1,7 @@
 //!Implementation of [`Processor`] and Intersection of control flow
-use super::{__switch, add_task, fetch_task, TaskContext, TaskControlBlock, TaskStatus};
+use super::{
+    __switch, add_task, change_current_uid, fetch_task, TaskContext, TaskControlBlock, TaskStatus,
+};
 use crate::{config::sync::HART_NUM, timer::check_futex_timer, trap::TrapContext, utils::hart_id};
 use alloc::{boxed::Box, sync::Arc};
 use log::debug;
@@ -63,6 +65,7 @@ pub fn run_tasks() {
                 let next_task_cx_ptr = &next_task_inner.task_cx as *const TaskContext;
                 next_task_inner.task_status = TaskStatus::Running;
                 next_task_inner.memory_set.activate();
+                change_current_uid(next_task_inner.user_id);
                 drop(next_task_inner);
                 drop(cur_task_inner);
                 processor.current = Some(next_task);

@@ -9,12 +9,15 @@ use crate::{
         board::{MEMORY_END, MMIO},
         mm::{DL_INTERP_OFFSET, KERNEL_ADDR_OFFSET, MMAP_TOP, PAGE_SIZE},
     },
-    fs::{map_dynamic_link_file, open, File, OSInode, OpenFlags, NONE_MODE, SEEK_CUR, SEEK_SET},
+    fs::{
+        map_dynamic_link_file, open, root_inode, File, OSInode, OpenFlags, NONE_MODE, SEEK_CUR,
+        SEEK_SET,
+    },
     mm::flush_tlb,
     sync::SyncUnsafeCell,
     syscall::MmapFlags,
     task::{Aux, AuxType},
-    utils::SyscallRet,
+    utils::{SysErrNo, SyscallRet},
 };
 use alloc::{
     string::{String, ToString},
@@ -503,43 +506,52 @@ impl MemorySetInner {
             if area.mmap_flags.contains(MmapFlags::MAP_SHARED)
                 && area.map_perm.contains(MapPermission::W)
             {
-                // 相邻的页面一次写回
-                let mut wb_range: Vec<(VirtPageNum, VirtPageNum)> = Vec::new();
-                VPNRange::new(start_vpn, end_vpn)
-                    .into_iter()
-                    .for_each(|vpn| {
-                        if area.data_frames.contains_key(&vpn) {
-                            if wb_range.is_empty() {
-                                wb_range.push((vpn, VirtPageNum(vpn.0 + 1)));
-                            } else {
-                                let end_range = wb_range.pop().unwrap();
-                                if end_range.1 == vpn {
-                                    wb_range.push((end_range.0, VirtPageNum(vpn.0 + 1)));
-                                } else {
-                                    wb_range.push(end_range);
+                let file = area.mmap_file.file.clone().unwrap();
+                let found_res = root_inode().find(&file.inode.path(), OpenFlags::O_RDWR, 0);
+                if found_res.clone().err() != Some(SysErrNo::ENOENT) {
+                    // 相邻的页面一次写回
+                    let mut wb_range: Vec<(VirtPageNum, VirtPageNum)> = Vec::new();
+                    VPNRange::new(start_vpn, end_vpn)
+                        .into_iter()
+                        .for_each(|vpn| {
+                            if area.data_frames.contains_key(&vpn) {
+                                if wb_range.is_empty() {
                                     wb_range.push((vpn, VirtPageNum(vpn.0 + 1)));
+                                } else {
+                                    let end_range = wb_range.pop().unwrap();
+                                    if end_range.1 == vpn {
+                                        wb_range.push((end_range.0, VirtPageNum(vpn.0 + 1)));
+                                    } else {
+                                        wb_range.push(end_range);
+                                        wb_range.push((vpn, VirtPageNum(vpn.0 + 1)));
+                                    }
                                 }
                             }
-                        }
+                        });
+                    // 每次写回前要设置偏移量
+                    let off = file.lseek(0, SEEK_CUR).unwrap();
+                    wb_range.into_iter().for_each(|(start_vpn, end_vpn)| {
+                        let start_addr: usize = VirtAddr::from(start_vpn).into();
+                        let mapped_len: usize = (end_vpn.0 - start_vpn.0) * PAGE_SIZE;
+                        let buf = UserBuffer {
+                            buffers: translated_byte_buffer(
+                                self.page_table.token(),
+                                start_addr as *const u8,
+                                mapped_len,
+                            )
+                            .unwrap(),
+                        };
+                        file.lseek((start_addr - addr) as isize, SEEK_SET);
+                        file.write(buf);
                     });
-                // 每次写回前要设置偏移量
-                let file = area.mmap_file.file.clone().unwrap();
-                let off = file.lseek(0, SEEK_CUR).unwrap();
-                wb_range.into_iter().for_each(|(start_vpn, end_vpn)| {
-                    let start_addr: usize = VirtAddr::from(start_vpn).into();
-                    let mapped_len: usize = (end_vpn.0 - start_vpn.0) * PAGE_SIZE;
-                    let buf = UserBuffer {
-                        buffers: translated_byte_buffer(
-                            self.page_table.token(),
-                            start_addr as *const u8,
-                            mapped_len,
-                        )
-                        .unwrap(),
-                    };
-                    file.lseek((start_addr - addr) as isize, SEEK_SET);
-                    file.write(buf);
-                });
-                file.lseek(off as isize, SEEK_SET);
+                    file.lseek(off as isize, SEEK_SET);
+                } else {
+                    debug!(
+                        "when munmap {}, file {} has been unlinked before!",
+                        idx,
+                        file.inode.path()
+                    );
+                }
             }
             // debug!(
             //     "[area vpn_range] start:{:#x},end:{:#x}",
@@ -648,8 +660,8 @@ impl MemorySetInner {
         let mut new_areas = Vec::new();
         for area in self.areas.iter_mut() {
             let (start, end) = area.vpn_range.range();
-            debug!("start is {:x}, end is {:x}", start.0, end.0);
-            debug!("start_vpn is {:x}, end_vpn is {:x}", start_vpn.0, end_vpn.0);
+            //debug!("start is {:x}, end is {:x}", start.0, end.0);
+            //debug!("start_vpn is {:x}, end_vpn is {:x}", start_vpn.0, end_vpn.0);
             if start >= start_vpn && end <= end_vpn {
                 //修改整个area
                 area.map_perm = map_perm;
@@ -661,17 +673,14 @@ impl MemorySetInner {
                 }
                 continue;
             } else if start < start_vpn && end > start_vpn && end <= end_vpn {
-                debug!("work here with {:?}", map_perm);
                 //修改area后半部分
                 let mut new_area = MapArea::from_another(area);
                 new_area.map_perm = map_perm;
                 new_area.vpn_range = VPNRange::new(start_vpn, end);
                 if if_mmap {
-                    debug!("can't work here");
                     new_area.mmap_file.file = file.clone();
                 }
                 if offset != usize::MAX {
-                    debug!("can't work here2");
                     new_area.mmap_file.offset = offset as usize;
                 }
                 area.vpn_range = VPNRange::new(start, start_vpn);

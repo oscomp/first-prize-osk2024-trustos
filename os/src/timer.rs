@@ -3,6 +3,7 @@
 use core::ops::Add;
 
 use crate::sbi::set_timer;
+use crate::signal::SigSet;
 use crate::sync::SyncUnsafeCell;
 use crate::task::TaskControlBlock;
 use crate::{config::board::CLOCK_FREQ, task::wakeup_futex_task};
@@ -177,6 +178,7 @@ pub struct TimerInner {
     pub timer: Itimerval,
     pub last_time: TimeVal,
     pub once: bool,
+    pub sig: SigSet,
 }
 
 impl TimerInner {
@@ -185,6 +187,7 @@ impl TimerInner {
             timer: Itimerval::new(),
             last_time: TimeVal::new(0, 0),
             once: false,
+            sig: SigSet::empty(),
         }
     }
 }
@@ -195,11 +198,12 @@ impl Timer {
             inner: SyncUnsafeCell::new(TimerInner::new()),
         }
     }
-    pub fn set_timer(&self, new: Itimerval) {
+    pub fn set_timer(&self, new: Itimerval, newsig: SigSet) {
         let inner = self.inner.get_unchecked_mut();
         inner.timer = new;
         inner.once = false;
         inner.last_time = TimeVal::new(0, 0);
+        inner.sig = newsig;
     }
     pub fn set_last_time(&self, last_time: TimeVal) {
         self.inner.get_unchecked_mut().last_time = last_time;
@@ -215,6 +219,9 @@ impl Timer {
     }
     pub fn timer(&self) -> Itimerval {
         self.inner.get_unchecked_ref().timer
+    }
+    pub fn sig(&self) -> SigSet {
+        self.inner.get_unchecked_ref().sig
     }
 }
 

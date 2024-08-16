@@ -37,7 +37,7 @@ pub use context::TaskContext;
 pub use futex::*;
 use log::debug;
 pub use manager::*;
-use spin::Lazy;
+use spin::{Lazy, Mutex};
 use switch::__switch;
 pub use sysinfo::Sysinfo;
 pub use task::{RobustList, TaskControlBlock, TaskStatus};
@@ -198,4 +198,14 @@ pub fn init() {
             p.idle_task_cx = Some(Box::new(TaskContext::zero_init()));
         }
     }
+}
+
+pub static CUR_UID: Lazy<Mutex<u32>> = Lazy::new(|| Mutex::new(0));
+
+pub fn current_uid() -> u32 {
+    *CUR_UID.lock()
+}
+
+pub fn change_current_uid(uid: u32) {
+    *CUR_UID.lock() = uid;
 }

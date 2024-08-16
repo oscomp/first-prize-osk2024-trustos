@@ -74,7 +74,7 @@ pub struct TaskControlBlockInner {
     pub sig_pending: SigSet,
     pub timer: Arc<Timer>,
     pub robust_list: RobustList,
-    pub user_id: usize,
+    pub user_id: u32,
 }
 
 impl TaskControlBlockInner {
@@ -598,7 +598,7 @@ impl TaskControlBlock {
             // 只触发一次,单次计时器
             if now > timer.last_time() + timer.timer().it_value {
                 // log::info!("Timer Alarm Once");
-                task_inner.sig_pending |= SigSet::SIGALRM;
+                task_inner.sig_pending |= timer.sig();
                 timer.set_trigger_once(false);
                 timer.set_last_time(now);
             }
@@ -606,7 +606,7 @@ impl TaskControlBlock {
             //间隔触发
             if now > timer.last_time() + timer.timer().it_interval {
                 // log::info!("Timer Alarm!");
-                task_inner.sig_pending |= SigSet::SIGALRM;
+                task_inner.sig_pending |= timer.sig();
                 timer.set_last_time(now);
             }
         }

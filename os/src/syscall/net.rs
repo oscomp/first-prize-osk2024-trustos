@@ -119,8 +119,6 @@ pub fn sys_socketpair(domain: u32, stype: u32, protocol: u32, sv: *mut u32) -> S
         domain, stype, protocol, sv as usize
     );
 
-    return Ok(0);
-
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();

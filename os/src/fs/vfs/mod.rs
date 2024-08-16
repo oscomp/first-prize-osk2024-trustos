@@ -28,6 +28,10 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     ///
+    fn is_dir(&self) -> bool {
+        unimplemented!()
+    }
+    ///
     fn fstat(&self) -> Kstat {
         unimplemented!()
     }
@@ -65,6 +69,10 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     ///
+    fn set_owner(&self, _uid: u32, _gid: u32) -> SyscallRet {
+        unimplemented!()
+    }
+    ///
     fn set_timestamps(
         &self,
         _atime: Option<u64>,
@@ -89,6 +97,9 @@ pub trait Inode: Send + Sync {
         unimplemented!()
     }
     fn delay(&self) {
+        unimplemented!()
+    }
+    fn if_delay(&self) -> bool {
         unimplemented!()
     }
     fn read_all(&self) -> Result<Vec<u8>, SysErrNo> {

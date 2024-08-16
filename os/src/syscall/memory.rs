@@ -5,7 +5,7 @@ use log::debug;
 use super::{MmapFlags, MmapProt};
 use crate::{
     config::mm::PAGE_SIZE,
-    fs::File,
+    fs::{File, OpenFlags},
     mm::{
         if_bad_address, insert_bad_address, remove_bad_address, shm_attach, shm_create, shm_drop,
         shm_find, MapPermission, ShmFlags, VirtAddr,
@@ -23,24 +23,33 @@ pub fn sys_mmap(
     fd: usize,
     off: usize,
 ) -> SyscallRet {
-    let map_perm: MapPermission = MmapProt::from_bits(prot).unwrap().into();
+    //需要有严格的判断返回错误的顺序！！！
+    if flags == 0 {
+        return Err(SysErrNo::EINVAL);
+    }
+
     let flags = MmapFlags::from_bits(flags).unwrap();
+    if fd == usize::MAX && !flags.contains(MmapFlags::MAP_ANONYMOUS) {
+        return Err(SysErrNo::EBADF);
+    }
+
+    if len == 0 {
+        return Err(SysErrNo::EINVAL);
+    }
+    let mmap_prot = MmapProt::from_bits(prot).unwrap();
+    let map_perm: MapPermission = mmap_prot.into();
     // 地址合法性
     if flags.contains(MmapFlags::MAP_FIXED) && addr == 0 {
         return Err(SysErrNo::EPERM);
     }
-    debug!("prot is {:?}", MmapProt::from_bits(prot).unwrap());
     debug!(
-        "[sys_mmap]: addr {:#x}, len {:#x}, fd {}, offset {:#x}, flags {:?}, prot {:?}",
-        addr, len, fd as isize, off, flags, map_perm
+        "[sys_mmap]: addr {:#x}, len {:#x}, fd {}, offset {:#x}, flags {:?}, prot is {:?}, map_perm {:?}",
+        addr, len, fd as isize, off, flags,mmap_prot, map_perm
     );
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let len = page_round_up(len);
     if fd == usize::MAX {
-        if !flags.contains(MmapFlags::MAP_ANONYMOUS) {
-            return Err(SysErrNo::EBADF);
-        }
         let rv = task_inner
             .memory_set
             .mmap(addr, len, map_perm, flags, None, usize::MAX);
@@ -52,18 +61,19 @@ pub fn sys_mmap(
             .memory_set
             .mmap(0, 1, MapPermission::empty(), flags, None, usize::MAX);
         insert_bad_address(rv);
-        log::info!("bad address is 0x{:x}", rv);
+        debug!("bad address is 0x{:x}", rv);
         return Ok(rv);
     }
     // check fd and map_permission
-    let file = task_inner.fd_table.get(fd).file()?;
+    let inode = task_inner.fd_table.get(fd);
+    let file = inode.file()?;
     // 读写权限
-    if map_perm.contains(MapPermission::R) && !file.readable()
-        || flags.contains(MmapFlags::MAP_SHARED)
-            && map_perm.contains(MapPermission::W)
-            && !file.writable()
+    if (map_perm.contains(MapPermission::R) && !file.readable())
+        || (map_perm.contains(MapPermission::W) && !file.writable())
+        || (mmap_prot != MmapProt::PROT_NONE && inode.flags.contains(OpenFlags::O_WRONLY))
     {
-        return Err(SysErrNo::EPERM);
+        //如果需要读/写/执行方式映射，必须要求文件可读
+        return Err(SysErrNo::EACCES);
     }
     let rv = task_inner
         .memory_set
@@ -86,8 +96,12 @@ pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
 
 /// 参考 https://man7.org/linux/man-pages/man2/mprotect.2.html
 pub fn sys_mprotect(addr: usize, len: usize, prot: u32) -> SyscallRet {
+    if addr == 0 {
+        return Err(SysErrNo::ENOMEM);
+    }
+
     if (addr % PAGE_SIZE != 0) || (len % PAGE_SIZE != 0) {
-        println!("sys_mprotect: not align");
+        log::warn!("sys_mprotect: not align");
         return Err(SysErrNo::EINVAL);
     }
     let map_perm: MapPermission = MmapProt::from_bits(prot).unwrap().into();

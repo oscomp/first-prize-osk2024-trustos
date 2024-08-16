@@ -10,6 +10,7 @@
 //
 use super::{File, StMode};
 use crate::fs::Kstat;
+use crate::signal::{send_signal_to_thread, SigSet};
 use crate::task::{current_task, suspend_current_and_run_next};
 use crate::utils::SysErrNo;
 use crate::{mm::UserBuffer, syscall::PollEvents, utils::SyscallRet};
@@ -293,6 +294,13 @@ impl File for Pipe {
         }
         // write at most loop_write bytes
         let mut ring_buffer = self.inner_lock();
+        if ring_buffer.all_read_ends_closed() {
+            //发送断开的管道错误信号
+            log::warn!("send SIGPIPE signal!");
+            let tid = current_task().unwrap().tid();
+            send_signal_to_thread(tid, SigSet::SIGPIPE);
+            return Err(SysErrNo::EPIPE);
+        }
         let length = buf.len();
         if length <= 10 {
             let mut buf_iter = buf.into_iter();

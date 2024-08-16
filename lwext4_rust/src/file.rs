@@ -293,13 +293,16 @@ impl Ext4File {
             let cache = get_cache(path.clone());
             let mut cache_writer = cache.write();
 
-            let mut offset = offset as usize;
+            let offset = offset as usize;
             if offset > cache_writer.size {
+                /*
                 warn!(
                     "Seek beyond the end of the file,path is {},offset is {} while size is {}",
                     path, offset, cache_writer.size
                 );
-                offset = cache_writer.size;
+                */
+                //offset = cache_writer.size;
+                cache_writer.truncate(offset);
             }
 
             cache_writer.offset = offset as usize;
@@ -491,6 +494,24 @@ impl Ext4File {
             drop(CString::from_raw(c_path));
         }
         Ok(0)
+    }
+
+    //int ext4_owner_set(const char *path, uint32_t uid, uint32_t gid)
+    pub fn set_owner(&mut self, uid: u32, gid: u32) -> Result<usize, i32> {
+        let c_path = self.file_path.clone();
+        let c_path = c_path.into_raw();
+
+        let r = unsafe { ext4_owner_set(c_path, uid, gid) };
+
+        // unsafe { ext4_mode_set(c_path, mode) };
+        unsafe {
+            drop(CString::from_raw(c_path));
+        }
+        if r != EOK as i32 {
+            error!("ext4_owner_set: rc = {}", r);
+            return Err(r);
+        }
+        Ok(EOK as usize)
     }
 
     pub fn set_time(

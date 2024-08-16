@@ -1,6 +1,10 @@
 use crate::mm::{get_data, if_bad_address, put_data};
+use crate::signal::SigSet;
 use crate::task::current_task;
-use crate::timer::{get_time_spec, Itimerval, Rusage, TimeVal, Timespec, Tms, ITIMER_REAL};
+use crate::timer::{
+    get_time_spec, Itimerval, Rusage, TimeVal, Timespec, Tms, ITIMER_PROF, ITIMER_REAL,
+    ITIMER_VIRTUAL,
+};
 use crate::utils::{SysErrNo, SyscallRet};
 use log::debug;
 
@@ -40,11 +44,26 @@ pub fn sys_settimer(
     new_value: *const Itimerval,
     old_value: *mut Itimerval,
 ) -> SyscallRet {
-    // TrustOS目前只支持 ITIMER_REAL
-    assert!(which == ITIMER_REAL, "only support Itimer Real");
+    if (which as isize) < 0 {
+        return Err(SysErrNo::EINVAL);
+    }
+    if (new_value as isize) < 0 || if_bad_address(new_value as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+    if (old_value as isize) < 0 || if_bad_address(old_value as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
+
+    let sig = match which {
+        ITIMER_REAL => SigSet::SIGALRM,
+        ITIMER_VIRTUAL => SigSet::SIGVTALRM,
+        ITIMER_PROF => SigSet::SIGPROF,
+        _ => return Err(SysErrNo::EINVAL),
+    };
 
     if old_value as usize != 0 {
         put_data(token, old_value, task_inner.timer.timer());
@@ -52,7 +71,7 @@ pub fn sys_settimer(
     if new_value as usize != 0 {
         let new_timer = get_data(token, new_value);
         debug!("[sys_settimer] new_timer={:?}", new_timer);
-        task_inner.timer.set_timer(new_timer);
+        task_inner.timer.set_timer(new_timer, sig);
         task_inner.timer.set_last_time(TimeVal::now());
         if new_timer.it_interval.is_empty() {
             if !new_timer.it_value.is_empty() {

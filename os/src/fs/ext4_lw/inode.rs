@@ -22,6 +22,7 @@ pub struct Ext4Inode {
 pub struct Ext4InodeInner {
     f: Ext4File,
     delay: bool,
+    if_dir: bool,
 }
 
 unsafe impl Send for Ext4Inode {}
@@ -29,10 +30,16 @@ unsafe impl Sync for Ext4Inode {}
 
 impl Ext4Inode {
     pub fn new(path: &str, types: InodeTypes) -> Self {
+        let is_dir = if types == InodeTypes::EXT4_DE_DIR {
+            true
+        } else {
+            false
+        };
         Ext4Inode {
             inner: SyncUnsafeCell::new(Ext4InodeInner {
                 f: Ext4File::new(path, types),
                 delay: false,
+                if_dir: is_dir,
             }),
         }
     }
@@ -77,6 +84,10 @@ impl Inode for Ext4Inode {
         as_inode_type(self.inner.get_unchecked_mut().f.file_type())
     }
 
+    fn is_dir(&self) -> bool {
+        self.inner.get_unchecked_mut().if_dir
+    }
+
     fn read_at(&self, off: usize, buf: &mut [u8]) -> SyscallRet {
         let file = &mut self.inner.get_unchecked_mut().f;
         let path = file.path();
@@ -118,6 +129,11 @@ impl Inode for Ext4Inode {
             .map_or(Err(SysErrNo::ENOENT), |_| Ok(0))
     }
 
+    fn set_owner(&self, uid: u32, gid: u32) -> SyscallRet {
+        let file = &mut self.inner.get_unchecked_mut().f;
+        file.set_owner(uid, gid).map_err(|e| SysErrNo::from(e))
+    }
+
     fn set_timestamps(
         &self,
         atime: Option<u64>,
@@ -151,20 +167,17 @@ impl Inode for Ext4Inode {
                 return Ok(buf);
             }
         } else {
-            unimplemented!("not support!");
-            // assert!(as_inode_type(file.types()) == InodeType::SymLink);
-            // let mut real_path_buf = [0u8; 256];
-            // file.file_readlink(&mut real_path_buf, 255)?;
-            // let end = real_path_buf
-            //     .iter()
-            //     .enumerate()
-            //     .find(|(_, v)| **v == 0)
-            //     .map(|(idx, _)| idx)
-            //     .unwrap();
-            // let real_path = format!("/{}", core::str::from_utf8(&real_path_buf[..end]).unwrap());
-            // debug!("[symlink] real_path= {}", real_path);
-            // let real_file = self.find(&real_path)?;
-            // real_file.read_all()
+            //unimplemented!("not support!");
+            assert!(file_type == InodeType::SymLink);
+            let mut real_path_buf = [0u8; 256];
+            file.file_readlink(&mut real_path_buf, 256)?;
+            let end = real_path_buf.iter().position(|v| *v == 0).unwrap();
+            let file_path = core::str::from_utf8(&real_path_buf[..end]).unwrap();
+            let path = self.path();
+            let (prefix, _) = path.rsplit_once("/").unwrap();
+            let abs_path = format!("{}/{}", prefix, file_path);
+            let real_file = self.find(&abs_path, OpenFlags::O_RDWR, 0)?;
+            real_file.read_all()
         }
     }
 
@@ -184,7 +197,7 @@ impl Inode for Ext4Inode {
             }
             Ok(Arc::new(Ext4Inode::new(path, InodeTypes::EXT4_DE_REG_FILE)))
         } else if file.check_inode_exist(path, InodeTypes::EXT4_DE_SYMLINK) {
-            if flags.contains(OpenFlags::O_UNLINK) {
+            if flags.contains(OpenFlags::O_ASK_SYMLINK) {
                 return Ok(Arc::new(Ext4Inode::new(path, InodeTypes::EXT4_DE_SYMLINK)));
             }
             if loop_times >= MAX_LOOPTIMES {
@@ -296,6 +309,10 @@ impl Inode for Ext4Inode {
     }
     fn delay(&self) {
         self.inner.get_unchecked_mut().delay = true;
+    }
+
+    fn if_delay(&self) -> bool {
+        self.inner.get_unchecked_mut().delay
     }
 
     fn fmode(&self) -> Result<u32, SysErrNo> {

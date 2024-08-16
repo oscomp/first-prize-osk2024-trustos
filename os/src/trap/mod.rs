@@ -140,7 +140,7 @@ pub fn trap_handler() {
                 current_trap_cx().sepc,
             );
                 //发送段错误信号
-                warn!("going to send SIGSEGV signal!");
+                warn!("send SIGSEGV signal!");
                 let tid = current_task().unwrap().tid();
                 send_signal_to_thread(tid, SigSet::SIGSEGV);
                 // page fault exit code

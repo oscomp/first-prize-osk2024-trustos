@@ -9,6 +9,7 @@ use crate::{
         get_data, if_bad_address, put_data, safe_translated_byte_buffer, translated_byte_buffer,
         translated_ref, translated_refmut, translated_str, UserBuffer,
     },
+    signal::check_if_any_sig_for_current_task,
     syscall::{FaccessatFileMode, FaccessatMode, FdSet, PollEvents, PollFd, SigSet},
     task::{current_task, current_token, suspend_current_and_run_next},
     timer::{get_time_ms, Timespec},
@@ -23,6 +24,7 @@ use alloc::{
 };
 use core::cmp::min;
 use log::debug;
+use lwext4_rust::bindings::O_WRONLY;
 
 use super::{FcntlCmd, Iovec, RLimit};
 
@@ -33,13 +35,27 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let inner = task.inner_lock();
     let memory_set = inner.memory_set.clone();
 
-    if fd >= inner.fd_table.len() {
+    if (fd as isize) < 0 || fd >= inner.fd_table.len() {
+        return Err(SysErrNo::EBADF);
+    }
+
+    if (buf as isize) < 0 || if_bad_address(buf as usize) || ((buf as usize) == 0 && len != 0) {
+        return Err(SysErrNo::EFAULT);
+    }
+
+    if (len as isize) < 0 {
         return Err(SysErrNo::EINVAL);
     }
+
     if let Some(file) = &inner.fd_table.try_get(fd) {
+        if let Ok(readfile) = file.file() {
+            if readfile.inode.is_dir() {
+                return Err(SysErrNo::EISDIR);
+            }
+        }
         let file: Arc<dyn File> = file.any();
         if !file.writable() {
-            return Err(SysErrNo::EACCES);
+            return Err(SysErrNo::EBADF);
         }
         let file = file.clone();
         // release current task TCB manually to avoid multi-borrow
@@ -60,15 +76,25 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
     let inner = task.inner_lock();
     let memory_set = inner.memory_set.clone();
 
+    if (fd as isize) < 0 || fd >= inner.fd_table.len() {
+        return Err(SysErrNo::EBADF);
+    }
+
+    if (buf as isize) <= 0 || if_bad_address(buf as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
     //debug!("[sys_read] fd is {}, len is {}", fd, len);
 
-    if fd >= inner.fd_table.len() {
-        return Err(SysErrNo::EINVAL);
-    }
     if let Some(file) = &inner.fd_table.try_get(fd) {
+        if let Ok(readfile) = file.file() {
+            if readfile.inode.is_dir() {
+                return Err(SysErrNo::EISDIR);
+            }
+        }
         let file: Arc<dyn File> = file.any();
         if !file.readable() {
-            return Err(SysErrNo::EACCES);
+            return Err(SysErrNo::EBADF);
         }
         // release current task TCB manually to avoid multi-borrow
         drop(inner);
@@ -88,15 +114,29 @@ pub fn sys_writev(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
     let inner = task.inner_lock();
     let token = inner.user_token();
 
-    // debug!(
-    //     "[sys_writev] fd is {}, iov is {:x}, iovcnt is {}",
-    //     fd, iov as usize, iovcnt
-    // );
+    debug!(
+        "[sys_writev] fd is {}, iov is {:x}, iovcnt is {}",
+        fd, iov as usize, iovcnt
+    );
 
-    if fd >= inner.fd_table.len() {
+    if (fd as isize) < 0 || fd >= inner.fd_table.len() {
+        return Err(SysErrNo::EBADF);
+    }
+
+    if (iov as isize) <= 0 || if_bad_address(iov as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
+    if (iovcnt as isize) < 0 {
         return Err(SysErrNo::EINVAL);
     }
+
     if let Some(file) = &inner.fd_table.try_get(fd) {
+        if let Ok(readfile) = file.file() {
+            if readfile.inode.is_dir() {
+                return Err(SysErrNo::EISDIR);
+            }
+        }
         let file = file.any();
         if !file.writable() {
             return Err(SysErrNo::EACCES);
@@ -111,10 +151,18 @@ pub fn sys_writev(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
             // current iovec pointer
             let current = unsafe { iov.add(iovec_size * i) };
             let iovinfo = *translated_refmut(token, current as *mut Iovec);
-            let buf = UserBuffer::new(
-                translated_byte_buffer(token, iovinfo.iov_base as *mut u8, iovinfo.iov_len)
-                    .unwrap(),
-            );
+            if (iovinfo.iov_len as isize) < 0 {
+                return Err(SysErrNo::EINVAL);
+            }
+            let buffer;
+            let check_buffer =
+                translated_byte_buffer(token, iovinfo.iov_base as *mut u8, iovinfo.iov_len);
+            if let Some(_) = check_buffer {
+                buffer = check_buffer.unwrap();
+            } else {
+                return Err(SysErrNo::EFAULT);
+            }
+            let buf = UserBuffer::new(buffer);
             let write_ret = file.write(buf)?;
             ret += write_ret as usize;
         }
@@ -130,10 +178,28 @@ pub fn sys_readv(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
     let inner = task.inner_lock();
     let token = inner.user_token();
 
-    if fd >= inner.fd_table.len() {
+    debug!(
+        "[sys_readv] fd is {}, iov is {:x}, iovcnt is {}",
+        fd, iov as usize, iovcnt
+    );
+
+    if (fd as isize) < 0 || fd >= inner.fd_table.len() {
+        return Err(SysErrNo::EBADF);
+    }
+
+    if (iov as isize) <= 0 || if_bad_address(iov as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
+    if (iovcnt as isize) < 0 {
         return Err(SysErrNo::EINVAL);
     }
     if let Some(file) = &inner.fd_table.try_get(fd) {
+        if let Ok(readfile) = file.file() {
+            if readfile.inode.is_dir() {
+                return Err(SysErrNo::EISDIR);
+            }
+        }
         let file = file.any();
         if !file.readable() {
             return Err(SysErrNo::EACCES);
@@ -148,10 +214,18 @@ pub fn sys_readv(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
             // current iovec pointer
             let current = unsafe { iov.add(iovec_size * i) };
             let iovinfo = *translated_refmut(token, current as *mut Iovec);
-            let buf = UserBuffer::new(
-                translated_byte_buffer(token, iovinfo.iov_base as *mut u8, iovinfo.iov_len)
-                    .unwrap(),
-            );
+            if (iovinfo.iov_len as isize) < 0 {
+                return Err(SysErrNo::EINVAL);
+            }
+            let buffer;
+            let check_buffer =
+                translated_byte_buffer(token, iovinfo.iov_base as *mut u8, iovinfo.iov_len);
+            if let Some(_) = check_buffer {
+                buffer = check_buffer.unwrap();
+            } else {
+                return Err(SysErrNo::EFAULT);
+            }
+            let buf = UserBuffer::new(buffer);
             let read_ret = file.read(buf)?;
             ret += read_ret as usize;
         }
@@ -228,7 +302,7 @@ pub fn sys_getcwd(buf: *const u8, size: usize) -> SyscallRet {
     }
 
     let cwdlen = inner.fs_info.cwd().len();
-    if size < cwdlen {
+    if size <= cwdlen {
         return Err(SysErrNo::ERANGE);
     }
     let mut buffer =
@@ -315,7 +389,7 @@ pub fn sys_chdir(path: *const u8) -> SyscallRet {
 
     let abs_path = get_abs_path(inner.fs_info.cwd(), &path);
     let osfile = open(&abs_path, OpenFlags::O_RDONLY, NONE_MODE)?.file()?;
-    if !osfile.inode.types().is_dir() {
+    if !osfile.inode.is_dir() {
         return Err(SysErrNo::ENOTDIR);
     }
     if path.starts_with("./") {
@@ -377,7 +451,13 @@ pub fn sys_getdents64(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
         UserBuffer::new(safe_translated_byte_buffer(inner.memory_set.clone(), buf, len).unwrap());
 
     let file = inner.fd_table.get(fd).file()?;
-    let off = file.lseek(0, SEEK_CUR)?;
+    let off;
+    let check_off = file.lseek(0, SEEK_CUR);
+    if let Err(_) = check_off {
+        return Ok(0);
+    } else {
+        off = check_off.unwrap();
+    }
     let (de, off) = file.inode.read_dentry(off, len)?;
     buffer.write(de.as_slice());
     let _ = file.lseek(off as isize, SEEK_SET)?;
@@ -408,7 +488,7 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, _flags: u32) -> SyscallRet {
     // 如果是File但尚有对应的fd未关闭,等到close时unlink
     // 如果是符号链接,直接移除
     // 如果是socket, FIFO, or device,移除但现有的fd可继续使用
-    let osfile = open(&abs_path, OpenFlags::O_UNLINK, NONE_MODE)?.file()?;
+    let osfile = open(&abs_path, OpenFlags::O_ASK_SYMLINK, NONE_MODE)?.file()?;
     debug!(
         "[sys_unlinkat] path={},link_cnt={},has_activate_fd={}",
         &abs_path,
@@ -500,20 +580,29 @@ pub fn sys_fstat(fd: usize, kst: *mut Kstat) -> SyscallRet {
 }
 
 /// 参考 https://man7.org/linux/man-pages/man2/pipe2.2.html
-pub fn sys_pipe2(fd: *mut u32) -> SyscallRet {
+pub fn sys_pipe2(fd: *mut u32, flags: u32) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let token = task_inner.user_token();
 
+    debug!("[sys_pipe2] fd is {:x},flags is {}", fd as usize, flags);
+
+    let mut pipe_flags = OpenFlags::empty();
+    if flags == 0x80000 {
+        //设置O_CLOEXEC
+        pipe_flags |= OpenFlags::O_CLOEXEC;
+    }
+
     let (read_pipe, write_pipe) = make_pipe();
     let read_fd = task_inner.fd_table.alloc_fd()?;
-    task_inner
-        .fd_table
-        .set(read_fd, FileDescriptor::default(FileClass::Abs(read_pipe)));
+    task_inner.fd_table.set(
+        read_fd,
+        FileDescriptor::new(pipe_flags, FileClass::Abs(read_pipe)),
+    );
     let write_fd = task_inner.fd_table.alloc_fd()?;
     task_inner.fd_table.set(
         write_fd,
-        FileDescriptor::default(FileClass::Abs(write_pipe)),
+        FileDescriptor::new(pipe_flags, FileClass::Abs(write_pipe)),
     );
     task_inner.fs_info.insert("pipe".to_string(), read_fd);
     task_inner.fs_info.insert("pipe".to_string(), write_fd);
@@ -537,7 +626,12 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *mut Kstat, _flags: usize
         open(&abs_path, OpenFlags::O_CREATE, NONE_MODE);
     }
 
-    let file = open(&abs_path, OpenFlags::O_RDONLY, NONE_MODE)?.any();
+    let file = open(
+        &abs_path,
+        OpenFlags::O_RDONLY | OpenFlags::O_ASK_SYMLINK,
+        NONE_MODE,
+    )?
+    .any();
     put_data(token, kst, file.fstat());
     return Ok(0);
 }
@@ -597,7 +691,7 @@ pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) ->
     let parent_inode = open(&parent_path, OpenFlags::O_RDWR, NONE_MODE)?.file()?;
     let parent_mode = parent_inode.inode.fmode()? & 0xfff;
     let parent_mode = FaccessatFileMode::from_bits_truncate(parent_mode);
-    if parent_inode.inode.types() != InodeType::Dir {
+    if !parent_inode.inode.is_dir() {
         return Err(SysErrNo::ENOTDIR);
     }
     if inner.user_id != 0
@@ -715,8 +809,6 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
 
-    // debug!("[sys_fcntl] fd is {}, cmd is {}, arg is {}", fd, cmd, arg);
-
     if fd >= task_inner.fd_table.len() || (fd as isize) < 0 {
         return Err(SysErrNo::EBADF);
     }
@@ -727,6 +819,8 @@ pub fn sys_fcntl(fd: usize, cmd: usize, arg: usize) -> SyscallRet {
 
     let mut file = task_inner.fd_table.get(fd);
     let cmd = FcntlCmd::from_bits(cmd).unwrap();
+
+    debug!("[sys_fcntl] fd is {}, cmd is {:?}, arg is {}", fd, cmd, arg);
 
     match cmd {
         FcntlCmd::F_DUPFD => {
@@ -798,22 +892,42 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
         outfd, infd, offset_ptr, count
     );
 
-    if outfd >= inner.fd_table.len()
-        || inner.fd_table.try_get(outfd).is_none()
+    if (infd as isize) < 0
         || infd >= inner.fd_table.len()
-        || inner.fd_table.try_get(infd).is_none()
+        || (outfd as isize) < 0
+        || outfd >= inner.fd_table.len()
     {
+        return Err(SysErrNo::EBADF);
+    }
+
+    if (offset_ptr as isize) < 0 || if_bad_address(offset_ptr as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
+    if (count as isize) < 0 {
         return Err(SysErrNo::EINVAL);
     }
 
-    let outfile = inner.fd_table.get(outfd).any();
+    if inner.fd_table.try_get(outfd).is_none() || inner.fd_table.try_get(infd).is_none() {
+        return Err(SysErrNo::EINVAL);
+    }
+
+    let outinode = inner.fd_table.get(outfd);
+    if let Ok(_) = outinode.file() {
+        if !outinode.flags.contains(OpenFlags::O_WRONLY)
+            && !outinode.flags.contains(OpenFlags::O_RDWR)
+        {
+            return Err(SysErrNo::EBADF);
+        }
+    }
+    let outfile = outinode.any();
     if !outfile.writable() {
-        return Err(SysErrNo::EACCES);
+        return Err(SysErrNo::EBADF);
     }
 
     let infile = inner.fd_table.get(infd).file()?;
     if !infile.readable() {
-        return Err(SysErrNo::EACCES);
+        return Err(SysErrNo::EBADF);
     }
 
     drop(inner);
@@ -831,6 +945,8 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
     //输入缓冲池
     let inbuffer = UserBuffer::new(inbufv);
 
+    let cur_off = infile.lseek(0, SEEK_CUR)?;
+
     let readcount;
     if offset_ptr == 0 {
         readcount = infile.read(inbuffer)?;
@@ -842,6 +958,8 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
         // infile.set_offset(offset as usize);
         infile.lseek(offset, SEEK_SET)?;
         readcount = infile.read(inbuffer)?;
+        *translated_refmut(token, offset_ptr as *mut isize) += readcount as isize;
+        infile.lseek(cur_off as isize, SEEK_SET);
     }
 
     if readcount == 0 {
@@ -870,13 +988,30 @@ pub fn sys_pwrite64(fd: usize, buf: *const u8, count: usize, offset: isize) -> S
     let inner = task.inner_lock();
     let token = inner.user_token();
 
-    if offset < 0 || fd >= inner.fd_table.len() {
+    if (fd as isize) < 0 || fd >= inner.fd_table.len() {
+        return Err(SysErrNo::EBADF);
+    }
+
+    if (buf as isize) < 0 || if_bad_address(buf as usize) || ((buf as usize) == 0 && count != 0) {
+        return Err(SysErrNo::EFAULT);
+    }
+
+    if offset < 0 {
         return Err(SysErrNo::EINVAL);
     }
     if let Some(file) = &inner.fd_table.try_get(fd) {
+        if let Ok(_) = file.abs() {
+            return Err(SysErrNo::ESPIPE);
+        }
+        if !file.flags.contains(OpenFlags::O_WRONLY) && !file.flags.contains(OpenFlags::O_RDWR) {
+            return Err(SysErrNo::EBADF);
+        }
         let file = file.file()?;
         if !file.writable() {
             return Err(SysErrNo::EACCES);
+        }
+        if file.inode.is_dir() {
+            return Err(SysErrNo::EISDIR);
         }
         let file = file.clone();
         // release current task TCB manually to avoid multi-borrow
@@ -904,9 +1039,15 @@ pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: isize) -> Sy
         return Err(SysErrNo::EINVAL);
     }
     if let Some(file) = &inner.fd_table.try_get(fd) {
+        if let Ok(_) = file.abs() {
+            return Err(SysErrNo::ESPIPE);
+        }
         let file = file.file()?;
         if !file.readable() {
             return Err(SysErrNo::EACCES);
+        }
+        if file.inode.is_dir() {
+            return Err(SysErrNo::EISDIR);
         }
         // release current task TCB manually to avoid multi-borrow
         drop(inner);
@@ -1034,8 +1175,27 @@ pub fn sys_symlinkat(target: *const u8, newdirfd: isize, linkpath: *const u8) ->
     let task = current_task().unwrap();
     let inner = task.inner_lock();
     let token = inner.user_token();
+
+    if (target as isize) < 0 || if_bad_address(target as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+    if (linkpath as isize) < 0 || if_bad_address(linkpath as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+    if newdirfd != -100 && newdirfd as usize >= inner.fd_table.len() {
+        return Err(SysErrNo::EBADF);
+    }
+
     let target_path = translated_str(token, target);
     let link_path = translated_str(token, linkpath);
+
+    if target_path.len() == 0
+        || link_path.len() == 0
+        || target_path.len() > MAX_PATH_LEN
+        || link_path.len() > MAX_PATH_LEN
+    {
+        return Err(SysErrNo::ENAMETOOLONG);
+    }
 
     debug!(
         "[sys_symlinkat] target is {},newdirfd is {},linkpath is {}",
@@ -1301,6 +1461,26 @@ pub fn sys_pselect6(
     let mut inner = task.inner_lock();
     let token = inner.user_token();
 
+    if (nfds as isize) < 0 {
+        return Err(SysErrNo::EINVAL);
+    }
+
+    if (readfds as isize) < 0 || if_bad_address(readfds as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
+    if (writefds as isize) < 0 || if_bad_address(writefds as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
+    if (exceptfds as isize) < 0 || if_bad_address(exceptfds as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
+    if (timeout as isize) < 0 || if_bad_address(timeout as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
     // debug!("[sys_pselect6] nfds is {}, readfds is {}, writefds is {}, exceptfds is {}, timeout is {}, sigmask is {}",nfds,readfds,writefds,exceptfds,timeout,sigmask);
 
     let old_mask = inner.sig_mask;
@@ -1364,7 +1544,8 @@ pub fn sys_pselect6(
                         }
                         num += 1;
                     } else {
-                        readfds.mark_fd(i, false);
+                        //readfds.mark_fd(i, false);
+                        return Err(SysErrNo::EBADF);
                     }
                 }
             }
@@ -1381,7 +1562,8 @@ pub fn sys_pselect6(
                         }
                         num += 1;
                     } else {
-                        writefds.mark_fd(i, false);
+                        //writefds.mark_fd(i, false);
+                        return Err(SysErrNo::EBADF);
                     }
                 }
             }
@@ -1399,7 +1581,8 @@ pub fn sys_pselect6(
                         }
                         num += 1;
                     } else {
-                        exceptfds.mark_fd(i, false);
+                        //exceptfds.mark_fd(i, false);
+                        return Err(SysErrNo::EBADF);
                     }
                 }
             }
@@ -1432,6 +1615,17 @@ pub fn sys_pselect6(
             }
             return Ok(0);
         }
+
+        /*
+        if let Some(_) = check_if_any_sig_for_current_task() {
+            //被信号唤醒
+            if sigmask != 0 {
+                inner.sig_mask = old_mask;
+            }
+            return Err(SysErrNo::EINTR);
+        }
+        */
+
         drop(inner);
         drop(task);
         suspend_current_and_run_next();
@@ -1500,7 +1694,7 @@ pub fn sys_fchmodat(dirfd: isize, path: *const u8, mode: u32, flags: u32) -> Sys
 
     let (parent_path, _) = rsplit_once(abs_path.as_str(), "/");
     let parent_inode = open(&parent_path, OpenFlags::O_RDWR, NONE_MODE)?.file()?;
-    if parent_inode.inode.types() != InodeType::Dir {
+    if !parent_inode.inode.is_dir() {
         return Err(SysErrNo::ENOTDIR);
     }
 
