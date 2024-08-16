@@ -533,7 +533,7 @@ pub fn sys_clock_nanosleep(
     drop(task_inner);
     drop(task);
 
-    if clockid != 0 {
+    if clockid != 0 && clockid != 1 {
         return Err(SysErrNo::EOPNOTSUPP);
     }
 

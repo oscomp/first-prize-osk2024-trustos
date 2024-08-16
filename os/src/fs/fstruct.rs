@@ -10,30 +10,24 @@ use alloc::{
 };
 use hashbrown::HashMap;
 
-use super::{File, FileClass, OSInode, Stdin, Stdout};
+use super::{File, FileClass, OSInode, OpenFlags, Stdin, Stdout};
 pub struct FdTable {
     inner: SyncUnsafeCell<FdTableInner>,
 }
 
 #[derive(Clone)]
 pub struct FileDescriptor {
-    close_on_exec: bool,
-    non_block: bool,
+    pub flags: OpenFlags,
     pub file: FileClass,
 }
 
 impl FileDescriptor {
-    pub fn new(close_on_exec: bool, non_block: bool, file: FileClass) -> Self {
-        Self {
-            close_on_exec,
-            non_block,
-            file,
-        }
+    pub fn new(flags: OpenFlags, file: FileClass) -> Self {
+        Self { flags, file }
     }
     pub fn default(file: FileClass) -> Self {
         Self {
-            close_on_exec: false,
-            non_block: false,
+            flags: OpenFlags::empty(),
             file,
         }
     }
@@ -48,22 +42,22 @@ impl FileDescriptor {
     }
 
     pub fn unset_cloexec(&mut self) {
-        self.close_on_exec = false
+        self.flags &= !OpenFlags::O_CLOEXEC;
     }
     pub fn set_cloexec(&mut self) {
-        self.close_on_exec = true;
+        self.flags |= OpenFlags::O_CLOEXEC;
     }
     pub fn cloexec(&self) -> bool {
-        self.close_on_exec
+        self.flags.contains(OpenFlags::O_CLOEXEC)
     }
     pub fn non_block(&self) -> bool {
-        self.non_block
+        self.flags.contains(OpenFlags::O_NONBLOCK)
     }
     pub fn unset_nonblock(&mut self) {
-        self.non_block = false
+        self.flags &= !OpenFlags::O_NONBLOCK;
     }
     pub fn set_nonblock(&mut self) {
-        self.non_block = true;
+        self.flags |= OpenFlags::O_NONBLOCK;
     }
 }
 
@@ -76,7 +70,7 @@ pub struct FdTableInner {
 impl FdTableInner {
     pub fn empty() -> Self {
         Self {
-            soft_limit: 64,
+            soft_limit: 128,
             hard_limit: 256,
             files: Vec::new(),
         }
@@ -125,7 +119,7 @@ impl FdTable {
         if let Some(fd) = (0..fd_table.len()).find(|fd| fd_table[*fd].is_none()) {
             return Ok(fd);
         }
-        if fd_table.len() >= self.get_soft_limit() {
+        if fd_table.len() + 1 > self.get_soft_limit() {
             return Err(SysErrNo::EMFILE);
         }
         fd_table.push(None);
@@ -133,10 +127,10 @@ impl FdTable {
     }
     pub fn alloc_fd_larger_than(&self, arg: usize) -> SyscallRet {
         let fd_table = &mut self.get_mut().files;
-        if arg >= self.get_soft_limit() {
+        if arg > self.get_soft_limit() {
             return Err(SysErrNo::EMFILE);
         }
-        if fd_table.len() + 1 >= self.get_soft_limit() {
+        if fd_table.len() + 1 > self.get_soft_limit() {
             return Err(SysErrNo::EMFILE);
         }
         if fd_table.len() < arg {
@@ -162,7 +156,7 @@ impl FdTable {
     }
 
     pub fn resize(&self, size: usize) -> GeneralRet {
-        if size >= self.get_soft_limit() {
+        if size > self.get_soft_limit() {
             return Err(SysErrNo::EMFILE);
         }
         self.get_mut().files.resize(size, None);

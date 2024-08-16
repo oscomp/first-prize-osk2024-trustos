@@ -15,7 +15,7 @@ mod context;
 
 use crate::{
     mm::{VirtAddr, VirtPageNum},
-    signal::{check_if_any_sig_for_current_task, handle_signal},
+    signal::{check_if_any_sig_for_current_task, handle_signal, send_signal_to_thread, SigSet},
     syscall::{syscall, Syscall},
     task::{
         current_task, current_trap_cx, exit_current_and_run_next, suspend_current_and_run_next,
@@ -139,8 +139,12 @@ pub fn trap_handler() {
                 stval,
                 current_trap_cx().sepc,
             );
+                //发送段错误信号
+                warn!("going to send SIGSEGV signal!");
+                let tid = current_task().unwrap().tid();
+                send_signal_to_thread(tid, SigSet::SIGSEGV);
                 // page fault exit code
-                exit_current_and_run_next(-2);
+                //exit_current_and_run_next(-2);
             }
         }
         Trap::Exception(Exception::StoreFault)
