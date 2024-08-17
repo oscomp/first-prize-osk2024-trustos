@@ -173,23 +173,12 @@ impl InodeType {
     pub const fn is_socket(self) -> bool {
         matches!(self, Self::Socket)
     }
-    // Returns a character representation of the node type.
-    //
-    // For example, `d` for directory, `-` for regular file, etc.
-    // pub const fn as_char(self) -> char {
-    //     match self {
-    //         Self::Fifo => 'p',
-    //         Self::CharDevice => 'c',
-    //         Self::Dir => 'd',
-    //         Self::BlockDevice => 'b',
-    //         Self::File => '-',
-    //         Self::SymLink => 'l',
-    //         Self::Socket => 's',
-    //     }
-    // }
 }
+#[cfg(feature = "board_qemu")]
+core::arch::global_asm!(include_str!("preload_qemu.S"));
 
-core::arch::global_asm!(include_str!("preload.S"));
+#[cfg(not(feature = "board_qemu"))]
+core::arch::global_asm!(include_str!("preload_vf2.S"));
 
 // os\src\fs\mod.rs
 //将预加载到内存中的程序写入文件根目录

@@ -17,14 +17,3 @@ test_start:
     .incbin "../final_tests/test_all_1stage.sh"
 test_end:
     .align 12
-
-
-# 将test提前放到内存里
-    #.section .data
-    #.global sd_start
-    #.global sd_end
-    #.align 12
-#sd_start:
-    #.incbin "../lwext4_rust/ext4.img"
-#sd_end:
-    #.align 12

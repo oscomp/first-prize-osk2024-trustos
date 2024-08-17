@@ -163,15 +163,6 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     schedule(&mut _unused as *mut _);
 }
 
-// pub fn handle_exit() -> ! {
-//     let task = take_current_task();
-//     debug!("exit in hanle_exit");
-//     drop(task);
-//     let mut _unused = TaskContext::zero_init();
-//     schedule(&mut _unused as *mut _);
-//     panic!("Unreachable in handle_exit!");
-// }
-
 ///Globle process that init user shell
 pub static INITPROC: Lazy<Arc<TaskControlBlock>> = Lazy::new(|| {
     Arc::new({
