@@ -396,6 +396,7 @@ impl Ext4File {
             //找到cache直接写cache
             let cache = get_cache(path.clone());
             let mut cache_writer = cache.write();
+            #[allow(unused)]
             let len = cache_writer.writebuf(buf);
 
             /*
@@ -410,7 +411,7 @@ impl Ext4File {
             //debug!("len is {} now", len);
             #[cfg(feature = "board_qemu")]
             if len > 5_100_000 {
-                debug!("len is {} out of mem", len);
+                log::info!("len is {} out of mem", len);
                 //write_back_cache(path.clone());
                 remove_cache(path.clone());
                 return Err(ENOMEM as i32);

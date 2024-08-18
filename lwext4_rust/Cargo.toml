@@ -13,8 +13,8 @@ links = "lwext4"
 build = "build.rs"
 
 [features]
-default = ["print","board_qemu"]
-# default = ["print","board_ramdisk"]
+# default = ["print","board_qemu"]
+default = ["print","board_ramdisk"]
 print = ["printf-compat"]
 
 board_qemu = []
@@ -26,6 +26,9 @@ log = "0.4"
 printf-compat = { version = "0.1", default-features = false, optional = true }
 spin = "0.9.8"
 hashbrown = "0.12.0"
+
+[profile.release]
+debug = false
 
 #[build-dependencies]
 #[target.'cfg(unix)'.build-dependencies]
