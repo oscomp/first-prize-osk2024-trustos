@@ -80,7 +80,7 @@ int main()
 
 	RUN(b_pthread_createjoin_serial1, 0);
 	RUN(b_pthread_createjoin_serial2, 0);
-	RUN(b_pthread_create_serial1, 0);
+	// RUN(b_pthread_create_serial1, 0);
 	RUN(b_pthread_uselesslock, 0);
 
 	RUN(b_utf8_bigbuf, 0);

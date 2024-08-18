@@ -408,7 +408,7 @@ impl Ext4File {
             */
 
             //debug!("len is {} now", len);
-            #[cfg(feature = "board_qemu")]
+            // #[cfg(feature = "board_qemu")]
             if len > 5_100_000 {
                 debug!("len is {} out of mem", len);
                 //write_back_cache(path.clone());
@@ -907,10 +907,7 @@ pub fn insert_cache(file_path: String, cache: &Arc<RwLock<VFileCache>>) {
 pub fn remove_cache(file_path: String) {
     CACHE_TABLE.lock().remove(&file_path);
 }
-#[cfg(feature = "board_qemu")]
-const FIFO_SIZE: usize = 30;
 
-#[cfg(not(feature = "board_qemu"))]
 const FIFO_SIZE: usize = 30;
 //采用先进先出策略
 static FIFO_TABLE: Lazy<Mutex<VecDeque<String>>> = Lazy::new(|| Mutex::new(VecDeque::new()));

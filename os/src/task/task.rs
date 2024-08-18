@@ -9,10 +9,7 @@ use crate::{
         PAGE_SIZE, PRE_ALLOC_PAGES, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP,
         USER_TRAP_CONTEXT_TOP,
     },
-    fs::{
-        create_proc_dir_and_file, open, FdTable, FsInfo, OpenFlags, DEFAULT_DIR_MODE,
-        DEFAULT_FILE_MODE,
-    },
+    fs::{FdTable, FsInfo, OpenFlags, DEFAULT_DIR_MODE, DEFAULT_FILE_MODE},
     mm::{
         flush_tlb, get_data, put_data, translated_refmut, MapAreaType, MapPermission, MemorySet,
         MemorySetInner, PageTable, PageTableEntry, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
@@ -529,8 +526,9 @@ impl TaskControlBlock {
             *translated_refmut(child_token, child_tid) = child.tid() as u32;
         }
 
+        #[cfg(feature = "ltp")]
         if !flags.contains(CloneFlags::CLONE_THREAD) {
-            create_proc_dir_and_file(pid, ppid);
+            fs::create_proc_dir_and_file(pid, ppid);
         }
 
         drop(child_inner);

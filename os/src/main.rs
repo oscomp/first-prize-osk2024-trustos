@@ -125,7 +125,7 @@ pub fn rust_main(hartid: usize) -> ! {
         fs::init();
         task::add_initproc();
         INIT_FINISHED.store(true, Ordering::SeqCst);
-        fs::list_apps();
+        // fs::list_apps();
         boot_all_harts(hartid);
         trap::enable_timer_interrupt();
         timer::set_next_trigger();

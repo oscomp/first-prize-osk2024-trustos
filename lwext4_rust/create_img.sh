@@ -1,5 +1,5 @@
 # 制作一个全0的镜像文件
-dd if=/dev/zero of=ext4.img bs=4M count=64
+dd if=/dev/zero of=ext4.img bs=4M count=72
 
 DIR=lwext4_rust
 

@@ -602,6 +602,7 @@ static DYNAMIC_PATH: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     .collect()
 });
 
+#[cfg(feature = "ltp")]
 pub fn create_proc_dir_and_file(pid: usize, ppid: usize) -> Result<(), SysErrNo> {
     open(
         format!("/proc/{}", pid).as_str(),
@@ -639,6 +640,7 @@ pub fn create_proc_dir_and_file(pid: usize, ppid: usize) -> Result<(), SysErrNo>
     Ok(())
 }
 
+#[cfg(feature = "ltp")]
 pub fn remove_proc_dir_and_file(pid: usize) {
     root_inode().unlink(format!("/proc/{}/stat", pid).as_str());
     remove_inode_idx(format!("/proc/{}/stat", pid).as_str());

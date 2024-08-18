@@ -37,5 +37,7 @@ board_qemu = []
 board_vf2 = []  # visionFive2 with sdcard
 board_ramdisk=[] # visionFive2 without sdcard
 
+ltp = []
+
 [profile.release]
 debug = true

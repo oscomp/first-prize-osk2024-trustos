@@ -191,10 +191,21 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
             envp = envp.add(1);
         }
     }
-    env.push("PATH=/:/bin:".to_string());
-    env.push("LD_LIBRARY_PATH=/lib:/lib/glibc:/lib/musl:".to_string());
-    //设置系统最大负载
-    env.push("ENOUGH=100000".to_string());
+    let env_path = "PATH=/:/bin:".to_string();
+    if !env.contains(&env_path) {
+        env.push(env_path);
+    }
+
+    let env_ld_library_path = "LD_LIBRARY_PATH=/lib:/lib/glibc:/lib/musl:".to_string();
+    if !env.contains(&env_ld_library_path) {
+        env.push(env_ld_library_path);
+    }
+
+    let env_enough = "ENOUGH=100000".to_string();
+    if !env.contains(&env_enough) {
+        //设置系统最大负载
+        env.push(env_enough);
+    }
 
     debug!("[sys_execve] env is {:?}", env);
 
