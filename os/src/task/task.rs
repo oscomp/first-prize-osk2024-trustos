@@ -528,7 +528,7 @@ impl TaskControlBlock {
 
         #[cfg(feature = "ltp")]
         if !flags.contains(CloneFlags::CLONE_THREAD) {
-            fs::create_proc_dir_and_file(pid, ppid);
+            crate::fs::create_proc_dir_and_file(pid, ppid);
         }
 
         drop(child_inner);

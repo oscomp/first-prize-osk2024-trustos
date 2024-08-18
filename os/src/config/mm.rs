@@ -5,7 +5,7 @@ pub const KERNEL_STACK_SIZE: usize = 4096 * 2;
 #[cfg(feature = "board_qemu")]
 pub const KERNEL_HEAP_SIZE: usize = 0x3_000_000; // 48MB
 #[cfg(not(feature = "board_qemu"))]
-pub const KERNEL_HEAP_SIZE: usize = 0x20_000_000; // 512MB
+pub const KERNEL_HEAP_SIZE: usize = 0x30_000_000; // 768MB
 pub const USER_HEAP_SIZE: usize = 0x10_000_000;
 pub const PRE_ALLOC_PAGES: usize = 8;
 

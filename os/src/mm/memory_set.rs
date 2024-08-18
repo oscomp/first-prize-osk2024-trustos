@@ -131,14 +131,9 @@ impl MemorySet {
     }
     #[inline(always)]
     pub fn mprotect(&self, start_vpn: VirtPageNum, end_vpn: VirtPageNum, map_perm: MapPermission) {
-        self.inner.get_unchecked_mut().mprotect(
-            start_vpn,
-            end_vpn,
-            map_perm,
-            None,
-            usize::MAX,
-            false,
-        );
+        self.inner
+            .get_unchecked_mut()
+            .mprotect(start_vpn, end_vpn, map_perm);
     }
     #[inline(always)]
     pub fn activate(&self) {
@@ -444,7 +439,14 @@ impl MemorySetInner {
                 }
             });
             if need_split {
-                self.mprotect(start_vpn, end_vpn, map_perm, file, off, true);
+                self.mprotect(start_vpn, end_vpn, map_perm);
+                for area in self.areas.iter_mut() {
+                    let (start, end) = area.vpn_range.range();
+                    if start == start_vpn && end == end_vpn {
+                        area.mmap_file.offset = off;
+                        area.mmap_file.file = file.clone();
+                    }
+                }
             } else {
                 self.push_lazily(MapArea::new_mmap(
                     VirtAddr::from(addr),
@@ -452,7 +454,7 @@ impl MemorySetInner {
                     MapType::Framed,
                     map_perm,
                     MapAreaType::Mmap,
-                    file,
+                    file.clone(),
                     off,
                     flags,
                 ));
@@ -656,9 +658,6 @@ impl MemorySetInner {
         start_vpn: VirtPageNum,
         end_vpn: VirtPageNum,
         map_perm: MapPermission,
-        file: Option<Arc<OSInode>>,
-        offset: usize,
-        if_mmap: bool,
     ) {
         //因修改而新增的Area
         let mut new_areas = Vec::new();
@@ -669,24 +668,12 @@ impl MemorySetInner {
             if start >= start_vpn && end <= end_vpn {
                 //修改整个area
                 area.map_perm = map_perm;
-                if if_mmap {
-                    area.mmap_file.file = file.clone();
-                }
-                if offset != usize::MAX {
-                    area.mmap_file.offset = offset as usize;
-                }
                 continue;
             } else if start < start_vpn && end > start_vpn && end <= end_vpn {
                 //修改area后半部分
                 let mut new_area = MapArea::from_another(area);
                 new_area.map_perm = map_perm;
                 new_area.vpn_range = VPNRange::new(start_vpn, end);
-                if if_mmap {
-                    new_area.mmap_file.file = file.clone();
-                }
-                if offset != usize::MAX {
-                    new_area.mmap_file.offset = offset as usize;
-                }
                 area.vpn_range = VPNRange::new(start, start_vpn);
                 GROUP_SHARE.lock().add_area(new_area.groupid);
                 while !area.data_frames.is_empty() {
@@ -703,12 +690,6 @@ impl MemorySetInner {
                 let mut new_area = MapArea::from_another(area);
                 new_area.map_perm = map_perm;
                 new_area.vpn_range = VPNRange::new(start, end_vpn);
-                if if_mmap {
-                    new_area.mmap_file.file = file.clone();
-                }
-                if offset != usize::MAX {
-                    new_area.mmap_file.offset = offset as usize;
-                }
                 area.vpn_range = VPNRange::new(end_vpn, end);
                 GROUP_SHARE.lock().add_area(new_area.groupid);
                 while !area.data_frames.is_empty() {
@@ -730,12 +711,6 @@ impl MemorySetInner {
                 front_area.vpn_range = VPNRange::new(start, start_vpn);
                 back_area.vpn_range = VPNRange::new(end_vpn, end);
                 area.vpn_range = VPNRange::new(start_vpn, end_vpn);
-                if if_mmap {
-                    area.mmap_file.file = file.clone();
-                }
-                if offset != usize::MAX {
-                    area.mmap_file.offset = offset as usize;
-                }
                 GROUP_SHARE.lock().add_area(front_area.groupid);
                 GROUP_SHARE.lock().add_area(back_area.groupid);
                 while !area.data_frames.is_empty() {

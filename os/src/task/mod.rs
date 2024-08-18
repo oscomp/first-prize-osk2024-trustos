@@ -154,7 +154,7 @@ pub fn exit_current_and_run_next(exit_code: i32) {
                     task_inner.sig_table.set_exit_code(exit_code);
                 }
                 #[cfg(feature = "ltp")]
-                fs::remove_proc_dir_and_file(task.pid());
+                crate::fs::remove_proc_dir_and_file(task.pid());
                 wakeup_parent(task.ppid());
             }
         }

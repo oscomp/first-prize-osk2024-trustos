@@ -408,7 +408,7 @@ impl Ext4File {
             */
 
             //debug!("len is {} now", len);
-            // #[cfg(feature = "board_qemu")]
+            #[cfg(feature = "board_qemu")]
             if len > 5_100_000 {
                 debug!("len is {} out of mem", len);
                 //write_back_cache(path.clone());
