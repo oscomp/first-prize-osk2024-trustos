@@ -14,7 +14,7 @@
 mod context;
 
 use crate::{
-    mm::{VirtAddr, VirtPageNum},
+    mm::{flush_tlb, VirtAddr, VirtPageNum},
     signal::{check_if_any_sig_for_current_task, handle_signal, send_signal_to_thread, SigSet},
     syscall::{syscall, Syscall},
     task::{
@@ -133,12 +133,12 @@ pub fn trap_handler() {
             }
             if !ok {
                 warn!(
-                "[kernel] hart {} {:?} in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.",
-                hartid,
-                scause.cause(),
-                stval,
-                current_trap_cx().sepc,
-            );
+                    "[kernel] hart {} {:?} in application, bad addr = {:#x}, bad instruction = {:#x}, kernel killed it.",
+                    hartid,
+                    scause.cause(),
+                    stval,
+                    current_trap_cx().sepc,
+                );
                 //发送段错误信号
                 warn!("send SIGSEGV signal!");
                 let tid = current_task().unwrap().tid();
@@ -194,6 +194,7 @@ pub fn trap_handler() {
             );
         }
     }
+    //flush_tlb();
     //检查定时器
     current_task().unwrap().check_timer();
 

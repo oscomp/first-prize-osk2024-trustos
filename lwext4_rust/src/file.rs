@@ -911,7 +911,7 @@ pub fn remove_cache(file_path: String) {
 const FIFO_SIZE: usize = 30;
 
 #[cfg(not(feature = "board_qemu"))]
-const FIFO_SIZE: usize = 1000;
+const FIFO_SIZE: usize = 30;
 //采用先进先出策略
 static FIFO_TABLE: Lazy<Mutex<VecDeque<String>>> = Lazy::new(|| Mutex::new(VecDeque::new()));
 

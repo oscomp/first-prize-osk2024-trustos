@@ -579,9 +579,11 @@ impl MemorySetInner {
     }
     pub fn lazy_page_fault(&mut self, vpn: VirtPageNum, scause: Trap) -> bool {
         let pte = self.page_table.translate(vpn);
+        //println!("vpn={:#X},enter lazy", vpn.0);
         if pte.is_some() && pte.unwrap().is_valid() {
             return false;
         }
+        //println!("vpn={:#X},enter lazy2", vpn.0);
         //mmap
         if let Some(area) = self
             .areas
@@ -592,6 +594,7 @@ impl MemorySetInner {
                 start <= vpn && vpn < end
             })
         {
+            //println!("vpn={:#X},enter lazy3", vpn.0);
             if scause == Trap::Exception(Exception::LoadPageFault)
                 || scause == Trap::Exception(Exception::InstructionPageFault)
             {
@@ -613,6 +616,7 @@ impl MemorySetInner {
                 start <= vpn && vpn < end
             })
         {
+            //println!("vpn={:#X},enter lazy4", vpn.0);
             lazy_page_fault(vpn.into(), &mut self.page_table, area);
             return true;
         }
