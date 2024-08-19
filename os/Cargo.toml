@@ -26,8 +26,8 @@ num_enum = { version = "0.7.2", default-features = false }
 cfg-if = { version = "1.0.0" }
 visionfive2-sd = {path = "./vendor/visionfive2-sd"}
 [features]
-# default = ["info","board_qemu","ltp"]
-default = ["info","board_ramdisk"]
+default = ["info","board_qemu","ltp"]
+#default = ["info","board_ramdisk"]
 error = []
 warn = []
 info = []

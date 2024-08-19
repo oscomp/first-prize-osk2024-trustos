@@ -46,6 +46,7 @@ pub enum Syscall {
     SendFile = 71,
     Pselect6 = 72,
     Ppoll = 73,
+    Splice = 76,
     ReadLinkat = 78,
     Fstatat = 79,
     Fstat = 80,
@@ -234,6 +235,14 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::SendFile => sys_sendfile(args[0], args[1], args[2], args[3]),
         Syscall::Pselect6 => sys_pselect6(args[0], args[1], args[2], args[3], args[4], args[5]),
         Syscall::Ppoll => sys_ppoll(args[0], args[1], args[2], args[3]),
+        Syscall::Splice => sys_splice(
+            args[0] as usize,
+            args[1] as usize,
+            args[2] as usize,
+            args[3] as usize,
+            args[4] as usize,
+            args[5] as u32,
+        ),
         Syscall::ReadLinkat => sys_readlinkat(
             args[0] as isize,
             args[1] as *const u8,

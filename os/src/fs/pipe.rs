@@ -223,11 +223,8 @@ impl File for Pipe {
         loop {
             let task = current_task().unwrap();
             let task_inner = task.inner_lock();
-            if !task_inner
-                .sig_pending
-                .difference(task_inner.sig_mask)
-                .is_empty()
-            {
+            let check_sig = task_inner.sig_pending.difference(task_inner.sig_mask);
+            if !check_sig.is_empty() && check_sig != SigSet::SIGCHLD {
                 return Err(SysErrNo::ERESTART);
             }
             drop(task_inner);
@@ -273,11 +270,8 @@ impl File for Pipe {
         loop {
             let task = current_task().unwrap();
             let task_inner = task.inner_lock();
-            if !task_inner
-                .sig_pending
-                .difference(task_inner.sig_mask)
-                .is_empty()
-            {
+            let check_sig = task_inner.sig_pending.difference(task_inner.sig_mask);
+            if !check_sig.is_empty() && check_sig != SigSet::SIGCHLD {
                 return Err(SysErrNo::ERESTART);
             }
             drop(task_inner);

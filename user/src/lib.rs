@@ -133,6 +133,10 @@ pub fn run_libc_bench() -> isize {
     sys_run_libc_bench()
 }
 
+pub fn run_splice() -> isize {
+    sys_run_splice()
+}
+
 pub fn run_lmbench_test() -> isize {
     sys_run_lmbench_test()
 }

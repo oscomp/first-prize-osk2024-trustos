@@ -1715,3 +1715,130 @@ pub fn sys_fallocate(_fd: usize, _mode: u32, _offset: usize, _len: usize) -> Sys
     //伪实现
     Ok(0)
 }
+
+use log::info;
+pub fn sys_splice(
+    infd: usize,
+    off_in: usize,
+    outfd: usize,
+    off_out: usize,
+    count: usize,
+    _flags: u32,
+) -> SyscallRet {
+    let task = current_task().unwrap();
+    let inner = task.inner_lock();
+    let token = inner.user_token();
+
+    debug!(
+        "[sys_splice] fd_in is {}, off_in is {}, fd_out is {}, off_out is {},count is {}",
+        infd, off_in, outfd, off_out, count
+    );
+
+    if outfd >= inner.fd_table.len()
+        || inner.fd_table.try_get(outfd).is_none()
+        || infd >= inner.fd_table.len()
+        || inner.fd_table.try_get(infd).is_none()
+        || (off_in as isize) < 0
+        || (off_out as isize) < 0
+    {
+        return Err(SysErrNo::EINVAL);
+    }
+
+    let outfile = inner.fd_table.get(outfd);
+    let infile = inner.fd_table.get(infd);
+
+    let mut offset_in = 0;
+    let mut offset_out = 0;
+    if off_in != 0 {
+        offset_in = *translated_ref(token, off_in as *const isize);
+        if offset_in < 0 {
+            return Err(SysErrNo::EINVAL);
+        }
+    }
+    if off_out != 0 {
+        offset_out = *translated_ref(token, off_out as *const isize);
+        if offset_out < 0 {
+            return Err(SysErrNo::EINVAL);
+        }
+    }
+
+    drop(inner);
+    drop(task);
+
+    //构造输入缓冲池
+    let mut buf = vec![0u8; count];
+    let mut inbufv = Vec::new();
+    unsafe {
+        inbufv.push(core::slice::from_raw_parts_mut(
+            buf.as_mut_slice().as_mut_ptr(),
+            buf.as_slice().len(),
+        ));
+    }
+    //输入缓冲池
+    let inbuffer = UserBuffer::new(inbufv);
+
+    //读数据
+    let readcount;
+    if off_in == 0 {
+        let infile = infile.abs()?;
+        if !infile.readable() {
+            return Err(SysErrNo::EACCES);
+        }
+        readcount = infile.read(inbuffer)?;
+    } else {
+        let infile = infile.file()?;
+        if !infile.readable() {
+            return Err(SysErrNo::EACCES);
+        }
+        if offset_in as usize >= infile.inode.size() {
+            return Ok(0);
+        }
+        let in_offset = infile.lseek(0, SEEK_CUR)?;
+        infile.lseek(offset_in, SEEK_SET)?;
+        readcount = infile.read(inbuffer)?;
+        infile.lseek(in_offset as isize, SEEK_SET)?;
+    }
+
+    if readcount == 0 {
+        return Ok(0);
+    }
+
+    //构造输出缓冲池
+    let mut outbufv = Vec::new();
+    unsafe {
+        outbufv.push(core::slice::from_raw_parts_mut(
+            buf.as_mut_slice().as_mut_ptr(),
+            readcount,
+        ));
+    }
+    //输出缓冲池
+    let outbuffer = UserBuffer::new(outbufv);
+
+    //写数据
+    let writecount;
+    if off_out == 0 {
+        let outfile = outfile.abs()?;
+        if !outfile.writable() {
+            return Err(SysErrNo::EACCES);
+        }
+        writecount = outfile.write(outbuffer)?;
+    } else {
+        let outfile = outfile.file()?;
+        if !outfile.writable() {
+            return Err(SysErrNo::EACCES);
+        }
+        let out_offset = outfile.lseek(0, SEEK_CUR)?;
+        outfile.lseek(offset_out, SEEK_SET)?;
+        writecount = outfile.write(outbuffer)?;
+        outfile.lseek(out_offset as isize, SEEK_SET)?;
+    }
+    //如果系统调用执行成功，*off_in和*off_out将会增加复制的长度
+    if off_in != 0 {
+        *translated_refmut(token, off_in as *mut isize) += writecount as isize;
+    }
+    if off_out != 0 {
+        *translated_refmut(token, off_out as *mut isize) += writecount as isize;
+    }
+
+    Ok(writecount)
+}

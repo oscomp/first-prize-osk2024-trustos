@@ -199,7 +199,7 @@ pub fn sys_busyboxsh() -> isize {
             [
                 "busybox\0".as_ptr() as isize,
                 "sh\0".as_ptr() as isize,
-                "libctest_testcode.sh\0".as_ptr() as isize,
+                "splice-test-1\0".as_ptr() as isize,
                 //"./test-ltp.sh\0".as_ptr() as isize,
                 //"ltp/testcases/bin/abort01\0".as_ptr() as isize,
                 // "libctest_testcode.sh\0".as_ptr() as isize,
@@ -218,6 +218,13 @@ pub fn sys_run_libc_bench() -> isize {
     syscall(
         SYSCALL_EXECVE,
         ["/libc-bench\0".as_ptr() as isize, 0, 0, 0, 0, 0],
+    )
+}
+
+pub fn sys_run_splice() -> isize {
+    syscall(
+        SYSCALL_EXECVE,
+        ["/splice-test-4\0".as_ptr() as isize, 0, 0, 0, 0, 0],
     )
 }
 

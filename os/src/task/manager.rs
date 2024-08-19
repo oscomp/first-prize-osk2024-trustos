@@ -178,7 +178,7 @@ pub fn move_child_process_to_init(ppid: usize) {
     if let Some(tasks) = inner.remove(&ppid) {
         let init_childer = inner.get_mut(&INITPROC.pid()).unwrap();
         for child in tasks {
-            debug!("give child {} {}", child.pid(), child.tid());
+            //debug!("give child {} {}", child.pid(), child.tid());
             init_childer.push(child);
         }
     }
