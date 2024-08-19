@@ -290,7 +290,7 @@ impl File for Pipe {
         let mut ring_buffer = self.inner_lock();
         if ring_buffer.all_read_ends_closed() {
             //发送断开的管道错误信号
-            log::warn!("send SIGPIPE signal!");
+            // log::warn!("send SIGPIPE signal!");
             let tid = current_task().unwrap().tid();
             send_signal_to_thread(tid, SigSet::SIGPIPE);
             return Err(SysErrNo::EPIPE);

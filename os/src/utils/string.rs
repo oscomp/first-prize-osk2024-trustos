@@ -69,10 +69,26 @@ pub fn get_abs_path(base_path: &str, path: &str) -> String {
     }
 }
 
-pub fn strip_color(s: String, prefix: &str, suffix: &str) -> String {
-    debug!("prefix is {}, suffix is {}", prefix, suffix);
-    let trimmed_start = s.strip_prefix(prefix).unwrap_or(&s);
-    let trimmed_result = trimmed_start.strip_suffix(suffix).unwrap_or(trimmed_start);
-    let ret = String::from("ltp/testcases/bin/") + trimmed_result;
-    ret
-}
+// pub fn strip_color(s: String, prefix: &str, suffix: &str) -> String {
+//     debug!("prefix is {}, suffix is {}", prefix, suffix);
+//     let trimmed_start = s.strip_prefix(prefix).unwrap_or(&s);
+//     let trimmed_result = trimmed_start.strip_suffix(suffix).unwrap_or(trimmed_start);
+//     let ret = String::from("ltp/testcases/bin/") + trimmed_result;
+//     ret
+// }
+
+// use regex::Regex;
+
+// pub fn remove_ansi_escape_sequences(text: &str) -> String {
+//     // 定义匹配 ANSI 转义序列的正则表达式
+//     let ansi_escape = Regex::new(r"\x1b\[[0-9;]*m").unwrap();
+//     // 替换所有匹配的 ANSI 转义序列为空字符串
+//     ansi_escape.replace_all(text, "").to_string()
+// }
+
+// pub fn strip_color(s: String, prefix: &str, suffix: &str) -> String {
+//     let mut tmp = s.replace(prefix, "");
+//     tmp = tmp.replace(suffix, "");
+//     log::info!("after_strip s={}", &tmp);
+//     tmp
+// }
