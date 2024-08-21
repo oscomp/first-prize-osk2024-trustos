@@ -1064,6 +1064,30 @@ pub fn sys_pread64(fd: usize, buf: *const u8, count: usize, offset: isize) -> Sy
     }
 }
 
+pub fn sys_truncate(path: *const u8, length: i32) -> SyscallRet {
+    let task = current_task().unwrap();
+    let inner = task.inner_lock();
+
+    let token = inner.user_token();
+
+    if (path as isize) <= 0 || if_bad_address(path as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
+    let path = translated_str(token, path);
+
+    if path.len() > MAX_PATH_LEN {
+        return Err(SysErrNo::ENAMETOOLONG);
+    }
+
+    debug!("[sys_truncate] path is {}", path);
+
+    let abs_path = get_abs_path(inner.fs_info.cwd(), &path);
+    let osfile = open(&abs_path, OpenFlags::O_RDWR, NONE_MODE)?.file()?;
+
+    return osfile.inode.truncate(length as usize);
+}
+
 // Linux的实现与手册有差异或未实现该调用
 pub fn sys_ftruncate(fd: usize, length: i32) -> SyscallRet {
     let task = current_task().unwrap();
@@ -1633,13 +1657,60 @@ pub fn sys_pselect6(
 }
 
 pub fn sys_fchownat(
-    _dirfd: isize,
-    _pathname: *const u8,
-    _owner: usize,
-    _group: usize,
-    _flags: u32,
+    dirfd: isize,
+    path: *const u8,
+    owner: u32,
+    group: u32,
+    flags: u32,
 ) -> SyscallRet {
-    //伪实现
+    let task = current_task().unwrap();
+    let task_inner = task.inner_lock();
+    let token = task_inner.user_token();
+
+    if (flags as isize) < 0 {
+        return Err(SysErrNo::EINVAL);
+    }
+
+    if dirfd != -100 && dirfd as usize >= task_inner.fd_table.len() {
+        return Err(SysErrNo::EBADF);
+    }
+
+    if (path as isize) <= 0 || if_bad_address(path as usize) {
+        return Err(SysErrNo::EFAULT);
+    }
+
+    let path = translated_str(token, path);
+
+    if path.len() > MAX_PATH_LEN {
+        return Err(SysErrNo::ENAMETOOLONG);
+    }
+
+    if path.len() == 0 {
+        return Err(SysErrNo::ENOENT);
+    }
+
+    let abs_path = task_inner.get_abs_path(dirfd, &path)?;
+
+    debug!(
+        "[sys_fchmodat] path is {}, flags is {}, owner is {}, group is {}",
+        &abs_path, flags, owner, group
+    );
+
+    let (parent_path, _) = rsplit_once(abs_path.as_str(), "/");
+    let parent_inode = open(&parent_path, OpenFlags::O_RDWR, NONE_MODE)?.file()?;
+    if !parent_inode.inode.is_dir() {
+        return Err(SysErrNo::ENOTDIR);
+    }
+
+    let inode = open(&abs_path, OpenFlags::empty(), NONE_MODE)?.file()?;
+    inode.inode.fowner_set(owner, group);
+    let mut mode = inode.inode.fmode()? & 0xfff;
+    //去掉S_ISUID和S_ISGID（有IXGRP权限时）
+    mode &= !0x800;
+    if mode & 0x8 != 0 {
+        mode &= !0x400;
+    }
+    inode.inode.fmode_set(mode)?;
     Ok(0)
 }
 
@@ -1707,7 +1778,7 @@ pub fn sys_fchmodat(dirfd: isize, path: *const u8, mode: u32, flags: u32) -> Sys
     */
 
     let inode = open(&abs_path, OpenFlags::empty(), NONE_MODE)?.file()?;
-    inode.inode.fmode_set(mode);
+    inode.inode.fmode_set(mode)?;
     Ok(0)
 }
 

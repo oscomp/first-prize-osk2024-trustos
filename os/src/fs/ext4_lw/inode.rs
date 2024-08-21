@@ -325,6 +325,10 @@ impl Inode for Ext4Inode {
         let file = &mut self.inner.get_unchecked_mut().f;
         file.file_mode_set(mode).map_err(|e| SysErrNo::from(e))
     }
+    fn fowner_set(&self, owner: u32, group: u32) -> SyscallRet {
+        let file = &mut self.inner.get_unchecked_mut().f;
+        file.set_owner(owner, group).map_err(|e| SysErrNo::from(e))
+    }
 }
 
 impl Drop for Ext4Inode {

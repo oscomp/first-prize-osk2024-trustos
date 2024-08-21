@@ -115,6 +115,9 @@ pub trait Inode: Send + Sync {
     fn fmode_set(&self, _mode: u32) -> SyscallRet {
         unimplemented!()
     }
+    fn fowner_set(&self, _owner: u32, _group: u32) -> SyscallRet {
+        unimplemented!()
+    }
 }
 
 /// 文件接口

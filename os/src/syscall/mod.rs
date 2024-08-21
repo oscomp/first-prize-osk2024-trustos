@@ -25,6 +25,7 @@ pub enum Syscall {
     Umount2 = 39,
     Mount = 40,
     StatFs = 43,
+    Truncate = 45,
     Ftruncate = 46,
     Fallocate = 47,
     Faccessat = 48,
@@ -188,6 +189,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
             args[4] as *const u8,
         ),
         Syscall::StatFs => sys_statfs(args[0] as *const u8, args[1] as *mut Statfs),
+        Syscall::Truncate => sys_truncate(args[0] as *const u8, args[1] as i32),
         Syscall::Ftruncate => sys_ftruncate(args[0], args[1] as i32),
         Syscall::Fallocate => sys_fallocate(
             args[0] as usize,
@@ -212,8 +214,8 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::Fchownat => sys_fchownat(
             args[0] as isize,
             args[1] as *const u8,
-            args[2] as usize,
-            args[3] as usize,
+            args[2] as u32,
+            args[3] as u32,
             args[4] as u32,
         ),
         Syscall::Openat => sys_openat(
