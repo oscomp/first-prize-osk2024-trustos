@@ -9,7 +9,7 @@ use crate::{
         PAGE_SIZE, PRE_ALLOC_PAGES, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP,
         USER_TRAP_CONTEXT_TOP,
     },
-    fs::{FdTable, FsInfo, OpenFlags, DEFAULT_DIR_MODE, DEFAULT_FILE_MODE},
+    fs::{FdTable, FsInfo},
     mm::{
         flush_tlb, get_data, put_data, translated_refmut, MapAreaType, MapPermission, MemorySet,
         MemorySetInner, PageTable, PageTableEntry, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
@@ -21,7 +21,7 @@ use crate::{
     trap::TrapContext,
     utils::{get_abs_path, is_abs_path, SysErrNo},
 };
-use alloc::{format, string::String, sync::Arc, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
 use core::mem::size_of;
 use spin::{Mutex, MutexGuard};
 

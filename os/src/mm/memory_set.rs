@@ -766,12 +766,6 @@ impl MemorySetInner {
     pub fn push_lazily(&mut self, map_area: MapArea) {
         self.areas.push(map_area);
     }
-    ///仅initproc会用，将懒分配的全部分配
-    fn unlazy(&mut self) {
-        for map_area in self.areas.iter_mut() {
-            map_area.map(&mut self.page_table);
-        }
-    }
     /// Without kernel stacks.
     pub fn new_kernel() -> Self {
         let mut memory_set = Self::new_bare();

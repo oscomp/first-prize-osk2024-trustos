@@ -29,7 +29,7 @@ mod tid;
 
 use crate::{
     fs::{open, OpenFlags, NONE_MODE},
-    mm::{get_data, put_data, VirtAddr},
+    mm::{put_data, VirtAddr},
     signal::{send_signal_to_thread_group, SigSet},
 };
 use alloc::{boxed::Box, sync::Arc};

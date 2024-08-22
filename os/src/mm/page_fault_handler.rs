@@ -1,8 +1,6 @@
 // Page Fault Handler 回调
 
 use alloc::sync::Arc;
-use log::debug;
-use lwext4_rust::bindings::EXT4_SUPERBLOCK_FLAGS_UNSIGNED_HASH;
 
 use crate::{
     config::mm::PAGE_SIZE,

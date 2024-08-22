@@ -4,7 +4,6 @@ use super::{
 };
 use crate::{config::sync::HART_NUM, timer::check_futex_timer, trap::TrapContext, utils::hart_id};
 use alloc::{boxed::Box, sync::Arc};
-use log::debug;
 ///Processor management structure
 pub struct Processor {
     ///The task currently executing on the current processor

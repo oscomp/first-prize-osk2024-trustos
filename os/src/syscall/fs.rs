@@ -2,14 +2,13 @@
 use crate::{
     fs::{
         fs_stat, make_pipe, open, open_device_file, remove_inode_idx, sync, File, FileClass,
-        FileDescriptor, InodeType, Kstat, OpenFlags, Statfs, DEFAULT_DIR_MODE, DEFAULT_FILE_MODE,
-        MAX_PATH_LEN, MNT_TABLE, NONE_MODE, SEEK_CUR, SEEK_SET,
+        FileDescriptor, Kstat, OpenFlags, Statfs, MAX_PATH_LEN, MNT_TABLE, NONE_MODE, SEEK_CUR,
+        SEEK_SET,
     },
     mm::{
         get_data, if_bad_address, put_data, safe_translated_byte_buffer, translated_byte_buffer,
         translated_ref, translated_refmut, translated_str, UserBuffer,
     },
-    signal::check_if_any_sig_for_current_task,
     syscall::{FaccessatFileMode, FaccessatMode, FdSet, PollEvents, PollFd, SigSet},
     task::{current_task, current_token, suspend_current_and_run_next},
     timer::{get_time_ms, Timespec},
@@ -24,7 +23,6 @@ use alloc::{
 };
 use core::cmp::min;
 use log::debug;
-use lwext4_rust::bindings::O_WRONLY;
 
 use super::{FcntlCmd, Iovec, RLimit};
 
@@ -528,14 +526,10 @@ pub fn sys_mount(
     flags: u32,
     data: *const u8,
 ) -> SyscallRet {
-    const MS_RDONLY: u32 = 1;
-    const MS_REMOUNT: u32 = 32;
-
     let token = current_token();
     let special = translated_str(token, special);
     let dir = translated_str(token, dir);
     let ftype = translated_str(token, ftype);
-    //log::info!("flags = {}", flags);
     if !data.is_null() {
         let data = translated_str(token, data);
         let ret = MNT_TABLE.lock().mount(special, dir, ftype, flags, data);
@@ -1787,7 +1781,6 @@ pub fn sys_fallocate(_fd: usize, _mode: u32, _offset: usize, _len: usize) -> Sys
     Ok(0)
 }
 
-use log::info;
 pub fn sys_splice(
     infd: usize,
     off_in: usize,

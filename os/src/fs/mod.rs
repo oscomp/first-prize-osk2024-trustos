@@ -11,7 +11,6 @@ mod stdio;
 mod vfs;
 
 use crate::mm::UserBuffer;
-use crate::syscall::FaccessatFileMode;
 use crate::task::current_uid;
 use crate::timer::{get_time, get_time_ms};
 use crate::utils::{GeneralRet, SysErrNo};

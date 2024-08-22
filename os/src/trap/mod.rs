@@ -14,7 +14,7 @@
 mod context;
 
 use crate::{
-    mm::{flush_tlb, VirtAddr, VirtPageNum},
+    mm::{VirtAddr, VirtPageNum},
     signal::{check_if_any_sig_for_current_task, handle_signal, send_signal_to_thread, SigSet},
     syscall::{syscall, Syscall},
     task::{
@@ -24,7 +24,7 @@ use crate::{
     utils::{backtrace, hart_id},
 };
 use core::arch::global_asm;
-use log::{debug, trace, warn};
+use log::{debug, warn};
 use riscv::register::{
     mtvec::TrapMode,
     scause::{self, Exception, Interrupt, Trap},
@@ -115,7 +115,6 @@ pub fn trap_handler() {
         Trap::Exception(Exception::StorePageFault)
         | Trap::Exception(Exception::LoadPageFault)
         | Trap::Exception(Exception::InstructionPageFault) => {
-            //debug!("{:?},bad addr = {:#x}", scause.cause(), stval);
             // page fault
             let mut ok;
             {
@@ -140,9 +139,8 @@ pub fn trap_handler() {
                     current_trap_cx().sepc,
                 );
                 //发送段错误信号
-                warn!("send SIGSEGV signal!");
-                let tid = current_task().unwrap().tid();
-                send_signal_to_thread(tid, SigSet::SIGSEGV);
+                debug!("send SIGSEGV signal!");
+                send_signal_to_thread(current_task().unwrap().tid(), SigSet::SIGSEGV);
                 // page fault exit code
                 //exit_current_and_run_next(-2);
             }
@@ -175,7 +173,6 @@ pub fn trap_handler() {
             check_futex_timer();
             // debug!("Timer Interupt!");
             suspend_current_and_run_next();
-            // set_next_trigger();
         }
         Trap::Exception(Exception::Breakpoint) => {
             warn!(
@@ -212,9 +209,6 @@ pub fn trap_return() {
     if let Some(signo) = check_if_any_sig_for_current_task() {
         debug!("found signo in trap_return");
         handle_signal(signo);
-    }
-    if scause::read().cause() == Trap::Interrupt(Interrupt::SupervisorTimer) {
-        set_next_trigger();
     }
 
     if scause::read().cause() == Trap::Interrupt(scause::Interrupt::SupervisorTimer) {

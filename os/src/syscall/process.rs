@@ -3,7 +3,7 @@ use crate::{
     mm::{
         get_data, if_bad_address, put_data, safe_put_data, translated_ref, translated_str, VirtAddr,
     },
-    signal::{check_if_any_sig_for_current_task, handle_signal},
+    signal::check_if_any_sig_for_current_task,
     syscall::{CloneFlags, FutexCmd, FutexOpt, Utsname},
     task::{
         add_task, change_current_uid, current_task, current_token, current_uid,
@@ -133,25 +133,8 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
 
     let token = task_inner.user_token();
     let mut path = trim_start_slash(translated_str(token, path));
-    // path = remove_ansi_escape_sequences(&path);
-    // path = strip_color(path, "\u{1b}[0;0m", "\u{1b}[m");
-    // if path.starts_with("ltp/testcases/bin/\u{1b}[1;32m") {
-    //     //去除颜色
-    //     path = strip_color(path, "ltp/testcases/bin/\u{1b}[1;32m", "\u{1b}[m");
-    // }
-    //log::info!("[sys_execve] path={}", path);
-
     //处理argv参数
     let mut argv_vec = Vec::<String>::new();
-    // if !argv.is_null() {
-    //     let argv_ptr = *translated_ref(token, argv);
-    //     if argv_ptr != 0 {
-    //         argv_vec.push(path.clone());
-    //         unsafe {
-    //             argv = argv.add(1);
-    //         }
-    //     }
-    // }
     loop {
         if argv.is_null() {
             break;
@@ -171,12 +154,6 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
         argv_vec.insert(0, String::from("busybox"));
         path = String::from("/busybox");
     }
-
-    // if path.ends_with("ls") || path.ends_with("xargs") || path.ends_with("sleep") {
-    //     //ls,xargs,sleep文件为busybox调用，需要用busybox来启动
-    //     argv_vec.insert(0, String::from("busybox"));
-    //     path = String::from("/busybox");
-    // }
 
     debug!("[sys_execve] path is {},arg is {:?}", path, argv_vec);
     let mut env = Vec::<String>::new();
@@ -396,13 +373,6 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
             drop(process_group);
             suspend_current_and_run_next();
         }
-
-        /*
-        if let Some(_) = check_if_any_sig_for_current_task() {
-            //被信号唤醒
-            return Err(SysErrNo::EINTR);
-        }
-        */
     }
 }
 
