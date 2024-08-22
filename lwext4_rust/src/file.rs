@@ -337,7 +337,13 @@ impl Ext4File {
             let length = buff.len();
             let end = (cache_read.offset + length).min(cache_read.size);
             let r_sz = end - cache_read.offset;
-            //debug!("data.len={:x},end={:x}", data.len(), end);
+            // debug!(
+            //     "read_size={},offset={},end={},end-offset={}",
+            //     r_sz,
+            //     cache_read.offset,
+            //     end,
+            //     end - cache_read.offset
+            // );
             if length <= 10 {
                 for i in 0..r_sz {
                     buff[i] = data[cache_read.offset + i];
@@ -346,12 +352,10 @@ impl Ext4File {
                 buff[..r_sz].copy_from_slice(&data[cache_read.offset..end]);
             }
 
-            /*
-            debug!(
-                "file_read {},len = {:x},offset is {:x}",
-                path, r_sz, cache_read.offset
-            );
-            */
+            // debug!(
+            //     "file_read {},len = {:x},offset is {:x}",
+            //     path, r_sz, cache_read.offset
+            // );
 
             return Ok(r_sz);
         }

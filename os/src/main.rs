@@ -20,12 +20,11 @@
 
 // #![deny(warnings)]
 //#![deny(missing_docs)]
-// #![allow(unused)]
-// #![deny(warnings)]
 #![allow(unused_must_use)]
 #![allow(unreachable_code)]
-#![allow(dead_code)]
-#![allow(unused_imports)]
+// #![allow(dead_code)]
+// #![allow(unused_imports)]
+#![allow(unused_unsafe)]
 #![no_std]
 #![no_main]
 #![feature(panic_info_message)]
@@ -125,7 +124,7 @@ pub fn rust_main(hartid: usize) -> ! {
         fs::init();
         task::add_initproc();
         INIT_FINISHED.store(true, Ordering::SeqCst);
-        // fs::list_apps();
+        fs::list_apps();
         boot_all_harts(hartid);
         trap::enable_timer_interrupt();
         timer::set_next_trigger();

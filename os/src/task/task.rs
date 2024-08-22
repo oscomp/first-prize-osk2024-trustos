@@ -9,10 +9,11 @@ use crate::{
         PAGE_SIZE, PRE_ALLOC_PAGES, USER_HEAP_SIZE, USER_STACK_SIZE, USER_STACK_TOP,
         USER_TRAP_CONTEXT_TOP,
     },
+    data_flow,
     fs::{FdTable, FsInfo},
     mm::{
-        flush_tlb, get_data, put_data, translated_refmut, MapAreaType, MapPermission, MemorySet,
-        MemorySetInner, PageTable, PageTableEntry, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
+        flush_tlb, put_data, MapAreaType, MapPermission, MemorySet, MemorySetInner, PageTable,
+        PageTableEntry, PhysPageNum, VPNRange, VirtAddr, VirtPageNum,
     },
     signal::{SigSet, SigTable},
     syscall::CloneFlags,
@@ -117,7 +118,7 @@ impl TaskControlBlockInner {
             VirtAddr::from(ustack_top).floor(),
         );
         //预先为栈顶分配几页，用于环境变量等初始数据
-        let page_table = PageTable::from_token(self.memory_set.get_ref().page_table.token());
+        let page_table = PageTable::from_token(self.memory_set.token());
         let area = self
             .memory_set
             .get_mut()
@@ -180,14 +181,6 @@ impl TaskControlBlockInner {
         } else {
             Ok(get_abs_path(self.fs_info.cwd(), path))
         }
-        // abs_path.map_or(Err(SysErrNo::EINVAL), |abs_path| {
-        //     if is_dynamic_link_file(&abs_path) {
-        //         let real_path = map_dynamic_link_file(&abs_path);
-        //         // log::info!("path={},dynamic path={}", path, real_path);
-        //         return Ok(String::from(real_path));
-        //     }
-        //     Ok(abs_path)
-        // })
     }
 }
 
@@ -260,14 +253,20 @@ impl TaskControlBlock {
         //用户栈高地址到低地址：环境变量字符串/参数字符串/aux辅助向量/环境变量地址数组/参数地址数组/参数数量
         // memory_set with elf program headers/trampoline/trap context/user stack
         let (memory_set, user_hp, entry_point, mut auxv) = MemorySetInner::from_elf(elf_data);
-        let token = memory_set.token();
 
-        task_inner.time_data.clear();
-        if task_inner.clear_child_tid != 0 {
-            put_data(token, task_inner.clear_child_tid as *mut u32, 0);
-        }
-        // substitute memory_set
+        // 替换 memory_set
         task_inner.memory_set = Arc::new(MemorySet::new(memory_set));
+        task_inner.memory_set.activate();
+
+        if task_inner.clear_child_tid != 0 {
+            // put_data(
+            //     task_inner.memory_set.token(),
+            //     task_inner.clear_child_tid as *mut u32,
+            //     0,
+            // );
+            data_flow!({ *(task_inner.clear_child_tid as *mut u32) = 0 });
+        }
+
         // 重新分配用户资源
         task_inner.alloc_user_res();
         task_inner.sig_table = Arc::new(SigTable::new());
@@ -276,21 +275,23 @@ impl TaskControlBlock {
         task_inner.fd_table.close_on_exec();
         task_inner.sig_mask = SigSet::empty();
         task_inner.sig_pending = SigSet::empty();
+        task_inner.time_data.clear();
 
         let mut user_sp = task_inner.user_stack_top;
-
-        // println!("user_sp:{:#X}  argv:{:?}", user_sp, argv);
 
         //环境变量内容入栈
         let mut envp = Vec::new();
         for env in env.iter() {
             user_sp -= env.len() + 1;
             envp.push(user_sp);
-            // println!("{:#X}:{}", user_sp, env);
             for (j, c) in env.as_bytes().iter().enumerate() {
-                *translated_refmut(token, (user_sp + j) as *mut u8) = *c;
+                unsafe {
+                    *((user_sp + j) as *mut u8) = *c;
+                }
             }
-            *translated_refmut(token, (user_sp + env.len()) as *mut u8) = 0;
+            unsafe {
+                *((user_sp + env.len()) as *mut u8) = 0;
+            }
         }
         envp.push(0);
         user_sp -= user_sp % size_of::<usize>();
@@ -301,12 +302,15 @@ impl TaskControlBlock {
             // 计算字符串在栈上的地址
             user_sp -= arg.len() + 1;
             argvp.push(user_sp);
-            // println!("{:#X}:{}", user_sp, arg);
             for (j, c) in arg.as_bytes().iter().enumerate() {
-                *translated_refmut(token, (user_sp + j) as *mut u8) = *c;
+                unsafe {
+                    *((user_sp + j) as *mut u8) = *c;
+                }
             }
             // 添加字符串末尾的 null 字符
-            *translated_refmut(token, (user_sp + arg.len()) as *mut u8) = 0;
+            unsafe {
+                *((user_sp + arg.len()) as *mut u8) = 0;
+            }
         }
         user_sp -= user_sp % size_of::<usize>(); //以8字节对齐
         argvp.push(0);
@@ -315,31 +319,30 @@ impl TaskControlBlock {
         user_sp -= 16;
         auxv.push(Aux::new(AuxType::RANDOM, user_sp));
         for i in 0..0xf {
-            *translated_refmut(token, (user_sp + i) as *mut u8) = i as u8;
+            unsafe {
+                *((user_sp + i) as *mut u8) = i as u8;
+            }
         }
         user_sp -= user_sp % 16;
 
-        // println!("aux:");
         //将auxv放入栈中
         auxv.push(Aux::new(AuxType::EXECFN, argvp[0]));
         auxv.push(Aux::new(AuxType::NULL, 0));
         for aux in auxv.iter().rev() {
-            // println!("{:?}", aux);
             user_sp -= size_of::<Aux>();
-            *translated_refmut(token, user_sp as *mut usize) = aux.aux_type as usize;
-            *translated_refmut(token, (user_sp + size_of::<usize>()) as *mut usize) = aux.value;
+            unsafe {
+                *(user_sp as *mut usize) = aux.aux_type as usize;
+                *((user_sp + size_of::<usize>()) as *mut usize) = aux.value;
+            }
         }
 
         //将环境变量指针数组放入栈中
-        // println!("env pointers:");
         user_sp -= envp.len() * size_of::<usize>();
         let envp_base = user_sp;
         for i in 0..envp.len() {
-            put_data(
-                token,
-                (user_sp + i * size_of::<usize>()) as *mut usize,
-                envp[i],
-            );
+            unsafe {
+                *((user_sp + i * size_of::<usize>()) as *mut usize) = envp[i];
+            }
         }
 
         // println!("arg pointers:");
@@ -347,20 +350,19 @@ impl TaskControlBlock {
         let argv_base = user_sp;
         //将参数指针数组放入栈中
         for i in 0..argvp.len() {
-            put_data(
-                token,
-                (user_sp + i * size_of::<usize>()) as *mut usize,
-                argvp[i],
-            );
+            unsafe {
+                *((user_sp + i * size_of::<usize>()) as *mut usize) = argvp[i];
+            }
         }
 
         //将argc放入栈中
         user_sp -= size_of::<usize>();
-        *translated_refmut(token, user_sp as *mut usize) = argv.len();
+        unsafe {
+            *(user_sp as *mut usize) = argv.len();
+        }
 
         //以8字节对齐
         user_sp -= user_sp % size_of::<usize>();
-        //println!("user_sp:{:#X}", user_sp);
 
         //将设置了O_CLOEXEC位的文件描述符关闭
         task_inner.fd_table.close_on_exec();
@@ -419,7 +421,7 @@ impl TaskControlBlock {
         };
         // 检查是否需要设置 parent_tid
         if flags.contains(CloneFlags::CLONE_PARENT_SETTID) {
-            *translated_refmut(parent_inner.user_token(), parent_tid) = tid_handle.0 as u32;
+            put_data(parent_inner.user_token(), parent_tid, tid_handle.0 as u32);
         }
         // 检查是否需要设置子进程的 set_child_tid,clear_child_tid
         let set_child_tid = if flags.contains(CloneFlags::CLONE_CHILD_SETTID) {
@@ -505,9 +507,8 @@ impl TaskControlBlock {
                 .remove_area_with_start_vpn(VirtAddr::from(ustack - USER_STACK_SIZE).floor());
             child_inner.user_stack_top = 0;
             // 设置运行的起始地址和参数以及stack
-            let token = parent_inner.user_token();
-            let entry_point = get_data(token, stack as *const usize);
-            let arg = get_data(token, (stack + 8) as *const usize);
+            let (entry_point, arg) =
+                data_flow!({ (*(stack as *const usize), *((stack + 8) as *const usize)) });
             // sepc/entry
             // debug!("[new thread] entry_point:{:#x}", entry_point);
             trap_cx.sepc = entry_point;
@@ -523,7 +524,7 @@ impl TaskControlBlock {
         // CLONE_CHILD_SETTID
         if flags.contains(CloneFlags::CLONE_CHILD_SETTID) {
             let child_token = child_inner.user_token();
-            *translated_refmut(child_token, child_tid) = child.tid() as u32;
+            put_data(child_token, child_tid, child.tid() as u32);
         }
 
         #[cfg(feature = "ltp")]

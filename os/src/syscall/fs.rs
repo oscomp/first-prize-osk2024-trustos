@@ -1,18 +1,16 @@
 //! File and filesystem-related syscalls
 use crate::{
+    data_flow,
     fs::{
         fs_stat, make_pipe, open, open_device_file, remove_inode_idx, sync, File, FileClass,
         FileDescriptor, Kstat, OpenFlags, Statfs, MAX_PATH_LEN, MNT_TABLE, NONE_MODE, SEEK_CUR,
         SEEK_SET,
     },
-    mm::{
-        get_data, if_bad_address, put_data, safe_translated_byte_buffer, translated_byte_buffer,
-        translated_ref, translated_refmut, translated_str, UserBuffer,
-    },
+    mm::{is_bad_address, safe_translated_byte_buffer, translated_byte_buffer, UserBuffer},
     syscall::{FaccessatFileMode, FaccessatMode, FdSet, PollEvents, PollFd, SigSet},
-    task::{current_task, current_token, suspend_current_and_run_next},
+    task::{current_task, suspend_current_and_run_next},
     timer::{get_time_ms, Timespec},
-    utils::{get_abs_path, rsplit_once, trim_start_slash, SysErrNo, SyscallRet},
+    utils::{c_ptr_to_string, get_abs_path, rsplit_once, trim_start_slash, SysErrNo, SyscallRet},
 };
 use alloc::{
     format,
@@ -37,7 +35,7 @@ pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
         return Err(SysErrNo::EBADF);
     }
 
-    if (buf as isize) < 0 || if_bad_address(buf as usize) || ((buf as usize) == 0 && len != 0) {
+    if (buf as isize) < 0 || is_bad_address(buf as usize) || ((buf as usize) == 0 && len != 0) {
         return Err(SysErrNo::EFAULT);
     }
 
@@ -78,7 +76,7 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> SyscallRet {
         return Err(SysErrNo::EBADF);
     }
 
-    if (buf as isize) <= 0 || if_bad_address(buf as usize) {
+    if (buf as isize) <= 0 || is_bad_address(buf as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
@@ -121,7 +119,7 @@ pub fn sys_writev(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
         return Err(SysErrNo::EBADF);
     }
 
-    if (iov as isize) <= 0 || if_bad_address(iov as usize) {
+    if (iov as isize) <= 0 || is_bad_address(iov as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
@@ -148,18 +146,13 @@ pub fn sys_writev(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
         for i in 0..iovcnt {
             // current iovec pointer
             let current = unsafe { iov.add(iovec_size * i) };
-            let iovinfo = *translated_refmut(token, current as *mut Iovec);
+            let iovinfo = data_flow!({ *(current as *mut Iovec) });
             if (iovinfo.iov_len as isize) < 0 {
                 return Err(SysErrNo::EINVAL);
             }
-            let buffer;
-            let check_buffer =
-                translated_byte_buffer(token, iovinfo.iov_base as *mut u8, iovinfo.iov_len);
-            if let Some(_) = check_buffer {
-                buffer = check_buffer.unwrap();
-            } else {
-                return Err(SysErrNo::EFAULT);
-            }
+            let buffer =
+                translated_byte_buffer(token, iovinfo.iov_base as *mut u8, iovinfo.iov_len)
+                    .unwrap();
             let buf = UserBuffer::new(buffer);
             let write_ret = file.write(buf)?;
             ret += write_ret as usize;
@@ -177,15 +170,18 @@ pub fn sys_readv(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
     let token = inner.user_token();
 
     debug!(
-        "[sys_readv] fd is {}, iov is {:x}, iovcnt is {}",
-        fd, iov as usize, iovcnt
+        "[sys_readv] fd is {}, iov is {:x}, iovcnt is {},file={} ",
+        fd,
+        iov as usize,
+        iovcnt,
+        inner.fs_info.fd2path(fd)
     );
 
     if (fd as isize) < 0 || fd >= inner.fd_table.len() {
         return Err(SysErrNo::EBADF);
     }
 
-    if (iov as isize) <= 0 || if_bad_address(iov as usize) {
+    if (iov as isize) <= 0 || is_bad_address(iov as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
@@ -211,18 +207,13 @@ pub fn sys_readv(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
         for i in 0..iovcnt {
             // current iovec pointer
             let current = unsafe { iov.add(iovec_size * i) };
-            let iovinfo = *translated_refmut(token, current as *mut Iovec);
+            let iovinfo = data_flow!({ *(current as *mut Iovec) });
             if (iovinfo.iov_len as isize) < 0 {
                 return Err(SysErrNo::EINVAL);
             }
-            let buffer;
-            let check_buffer =
-                translated_byte_buffer(token, iovinfo.iov_base as *mut u8, iovinfo.iov_len);
-            if let Some(_) = check_buffer {
-                buffer = check_buffer.unwrap();
-            } else {
-                return Err(SysErrNo::EFAULT);
-            }
+            let buffer =
+                translated_byte_buffer(token, iovinfo.iov_base as *mut u8, iovinfo.iov_len)
+                    .unwrap();
             let buf = UserBuffer::new(buffer);
             let read_ret = file.read(buf)?;
             ret += read_ret as usize;
@@ -234,15 +225,16 @@ pub fn sys_readv(fd: usize, iov: *const u8, iovcnt: usize) -> SyscallRet {
 }
 
 /// 参考 https://man7.org/linux/man-pages/man2/openat.2.html
-pub fn sys_openat(dirfd: isize, path: *const u8, flags: u32, mode: u32) -> SyscallRet {
-    if path as usize == 0 {
+pub fn sys_openat(dirfd: isize, pathp: *const u8, flags: u32, mode: u32) -> SyscallRet {
+    if pathp as usize == 0 {
         return Err(SysErrNo::ENOENT);
     }
 
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
-    let token = task_inner.user_token();
-    let path = translated_str(token, path);
+
+    let path = data_flow!({ c_ptr_to_string(pathp) });
+
     let flags = OpenFlags::from_bits(flags).unwrap();
 
     let mut abs_path = task_inner.get_abs_path(dirfd, &path)?;
@@ -295,7 +287,7 @@ pub fn sys_getcwd(buf: *const u8, size: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
 
-    if (buf as isize) < 0 || if_bad_address(buf as usize) || (size as isize) < 0 {
+    if (buf as isize) < 0 || is_bad_address(buf as usize) || (size as isize) < 0 {
         return Err(SysErrNo::EFAULT);
     }
 
@@ -371,13 +363,13 @@ pub fn sys_dup3(old: usize, new: usize, flags: u32) -> SyscallRet {
 pub fn sys_chdir(path: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
 
-    if (path as isize) <= 0 || if_bad_address(path as usize) {
+    if (path as isize) <= 0 || is_bad_address(path as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
-    let mut path = translated_str(token, path);
+    // let mut path = translated_str(token, path);
+    let mut path = data_flow!({ c_ptr_to_string(path) });
 
     if path.len() > MAX_PATH_LEN {
         return Err(SysErrNo::ENAMETOOLONG);
@@ -405,8 +397,7 @@ pub fn sys_chdir(path: *const u8) -> SyscallRet {
 pub fn sys_mkdirat(dirfd: isize, path: *const u8, mode: u32) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
-    let path = translated_str(token, path);
+    let path = data_flow!({ c_ptr_to_string(path) });
 
     debug!(
         "[sys_mkdirat] dirfd is {},path is {},mode is {}",
@@ -478,9 +469,8 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, _flags: u32) -> SyscallRet {
     // assert!(flags != AT_REMOVEDIR, "not support yet");
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
 
-    let path = translated_str(token, path);
+    let path = data_flow!({ c_ptr_to_string(path) });
     let abs_path = inner.get_abs_path(dirfd, &path)?;
     // TODO(ZMY) 支持符号链接,socket,FIFO,device
     // 如果是File但尚有对应的fd未关闭,等到close时unlink
@@ -507,8 +497,7 @@ pub fn sys_unlinkat(dirfd: isize, path: *const u8, _flags: u32) -> SyscallRet {
 
 /// 参考 https://man7.org/linux/man-pages/man2/umount2.2.html
 pub fn sys_umount2(special: *const u8, flags: u32) -> SyscallRet {
-    let token = current_token();
-    let special = translated_str(token, special);
+    let special = data_flow!({ c_ptr_to_string(special) });
 
     let ret = MNT_TABLE.lock().umount(special, flags);
     if ret != -1 {
@@ -526,12 +515,16 @@ pub fn sys_mount(
     flags: u32,
     data: *const u8,
 ) -> SyscallRet {
-    let token = current_token();
-    let special = translated_str(token, special);
-    let dir = translated_str(token, dir);
-    let ftype = translated_str(token, ftype);
+    let (special, dir, ftype) = data_flow!({
+        (
+            c_ptr_to_string(special),
+            c_ptr_to_string(dir),
+            c_ptr_to_string(ftype),
+        )
+    });
+
     if !data.is_null() {
-        let data = translated_str(token, data);
+        let data = data_flow!({ c_ptr_to_string(data) });
         let ret = MNT_TABLE.lock().mount(special, dir, ftype, flags, data);
         if ret != -1 {
             Ok(0)
@@ -554,9 +547,8 @@ pub fn sys_mount(
 pub fn sys_fstat(fd: usize, kst: *mut Kstat) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
 
-    if (kst as isize) <= 0 || if_bad_address(kst as usize) {
+    if (kst as isize) <= 0 || is_bad_address(kst as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
@@ -569,7 +561,7 @@ pub fn sys_fstat(fd: usize, kst: *mut Kstat) -> SyscallRet {
         return Err(SysErrNo::EBADF);
     }
     let file = inner.fd_table.get(fd).any();
-    put_data(token, kst, file.fstat());
+    data_flow!({ *kst = file.fstat() });
     Ok(0)
 }
 
@@ -577,7 +569,6 @@ pub fn sys_fstat(fd: usize, kst: *mut Kstat) -> SyscallRet {
 pub fn sys_pipe2(fd: *mut u32, flags: u32) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
-    let token = task_inner.user_token();
 
     debug!("[sys_pipe2] fd is {:x},flags is {}", fd as usize, flags);
 
@@ -601,8 +592,10 @@ pub fn sys_pipe2(fd: *mut u32, flags: u32) -> SyscallRet {
     task_inner.fs_info.insert("pipe".to_string(), read_fd);
     task_inner.fs_info.insert("pipe".to_string(), write_fd);
     debug!("pipe read fd is {}, write fd is {}", read_fd, write_fd);
-    *translated_refmut(token, fd) = read_fd as u32;
-    *translated_refmut(token, unsafe { fd.add(1) }) = write_fd as u32;
+    data_flow!({
+        *fd = read_fd as u32;
+        *fd.add(1) = write_fd as u32;
+    });
     Ok(0)
 }
 
@@ -610,8 +603,7 @@ pub fn sys_pipe2(fd: *mut u32, flags: u32) -> SyscallRet {
 pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *mut Kstat, _flags: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
-    let path = trim_start_slash(translated_str(token, path));
+    let path = trim_start_slash(data_flow!({ c_ptr_to_string(path) }));
 
     let abs_path = inner.get_abs_path(dirfd, &path)?;
     //log::info!("[sys_fstatat] abs_path={}", &abs_path);
@@ -626,16 +618,13 @@ pub fn sys_fstatat(dirfd: isize, path: *const u8, kst: *mut Kstat, _flags: usize
         NONE_MODE,
     )?
     .any();
-    put_data(token, kst, file.fstat());
+    data_flow!({ *kst = file.fstat() });
     return Ok(0);
 }
 
 /// 参考 https://man7.org/linux/man-pages/man2/statfs.2.html
 pub fn sys_statfs(_path: *const u8, statfs: *mut Statfs) -> SyscallRet {
-    let task = current_task().unwrap();
-    let inner = task.inner_lock();
-    let token = inner.user_token();
-    put_data(token, statfs, fs_stat());
+    data_flow!({ *statfs = fs_stat() });
     Ok(0)
 }
 
@@ -643,14 +632,13 @@ pub fn sys_statfs(_path: *const u8, statfs: *mut Statfs) -> SyscallRet {
 pub fn sys_faccessat(dirfd: isize, path: *const u8, mode: u32, _flags: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
     if (path as isize) <= 0 {
         return Err(SysErrNo::EFAULT);
     }
     if (mode as i32) < 0 {
         return Err(SysErrNo::EINVAL);
     }
-    let path = translated_str(token, path);
+    let path = data_flow!({ c_ptr_to_string(path) });
 
     if path.len() == 0 {
         return Err(SysErrNo::ENOENT);
@@ -741,9 +729,8 @@ pub fn sys_utimensat(
     }
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
     let path = if !path.is_null() {
-        translated_str(token, path)
+        data_flow!({ c_ptr_to_string(path) })
     } else {
         String::new()
     };
@@ -759,8 +746,7 @@ pub fn sys_utimensat(
         atime_sec = Some(nowtime);
         mtime_sec = Some(nowtime);
     } else {
-        let atime = get_data(token, times);
-        let mtime = get_data(token, unsafe { times.add(1) });
+        let (atime, mtime) = data_flow!({ (*times, *times.add(1)) });
         match atime.tv_nsec {
             UTIME_NOW => atime_sec = Some(nowtime),
             UTIME_OMIT => (),
@@ -879,7 +865,6 @@ pub fn sys_ioctl(_fd: usize, _cmd: usize, _arg: usize) -> SyscallRet {
 pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
 
     debug!(
         "[sys_sendfile] outfd is {}, infd is {}, offset_ptr is {}, count is {}",
@@ -894,7 +879,7 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
         return Err(SysErrNo::EBADF);
     }
 
-    if (offset_ptr as isize) < 0 || if_bad_address(offset_ptr as usize) {
+    if (offset_ptr as isize) < 0 || is_bad_address(offset_ptr as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
@@ -945,15 +930,16 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
     if offset_ptr == 0 {
         readcount = infile.read(inbuffer)?;
     } else {
-        let offset = *translated_ref(token, offset_ptr as *const isize);
+        let offset = data_flow!({ *(offset_ptr as *const isize) });
         if offset < 0 {
             return Err(SysErrNo::EINVAL);
         }
-        // infile.set_offset(offset as usize);
         infile.lseek(offset, SEEK_SET)?;
         readcount = infile.read(inbuffer)?;
-        *translated_refmut(token, offset_ptr as *mut isize) += readcount as isize;
-        infile.lseek(cur_off as isize, SEEK_SET);
+        data_flow!({
+            *(offset_ptr as *mut isize) += readcount as isize;
+        });
+        infile.lseek(cur_off as isize, SEEK_SET)?;
     }
 
     if readcount == 0 {
@@ -980,13 +966,12 @@ pub fn sys_sendfile(outfd: usize, infd: usize, offset_ptr: usize, count: usize) 
 pub fn sys_pwrite64(fd: usize, buf: *const u8, count: usize, offset: isize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
 
     if (fd as isize) < 0 || fd >= inner.fd_table.len() {
         return Err(SysErrNo::EBADF);
     }
 
-    if (buf as isize) < 0 || if_bad_address(buf as usize) || ((buf as usize) == 0 && count != 0) {
+    if (buf as isize) < 0 || is_bad_address(buf as usize) || ((buf as usize) == 0 && count != 0) {
         return Err(SysErrNo::EFAULT);
     }
 
@@ -1013,9 +998,8 @@ pub fn sys_pwrite64(fd: usize, buf: *const u8, count: usize, offset: isize) -> S
         drop(task);
         let cur_offset = file.lseek(0, SEEK_CUR)? as isize;
         file.lseek(offset, SEEK_SET)?;
-        let ret = file.write(UserBuffer::new(
-            translated_byte_buffer(token, buf, count).unwrap(),
-        ))?;
+        let wbuf = data_flow!({ core::slice::from_raw_parts_mut(buf as *mut u8, count) });
+        let ret = file.write(UserBuffer::new(vec![wbuf]))?;
         file.lseek(cur_offset, SEEK_SET)?;
         return Ok(ret);
     }
@@ -1062,13 +1046,11 @@ pub fn sys_truncate(path: *const u8, length: i32) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
 
-    let token = inner.user_token();
-
-    if (path as isize) <= 0 || if_bad_address(path as usize) {
+    if (path as isize) <= 0 || is_bad_address(path as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
-    let path = translated_str(token, path);
+    let path = data_flow!({ c_ptr_to_string(path) });
 
     if path.len() > MAX_PATH_LEN {
         return Err(SysErrNo::ENAMETOOLONG);
@@ -1137,17 +1119,18 @@ pub fn sys_prlimit(
     if pid == 0 {
         let task = current_task().unwrap();
         let mut inner = task.inner_lock();
-        let token = inner.user_token();
         let fd_table = &mut inner.fd_table;
         if !old_limit.is_null() {
             // 说明是get
-            let limit = translated_refmut(token, old_limit);
-            limit.rlim_cur = fd_table.get_soft_limit();
-            limit.rlim_max = fd_table.get_hard_limit();
+            data_flow!({
+                (*old_limit).rlim_cur = fd_table.get_soft_limit();
+                (*old_limit).rlim_max = fd_table.get_hard_limit();
+            });
         }
         if !new_limit.is_null() {
             // 说明是set
-            let limit: &RLimit = translated_ref(token, new_limit);
+            let limit;
+            data_flow!({ limit = *new_limit });
             fd_table.set_limit(limit.rlim_cur, limit.rlim_max);
         }
     } else {
@@ -1161,8 +1144,7 @@ pub fn sys_prlimit(
 pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsize: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
-    let path = translated_str(token, path);
+    let path = data_flow!({ c_ptr_to_string(path) });
 
     debug!(
         "[sys_readlinkat] dirfd is {}, path is {}, buf is {:x}, bufsize is {}",
@@ -1173,7 +1155,9 @@ pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsize: us
     if path == "/proc/self/exe" {
         debug!("fs_info={}", inner.fs_info.exe());
         let size_needed = inner.fs_info.exe_as_bytes().len();
-        let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, size_needed).unwrap());
+        let mut buffer = UserBuffer::new(vec![data_flow!({
+            core::slice::from_raw_parts_mut(buf as *mut _, size_needed)
+        })]);
         let res = buffer.write(inner.fs_info.exe_as_bytes());
         return Ok(res);
     }
@@ -1182,7 +1166,9 @@ pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsize: us
     let mut linkbuf = vec![0u8; bufsize];
     let file = open(&abs_path, OpenFlags::empty(), NONE_MODE)?.file()?;
     let readcnt = file.inode.read_link(&mut linkbuf, bufsize)?;
-    let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, readcnt).unwrap());
+    // let mut buffer = UserBuffer::new(translated_byte_buffer(token, buf, readcnt).unwrap());
+    let mut buffer =
+        UserBuffer::new_single(unsafe { core::slice::from_raw_parts_mut(buf as *mut _, readcnt) });
     buffer.write(&linkbuf);
     Ok(readcnt)
 
@@ -1192,20 +1178,19 @@ pub fn sys_readlinkat(dirfd: isize, path: *const u8, buf: *const u8, bufsize: us
 pub fn sys_symlinkat(target: *const u8, newdirfd: isize, linkpath: *const u8) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
 
-    if (target as isize) < 0 || if_bad_address(target as usize) {
+    if (target as isize) < 0 || is_bad_address(target as usize) {
         return Err(SysErrNo::EFAULT);
     }
-    if (linkpath as isize) < 0 || if_bad_address(linkpath as usize) {
+    if (linkpath as isize) < 0 || is_bad_address(linkpath as usize) {
         return Err(SysErrNo::EFAULT);
     }
     if newdirfd != -100 && newdirfd as usize >= inner.fd_table.len() {
         return Err(SysErrNo::EBADF);
     }
 
-    let target_path = translated_str(token, target);
-    let link_path = translated_str(token, linkpath);
+    let (target_path, link_path) =
+        data_flow!({ (c_ptr_to_string(target), c_ptr_to_string(linkpath)) });
 
     if target_path.len() == 0
         || link_path.len() == 0
@@ -1253,9 +1238,7 @@ pub fn sys_renameat2(
 ) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
-    let oldpath = translated_str(token, oldpath);
-    let newpath = translated_str(token, newpath);
+    let (oldpath, newpath) = data_flow!({ (c_ptr_to_string(oldpath), c_ptr_to_string(newpath)) });
 
     let old_abs_path = inner.get_abs_path(olddirfd, &oldpath)?;
     let osfile = open(&old_abs_path, OpenFlags::O_RDWR, NONE_MODE)?.file()?;
@@ -1276,7 +1259,6 @@ pub fn sys_copy_file_range(
 ) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
 
     debug!("[sys_copy_file_range] infd is {}, off_in is {}, outfd is {}, off_out is {},count is {}, flags is {}", infd, off_in, outfd, off_out, count, flags);
 
@@ -1318,7 +1300,7 @@ pub fn sys_copy_file_range(
     if off_in == 0 {
         readcount = infile.read(inbuffer)?;
     } else {
-        let offset = *translated_ref(token, off_in as *const isize);
+        let offset = data_flow!({ *(off_in as *const isize) });
         if offset < 0 {
             return Err(SysErrNo::EINVAL);
         }
@@ -1348,7 +1330,7 @@ pub fn sys_copy_file_range(
     if off_out == 0 {
         writecount = outfile.write(outbuffer)?;
     } else {
-        let offset = *translated_ref(token, off_out as *const isize);
+        let offset = data_flow!({ *(off_out as *const isize) });
         if offset < 0 {
             return Err(SysErrNo::EINVAL);
         }
@@ -1362,10 +1344,14 @@ pub fn sys_copy_file_range(
         .set_timestamps(None, Some((get_time_ms() / 1000) as u64), None);
     //如果系统调用执行成功，*off_in和*off_out将会增加复制的长度
     if off_in != 0 {
-        *translated_refmut(token, off_in as *mut isize) += writecount as isize;
+        data_flow!({
+            *(off_in as *mut isize) += writecount as isize;
+        });
     }
     if off_out != 0 {
-        *translated_refmut(token, off_out as *mut isize) += writecount as isize;
+        data_flow!({
+            *(off_out as *mut isize) += writecount as isize;
+        });
     }
 
     Ok(writecount)
@@ -1373,15 +1359,11 @@ pub fn sys_copy_file_range(
 
 /// 参考 https://man7.org/linux/man-pages/man2/getrandom.2.html
 pub fn sys_getrandom(buf_ptr: *const u8, buflen: usize, flags: u32) -> SyscallRet {
-    let task = current_task().unwrap();
-    let inner = task.inner_lock();
-    let token = inner.user_token();
-
     if (flags as i32) < 0 {
         return Err(SysErrNo::EINVAL);
     }
 
-    if (buf_ptr as isize) < 0 || if_bad_address(buf_ptr as usize) {
+    if (buf_ptr as isize) < 0 || is_bad_address(buf_ptr as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
@@ -1389,16 +1371,15 @@ pub fn sys_getrandom(buf_ptr: *const u8, buflen: usize, flags: u32) -> SyscallRe
         return Err(SysErrNo::EINVAL);
     }
 
-    open_device_file("/dev/random")?.read(UserBuffer::new(
-        translated_byte_buffer(token, buf_ptr, buflen).unwrap(),
-    ))
+    open_device_file("/dev/random")?.read(UserBuffer::new_single(unsafe {
+        core::slice::from_raw_parts_mut(buf_ptr as *mut _, buflen)
+    }))
 }
 
 /// 参考 https://man7.org/linux/man-pages/man2/ppoll.2.html
 pub fn sys_ppoll(fds_ptr: usize, nfds: usize, tmo_p: usize, mask: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
 
     debug!(
         "[sys_ppoll] fds_ptr is {}, nfds is {}, tmo_p is {}, mask is {}",
@@ -1411,15 +1392,18 @@ pub fn sys_ppoll(fds_ptr: usize, nfds: usize, tmo_p: usize, mask: usize) -> Sysc
 
     let mut fds = Vec::new();
     let ptr = fds_ptr as *mut PollFd;
-    for i in 0..nfds {
-        fds.push(translated_refmut(token, unsafe { ptr.add(i) } as *mut PollFd));
-    }
+
+    data_flow!({
+        for i in 0..nfds {
+            fds.push(*((ptr.add(i)) as *mut PollFd))
+        }
+    });
 
     let waittime = if tmo_p == 0 {
         //为0则永远等待直到完成
         -1
     } else {
-        let timespec = translated_ref(token, tmo_p as *const Timespec);
+        let timespec = data_flow!({ *(tmo_p as *const Timespec) });
         (timespec.tv_sec * 1000000000 + timespec.tv_nsec) as isize
     };
     if waittime == 0 {
@@ -1477,25 +1461,24 @@ pub fn sys_pselect6(
 ) -> SyscallRet {
     let task = current_task().unwrap();
     let mut inner = task.inner_lock();
-    let token = inner.user_token();
 
     if (nfds as isize) < 0 {
         return Err(SysErrNo::EINVAL);
     }
 
-    if (readfds as isize) < 0 || if_bad_address(readfds as usize) {
+    if (readfds as isize) < 0 || is_bad_address(readfds as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
-    if (writefds as isize) < 0 || if_bad_address(writefds as usize) {
+    if (writefds as isize) < 0 || is_bad_address(writefds as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
-    if (exceptfds as isize) < 0 || if_bad_address(exceptfds as usize) {
+    if (exceptfds as isize) < 0 || is_bad_address(exceptfds as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
-    if (timeout as isize) < 0 || if_bad_address(timeout as usize) {
+    if (timeout as isize) < 0 || is_bad_address(timeout as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
@@ -1503,23 +1486,24 @@ pub fn sys_pselect6(
 
     let old_mask = inner.sig_mask;
     if sigmask != 0 {
-        inner.sig_mask = get_data(token, sigmask as *const SigSet);
+        data_flow!({ inner.sig_mask = *(sigmask as *const SigSet) });
     }
 
     let nfds = min(nfds, inner.fd_table.get_soft_limit());
 
     let mut using_readfds = if readfds != 0 {
-        Some(get_data(token, readfds as *mut FdSet))
+        // get_data(token, readfds as *mut FdSet)
+        Some(data_flow!({ *(readfds as *mut FdSet) }))
     } else {
         None
     };
     let mut using_writefds = if writefds != 0 {
-        Some(get_data(token, writefds as *mut FdSet))
+        Some(data_flow!({ *(writefds as *mut FdSet) }))
     } else {
         None
     };
     let mut using_exceptfds = if exceptfds != 0 {
-        Some(get_data(token, exceptfds as *mut FdSet))
+        Some(data_flow!({ *(exceptfds as *mut FdSet) }))
     } else {
         None
     };
@@ -1529,8 +1513,7 @@ pub fn sys_pselect6(
         //为0则永远等待直到完成
         -1
     } else {
-        // let timespec = translated_ref(token, timeout as *const Timespec);
-        let timespec = get_data(token, timeout as *const Timespec);
+        let timespec = data_flow!({ *(timeout as *const Timespec) });
         // debug!(
         //     "[sys_pselect6] waittime is {} sec, {} nsec",
         //     timespec.tv_sec, timespec.tv_nsec
@@ -1610,14 +1593,13 @@ pub fn sys_pselect6(
         if num > 0 || waittime == 0 {
             // debug!("[sys_pselect6] ret for num:{},waittime:{}", num, waittime);
             if let Some(using_readfds) = using_readfds {
-                put_data(token, readfds as *mut FdSet, using_readfds);
+                data_flow!({ *(readfds as *mut FdSet) = using_readfds });
             }
             if let Some(using_writefds) = using_writefds {
-                put_data(token, writefds as *mut FdSet, using_writefds);
+                data_flow!({ *(writefds as *mut FdSet) = using_writefds });
             }
             if let Some(using_exceptfds) = using_exceptfds {
-                // debug!("[sys_pselect6] exceptfds is {:?}", using_exceptfds);
-                put_data(token, exceptfds as *mut FdSet, using_exceptfds);
+                data_flow!({ *(exceptfds as *mut FdSet) = using_exceptfds });
             }
             if sigmask != 0 {
                 inner.sig_mask = old_mask;
@@ -1634,16 +1616,6 @@ pub fn sys_pselect6(
             return Ok(0);
         }
 
-        /*
-        if let Some(_) = check_if_any_sig_for_current_task() {
-            //被信号唤醒
-            if sigmask != 0 {
-                inner.sig_mask = old_mask;
-            }
-            return Err(SysErrNo::EINTR);
-        }
-        */
-
         drop(inner);
         drop(task);
         suspend_current_and_run_next();
@@ -1659,7 +1631,6 @@ pub fn sys_fchownat(
 ) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
-    let token = task_inner.user_token();
 
     if (flags as isize) < 0 {
         return Err(SysErrNo::EINVAL);
@@ -1669,11 +1640,11 @@ pub fn sys_fchownat(
         return Err(SysErrNo::EBADF);
     }
 
-    if (path as isize) <= 0 || if_bad_address(path as usize) {
+    if (path as isize) <= 0 || is_bad_address(path as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
-    let path = translated_str(token, path);
+    let path = data_flow!({ c_ptr_to_string(path) });
 
     if path.len() > MAX_PATH_LEN {
         return Err(SysErrNo::ENAMETOOLONG);
@@ -1726,7 +1697,6 @@ pub fn sys_fchmod(fd: usize, mode: u32) -> SyscallRet {
 pub fn sys_fchmodat(dirfd: isize, path: *const u8, mode: u32, flags: u32) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
-    let token = task_inner.user_token();
 
     if (flags as isize) < 0 {
         return Err(SysErrNo::EINVAL);
@@ -1736,11 +1706,11 @@ pub fn sys_fchmodat(dirfd: isize, path: *const u8, mode: u32, flags: u32) -> Sys
         return Err(SysErrNo::EBADF);
     }
 
-    if (path as isize) <= 0 || if_bad_address(path as usize) {
+    if (path as isize) <= 0 || is_bad_address(path as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
-    let path = translated_str(token, path);
+    let path = data_flow!({ c_ptr_to_string(path) });
 
     if path.len() > MAX_PATH_LEN {
         return Err(SysErrNo::ENAMETOOLONG);
@@ -1791,7 +1761,6 @@ pub fn sys_splice(
 ) -> SyscallRet {
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
 
     debug!(
         "[sys_splice] fd_in is {}, off_in is {}, fd_out is {}, off_out is {},count is {}",
@@ -1814,13 +1783,13 @@ pub fn sys_splice(
     let mut offset_in = 0;
     let mut offset_out = 0;
     if off_in != 0 {
-        offset_in = *translated_ref(token, off_in as *const isize);
+        data_flow!({ offset_in = *(off_in as *const isize) });
         if offset_in < 0 {
             return Err(SysErrNo::EINVAL);
         }
     }
     if off_out != 0 {
-        offset_out = *translated_ref(token, off_out as *const isize);
+        data_flow!({ offset_out = *(off_out as *const isize) });
         if offset_out < 0 {
             return Err(SysErrNo::EINVAL);
         }
@@ -1898,10 +1867,14 @@ pub fn sys_splice(
     }
     //如果系统调用执行成功，*off_in和*off_out将会增加复制的长度
     if off_in != 0 {
-        *translated_refmut(token, off_in as *mut isize) += writecount as isize;
+        data_flow!({
+            *(off_in as *mut isize) += writecount as isize;
+        });
     }
     if off_out != 0 {
-        *translated_refmut(token, off_out as *mut isize) += writecount as isize;
+        data_flow!({
+            *(off_out as *mut isize) += writecount as isize;
+        });
     }
 
     Ok(writecount)

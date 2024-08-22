@@ -153,6 +153,7 @@ use crate::{
     fs::{Kstat, Statfs},
     sbi::shutdown,
     signal::{SigAction, SigInfo, SigSet},
+    task::Sysinfo,
     timer::{Itimerval, Rusage, Timespec, Tms},
     utils::SyscallRet,
 };
@@ -161,7 +162,7 @@ use crate::{
 pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
     let id = syscall_id;
     let syscall_id: Syscall = Syscall::from(syscall_id);
-    // log::debug!("syscall:{:?}", syscall_id);
+    log::debug!("syscall:{:?}", syscall_id);
     match syscall_id {
         Syscall::Getcwd => sys_getcwd(args[0] as *const u8, args[1]),
         Syscall::Dup => sys_dup(args[0]),
@@ -332,7 +333,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::GetRusage => sys_getrusage(args[0] as isize, args[1] as *mut Rusage),
         Syscall::GetTimeOfDay => sys_gettimeofday(args[0] as *mut Timespec, args[1] as usize),
         Syscall::Umask => sys_umask(args[0] as u32),
-        Syscall::Uname => sys_uname(args[0] as *mut u8),
+        Syscall::Uname => sys_uname(args[0] as *mut Utsname),
         Syscall::GetPid => sys_getpid(),
         Syscall::GetPPid => sys_getppid(),
         Syscall::GetUid => sys_getuid(),
@@ -340,7 +341,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 6]) -> SyscallRet {
         Syscall::GetGid => sys_getgid(),
         Syscall::GetEGid => sys_getegid(),
         Syscall::GetTid => sys_gettid(),
-        Syscall::SysInfo => sys_sysinfo(args[0] as *const u8),
+        Syscall::SysInfo => sys_sysinfo(args[0] as *mut Sysinfo),
         Syscall::Shmget => sys_shmget(args[0] as i32, args[1], args[2] as i32),
         Syscall::Shmctl => sys_shmctl(args[0] as i32, args[1] as i32, args[2]),
         Syscall::Shmat => sys_shmat(args[0] as i32, args[1], args[2] as i32),

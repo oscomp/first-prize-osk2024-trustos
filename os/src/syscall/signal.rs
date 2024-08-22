@@ -1,7 +1,7 @@
 use log::debug;
 
 use crate::{
-    mm::{get_data, put_data, safe_get_data},
+    data_flow,
     signal::{
         restore_frame, send_access_signal, send_signal_to_thread, send_signal_to_thread_group,
         send_signal_to_thread_of_proc, KSigAction, SigAction, SigInfo, SigSet, SIG_MAX_NUM,
@@ -24,13 +24,14 @@ pub fn sys_rt_sigaction(
 
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
-    let token = task_inner.user_token();
     if old_act as usize != 0 {
         let sig_act = task_inner.sig_table.action(signo).act;
-        put_data(token, old_act, sig_act);
+        data_flow!({
+            *old_act = sig_act;
+        });
     }
     if act as usize != 0 {
-        let new_act = get_data(token, act);
+        let new_act = data_flow!({ *act });
         debug!(
             "[sys_rt_sigaction] signo is {}, sig is {:?}, act is {:?}",
             signo,
@@ -63,7 +64,6 @@ pub fn sys_rt_sigreturn() -> SyscallRet {
 pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) -> SyscallRet {
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
-    let memory_set = task_inner.memory_set.clone();
     let how = SignalMaskFlag::from_bits(how).ok_or(SysErrNo::EINVAL)?;
 
     debug!(
@@ -71,10 +71,12 @@ pub fn sys_rt_sigprocmask(how: u32, set: *const SigSet, old_set: *mut SigSet) ->
         old_set as usize, set as usize
     );
     if old_set as usize != 0 {
-        put_data(memory_set.token(), old_set, task_inner.sig_mask);
+        data_flow!({
+            *old_set = task_inner.sig_mask;
+        });
     }
     if set as usize != 0 {
-        let mask = safe_get_data(memory_set, set);
+        let mask = data_flow!({ *set });
 
         debug!(
             "[sys_sigprocmask] how is {:?}, mask is {:?}, old_set is {:x}",
@@ -106,12 +108,11 @@ pub fn sys_rt_sigtimedwait(
 /// 暂时将调用线程的信号掩码替换为 mask 给出的掩码，然后暂停线程，直到传递信号，
 /// 其操作是调用信号处理程序或终止进程
 /// 参考 https://man7.org/linux/man-pages/man2/rt_sigsuspend.2.html
-pub fn sys_rt_sigsuspend(mask: *const SigSet) -> SyscallRet {
+pub fn sys_rt_sigsuspend(mask_ptr: *const SigSet) -> SyscallRet {
     // TODO(ZMY): 暂停线程
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
-    let token = task_inner.user_token();
-    let mask = get_data(token, mask);
+    let mask = data_flow!({ *mask_ptr });
     let old_mask = task_inner.sig_mask;
     task_inner.sig_mask = mask;
     drop(task_inner);

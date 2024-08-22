@@ -303,6 +303,9 @@ impl FsInfo {
     pub fn has_fd(&self, path: &str) -> bool {
         self.get_ref().fd2path.values().any(|v| v == path)
     }
+    pub fn fd2path(&self, fd: usize) -> String {
+        self.get_ref().fd2path.get(&fd).unwrap().clone()
+    }
     pub fn remove(&self, fd: usize) {
         self.get_mut().fd2path.remove(&fd);
     }

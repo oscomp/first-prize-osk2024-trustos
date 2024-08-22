@@ -7,7 +7,7 @@ use crate::{
     config::mm::PAGE_SIZE,
     fs::{File, OpenFlags},
     mm::{
-        if_bad_address, insert_bad_address, remove_bad_address, shm_attach, shm_create, shm_drop,
+        is_bad_address, insert_bad_address, remove_bad_address, shm_attach, shm_create, shm_drop,
         shm_find, MapPermission, ShmFlags, VirtAddr,
     },
     task::current_task,
@@ -88,7 +88,7 @@ pub fn sys_munmap(addr: usize, len: usize) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
     let len = page_round_up(len);
-    if if_bad_address(addr) {
+    if is_bad_address(addr) {
         remove_bad_address(addr);
     }
     task_inner.memory_set.munmap(addr, len)

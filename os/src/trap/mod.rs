@@ -46,6 +46,8 @@ pub fn init() {
     //开启rustsbi的浮点指令
     unsafe {
         sstatus::set_fs(FS::Clean);
+        // 允许内核态访问用户内存
+        sstatus::set_sum();
     }
 }
 
@@ -70,6 +72,10 @@ pub fn enable_timer_interrupt() {
 #[no_mangle]
 /// handle an interrupt, exception, or system call from user space
 pub fn trap_handler() {
+    // unsafe {
+    //     sstatus::set_sum();
+    // }
+
     //记录用户空间花费CPU时间，同时准备内核空间花费CPU时间
     current_task()
         .unwrap()
@@ -215,6 +221,8 @@ pub fn trap_return() {
         set_next_trigger();
     }
 
+    // log::info!("return to user");
+
     set_user_trap_entry();
     extern "C" {
         #[allow(improper_ctypes)]
@@ -223,6 +231,7 @@ pub fn trap_return() {
     unsafe {
         // 方便调试进入__return_to_user
         let trap_cx = current_trap_cx();
+        // debug!("return to user,trap_ctx={:?}", trap_cx);
         __return_to_user(trap_cx);
     }
 }

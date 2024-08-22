@@ -12,7 +12,7 @@ mod vfs;
 
 use crate::mm::UserBuffer;
 use crate::task::current_uid;
-use crate::timer::{get_time, get_time_ms};
+use crate::timer::get_time_ms;
 use crate::utils::{GeneralRet, SysErrNo};
 use alloc::format;
 use alloc::string::String;

@@ -438,7 +438,7 @@ pub fn insert_bad_address(va: usize) {
     BAD_ADDRESS.lock().insert(va);
 }
 
-pub fn if_bad_address(va: usize) -> bool {
+pub fn is_bad_address(va: usize) -> bool {
     BAD_ADDRESS.lock().contains(&va)
 }
 

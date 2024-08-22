@@ -11,7 +11,7 @@ pub use signal::*;
 
 use crate::{
     config::mm::USER_STACK_SIZE,
-    mm::{get_data, put_data},
+    data_flow,
     task::{current_task, exit_current_and_run_next, TaskControlBlock, THREAD_GROUP, TID_TO_TASK},
     trap::{MachineContext, UserContext},
     utils::{SysErrNo, SyscallRet},
@@ -65,7 +65,6 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
 
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
-    let token = task_inner.user_token();
 
     let trap_cx = task_inner.trap_cx();
     let mut user_sp = trap_cx.gp.x[2];
@@ -92,15 +91,15 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
         // 处理函数 (*sa_handler)(int);
         // 保存 Trap 上下文
         user_sp = user_sp - size_of::<MachineContext>();
-        put_data(token, user_sp as *mut MachineContext, trap_cx.as_mctx());
+        data_flow!({ *(user_sp as *mut MachineContext) = trap_cx.as_mctx() });
 
         // signal mask
         user_sp = user_sp - size_of::<SigSet>();
-        put_data(token, user_sp as *mut SigSet, task_inner.sig_mask);
+        data_flow!({ *(user_sp as *mut SigSet) = task_inner.sig_mask });
 
         // 不是 sigInfo
         user_sp = user_sp - size_of::<usize>();
-        put_data(token, user_sp as *mut usize, 0);
+        data_flow!({ *(user_sp as *mut usize) = 0 });
     } else {
         // (*sa_sigaction)(int, siginfo_t *, void *) 第三个参数指向UserContext
         let uctx_addr = user_sp - size_of::<UserContext>();
@@ -108,37 +107,31 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
         let sig_sp = siginfo_addr;
         let sig_size = sig_sp - (task_inner.user_stack_top - USER_STACK_SIZE);
         // debug!("sig_size={:#x}", sig_size);
-        put_data(
-            token,
-            uctx_addr as *mut UserContext,
-            UserContext {
+        data_flow!({
+            *(uctx_addr as *mut UserContext) = UserContext {
                 flags: 0,
                 link: 0,
                 stack: SignalStack::new(sig_sp, sig_size),
                 sigmask: task_inner.sig_mask,
                 __pad: [0u8; 128],
                 mcontext: trap_cx.as_mctx(),
-            },
-        );
+            }
+        });
         // a2
         trap_cx.gp.x[12] = uctx_addr;
-        put_data(
-            token,
-            siginfo_addr as *mut SigInfo,
-            SigInfo::new(signo, 0, 0),
-        );
+        data_flow!({ *(siginfo_addr as *mut SigInfo) = SigInfo::new(signo, 0, 0) });
         // a1
         trap_cx.gp.x[11] = siginfo_addr;
 
         user_sp = sig_sp;
         // 是 sigInfo
         user_sp = user_sp - size_of::<usize>();
-        put_data(token, user_sp as *mut usize, usize::MAX);
+        data_flow!({ *(user_sp as *mut usize) = usize::MAX });
     }
 
     // checkout(Magic Num)
     user_sp -= size_of::<usize>();
-    put_data(token, user_sp as *mut usize, 0xdeadbeef);
+    data_flow!({ *(user_sp as *mut usize) = 0xdeadbeef });
     // a0
     trap_cx.gp.x[10] = signo;
     // sp
@@ -161,40 +154,38 @@ pub fn setup_frame(signo: usize, sig_action: KSigAction) {
 pub fn restore_frame() -> SyscallRet {
     let task = current_task().unwrap();
     let mut task_inner = task.inner_lock();
-    let token = task_inner.user_token();
 
     let trap_cx = task_inner.trap_cx();
     let mut user_sp = trap_cx.gp.x[2];
 
-    let checkout = get_data(token, user_sp as *const usize);
+    let checkout = unsafe { *(user_sp as *const usize) };
     assert!(checkout == 0xdeadbeef, "restore frame checkout error!");
     user_sp += size_of::<usize>();
 
     // sigInfo标志位
-    let sa_siginfo = get_data(token, user_sp as *const usize) == usize::MAX;
+    let sa_siginfo = unsafe { *(user_sp as *const usize) } == usize::MAX;
     user_sp += size_of::<usize>();
 
     if !sa_siginfo {
         // signal mask
-        task_inner.sig_mask = get_data(token, user_sp as *const SigSet);
+        // task_inner.sig_mask = get_data(token, user_sp as *const SigSet);
+        task_inner.sig_mask = unsafe { *(user_sp as *const SigSet) };
         user_sp += size_of::<SigSet>();
         // Trap cx
-        let mctx = get_data(token, user_sp as *const MachineContext);
+        let mctx = unsafe { *(user_sp as *const MachineContext) };
         trap_cx.copy_from_mctx(mctx);
     } else {
         user_sp += size_of::<SigInfo>();
-        task_inner.sig_mask = get_data(
-            token,
-            (user_sp + 2 * size_of::<usize>() + size_of::<SignalStack>()) as *const SigSet,
-        );
-        let mctx = get_data(
-            token,
-            (user_sp
+        task_inner.sig_mask = unsafe {
+            *((user_sp + 2 * size_of::<usize>() + size_of::<SignalStack>()) as *const SigSet)
+        };
+        let mctx = unsafe {
+            *((user_sp
                 + 2 * size_of::<usize>()
                 + size_of::<SignalStack>()
                 + size_of::<SigSet>()
-                + 128) as *mut MachineContext,
-        );
+                + 128) as *mut MachineContext)
+        };
         trap_cx.copy_from_mctx(mctx);
     }
     debug!("[restore_frame!] sepc= {:#x}", trap_cx.sepc);

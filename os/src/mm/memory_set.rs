@@ -1,14 +1,15 @@
 //! Implementation of [`MapArea`] and [`MemorySet`].
 use super::{
-    cow_page_fault, lazy_page_fault, mmap_read_page_fault, mmap_write_page_fault,
-    translated_byte_buffer, FrameTracker, MapArea, MapAreaType, MapPermission, MapType, PTEFlags,
-    PageTable, PageTableEntry, PhysAddr, UserBuffer, VPNRange, VirtAddr, VirtPageNum, GROUP_SHARE,
+    cow_page_fault, lazy_page_fault, mmap_read_page_fault, mmap_write_page_fault, FrameTracker,
+    MapArea, MapAreaType, MapPermission, MapType, PTEFlags, PageTable, PageTableEntry, PhysAddr,
+    UserBuffer, VPNRange, VirtAddr, VirtPageNum, GROUP_SHARE,
 };
 use crate::{
     config::{
         board::{MEMORY_END, MMIO},
         mm::{DL_INTERP_OFFSET, KERNEL_ADDR_OFFSET, MMAP_TOP, PAGE_SIZE},
     },
+    data_flow,
     fs::{
         map_dynamic_link_file, open, root_inode, File, OSInode, OpenFlags, NONE_MODE, SEEK_CUR,
         SEEK_SET,
@@ -19,6 +20,7 @@ use crate::{
     task::{Aux, AuxType},
     utils::{SysErrNo, SyscallRet},
 };
+use alloc::vec;
 use alloc::{
     string::{String, ToString},
     sync::Arc,
@@ -535,14 +537,9 @@ impl MemorySetInner {
                     wb_range.into_iter().for_each(|(start_vpn, end_vpn)| {
                         let start_addr: usize = VirtAddr::from(start_vpn).into();
                         let mapped_len: usize = (end_vpn.0 - start_vpn.0) * PAGE_SIZE;
-                        let buf = UserBuffer {
-                            buffers: translated_byte_buffer(
-                                self.page_table.token(),
-                                start_addr as *const u8,
-                                mapped_len,
-                            )
-                            .unwrap(),
-                        };
+                        let buf = UserBuffer::new_single(data_flow!({
+                            core::slice::from_raw_parts_mut(start_addr as *mut u8, mapped_len)
+                        }));
                         file.lseek((start_addr - addr) as isize, SEEK_SET);
                         file.write(buf);
                     });
@@ -596,7 +593,7 @@ impl MemorySetInner {
                 start <= vpn && vpn < end
             })
         {
-            //println!("vpn={:#X},enter lazy3", vpn.0);
+            // println!("vpn={:#X},enter lazy3", vpn.0);
             if scause == Trap::Exception(Exception::LoadPageFault)
                 || scause == Trap::Exception(Exception::InstructionPageFault)
             {
@@ -1121,14 +1118,10 @@ impl MemorySetInner {
                         .count()
                         * PAGE_SIZE;
                     let file = area.mmap_file.file.clone().unwrap();
-                    file.write(UserBuffer {
-                        buffers: translated_byte_buffer(
-                            self.page_table.token(),
-                            addr.0 as *const u8,
-                            mapped_len,
-                        )
-                        .unwrap(),
-                    })?;
+                    let buf = data_flow!({
+                        core::slice::from_raw_parts_mut(addr.0 as *mut u8, mapped_len)
+                    });
+                    file.write(UserBuffer::new(vec![buf]))?;
                 }
             }
         }

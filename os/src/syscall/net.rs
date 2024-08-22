@@ -1,8 +1,8 @@
 use alloc::{format, string::ToString};
 
 use crate::{
+    data_flow,
     fs::{make_socket, make_socketpair, FileClass, FileDescriptor, OpenFlags},
-    mm::{put_data, translated_refmut},
     task::current_task,
     utils::{SysErrNo, SyscallRet},
 };
@@ -79,13 +79,10 @@ pub fn sys_recvfrom(
     _src_addr: *const u8,
     _addrlen: u32,
 ) -> SyscallRet {
-    let task = current_task().unwrap();
-    let inner = task.inner_lock();
-    let token = inner.user_token();
-    unsafe {
-        put_data(token, buf, b'x');
-        put_data(token, buf.add(1), b'0');
-    }
+    data_flow!({
+        *buf = b'x';
+        *buf.add(1) = b'0';
+    });
     Ok(1)
 }
 
@@ -121,7 +118,6 @@ pub fn sys_socketpair(domain: u32, stype: u32, protocol: u32, sv: *mut u32) -> S
 
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
 
     let (socket1, socket2) = make_socketpair();
     let close_on_exec = (stype & 0o2000000) == 0o2000000;
@@ -150,8 +146,10 @@ pub fn sys_socketpair(domain: u32, stype: u32, protocol: u32, sv: *mut u32) -> S
         .fs_info
         .insert(format!("socket{}", new_fd2).to_string(), new_fd2);
 
-    *translated_refmut(token, sv) = new_fd1 as u32;
-    *translated_refmut(token, unsafe { sv.add(1) }) = new_fd2 as u32;
+    data_flow!({
+        *sv = new_fd1 as u32;
+        *sv.add(1) = new_fd2 as u32;
+    });
 
     Ok(0)
 }

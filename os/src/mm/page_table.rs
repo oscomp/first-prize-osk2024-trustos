@@ -5,9 +5,8 @@ use super::{
     frame_alloc, FrameTracker, MemorySet, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum,
     KERNEL_SPACE,
 };
-use alloc::{string::String, sync::Arc, vec, vec::Vec};
+use alloc::{sync::Arc, vec, vec::Vec};
 use bitflags::*;
-use log::debug;
 use riscv::register::scause::{Exception, Trap};
 
 use core::arch::asm;
@@ -268,12 +267,12 @@ pub fn translated_byte_buffer(
         let mut vpn = start_va.floor();
         match page_table.translate(vpn) {
             None => {
-                //panic!("[kernel] mm: 0x{:x} not mapped", start);
+                panic!("[kernel] mm: 0x{:x} not mapped", start);
                 log::debug!("vpn {:#x} not found", vpn.0);
                 return None;
             }
             Some(ref pte) => {
-                //assert!(pte.is_valid(), "vpn {} to ppn {}", vpn.0, pte.ppn().0);
+                assert!(pte.is_valid(), "vpn {} to ppn {}", vpn.0, pte.ppn().0);
                 if !pte.is_valid() {
                     log::debug!("vpn {:#x} invalid", vpn.0);
                     return None;
@@ -340,112 +339,11 @@ pub fn safe_translated_byte_buffer(
     Some(v)
 }
 
-/// Translate a pointer to a mutable u8 Vec end with `\0` through page table to a `String`
-pub fn translated_str(token: usize, ptr: *const u8) -> String {
-    let page_table = PageTable::from_token(token);
-    let mut string = String::new();
-    let mut va = ptr as usize;
-    loop {
-        let ch: u8 =
-            *(KernelAddr::from(page_table.translate_va(VirtAddr::from(va)).unwrap()).as_mut());
-        if ch == 0 {
-            break;
-        }
-        string.push(ch as char);
-        va += 1;
-    }
-    string
-}
-
-#[allow(unused)]
-///Translate a generic through page table and return a reference
-pub fn translated_ref<T>(token: usize, ptr: *const T) -> &'static T {
-    let page_table = PageTable::from_token(token);
-    let va = ptr as usize;
-    KernelAddr::from(page_table.translate_va(VirtAddr::from(va)).unwrap()).as_ref()
-}
-
-pub fn safe_translated_ref<T>(memory_set: Arc<MemorySet>, ptr: *const T) -> &'static T {
-    let page_table = PageTable::from_token(memory_set.token());
-    let va = ptr as usize;
-    let start_va = VirtAddr::from(va);
-    let vpn = start_va.floor();
-    match page_table.translate(vpn) {
-        None => {
-            memory_set.lazy_page_fault(vpn, Trap::Exception(Exception::LoadPageFault));
-        }
-        Some(ref pte) => {
-            if !pte.is_valid() {
-                memory_set.lazy_page_fault(vpn, Trap::Exception(Exception::LoadPageFault));
-            }
-        }
-    }
-    KernelAddr::from(page_table.translate_va(VirtAddr::from(va)).unwrap()).as_ref()
-}
 ///Translate a generic through page table and return a mutable reference
-pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
+fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
     let page_table = PageTable::from_token(token);
     let va = ptr as usize;
     KernelAddr::from(page_table.translate_va(VirtAddr::from(va)).unwrap()).as_mut()
-}
-
-pub fn safe_translated_refmut<T>(memory_set: Arc<MemorySet>, ptr: *mut T) -> &'static mut T {
-    let page_table = PageTable::from_token(memory_set.token());
-    let va = ptr as usize;
-    let start_va = VirtAddr::from(va);
-    let vpn = start_va.floor();
-    match page_table.translate(vpn) {
-        None => {
-            memory_set.lazy_page_fault(vpn, Trap::Exception(Exception::StorePageFault));
-        }
-        Some(ref pte) => {
-            if !pte.is_valid() {
-                memory_set.lazy_page_fault(vpn, Trap::Exception(Exception::StorePageFault));
-            }
-        }
-    }
-    KernelAddr::from(page_table.translate_va(VirtAddr::from(va)).unwrap()).as_mut()
-}
-
-/// 从 `token` 地址空间 `ptr` 处读取数据，
-/// 其中虚拟地址 `ptr` 解析得到的物理地址可以跨页。
-///
-/// 类型 `T` 需实现 Copy trait
-pub fn get_data<T: 'static + Copy>(token: usize, ptr: *const T) -> T {
-    let page_table = PageTable::from_token(token);
-    let mut va = VirtAddr::from(ptr as usize);
-    let pa = page_table.translate_va(va).unwrap();
-    let size = core::mem::size_of::<T>();
-    // 若数据跨页，则转换成字节数据写入
-    if (pa + size - 1).floor() != pa.floor() {
-        let mut bytes = vec![0u8; size];
-        for i in 0..size {
-            bytes[i] = *(page_table.translate_va(va).unwrap().as_ref());
-            va = va + 1;
-        }
-        unsafe { *(bytes.as_slice().as_ptr() as usize as *const T) }
-    } else {
-        *translated_ref(token, ptr)
-    }
-}
-
-pub fn safe_get_data<T: 'static + Copy>(memory_set: Arc<MemorySet>, ptr: *const T) -> T {
-    let page_table = PageTable::from_token(memory_set.token());
-    let mut va = VirtAddr::from(ptr as usize);
-    let pa = page_table.translate_va(va).unwrap();
-    let size = core::mem::size_of::<T>();
-    // 若数据跨页，则转换成字节数据写入
-    if (pa + size - 1).floor() != pa.floor() {
-        debug!("work in overpage");
-        let mut bytes = vec![0u8; size];
-        for i in 0..size {
-            bytes[i] = *(page_table.translate_va(va).unwrap().as_ref());
-            va = va + 1;
-        }
-        unsafe { *(bytes.as_slice().as_ptr() as usize as *const T) }
-    } else {
-        *safe_translated_ref(memory_set, ptr)
-    }
 }
 
 /// 将数据 `data` 写入 `token` 地址空间 `ptr` 处，
@@ -468,24 +366,6 @@ pub fn put_data<T: 'static>(token: usize, ptr: *mut T, data: T) {
     }
 }
 
-pub fn safe_put_data<T: 'static>(memory_set: Arc<MemorySet>, ptr: *mut T, data: T) {
-    let page_table = PageTable::from_token(memory_set.token());
-    let mut va = VirtAddr::from(ptr as usize);
-    let pa = page_table.translate_va(va).unwrap();
-    let size = core::mem::size_of::<T>();
-    // 若数据跨页，则转换成字节数据写入
-    if (pa + size - 1).floor() != pa.floor() {
-        let bytes =
-            unsafe { core::slice::from_raw_parts(&data as *const _ as usize as *const u8, size) };
-        for i in 0..size {
-            *(page_table.translate_va(va).unwrap().as_mut()) = bytes[i];
-            va = va + 1;
-        }
-    } else {
-        *safe_translated_refmut(memory_set, ptr) = data;
-    }
-}
-
 ///Array of u8 slice that user communicate with os
 pub struct UserBuffer {
     ///U8 vec
@@ -496,6 +376,11 @@ impl UserBuffer {
     ///Create a `UserBuffer` by parameter
     pub fn new(buffers: Vec<&'static mut [u8]>) -> Self {
         Self { buffers }
+    }
+    pub fn new_single(buffer: &'static mut [u8]) -> Self {
+        Self {
+            buffers: vec![buffer],
+        }
     }
     ///Length of `UserBuffer`
     pub fn len(&self) -> usize {

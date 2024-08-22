@@ -1,19 +1,17 @@
 use crate::{
+    data_flow,
     fs::{open, OpenFlags, NONE_MODE},
-    mm::{
-        get_data, if_bad_address, put_data, safe_put_data, translated_ref, translated_str, VirtAddr,
-    },
+    mm::{is_bad_address, VirtAddr},
     signal::check_if_any_sig_for_current_task,
     syscall::{CloneFlags, FutexCmd, FutexOpt, Utsname},
     task::{
-        add_task, change_current_uid, current_task, current_token, current_uid,
-        exit_current_and_run_next, exit_current_group_and_run_next, find_task_by_tid,
-        futex_requeue, futex_wait, futex_wake_up, move_child_process_to_init,
-        remove_all_from_thread_group, suspend_current_and_run_next, task_num, FutexKey, Sysinfo,
-        PROCESS_GROUP,
+        add_task, change_current_uid, current_task, current_uid, exit_current_and_run_next,
+        exit_current_group_and_run_next, find_task_by_tid, futex_requeue, futex_wait,
+        futex_wake_up, move_child_process_to_init, remove_all_from_thread_group,
+        suspend_current_and_run_next, task_num, FutexKey, Sysinfo, PROCESS_GROUP,
     },
     timer::{add_futex_timer, calculate_left_timespec, get_time_ms, get_time_spec, Timespec},
-    utils::{get_abs_path, trim_start_slash, SysErrNo, SyscallRet},
+    utils::{c_ptr_to_string, get_abs_path, trim_start_slash, SysErrNo, SyscallRet},
 };
 use alloc::{
     string::{String, ToString},
@@ -127,49 +125,48 @@ pub fn sys_clone(
 }
 
 /// 参考 https://man7.org/linux/man-pages/man2/execve.2.html
-pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usize) -> SyscallRet {
+pub fn sys_execve(pathp: *const u8, mut argvp: *const usize, mut envp: *const usize) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
 
-    let token = task_inner.user_token();
-    let mut path = trim_start_slash(translated_str(token, path));
-    //处理argv参数
-    let mut argv_vec = Vec::<String>::new();
-    loop {
-        if argv.is_null() {
-            break;
+    let mut argv = Vec::<String>::new();
+    let mut env = Vec::<String>::new();
+    let mut path;
+    unsafe {
+        // 处理Path
+        path = trim_start_slash(c_ptr_to_string(pathp));
+        if path.ends_with(".sh") {
+            //.sh文件不是可执行文件，需要用busybox的sh来启动
+            argv.push(String::from("busybox"));
+            argv.push(String::from("sh"));
+            path = String::from("/busybox");
         }
-        let argv_ptr = *translated_ref(token, argv);
-        if argv_ptr == 0 {
-            break;
+
+        //处理argv参数
+        loop {
+            let argv_ptr = *argvp;
+            if argv_ptr == 0 {
+                break;
+            }
+            argv.push(c_ptr_to_string(argv_ptr as *const u8));
+            argvp = argvp.add(1);
         }
-        argv_vec.push(translated_str(token, argv_ptr as *const u8));
-        unsafe {
-            argv = argv.add(1);
+
+        debug!("[sys_execve] path is {},arg is {:?}", path, argv);
+
+        // 处理envp参数
+        if !envp.is_null() {
+            loop {
+                let envp_ptr = *envp;
+                if envp_ptr == 0 {
+                    break;
+                }
+                env.push(c_ptr_to_string(envp_ptr as *const u8));
+                envp = envp.add(1);
+            }
         }
-    }
-    if path.ends_with(".sh") {
-        //.sh文件不是可执行文件，需要用busybox的sh来启动
-        argv_vec.insert(0, String::from("sh"));
-        argv_vec.insert(0, String::from("busybox"));
-        path = String::from("/busybox");
     }
 
-    debug!("[sys_execve] path is {},arg is {:?}", path, argv_vec);
-    let mut env = Vec::<String>::new();
-    loop {
-        if envp.is_null() {
-            break;
-        }
-        let envp_ptr = *translated_ref(token, envp);
-        if envp_ptr == 0 {
-            break;
-        }
-        env.push(translated_str(token, envp_ptr as *const u8));
-        unsafe {
-            envp = envp.add(1);
-        }
-    }
     let env_path = "PATH=/:/bin:".to_string();
     if !env.contains(&env_path) {
         env.push(env_path);
@@ -198,8 +195,8 @@ pub fn sys_execve(path: *const u8, mut argv: *const usize, mut envp: *const usiz
     task_inner.fs_info.set_exe(abs_path);
     let elf_data = app_inode.inode.read_all()?;
     drop(task_inner);
-    task.exec(&elf_data, &argv_vec, &mut env);
-    task.inner_lock().memory_set.activate();
+    task.exec(&elf_data, &argv, &mut env);
+    // task.inner_lock().memory_set.activate();
     Ok(0)
 }
 
@@ -208,7 +205,7 @@ pub fn sys_futex(
     uaddr: *mut i32,
     futex_op: u32,
     val: i32,
-    timeout: *const Timespec,
+    timeoutp: *const Timespec,
     uaddr2: *mut u32,
     _val3: i32,
 ) -> SyscallRet {
@@ -220,7 +217,6 @@ pub fn sys_futex(
 
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
-    let token = task_inner.user_token();
     let pa = task_inner
         .memory_set
         .translate_va(VirtAddr::from(uaddr as usize))
@@ -245,13 +241,13 @@ pub fn sys_futex(
 
     match cmd {
         FutexCmd::FUTEX_WAIT => {
-            let futex_word = get_data(token, uaddr);
+            let futex_word = data_flow!({ *uaddr });
             log::debug!("[sys_futex] futex_word = {}", futex_word,);
             if futex_word != val {
                 return Err(SysErrNo::EAGAIN);
             }
-            if !timeout.is_null() {
-                let timeout = get_data(token, timeout);
+            if !timeoutp.is_null() {
+                let timeout = data_flow!({ *timeoutp });
                 log::debug!("[sys_futex] timeout={:?}", timeout);
                 add_futex_timer(get_time_spec() + timeout, current_task().unwrap());
             }
@@ -276,7 +272,7 @@ pub fn sys_futex(
             };
             drop(task_inner);
             drop(task);
-            Ok(futex_requeue(key, val, new_key, timeout as i32))
+            Ok(futex_requeue(key, val, new_key, timeoutp as i32))
         }
         _ => unimplemented!(),
     }
@@ -344,9 +340,13 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
                 );
                 if exit_code >= 128 && exit_code <= 255 {
                     //表示由于信号而退出的
-                    put_data(task_inner.memory_set.token(), wstatus, exit_code);
+                    data_flow!({
+                        *wstatus = exit_code;
+                    });
                 } else {
-                    put_data(task_inner.memory_set.token(), wstatus, exit_code << 8);
+                    data_flow!({
+                        *wstatus = exit_code << 8;
+                    });
                 }
             }
             drop(child_inner);
@@ -377,14 +377,12 @@ pub fn sys_wait4(pid: isize, wstatus: *mut i32, options: i32) -> SyscallRet {
 }
 
 /// 参考 https://man7.org/linux/man-pages/man2/nanosleep.2.html
-pub fn sys_nanosleep(req: *const Timespec, rem: *mut Timespec) -> SyscallRet {
-    let token = current_token();
-
-    if (req as isize) <= 0 || if_bad_address(req as usize) {
+pub fn sys_nanosleep(req_ptr: *const Timespec, rem: *mut Timespec) -> SyscallRet {
+    if (req_ptr as isize) <= 0 || is_bad_address(req_ptr as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
-    if (rem as isize) < 0 || if_bad_address(rem as usize) {
+    if (rem as isize) < 0 || is_bad_address(rem as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
@@ -392,8 +390,7 @@ pub fn sys_nanosleep(req: *const Timespec, rem: *mut Timespec) -> SyscallRet {
     //     "[sys_nanosleep] req is {:x}, rem is {:x}",
     //     req as usize, rem as usize
     // );
-
-    let req = get_data(token, req);
+    let req = data_flow!({ *req_ptr });
     let waittime = req.tv_sec * 1_000_000_000usize + req.tv_nsec;
     let begin = get_time_ms() * 1_000_000usize;
     let endtime = get_time_spec() + req;
@@ -411,7 +408,9 @@ pub fn sys_nanosleep(req: *const Timespec, rem: *mut Timespec) -> SyscallRet {
         if let Some(_) = check_if_any_sig_for_current_task() {
             //被信号唤醒
             if rem as usize != 0 {
-                put_data(token, rem, calculate_left_timespec(endtime));
+                data_flow!({
+                    *rem = calculate_left_timespec(endtime);
+                });
             }
             return Err(SysErrNo::EINTR);
         }
@@ -421,8 +420,8 @@ pub fn sys_nanosleep(req: *const Timespec, rem: *mut Timespec) -> SyscallRet {
 }
 
 /// 参考 https://man7.org/linux/man-pages/man2/uname.2.html
-pub fn sys_uname(buf: *mut u8) -> SyscallRet {
-    if (buf as isize) < 0 || if_bad_address(buf as usize) {
+pub fn sys_uname(uname_addr: *mut Utsname) -> SyscallRet {
+    if (uname_addr as isize) < 0 || is_bad_address(uname_addr as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
@@ -439,8 +438,7 @@ pub fn sys_uname(buf: *mut u8) -> SyscallRet {
         machine: str2u8("RISC-V64"),
         domainname: str2u8("TrustOS"),
     };
-    let token = current_token();
-    put_data(token, buf as *mut Utsname, uname);
+    data_flow!({ *uname_addr = uname });
     Ok(0)
 }
 
@@ -455,17 +453,8 @@ pub fn sys_brk(brk_addr: usize) -> SyscallRet {
 }
 
 /// 参考 https://man7.org/linux/man-pages/man2/sysinfo.2.html
-pub fn sys_sysinfo(info: *const u8) -> SyscallRet {
-    let task = current_task().unwrap();
-    let inner = task.inner_lock();
-    let token = inner.user_token();
-
-    put_data(
-        token,
-        info as *mut Sysinfo,
-        Sysinfo::new(get_time_ms() / 1000, 1 << 56, task_num()),
-    );
-    // debug!("[sys_sysinfo] ourinfo is {:?}", ourinfo);
+pub fn sys_sysinfo(info: *mut Sysinfo) -> SyscallRet {
+    data_flow!({ *info = Sysinfo::new(get_time_ms() / 1000, 1 << 56, task_num()) });
     Ok(0)
 }
 
@@ -528,13 +517,12 @@ pub fn sys_sched_getparam(_pid: usize, _param: *const u8) -> SyscallRet {
 pub fn sys_clock_nanosleep(
     clockid: usize,
     flags: u32,
-    t: *const Timespec,
+    time_ptr: *const Timespec,
     remain: *mut Timespec,
 ) -> SyscallRet {
     const TIME_ABSTIME: u32 = 1;
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
-    let memory_set = task_inner.memory_set.clone();
     drop(task_inner);
     drop(task);
 
@@ -542,20 +530,21 @@ pub fn sys_clock_nanosleep(
         return Err(SysErrNo::EOPNOTSUPP);
     }
 
-    if (t as isize) <= 0 || if_bad_address(t as usize) {
+    if (time_ptr as isize) <= 0 || is_bad_address(time_ptr as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
-    if (remain as isize) < 0 || if_bad_address(remain as usize) {
+    if (remain as isize) < 0 || is_bad_address(remain as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
     debug!(
         "[sys_clock_nanosleep] clockid is {}, flags is {}, t is {:x}, remain is {:x}",
-        clockid, flags, t as usize, remain as usize
+        clockid, flags, time_ptr as usize, remain as usize
     );
 
-    let t = get_data(memory_set.token(), t);
+    // let t = get_data(memory_set.token(), time_ptr);
+    let t = data_flow!({ *time_ptr });
 
     if (t.tv_sec as isize) < 0 || (t.tv_nsec as isize) < 0 || t.tv_nsec >= 1_000_000_000usize {
         return Err(SysErrNo::EINVAL);
@@ -582,7 +571,8 @@ pub fn sys_clock_nanosleep(
             //被信号唤醒
             debug!("interupt by signal");
             if remain as usize != 0 {
-                safe_put_data(memory_set, remain, calculate_left_timespec(endtime));
+                // put_data(memory_set, remain, calculate_left_timespec(endtime));
+                data_flow!({ *remain = calculate_left_timespec(endtime) })
             }
             //handle_signal(signo);
             return Err(SysErrNo::EINTR);
@@ -612,9 +602,10 @@ pub fn sys_get_robust_list(pid: usize, head_ptr: *mut usize, len_ptr: *mut usize
     }
     if let Some(task) = task {
         let task_inner = task.inner_lock();
-        let token = task_inner.user_token();
-        put_data(token, head_ptr, task_inner.robust_list.head);
-        put_data(token, len_ptr, task_inner.robust_list.len);
+        data_flow!({
+            *head_ptr = task_inner.robust_list.head;
+            *len_ptr = task_inner.robust_list.len;
+        });
         Ok(0)
     } else {
         Err(SysErrNo::ESRCH)

@@ -70,6 +70,9 @@ impl TrapContext {
     pub fn app_init_context(entry: usize, sp: usize, kernel_sp: usize) -> Self {
         let mut sstatus = sstatus::read();
         sstatus.set_spp(SPP::User);
+        unsafe {
+            sstatus::set_sum();
+        }
         let mut cx = Self {
             gp: GeneralRegs { x: [0; 32] },
             sstatus,

@@ -1,10 +1,8 @@
-use hashbrown::HashMap;
 use log::{debug, warn};
 use lwext4_rust::{
     bindings::{O_CREAT, O_RDONLY, O_RDWR, O_TRUNC, SEEK_SET},
     Ext4File, InodeTypes,
 };
-use spin::Lazy;
 
 use crate::{
     fs::{Dirent, Inode, InodeType, Kstat, OpenFlags, String},
@@ -371,6 +369,11 @@ fn as_inode_type(types: InodeTypes) -> InodeType {
         }
     }
 }
+
+#[cfg(feature = "ltp")]
+use hashbrown::HashMap;
+#[cfg(feature = "ltp")]
+use spin::Lazy;
 
 #[cfg(feature = "ltp")]
 static LINK_CACHE: Lazy<HashMap<String, String>> = Lazy::new(|| HashMap::new());

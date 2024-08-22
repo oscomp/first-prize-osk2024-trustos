@@ -1,4 +1,5 @@
-use crate::mm::{get_data, if_bad_address, put_data};
+use crate::data_flow;
+use crate::mm::is_bad_address;
 use crate::signal::SigSet;
 use crate::task::current_task;
 use crate::timer::{
@@ -12,19 +13,14 @@ const MAX_CLOCKS: usize = 12;
 
 /// 参考 https://man7.org/linux/man-pages/man2/gettimeofday.2.html
 pub fn sys_gettimeofday(ts: *mut Timespec, tz: usize) -> SyscallRet {
-    let task = current_task().unwrap();
-    let task_inner = task.inner_lock();
-    let token = task_inner.user_token();
-
-    if (ts as isize) < 0 || if_bad_address(ts as usize) {
+    if (ts as isize) < 0 || is_bad_address(ts as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
-    if (tz as isize) < 0 || if_bad_address(tz as usize) {
+    if (tz as isize) < 0 || is_bad_address(tz as usize) {
         return Err(SysErrNo::EFAULT);
     }
-
-    put_data(token, ts, get_time_spec());
+    data_flow!({ *ts = get_time_spec() });
     Ok(0)
 }
 
@@ -32,9 +28,7 @@ pub fn sys_gettimeofday(ts: *mut Timespec, tz: usize) -> SyscallRet {
 pub fn sys_times(tms: *mut Tms) -> SyscallRet {
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
-    let token = task_inner.user_token();
-
-    put_data(token, tms, Tms::new(&task_inner.time_data));
+    data_flow!({ *tms = Tms::new(&task_inner.time_data) });
     Ok(0)
 }
 
@@ -47,16 +41,15 @@ pub fn sys_settimer(
     if (which as isize) < 0 {
         return Err(SysErrNo::EINVAL);
     }
-    if (new_value as isize) < 0 || if_bad_address(new_value as usize) {
+    if (new_value as isize) < 0 || is_bad_address(new_value as usize) {
         return Err(SysErrNo::EFAULT);
     }
-    if (old_value as isize) < 0 || if_bad_address(old_value as usize) {
+    if (old_value as isize) < 0 || is_bad_address(old_value as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
     let task = current_task().unwrap();
     let task_inner = task.inner_lock();
-    let token = task_inner.user_token();
 
     let sig = match which {
         ITIMER_REAL => SigSet::SIGALRM,
@@ -66,10 +59,12 @@ pub fn sys_settimer(
     };
 
     if old_value as usize != 0 {
-        put_data(token, old_value, task_inner.timer.timer());
+        data_flow!({
+            *old_value = task_inner.timer.timer();
+        });
     }
     if new_value as usize != 0 {
-        let new_timer = get_data(token, new_value);
+        let new_timer = data_flow!({ *new_value });
         debug!("[sys_settimer] new_timer={:?}", new_timer);
         task_inner.timer.set_timer(new_timer, sig);
         task_inner.timer.set_last_time(TimeVal::now());
@@ -86,13 +81,9 @@ pub fn sys_settimer(
 
 /// 参考 https://man7.org/linux/man-pages/man2/clock_gettime.2.html
 pub fn sys_clock_gettime(clockid: usize, tp: *mut Timespec) -> SyscallRet {
-    let task = current_task().unwrap();
-    let inner = task.inner_lock();
-
-    let token = inner.user_token();
     let time = get_time_spec();
 
-    if (tp as isize) <= 0 || if_bad_address(tp as usize) {
+    if (tp as isize) <= 0 || is_bad_address(tp as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
@@ -100,27 +91,25 @@ pub fn sys_clock_gettime(clockid: usize, tp: *mut Timespec) -> SyscallRet {
         return Err(SysErrNo::EINVAL);
     }
 
-    put_data(token, tp, time);
-    // debug!(
-    //     "[sys_clock_gettime] clockid is {}, time={:?}",
-    //     clockid, time
-    // );
+    data_flow!({
+        *tp = time;
+    });
     Ok(0)
 }
 
 /// 参考 https://man7.org/linux/man-pages/man2/getrusage.2.html
 pub fn sys_getrusage(who: isize, usage: *mut Rusage) -> SyscallRet {
     // TrustOS目前只支持 RUSAGESELF 和 RUSAGECHILDEN
-    debug!(
-        "[sys_getrusage] who is {}, usage is {:x}",
-        who, usage as usize
-    );
+    // debug!(
+    //     "[sys_getrusage] who is {}, usage is {:x}",
+    //     who, usage as usize
+    // );
 
     if who < -1 {
         return Err(SysErrNo::EINVAL);
     }
 
-    if (usage as isize) < 0 || if_bad_address(usage as usize) {
+    if (usage as isize) < 0 || is_bad_address(usage as usize) {
         return Err(SysErrNo::EFAULT);
     }
 
@@ -129,7 +118,6 @@ pub fn sys_getrusage(who: isize, usage: *mut Rusage) -> SyscallRet {
 
     let task = current_task().unwrap();
     let inner = task.inner_lock();
-    let token = inner.user_token();
 
     match who {
         RUSAGESELF => {
@@ -137,7 +125,7 @@ pub fn sys_getrusage(who: isize, usage: *mut Rusage) -> SyscallRet {
                 inner.time_data.utime as usize,
                 inner.time_data.stime as usize,
             );
-            put_data(token, usage, gotusage);
+            data_flow!({ *usage = gotusage });
             Ok(0)
         }
         RUSAGECHILDEN => {
@@ -145,7 +133,7 @@ pub fn sys_getrusage(who: isize, usage: *mut Rusage) -> SyscallRet {
                 inner.time_data.cutime as usize,
                 inner.time_data.cstime as usize,
             );
-            put_data(token, usage, gotusage);
+            data_flow!({ *usage = gotusage });
             Ok(0)
         }
         _ => return Err(SysErrNo::EINVAL),
@@ -163,13 +151,8 @@ pub fn sys_clock_getres(clockid: usize, res: *mut Timespec) -> SyscallRet {
         return Err(SysErrNo::EINVAL);
     }
 
-    let task = current_task().unwrap();
-    let inner = task.inner_lock();
-    let token = inner.user_token();
-
-    //assert!(clockid == 1, "other clockid not supported!");
-
-    let restime = Timespec::new(0, 1);
-    put_data(token, res, restime);
+    data_flow!({
+        *res = Timespec::new(0, 1);
+    });
     Ok(0)
 }
