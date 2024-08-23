@@ -259,11 +259,6 @@ impl TaskControlBlock {
         task_inner.memory_set.activate();
 
         if task_inner.clear_child_tid != 0 {
-            // put_data(
-            //     task_inner.memory_set.token(),
-            //     task_inner.clear_child_tid as *mut u32,
-            //     0,
-            // );
             data_flow!({ *(task_inner.clear_child_tid as *mut u32) = 0 });
         }
 

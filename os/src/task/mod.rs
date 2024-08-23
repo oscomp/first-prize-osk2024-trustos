@@ -27,6 +27,8 @@ mod sysinfo;
 mod task;
 mod tid;
 
+use core::sync::atomic::AtomicU32;
+
 use crate::{
     fs::{open, OpenFlags, NONE_MODE},
     mm::{put_data, VirtAddr},
@@ -37,7 +39,7 @@ pub use context::TaskContext;
 pub use futex::*;
 use log::debug;
 pub use manager::*;
-use spin::{Lazy, Mutex};
+use spin::Lazy;
 use switch::__switch;
 pub use sysinfo::Sysinfo;
 pub use task::{RobustList, TaskControlBlock, TaskStatus};
@@ -192,12 +194,13 @@ pub fn init() {
     }
 }
 
-pub static CUR_UID: Lazy<Mutex<u32>> = Lazy::new(|| Mutex::new(0));
+// pub static CUR_UID: Lazy<Mutex<u32>> = Lazy::new(|| Mutex::new(0));
+pub static CUR_UID: Lazy<AtomicU32> = Lazy::new(|| AtomicU32::new(0));
 
 pub fn current_uid() -> u32 {
-    *CUR_UID.lock()
+    CUR_UID.load(core::sync::atomic::Ordering::SeqCst)
 }
 
 pub fn change_current_uid(uid: u32) {
-    *CUR_UID.lock() = uid;
+    CUR_UID.store(uid, core::sync::atomic::Ordering::SeqCst);
 }
