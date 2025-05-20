@@ -1,3 +1,4 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/oscomp/first-prize-osk2024-trustos)
 # OSKernel2024-TrustOS
 
 ## TrustOS启动
